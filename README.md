@@ -4,9 +4,9 @@
 
 # Pentest Copilot
 
-[![License](https://img.shields.io/github/license/bugbasesecurity/pentest-copilot?style=flat-square)](https://github.com/bugbasesecurity/pentest-copilot/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot?style=social)](https://github.com/bugbasesecurity/pentest-copilot/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot?style=social)](https://github.com/bugbasesecurity/pentest-copilot/forks)
+![GitHub License](https://img.shields.io/github/license/bugbasesecurity/pentest-copilot)
+![GitHub Repo stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot)
+![GitHub forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot)
 
 Pentest Copilot is an AI-powered ethical hacking assistant tool designed to streamline your pentesting workflow. Leveraging OpenAI's GPT models, it supports you through critical stages of penetration testing, including reconnaissance, enumeration, vulnerability identification, privilege escalation and data extraction.
 
