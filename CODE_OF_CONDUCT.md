@@ -19,7 +19,7 @@ To maintain a professional and responsible community, we expect all contributors
   - Report vulnerabilities **responsibly** following coordinated disclosure practices.
 
 - **Contribution Guidelines:**
-  - Follow our contribution guidelines as detailed in [CONTRIBUTING.md](https://github.com/bugbasesecurity/pentest-copilot-web/CONTRIBUTING.md).
+  - Follow our contribution guidelines as detailed in [CONTRIBUTING.md](https://github.com/bugbasesecurity/pentest-copilot/CONTRIBUTING.md).
   - Maintain integrity and transparency in all contributions.
   - Avoid introducing malicious or harmful code.
 

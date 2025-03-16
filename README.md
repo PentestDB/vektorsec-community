@@ -4,14 +4,13 @@
 
 # Pentest Copilot
 
-[![License](https://img.shields.io/github/license/bugbasesecurity/pentest-copilot-web?style=flat-square)](https://github.com/bugbasesecurity/pentest-copilot-web/blob/main/LICENSE)
-[![Docker Pulls](https://img.shields.io/docker/pulls/bugbasesecurity/pentest-copilot-web?style=flat-square)](https://hub.docker.com/r/bugbasesecurity/pentest-copilot-web)
-[![GitHub Stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot-web?style=social)](https://github.com/bugbasesecurity/pentest-copilot-web/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot-web?style=social)](https://github.com/bugbasesecurity/pentest-copilot-web/forks)
+[![License](https://img.shields.io/github/license/bugbasesecurity/pentest-copilot?style=flat-square)](https://github.com/bugbasesecurity/pentest-copilot/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot?style=social)](https://github.com/bugbasesecurity/pentest-copilot/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot?style=social)](https://github.com/bugbasesecurity/pentest-copilot/forks)
 
 Pentest Copilot is an AI-powered ethical hacking assistant tool designed to streamline your pentesting workflow. Leveraging OpenAI's GPT models, it supports you through critical stages of penetration testing, including reconnaissance, enumeration, vulnerability identification, privilege escalation and data extraction.
 
-Explore the [Github Wiki](https://github.com/bugbasesecurity/pentest-copilot-web/wiki) for detailed documentation on the tool's features, installation, and usage.
+Explore the [Github Wiki](https://github.com/bugbasesecurity/pentest-copilot/wiki) for detailed documentation on the tool's features, installation, and usage.
 
 ---
 
@@ -55,7 +54,7 @@ To get started with Pentest Copilot, follow these steps:
 ### Clone the repository:
 
 ```bash
-git clone https://github.com/bugbasesecurity/pentest-copilot-web.git pentest-copilot
+git clone https://github.com/bugbasesecurity/pentest-copilot.git pentest-copilot
 cd pentest-copilot
 ```
 
@@ -63,7 +62,6 @@ cd pentest-copilot
 
 1. Copy `./backend/.env.template` to `./backend/.env`.
 2. Copy `./frontent/.env.template` to `./frontend/.env`.
-
 
 ```bash
 cp backend/.env.template backend/.env
@@ -80,7 +78,6 @@ In `./backend/.env`, add your OpenAI API keys for both the large and small model
 MODEL_API_KEY_LARGE=your_large_model_api_key
 MODEL_API_KEY_SMALL=your_small_model_api_key
 ```
-
 
 ### Set up custom exploit box (Kali server)
 
@@ -125,27 +122,26 @@ Pentest Copilot requires configuration through environment variables. Below are 
 
 ### Backend (`./backend/.env`)
 
-| Variable            | Description                            | Default                                    |
-| ------------------- | -------------------------------------- | ------------------------------------------ |
-| BASE_URL_FRONTEND   | URL of the frontend server             | `http://127.0.0.1:3000`                    |
-| DEPLOYMENT          | Deployment environment                 | `LOCAL`                                    |
-| MONGO_DATABASE      | Name of the MongoDB database           | `pentestcopilot`                           |
-| MONGO_URI           | MongoDB connection string              | `mongodb://127.0.0.1:27017/pentestcopilot` |
-| SESS_LIFETIME       | Session lifetime in milliseconds       | `1000`                                     |
-| SESS_NAME           | Session cookie name                    | `sid`                                      |
-| SESS_SECRET         | Secret key for signing session cookies | `thisismysessionsecret!123`                |
-| PORT                | Port for the backend server            | `8080`                                     |
-| MODEL_LARGE         | Identifier for the large OpenAI model  | `gpt-4-1106-preview`                       |
-| MODEL_API_KEY_LARGE | API key for the large OpenAI model     | `your_large_model_api_key`                 |
-| MODEL_SMALL         | Identifier for the small OpenAI model  | `gpt-3.5-turbo-1106`                       |
-| MODEL_API_KEY_SMALL | API key for the small OpenAI model     | `your_small_model_api_key`                 |
-| SSH_HOST            | Hostname for the custom exploit box    | `localhost`                                |
-| SSH_PORT            | Port for the custom exploit box        | `4242`                                     |
-| SSH_USERNAME        | Username for the custom exploit box    | `root`                                     |
-| SSH_PASSWORD        | Password for the custom exploit box    | `''`                                       |
-| SSH_PRIVATE_KEY     | Path to the private key for SSH        | `'/path/to/private/key'`                                       |
-| SSH_PRIVATE_KEY_PASSPHRASE | Passphrase for the private key    | `''`                                       |
-
+| Variable                   | Description                            | Default                                    |
+| -------------------------- | -------------------------------------- | ------------------------------------------ |
+| BASE_URL_FRONTEND          | URL of the frontend server             | `http://127.0.0.1:3000`                    |
+| DEPLOYMENT                 | Deployment environment                 | `LOCAL`                                    |
+| MONGO_DATABASE             | Name of the MongoDB database           | `pentestcopilot`                           |
+| MONGO_URI                  | MongoDB connection string              | `mongodb://127.0.0.1:27017/pentestcopilot` |
+| SESS_LIFETIME              | Session lifetime in milliseconds       | `1000`                                     |
+| SESS_NAME                  | Session cookie name                    | `sid`                                      |
+| SESS_SECRET                | Secret key for signing session cookies | `thisismysessionsecret!123`                |
+| PORT                       | Port for the backend server            | `8080`                                     |
+| MODEL_LARGE                | Identifier for the large OpenAI model  | `gpt-4-1106-preview`                       |
+| MODEL_API_KEY_LARGE        | API key for the large OpenAI model     | `your_large_model_api_key`                 |
+| MODEL_SMALL                | Identifier for the small OpenAI model  | `gpt-3.5-turbo-1106`                       |
+| MODEL_API_KEY_SMALL        | API key for the small OpenAI model     | `your_small_model_api_key`                 |
+| SSH_HOST                   | Hostname for the custom exploit box    | `localhost`                                |
+| SSH_PORT                   | Port for the custom exploit box        | `4242`                                     |
+| SSH_USERNAME               | Username for the custom exploit box    | `root`                                     |
+| SSH_PASSWORD               | Password for the custom exploit box    | `''`                                       |
+| SSH_PRIVATE_KEY            | Path to the private key for SSH        | `'/path/to/private/key'`                   |
+| SSH_PRIVATE_KEY_PASSPHRASE | Passphrase for the private key         | `''`                                       |
 
 <h2 id="system-components">Architecture 🏗️</h2>
 
@@ -279,7 +275,6 @@ npm run dev
 ```
 
 The frontend server will start at `http://localhost:3000`.
-
 
 ## Meet the Authors
 

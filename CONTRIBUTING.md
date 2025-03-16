@@ -11,18 +11,18 @@ Before you begin, ensure you have the following installed:
 - **Docker**
 
 ### Setting Up Your Development Environment
-Follow the instructions in the [README](https://github.com/bugbasesecurity/pentest-copilot-web/blob/main/README.md) to set up Pentest Copilot on your local machine.
+Follow the instructions in the [README](https://github.com/bugbasesecurity/pentest-copilot/blob/main/README.md) to set up Pentest Copilot on your local machine.
 
 ## How to Contribute
 
 ### Reporting Bugs
 If you find a bug in the software:
-1. Check the [Issues](https://github.com/bugbasesecurity/pentest-copilot-web/issues) page to see if it has already been reported.
+1. Check the [Issues](https://github.com/bugbasesecurity/pentest-copilot/issues) page to see if it has already been reported.
 2. If not, open a new issue and provide a detailed description of the bug, including steps to reproduce it.
 
 ### Suggesting Enhancements
 We love new ideas! To suggest enhancements:
-1. Check if your idea is already being discussed in the [Issues](https://github.com/bugbasesecurity/pentest-copilot-web/issues).
+1. Check if your idea is already being discussed in the [Issues](https://github.com/bugbasesecurity/pentest-copilot/issues).
 2. If not, open a new issue and label it as a **feature request**.
 3. Clearly describe the feature and its benefits.
 
@@ -36,5 +36,5 @@ We love new ideas! To suggest enhancements:
 7. **Open a Pull Request:** Go to the original Pentest Copilot repository, and you’ll see a prompt to open a pull request from your new branch. Provide a detailed description of your changes and why they’re necessary.
 
 ## License
-By contributing to Pentest Copilot, you agree that your contributions will be licensed under its [MIT License](https://github.com/bugbasesecurity/pentest-copilot-web/blob/main/LICENSE).
+By contributing to Pentest Copilot, you agree that your contributions will be licensed under its [MIT License](https://github.com/bugbasesecurity/pentest-copilot/blob/main/LICENSE).
 
