@@ -1,0 +1,17 @@
+/sandbox/__pycache__
+/sandbox/*.env
+/sandbox/.env
+
+# VENVS
+/sandbox/env
+/sandbox/copilotweb
+
+/frontend/.env
+
+/kali-data/*
+/kali_data/*
+
+.env
+
+**/.DS_Store
+**/.vscode

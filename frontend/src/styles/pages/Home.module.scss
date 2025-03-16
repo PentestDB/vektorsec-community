@@ -1,0 +1,679 @@
+@import "../variables";
+
+.container {
+  width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+
+  .orbitContainer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: url("../../assets/green-dots.svg") repeat-x center center fixed;
+
+    .orbit {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: none;
+      border-radius: 50%;
+      border: 0.5px solid rgba(#fff, 0.6);
+      box-shadow: 0px 0px 5.580693244934082px 2px rgba(255, 255, 255, 0.2),
+        0px 0px 5.580693244934082px 2px rgba(255, 255, 255, 0.2) inset;
+    }
+
+    .orbit1 {
+      width: 95em;
+      height: 95em;
+      transform: translate(-50%, -50%) rotate(0deg);
+
+      @include responsive(tablet3) {
+        width: 85em;
+        height: 85em;
+      }
+
+      @include responsive(tablet1) {
+        width: 60em;
+        height: 60em;
+      }
+    }
+
+    .orbit2 {
+      width: 81.25em;
+      height: 81.25em;
+      transform: translate(-50%, -50%) rotate(10deg);
+      animation: orbit2Rotation infinite linear 120s;
+
+      @include responsive(tablet3) {
+        width: 71.25em;
+        height: 71.25em;
+      }
+
+      @include responsive(tablet1) {
+        width: 50em;
+        height: 50em;
+      }
+
+      @keyframes orbit2Rotation {
+        0% {
+          transform: translate(-50%, -50%) rotate(10deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(370deg);
+        }
+      }
+    }
+
+    .orbit3 {
+      width: 67.5em;
+      height: 67.5em;
+      transform: translate(-50%, -50%) rotate(-30deg);
+      animation: orbit3Rotation infinite linear 100s;
+
+      @include responsive(tablet3) {
+        width: 57.5em;
+        height: 57.5em;
+      }
+
+      @include responsive(tablet1) {
+        width: 40em;
+        height: 40em;
+      }
+
+      @keyframes orbit3Rotation {
+        0% {
+          transform: translate(-50%, -50%) rotate(-30deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(330deg);
+        }
+      }
+    }
+
+    .orbit4 {
+      width: 53.75em;
+      height: 53.75em;
+      transform: translate(-50%, -50%) rotate(-145deg);
+      animation: orbit4Rotation infinite linear 80s;
+
+      @include responsive(tablet3) {
+        width: 43.75em;
+        height: 43.75em;
+      }
+
+      @include responsive(tablet1) {
+        width: 30em;
+        height: 30em;
+      }
+
+      @keyframes orbit4Rotation {
+        0% {
+          transform: translate(-50%, -50%) rotate(-145deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(215deg);
+        }
+      }
+    }
+
+    .orbit5 {
+      width: 40em;
+      height: 40em;
+      transform: translate(-50%, -50%) rotate(-15deg);
+      animation: orbit5Rotation infinite linear 60s;
+
+      @include responsive(tablet3) {
+        width: 30em;
+        height: 30em;
+      }
+
+      @include responsive(tablet1) {
+        width: 20em;
+        height: 20em;
+      }
+
+      @keyframes orbit5Rotation {
+        0% {
+          transform: translate(-50%, -50%) rotate(-15deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(345deg);
+        }
+      }
+    }
+  }
+
+  .planet {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+
+    @include responsive(tablet1) {
+      width: 3em;
+      height: 3em;
+    }
+
+    .planetRing {
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      border: 0.8px solid #fff;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+
+      @include responsive(tablet1) {
+        width: 2.2em;
+        height: 2.2em;
+      }
+
+      .planetIcon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #fff;
+        font-size: 1.5rem;
+
+        @include responsive(tablet1) {
+          font-size: 1.2rem;
+        }
+      }
+    }
+  }
+
+  .planet1 {
+    background: #d74d00;
+    top: 50%;
+    left: 0;
+    box-shadow: 0px 0px 20px 4px #d74d00aa;
+  }
+
+  .planet2 {
+    background: #b9d700;
+    top: 50%;
+    right: 0;
+    transform: translate(50%, -50%);
+    box-shadow: 0px 0px 20px 4px #b9d700aa;
+  }
+  .planet3 {
+    background: #da08ec;
+    top: 50%;
+    left: 0;
+    box-shadow: 0px 0px 20px 4px #da08ecaa;
+  }
+  .planet4 {
+    background: #089aec;
+    top: 50%;
+    right: 0;
+    transform: translate(50%, -50%);
+    box-shadow: 0px 0px 20px 4px #089aecaa;
+  }
+  .planet6 {
+    background: #d7c100;
+    top: 50%;
+    left: 0;
+    box-shadow: 0px 0px 20px 4px #d7c100aa;
+  }
+
+  .planet5 {
+    background: #00d7a3;
+    top: 50%;
+    left: 0;
+    box-shadow: 0px 0px 20px 4px #00d7a3aa;
+  }
+
+  .fadeforeground {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(
+      180deg,
+      #0b0b12 0%,
+      rgba(11, 11, 18, 0.05) 50%,
+      #0b0b12 100%
+    );
+    z-index: 1;
+  }
+
+  .bottomglow {
+    width: 200vw;
+    height: 138vw;
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translate(-50%, 80%);
+    width: 270rem;
+    height: 155rem;
+    border-radius: 50%;
+    background: radial-gradient(
+      20% 19% at 50% 28%,
+      #8e35ff 0%,
+      rgba(0, 0, 0, 0) 75%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    border: none;
+    z-index: 1;
+    animation: breathingEffect infinite 6s ease-in-out;
+
+    @keyframes breathingEffect {
+      0% {
+        transform: translate(-50%, 80%) scale(1);
+      }
+      50% {
+        transform: translate(-50%, 80%) scale(1.1);
+      }
+
+      100% {
+        transform: translate(-50%, 80%) scale(1);
+      }
+    }
+  }
+
+  .mainContainer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    .footerNotices {
+      position: absolute;
+      bottom: 1rem;
+      color: #b4b4b4;
+      text-align: center;
+      margin: 0 0.5rem;
+      line-height: 1.4;
+    }
+
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+
+      h1 {
+        font-size: 6rem;
+        font-weight: 500;
+        background: linear-gradient(90deg, #ca00aa -2.59%, #05c3ff 105.63%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 1rem;
+
+        @include responsive(tablet3) {
+          font-size: 5rem;
+        }
+
+        @include responsive(tablet2) {
+          font-size: 4rem;
+        }
+        @include responsive(tablet1) {
+          font-size: 3rem;
+        }
+      }
+
+      p {
+        text-align: center;
+        color: #fff;
+        font-size: 1.3rem;
+        font-weight: 300;
+        width: 40%;
+        line-height: 1.6;
+
+        @include responsive(laptop1) {
+          width: 70%;
+        }
+
+        @include responsive(tablet3) {
+          font-size: 1.1rem;
+        }
+
+        @include responsive(tablet2) {
+          width: 90%;
+          font-size: 1rem;
+        }
+      }
+      .tagline {
+        color: #cacaca;
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-bottom: 0.3rem;
+
+        @include responsive(tablet2) {
+          font-size: 1rem;
+        }
+      }
+
+      .inputContainer {
+        margin-top: 2rem;
+        position: relative;
+
+        .input {
+          padding: 0rem 1.5rem;
+          height: 3rem;
+          width: 33rem;
+          max-width: 90vw;
+          font-size: 1rem;
+          border-radius: 4rem;
+          color: #fff;
+          background-color: rgba(#fff, 0.1);
+          border: 0.5px solid #fff;
+          display: flex;
+          align-items: center;
+
+          &::placeholder {
+            color: rgba(#fff, 0.5);
+          }
+
+          @include responsive(tablet2) {
+            height: 2.5rem;
+            font-size: 0.8rem;
+          }
+        }
+
+        .joinButton {
+          border-radius: 4rem;
+          width: 8rem;
+          height: 3rem;
+          font-size: 1rem;
+          border: 0.5px solid #fff;
+          position: absolute;
+          top: 0;
+          right: 0;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 500;
+
+          @include responsive(tablet2) {
+            height: 2.5rem;
+            font-size: 0.9rem;
+          }
+        }
+      }
+    }
+
+    .successCard {
+      background: rgba(#fff, 0.05);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border-radius: 6px;
+      max-width: 50rem;
+      width: 90%;
+      position: absolute;
+      border: 0.5px solid #ffffff22;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      padding: 1rem;
+      border-radius: 10px;
+      box-shadow: rgba(#e5e5e5, 0.1) 0px 0px 100px 0px;
+
+      :global {
+        .ant-card-body {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+      }
+
+      h1 {
+        font-size: 2rem;
+        font-weight: 500;
+        margin-bottom: 1rem;
+        background: linear-gradient(90deg, #ca00aa -2.59%, #05c3ff 105.63%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-top: 2rem;
+      }
+
+      p {
+        font-size: 1.3rem;
+        font-weight: 400;
+        text-align: center;
+        margin-bottom: 1rem;
+        color: #f3f3f3;
+      }
+    }
+
+    .eggCard {
+      max-width: 70rem;
+      max-height: 78vh;
+      overflow-y: auto;
+      transform: translate(-50%, -48%);
+      color: #fff;
+
+      :global {
+        .ant-result {
+          .ant-result-title {
+            color: #fff;
+          }
+        }
+      }
+
+      // change scrollbar css
+      &::-webkit-scrollbar {
+        width: 0.1rem;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: none;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #e5e5e53a;
+      }
+
+      &::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+
+      p {
+        width: 100%;
+      }
+
+      .shareBtn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        height: 2.8rem;
+        border-radius: 6px;
+        color: #fff;
+        border: none;
+        width: 12rem;
+      }
+
+      .shareForm {
+        margin-top: 4rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+
+        .formTitle {
+          color: #fff;
+          font-size: 1.2rem;
+          margin-bottom: 1rem;
+          font-weight: bold;
+        }
+
+        .formItem {
+          justify-self: center;
+
+          :global {
+            .ant-input {
+              padding: 0rem 1.5rem;
+              height: 2.5rem;
+              width: 30rem;
+              max-width: 70vw;
+              font-size: 1rem;
+              border-radius: 4rem;
+              color: #fff;
+              background-color: rgba(#fff, 0.1);
+              border: 0.5px solid #fff;
+              display: flex;
+              align-items: center;
+
+              &::placeholder {
+                color: rgba(#fff, 0.5);
+              }
+            }
+          }
+        }
+
+        .joinButton {
+          border-radius: 4rem;
+          height: 2.8rem;
+          padding: 0 2rem;
+          font-size: 1rem;
+          border: 0.5px solid #fff;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+
+  .smallegg {
+    position: absolute;
+    right: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: -2;
+    transition: all 0.3s ease-in-out;
+  }
+
+  .tagline2 {
+    color: #fff;
+    text-align: center;
+    font-size: 1rem;
+    font-weight: 500;
+    border-width: 2px;
+    border-style: solid;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+
+    background: linear-gradient(#0b0b12, #0b0b12) padding-box,
+      linear-gradient(90deg, #ca00aa -2.59%, #05c3ff 105.63%) border-box;
+    border-radius: 50em;
+    border: 2px solid transparent;
+
+    @include responsive(tablet2) {
+      font-size: 0.9rem;
+      padding: 0.5rem 0.8rem;
+    }
+
+    @include responsive(mobile2) {
+      font-size: 0.6rem;
+      padding: 0.5rem 0.5rem;
+    }
+  }
+
+  .navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 108px;
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 13;
+
+    @include responsive(tablet2) {
+      padding: 0 1rem;
+    }
+
+    .bbLogoText {
+      background-color: #ca4246;
+
+      background-image: linear-gradient(
+        45deg,
+        #ca4246 16.666%,
+        #e16541 16.666%,
+        #e16541 33.333%,
+        #f18f43 33.333%,
+        #f18f43 50%,
+        #8b9862 50%,
+        #8b9862 66.666%,
+        #476098 66.666%,
+        #476098 83.333%,
+        #a7489b 83.333%
+      );
+
+      background-size: 100%;
+      background-repeat: repeat;
+
+      // -webkit-background-clip: border-box;
+      // -webkit-text-fill-color: transparent;
+      animation: rainbow-text-simple-animation-rev 0.75s ease forwards;
+
+      &:hover {
+        animation: rainbow-text-simple-animation 0.5s ease-in forwards;
+      }
+
+      @keyframes rainbow-text-simple-animation-rev {
+        0% {
+          background-size: 650%;
+        }
+        40% {
+          background-size: 650%;
+        }
+        100% {
+          background-size: 100%;
+        }
+      }
+
+      @keyframes rainbow-text-simple-animation {
+        0% {
+          background-size: 100%;
+        }
+        80% {
+          background-size: 650%;
+        }
+        100% {
+          background-size: 650%;
+        }
+      }
+    }
+  }
+
+  .count {
+    color: #cacaca;
+    margin-top: 0.5rem;
+    width: 33rem;
+    max-width: 90vw;
+    text-align: center;
+    line-height: 1.4;
+
+    @include responsive(tablet2) {
+      font-size: 0.9rem;
+    }
+  }
+}

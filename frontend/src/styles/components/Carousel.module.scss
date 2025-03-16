@@ -1,0 +1,122 @@
+@import "../_variables";
+
+.mainCarouselWrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+
+  .imageContainerActive {
+    max-width: 90%;
+    display: flex;
+    justify-content: center;
+    animation: fadeInZoom 0.5s ease-in-out;
+  }
+
+  .imageContainer {
+    display: none;
+  }
+
+  .carouselIndicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-top: 1rem;
+
+    .indicator {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: var(--primary-text);
+      margin: 0 0.5rem;
+      cursor: pointer;
+    }
+
+    .indicatorActive {
+      @extend .indicator;
+      background: var(--primary-purple);
+    }
+  }
+}
+
+.sliderWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+
+  .leftArrow {
+    position: absolute;
+    left: 1rem;
+    z-index: 3;
+    font-size: 3rem;
+    cursor: pointer;
+    color: var(--primary-text);
+  }
+
+  .rightArrow {
+    @extend .leftArrow;
+    right: 1rem;
+    left: unset;
+  }
+
+  .slide {
+    width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    display: none !important;
+  }
+
+  .activeSlideOut {
+    @extend .slide;
+    width: 100%;
+    padding: 3rem 5rem;
+    display: block !important;
+    animation: slideInRight 0.2s ease-in-out;
+
+    @include responsive(mobile5) {
+      padding: 3rem 1rem;
+    }
+  }
+
+  .activeSlideIn {
+    @extend .activeSlideOut;
+    animation: slideInLeft 0.2s ease-in-out;
+  }
+}
+
+@keyframes fadeInZoom {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

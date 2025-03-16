@@ -1,0 +1,288 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap");
+@import "@/styles/color-themes";
+@import "@/styles/variables";
+
+body,
+html {
+  scroll-behavior: smooth;
+
+  background: var(--secondary-bg);
+  overflow-x: hidden;
+  padding: 0;
+  margin: 0;
+
+  * {
+    font-family: "Manrope", "Inter", sans-serif;
+  }
+}
+
+@font-face {
+  font-family: "Menlo for powerline";
+  src: url("../assets/fonts/menlo-for-powerline/MenloPowerline.ttf");
+}
+
+// modal
+.ant-modal-confirm-confirm .ant-modal-content {
+  background-color: var(--cli-bg) !important;
+  border: 1px solid var(--border-color-100) !important;
+
+  .ant-modal-confirm-title {
+    color: var(--primary-text);
+  }
+
+  .ant-modal-confirm-content {
+    color: var(--secondary-text);
+  }
+}
+
+.imageOpacity {
+  transition: 0.5s ease;
+  opacity: 0.3;
+}
+
+.activeImage {
+  opacity: 1;
+}
+
+.box1 {
+  position: relative;
+  left: 50%;
+  transform: translate(-60%, 30%);
+}
+
+.box2 {
+  position: absolute;
+  left: 37%;
+  bottom: 48%;
+  transform: translate(-60%, 50%);
+}
+
+.box3 {
+  position: absolute;
+  left: 45%;
+  top: 10%;
+  transform: translate(-50%, 50%);
+}
+
+.box4 {
+  position: absolute;
+  right: 3%;
+  bottom: 44%;
+  transform: translate(-30%, -50%);
+
+  @include responsive(laptop2) {
+    display: none;
+    transform: translate(-10%, -40%);
+  }
+}
+
+.box5 {
+  position: absolute;
+  left: 72%;
+  top: 30%;
+  transform: translate(-30%, -50%);
+}
+// loader
+.ant-spin-dot {
+  .ant-spin-dot-item {
+    background-color: var(--primary-purple);
+  }
+}
+
+// NProgress
+
+#nprogress {
+  pointer-events: none;
+}
+
+#nprogress .bar {
+  background: var(--bugbase-green);
+
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 2px;
+}
+
+/* Fancy blur effect */
+#nprogress .peg {
+  display: block;
+  position: absolute;
+  right: 0px;
+  width: 100px;
+  height: 100%;
+  opacity: 1;
+
+  -webkit-transform: rotate(3deg) translate(0px, -4px);
+  -ms-transform: rotate(3deg) translate(0px, -4px);
+  transform: rotate(3deg) translate(0px, -4px);
+}
+
+.codeStyle {
+  display: block !important;
+}
+
+// scrollbar design overall website
+::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--primary-purple);
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--card-bg);
+}
+
+.pentest-copilot-logo {
+  z-index: 1000000;
+  display: inline-block;
+  position: relative;
+  width: 150px;
+  height: 100px;
+
+  .pentest-copilot-logo-plain {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    -webkit-mask-image: url("/copilotlogo.svg");
+    mask-image: url("/copilotlogo.svg");
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+
+    background-color: var(--primary-text);
+  }
+
+  .pentest-copilot-logo-overlay {
+    @extend .pentest-copilot-logo-plain;
+
+    background: linear-gradient(
+      45deg,
+      #d74d00,
+      #da08ec,
+      #da08ec,
+      #b9d700,
+      #089aec,
+      #00d7a3,
+      #d7c100,
+      #d74d00
+    );
+    background-size: 400% 400%;
+    animation: gradientAnimation 5s infinite;
+
+    @keyframes gradientAnimation {
+      0% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+  }
+}
+
+.confirm-popup-large {
+  width: 48rem !important;
+}
+
+.recharts-tooltip-cursor {
+  fill: var(--secondary-text-100);
+}
+
+.line1 {
+  position: absolute;
+  left: 18%;
+  transform: translate(-150%, -53%) scale(1.5);
+  z-index: 1;
+
+  @include responsive(laptop1) {
+    display: none;
+  }
+}
+
+.line2 {
+  @extend .line1;
+  left: 35%;
+  transform: translate(-100%, 60%);
+  z-index: 1;
+}
+
+.line3 {
+  @extend .line1;
+  left: 50%;
+  transform: translate(-150%, -65%);
+  z-index: 1;
+}
+
+.line4 {
+  position: absolute;
+  right: 23%;
+  transform: translate(-100%, -10%) scale(1.5);
+  z-index: 1;
+
+  @include responsive(laptop1) {
+    display: none;
+  }
+}
+
+.line5 {
+  @extend .line4;
+  right: 5%;
+  transform: translate(-100%, -48%) scale(1.2);
+  z-index: 1;
+}
+
+.ant-alert {
+  .ant-alert-message {
+    color: var(--primary-text);
+    font-weight: bold;
+  }
+
+  .ant-alert-description {
+    color: var(--secondary-text);
+    font-size: nth($fontSize, 2);
+    font-weight: 500;
+  }
+
+  .ant-alert-close-icon {
+    .anticon {
+      color: var(--primary-text);
+    }
+  }
+}
+
+.ant-alert-info {
+  background-color: rgba(#089aec, 0.1);
+}
+
+.ant-alert-warning {
+  background-color: rgba(#ff9f00, 0.1);
+}
+
+.ant-alert-error {
+  background-color: rgba(#d74d00, 0.1);
+  border: 1px solid #d74d00;
+}
+
+.ant-alert-success {
+  background-color: rgba(#00d7a3, 0.1);
+}
+
+.ant-input-number-input {
+  padding: 0 !important;
+}

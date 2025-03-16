@@ -1,0 +1,82 @@
+@import "../_variables";
+
+.termsContainer {
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 4rem 1rem;
+  width: 70%;
+  color: var(--primary-text);
+
+  @include responsive(tablet4) {
+    width: 90%;
+  }
+
+  @include responsive(mobile5) {
+    width: 100%;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: nth($fontSize, 9);
+    font-weight: 700;
+    margin-bottom: 3rem;
+
+    @include responsive(tablet2) {
+      font-size: nth($fontSize, 7);
+    }
+  }
+
+  h3 {
+    font-size: nth($fontSize, 5);
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+
+    @include responsive(tablet2) {
+      font-size: nth($fontSize, 3);
+    }
+  }
+
+  p {
+    font-size: nth($fontSize, 3);
+    line-height: 1.7;
+    word-spacing: 2.5px;
+    margin-bottom: 1rem;
+    font-weight: 400;
+    color: var(--primary-text);
+    margin-bottom: 1.6rem;
+
+    @include responsive(tablet2) {
+      font-size: nth($fontSize, 2);
+    }
+  }
+
+  b {
+    color: #000;
+  }
+
+  .section {
+    margin: 3rem 0rem;
+  }
+
+  ol {
+    padding-left: 2rem;
+    margin-bottom: 1.6rem;
+  }
+  li {
+    font-size: nth($fontSize, 3);
+    word-spacing: 2.5px;
+    font-weight: 400;
+    color: var(--primary-text);
+    margin-bottom: 0.3rem;
+    padding-left: 1rem;
+
+    @include responsive(tablet2) {
+      font-size: nth($fontSize, 2);
+    }
+  }
+  a {
+    color: var(--bugbase-green);
+    font-weight: 600;
+    text-decoration: none;
+  }
+}

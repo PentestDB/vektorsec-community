@@ -1,0 +1,370 @@
+@import "../_variables";
+
+.plansContainer {
+  min-height: 100vh;
+  background: var(--navbar-bg);
+
+  .leftCircle1 {
+    position: absolute;
+    width: 36rem;
+    height: 36rem;
+    border-radius: 50%;
+    background: rgba(#a100f2, 0.5);
+    top: -7%;
+    left: -7%;
+    filter: blur(100px);
+  }
+
+  .titleSection {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 2rem;
+
+    .title {
+      font-size: nth($fontSize, 7);
+      color: var(--primary-text);
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .description {
+      text-align: center;
+      font-weight: 500;
+      font-size: nth($fontSize, 3);
+      color: var(--secondary-text);
+      width: 35%;
+    }
+
+    :global {
+      .ant-segmented {
+        background: white !important;
+        border-radius: 100px;
+        position: relative;
+        width: 215px;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+
+        .ant-segmented-group {
+          width: 100%;
+          padding-right: 0.1rem;
+        }
+
+        .ant-segmented-item {
+          width: 100%;
+          padding: 0.4rem 0.8rem;
+          border-radius: 100px;
+          .ant-segmented-item-label {
+            color: black !important;
+            opacity: 0.8;
+            font-weight: 600;
+          }
+        }
+
+        .ant-segmented-item-selected {
+          background: var(--primary-purple);
+          .ant-segmented-item-label {
+            color: var(--primary-text) !important;
+            border-radius: 100px;
+            opacity: 1;
+          }
+        }
+
+        .ant-segmented-thumb {
+          border-radius: 100px;
+          transition: all 0.3s ease-in-out;
+          background-color: var(--primary-purple) !important;
+        }
+      }
+    }
+  }
+
+  .plans {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4rem;
+    flex-wrap: wrap;
+
+    padding-top: 4rem;
+    padding-bottom: 10rem;
+
+    .planCard {
+      max-width: 23rem;
+      padding: 1rem;
+      cursor: pointer;
+      color: var(--primary-text);
+      border-color: transparent;
+      border-radius: 36px;
+      border-radius: 10px;
+      border: 2px solid var(--primary-purple);
+      background: var(--purple-background);
+
+      &:hover {
+        background: linear-gradient(
+          180deg,
+          rgba(142, 53, 255, 0.2) 0%,
+          #8e35ff 82.58%
+        );
+
+        :global {
+          .ant-btn {
+            color: var(--primary-text);
+            border: 2px solid var(--primary-text) !important;
+          }
+        }
+      }
+
+      :global {
+        .ant-card-body {
+          display: flex;
+          flex-direction: column;
+        }
+      }
+
+      .planHeader {
+        height: 17rem;
+        .planName {
+          font-size: nth($fontSize, 6);
+          font-weight: 700;
+          color: var(--primary-text);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+
+          :global {
+            .ant-tag {
+              height: min-content;
+              padding: 0.4rem 0.5rem;
+              border-radius: 13px;
+              border: none;
+              background: rgba(16, 202, 0, 0.2);
+              color: var(--bugbase-green);
+              font-size: 8.708px;
+              font-weight: 700;
+              line-height: normal;
+            }
+          }
+
+          .discountTag {
+            color: var(--navbar-bg);
+            padding-right: 0.6rem;
+          }
+        }
+
+        .planPrice {
+          font-size: nth($fontSize, 9);
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 0.8rem;
+          color: var(--primary-text);
+          margin-bottom: 0;
+
+          span {
+            font-size: nth($fontSize, 4);
+            font-weight: 500;
+            color: var(--secondary-text);
+          }
+        }
+
+        .planPriceMedium {
+          @extend .planPrice;
+          font-size: nth($fontSize, 8);
+          font-weight: 900;
+        }
+
+        .description {
+          color: var(--primary-grey-600);
+          font-size: nth($fontSize, 3);
+          font-weight: 500;
+        }
+
+        :global {
+          .ant-tag {
+            height: min-content;
+            padding: 0.4rem 0.5rem;
+            border-radius: 13px;
+            border: none;
+            color: var(--navbar-bg);
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: normal;
+            margin-bottom: 0.5rem;
+          }
+        }
+      }
+
+      .planHeaderPrivate {
+        @extend .planHeader;
+        height: 15rem;
+      }
+
+      .planFeatures {
+        margin-top: 1.2rem;
+        height: 12.5rem;
+        margin-bottom: 2rem;
+
+        .feature {
+          font-size: nth($fontSize, 2);
+          margin-bottom: 0.8rem;
+          flex-wrap: wrap;
+          display: flex;
+          align-items: flex-start;
+
+          .checkIcon {
+            font-size: 1rem;
+            margin-top: 3px;
+          }
+
+          .featureText {
+            width: 90%;
+            color: var(--primary-text);
+            font-weight: 600;
+          }
+
+          .featureStrike {
+            @extend .featureText;
+            text-decoration: line-through;
+            color: var(--secondary-text);
+          }
+        }
+      }
+
+      .divider {
+        background-color: var(--secondary-text);
+        margin: 2rem 0;
+      }
+
+      .chooseButton {
+        align-self: center;
+        height: 3rem;
+        padding: 0 3rem;
+        border-radius: 10px;
+        background: var(---purple-bg);
+        color: var(--primary-text);
+        font-weight: 500;
+        font-size: nth($fontSize, 3);
+        border-width: 2px;
+        border: 2px solid var(--primary-text) !important;
+
+        &:hover {
+          color: var(--card-bg) !important;
+          background: var(--primary-text);
+        }
+      }
+
+      .chooseButtonPro {
+        @extend .chooseButton;
+        border: 2px solid var(--primary-text) !important;
+        color: var(--primary-text) !important;
+        font-weight: 500;
+      }
+    }
+
+    .planCardActive {
+      @extend .planCard;
+      background: linear-gradient(
+        180deg,
+        rgba(142, 53, 255, 0.2) 0%,
+        #8e35ff 82.58%
+      );
+    }
+  }
+}
+
+.stripePlanContainer {
+  @extend .plansContainer;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  :global {
+    .ant-segmented {
+      background: var(--navbar-bg) !important;
+      border-radius: 7px;
+      position: relative;
+      width: 307px;
+      height: 3rem;
+      display: flex;
+      align-items: center;
+
+      .ant-segmented-item {
+        width: 100%;
+        padding: 0.4rem 0.8rem;
+        margin: 0 0.1rem;
+        border-radius: 4px;
+        .ant-segmented-item-label {
+          color: var(--primary-text) !important;
+          opacity: 0.8;
+          font-weight: 600;
+        }
+      }
+
+      .ant-segmented-item-selected {
+        background: var(--primary-text);
+        .ant-segmented-item-label {
+          color: var(--navbar-bg) !important;
+          border-radius: 100px;
+          opacity: 1;
+        }
+      }
+
+      .ant-segmented-thumb {
+        transition: all 0.3s ease-in-out;
+        background-color: var(--primary-text) !important;
+      }
+    }
+  }
+
+  .plans {
+    gap: 2rem;
+
+    .planCard {
+      background: none;
+      border: 0.5px solid var(--primary-text);
+      border-radius: 23px;
+
+      &:hover {
+        background: none;
+      }
+
+      .chooseButton {
+        border: 2px solid var(--primary-text) !important;
+      }
+    }
+
+    .planCardActive {
+      @extend .planCard;
+      background: var(--primary-purple);
+      border: none;
+
+      &:hover {
+        background: var(--primary-purple);
+      }
+    }
+  }
+}
+
+.upgradeplanContainer {
+  @extend .stripePlanContainer;
+  min-height: fit-content;
+
+  .plans {
+    padding-bottom: 0;
+    padding-top: 2rem;
+  }
+}
+
+.payBillContainer {
+  .description {
+    font-size: nth($fontSize, 3);
+    font-weight: 600;
+    color: var(--secondary-text);
+    margin-bottom: 1rem;
+  }
+}

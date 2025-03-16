@@ -1,0 +1,212 @@
+@import "../_variables";
+
+.billingsContainer {
+  padding: 0 2rem;
+
+  .header {
+    margin-bottom: 5rem;
+
+    h1 {
+      font-size: nth($fontSize, 7);
+      color: var(--primary-text);
+      margin-bottom: 0.75rem;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    p {
+      color: var(--secondary-text);
+      font-size: nth($fontSize, 2);
+      font-weight: 600;
+      margin: 0;
+      padding: 0;
+    }
+  }
+
+  .planWrapper {
+    gap: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+
+    .planCard {
+      flex: 1;
+      display: flex;
+      padding: 1.5rem;
+      max-width: 35rem;
+      border-radius: 4px;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 0.1px solid var(--border-color);
+
+      .cardContent {
+        gap: 1.5rem;
+        display: flex;
+        flex-direction: column;
+
+        .planName {
+          color: var(--primary-text);
+          font-size: nth($fontSize, 5);
+          font-weight: 800;
+
+          .payTag {
+            color: var(--bugbase-green);
+            background-color: var(--bugbase-green-100);
+            font-size: nth($fontSize, 2);
+            font-weight: 600;
+            border-radius: 0.75rem;
+            padding: 0.1rem 0.6rem;
+            margin: 0 1rem;
+          }
+        }
+
+        .planDescription {
+          color: var(--primary-text);
+          font-size: nth($fontSize, 2);
+          font-weight: 600;
+        }
+
+        .billingDate {
+          color: var(--secondary-text);
+          font-size: nth($fontSize, 2);
+          margin-bottom: 1.5rem;
+          font-weight: 600;
+        }
+      }
+
+      .buttons {
+        padding-top: 1.5rem;
+        display: flex;
+        gap: 1.5rem;
+      }
+    }
+
+    .paymentCard {
+      @extend .planCard;
+
+      .options {
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .paymentHeader {
+        display: flex;
+        font-weight: 800;
+        color: var(--primary-text);
+        font-size: nth($fontSize, 5);
+        justify-content: space-between;
+        margin-bottom: 1rem;
+
+        .editBtn {
+          height: unset !important;
+          padding: 0.25rem 1rem !important;
+        }
+      }
+
+      .paymentDescription {
+        color: var(--primary-text);
+        font-size: nth($fontSize, 2);
+        font-weight: 600;
+        margin-bottom: 2rem;
+      }
+
+      .creditCard {
+        display: flex;
+        padding: 1rem;
+        max-width: 20rem;
+        border-radius: 4px;
+        flex-direction: column;
+        border: 0.1px solid var(--border-color);
+
+        .cardNumber {
+          font-size: nth($fontSize, 4);
+          color: var(--primary-text);
+          font-weight: 600;
+          display: flex;
+          gap: 1rem;
+          justify-content: space-between;
+        }
+
+        .cardExpiry {
+          font-size: nth($fontSize, 2);
+          color: var(--secondary-text);
+          margin-top: 1rem;
+          font-weight: 600;
+        }
+
+        .cardEmail {
+          gap: 0.25rem;
+          display: flex;
+          font-weight: 600;
+          margin-top: 2rem;
+          align-items: center;
+          font-size: nth($fontSize, 2);
+          color: var(--secondary-text);
+        }
+      }
+    }
+  }
+
+  .invoiceHistory {
+    margin: 4rem 0;
+
+    h2 {
+      font-weight: 800;
+      color: var(--primary-text);
+      font-size: nth($fontSize, 4);
+    }
+
+    p {
+      font-weight: 600;
+      color: var(--secondary-text);
+      font-size: nth($fontSize, 2);
+    }
+
+    .invoiceTable {
+      :global {
+        .ant-table-content {
+          background: var(--primary-bg) !important;
+          .ant-table-tbody {
+            .ant-table-row {
+              background: var(--secondary-text-100) !important;
+            }
+            .ant-table-cell-row-hover {
+              background: var(--primary-bg) !important;
+            }
+          }
+
+          .ant-table-thead > tr {
+            td,
+            th {
+              background-color: var(--secondary-bg);
+              color: var(--primary-text);
+              font-size: nth($fontSize, 3);
+              font-weight: bold;
+              border: none;
+
+              &::before {
+                display: none;
+              }
+            }
+          }
+
+          .ant-table-tbody > tr > td {
+            border: none;
+            color: var(--primary-text);
+            font-size: nth($fontSize, 3);
+            font-weight: 400;
+            background-color: var(--secondary-bg);
+          }
+
+          .ant-table-placeholder {
+            border: none;
+            background: var(--secondary-bg) !important;
+
+            .ant-empty-description {
+              color: var(--secondary-text);
+            }
+          }
+        }
+      }
+    }
+  }
+}

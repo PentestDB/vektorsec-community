@@ -1,0 +1,43 @@
+:root {
+  --primary-grey: #6d6d6d;
+  --primary-purple: #9933ff;
+  --purple-background: #8e35ff14;
+  --primary-bg: #202020;
+  --secondary-bg: #191919;
+  --black-bg: #1f1f1f;
+  --primary-text: #ffffff;
+  --primary-text-100: #f3f3f3;
+  --secondary-text: #d4d4d4;
+  --purple-bg: #a100f250;
+  --filled-purple: #8e35ff;
+  --filled-purple-100: #8e35ff77;
+  --filled-purple-50: #8e35ff50;
+  --filled-pink: #c10aad;
+  --purple-bg-100: #8e35ff1a;
+  --border-color: #d4d4d4;
+  --bugbase-green: #10ca00;
+  --danger: #ff3e3e;
+  --lime-green: #9fef00;
+  --status-grey: #555555;
+  --cli-bg: #090909;
+  --navbar-bg: #0b0b12;
+  --card-bg: #0e0c18;
+  --input-bg: #ffffff0d;
+
+  --table-bg: #d4d4d426;
+  --border-color-100: #ffffff4d;
+  --secondary-text-100: #d4d4d41a;
+  --primary-purple-100: #a100f21a;
+  --danger-100: #cb444a1a;
+  --danger-600: #ff3e3e90;
+  --bugbase-green-100: #10ca001a;
+  --lime-green-100: #9fef001a;
+  --lime-green-700: #9fef00b3;
+  --orange-700: #ef87515a;
+  --orange: #ef8751;
+  --yellow-700: #f5d60030;
+  --yellow: #f5d600;
+  --secondary-text-500: #d4d4d480;
+  --text-light: #b4b4b4;
+  --primary-grey-600: rgba(255, 255, 255, 0.6);
+}

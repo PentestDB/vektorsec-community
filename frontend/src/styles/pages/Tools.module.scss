@@ -1,0 +1,46 @@
+@import "../_variables";
+
+.toolsContainer {
+  padding: 0 2rem;
+  width: 100%;
+
+  .selectToolBox {
+    border: 1px solid var(--border-color-100);
+    background: var(--secondary-bg);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    height: 10rem;
+
+    h2 {
+      color: var(--primary-text);
+      font-size: nth($fontSize, 3);
+      font-weight: 700;
+      padding-bottom: 12px;
+    }
+
+    .checkboxItem {
+      a {
+        color: var(--secondary-text);
+        font-weight: 400;
+      }
+    }
+
+    :global {
+      .ant-checkbox-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      .ant-checkbox-inner {
+        background: none !important;
+      }
+
+      .ant-checkbox-wrapper {
+        color: var(--primary-text);
+        font-weight: 500;
+      }
+    }
+  }
+}

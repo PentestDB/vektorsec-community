@@ -1,0 +1,193 @@
+@import "../_variables";
+
+.navbarContainer {
+  .bbLogo {
+    z-index: 5;
+    display: inline-block;
+    position: relative;
+    width: 150px;
+    height: 100%;
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+
+      -webkit-mask-image: url("../../assets/copilot-logo-full.svg");
+      mask-image: url("../../assets/copilot-logo-full.svg");
+      -webkit-mask-size: contain;
+      mask-size: contain;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      mask-position: center;
+
+      background: linear-gradient(
+        45deg,
+        #d74d00,
+        #da08ec,
+        #da08ec,
+        #b9d700,
+        #089aec,
+        #00d7a3,
+        #d7c100,
+        #d74d00
+      );
+      background-size: 400% 400%;
+      animation: gradientAnimation 5s infinite;
+    }
+  }
+
+  .navItems {
+    display: flex;
+    gap: 4rem;
+    z-index: 11;
+    align-items: center;
+
+    .navItem {
+      font-weight: 700;
+      color: var(--primary-text);
+      font-size: nth($fontSize, 3);
+      text-decoration: none;
+    }
+
+    .navItemSelected {
+      color: var(--filled-pink);
+      font-weight: 900;
+      text-decoration: none;
+    }
+
+    @media only screen and (max-width: 1207px) {
+      display: none;
+    }
+  }
+}
+
+.hamSec {
+  display: none;
+  z-index: 15;
+
+  @media only screen and (max-width: 1207px) {
+    display: block;
+  }
+
+  .ham {
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+}
+
+.sidebarContainer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background-color: var(--primary-bg);
+  min-height: 100vh;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0px 0px 30px rgba(0, 0, 0, 0.08);
+
+  .closeSec {
+    height: 100px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0rem 1.2rem;
+
+    .close {
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: var(--primary-text);
+    }
+  }
+
+  .sidebarWrapper {
+    width: 18rem;
+    padding-left: 1rem;
+
+    @include responsive(mobile3) {
+      width: 100vw;
+    }
+
+    .loginBtn {
+      background-color: var(--filled-pink) !important;
+      border-radius: 4px;
+    }
+
+    :global {
+      .ant-menu {
+        height: calc(100vh - 100px);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--primary-bg);
+
+        .ant-menu-item {
+          width: 90%;
+          color: var(--primary-text);
+          font-weight: 600;
+          font-size: nth($fontSize, 3);
+
+          &:hover {
+            color: var(--primary-text);
+          }
+        }
+
+        .ant-menu-item-selected {
+          background-color: var(--filled-pink) !important;
+          border-radius: 4px;
+        }
+      }
+    }
+
+    .navLink {
+      font-size: nth($fontSize, 3);
+      font-weight: 500;
+    }
+
+    .activeLink {
+      color: #111;
+    }
+  }
+}
+
+.navbar {
+  display: flex;
+  height: 108px;
+  background: linear-gradient(
+    180deg,
+    #0b0b12 50.5%,
+    rgba(11, 11, 18, 0) 97.24%
+  );
+
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  @include responsive(tablet2) {
+    padding: 0 1rem;
+  }
+}
+
+.noNavbarbg {
+  background: transparent !important;
+}
+
+@keyframes gradientAnimation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}

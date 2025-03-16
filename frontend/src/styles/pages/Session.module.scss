@@ -1,0 +1,589 @@
+@import "../_variables";
+
+.sessionHeaderContainer {
+  padding: 1.4rem 2rem;
+  color: var(--primary-text);
+  border-bottom: 1px solid var(--border-color-100);
+
+  .sessionType {
+    color: var(--secondary-text);
+    font-size: nth($fontSize, 3);
+  }
+
+  .sessionName {
+    font-size: nth($fontSize, 9);
+    font-weight: bold;
+  }
+
+  .sessionDescription {
+    color: var(--secondary-text);
+    font-weight: 600;
+    padding-top: 0.4rem;
+  }
+
+  .exploitBoxAlert {
+    margin-top: 1rem;
+    border-radius: 4px;
+    background-color: #e1ae474d;
+    border: 1px solid #faad14;
+
+    b,
+    div {
+      color: #fff;
+    }
+  }
+
+  .sessionActions {
+    float: right;
+    gap: 1rem;
+    align-items: center;
+    display: flex;
+
+    .exitButton {
+      padding: 0 1rem;
+    }
+
+    .runStatusLabel {
+      margin: 0;
+      font-size: nth($fontSize, 3);
+      font-weight: 700;
+      color: var(--bugbase-green);
+    }
+  }
+}
+
+.settingsHeaderContainer {
+  @extend .sessionHeaderContainer;
+  border-bottom: none;
+  padding: 0 2rem;
+  padding-top: 1.4rem;
+  padding-bottom: 2rem;
+
+  .sessionName {
+    font-size: nth($fontSize, 6);
+  }
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+
+  background: var(--secondary-bg);
+  min-height: 100vh;
+  border-right: 1px solid var(--border-color-100);
+
+  width: 16.5%;
+  padding: 1rem;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  .createNew {
+    .exitSession {
+      padding: 0 1rem 2rem 0;
+      font-size: nth($fontSize, 2);
+      font-weight: 600;
+      color: var(--danger);
+
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+      cursor: pointer;
+    }
+
+    .exitSessionSettings {
+      @extend .exitSession;
+      color: var(--secondary-text-500);
+    }
+  }
+
+  .additionalOptions {
+    color: var(--primary-text-100);
+    .supportStep {
+      .options {
+        font-size: nth($fontSize, 2);
+        font-weight: 600;
+        padding: 0.8rem;
+        display: flex;
+        gap: 0.6rem;
+        cursor: pointer;
+      }
+      padding-bottom: 1rem;
+    }
+
+    .helpOptions {
+      @extend .supportStep;
+      border-top: 2px solid var(--border-color-100);
+      padding-top: 1rem;
+      padding-bottom: 0;
+    }
+  }
+
+  .settingsHeader {
+    font-size: nth($fontSize, 4);
+    font-weight: 600;
+    color: var(--primary-text);
+    margin: 0.5rem 0;
+  }
+
+  .sessionOptions {
+    padding: 1.5rem 0 1rem 0;
+
+    .sidebarIcon {
+      font-size: 16px;
+    }
+
+    .tab {
+      gap: 0.5rem;
+      display: flex;
+      cursor: pointer;
+      font-weight: 600;
+      border-radius: 4px;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.5rem;
+      color: var(--primary-text);
+      transition: all 0.2s ease-in-out;
+
+      &:hover {
+        opacity: 0.9;
+      }
+    }
+
+    .activeTab {
+      @extend .tab;
+      background-color: var(--table-bg);
+    }
+  }
+}
+
+.divider {
+  background-color: var(--secondary-text-500);
+  height: 0.5px;
+}
+
+.statusBar {
+  position: sticky;
+  top: 5rem;
+  display: flex;
+  padding: 0.5rem;
+  color: var(--primary-text);
+  font-size: nth($fontSize, 2);
+  background: var(--status-grey);
+  justify-content: space-around;
+  z-index: 10;
+
+  .status {
+    display: flex;
+    font-weight: 600;
+    align-items: center;
+
+    span {
+      font-weight: 700;
+      margin-left: 0.3rem;
+      color: var(--bugbase-green);
+    }
+
+    .addTimeBtn {
+      font-size: nth($fontSize, 1);
+      margin-left: 1rem;
+      border: 1px solid var(--primary-text);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+
+      cursor: pointer;
+    }
+  }
+}
+
+.sessionMainWrapper {
+  display: flex;
+  gap: 1rem;
+  // padding-bottom: 50rem;
+
+  .sessionContainer {
+    color: var(--primary-text);
+    padding: 2rem;
+    width: 100%;
+
+    .intro {
+      font-size: nth($fontSize, 2);
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    .noGoldResult {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+
+      :global {
+        .ant-result-title {
+          color: var(--secondary-text);
+        }
+      }
+    }
+
+    .errorText {
+      font-weight: 600;
+      color: var(--danger);
+      font-size: nth($fontSize, 5);
+    }
+  }
+
+  .sidebarWrapper {
+    gap: 0.5rem;
+    top: 16rem;
+    position: fixed;
+    display: flex;
+    padding: 1rem;
+    min-width: 7rem;
+    text-align: center;
+    flex-direction: column;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    background-color: var(--secondary-bg);
+
+    .loop {
+      cursor: pointer;
+      font-weight: 700;
+      padding: 0.25rem 0.5rem;
+      color: var(--primary-text);
+      transition: all 0.2s ease-in-out;
+
+      &:hover {
+        opacity: 0.8;
+      }
+    }
+
+    @include responsive(mobile4) {
+      display: none;
+    }
+  }
+}
+
+.sessionRunning {
+  padding-bottom: 25rem;
+}
+
+.tabsContainer {
+  gap: 0.5rem;
+  display: flex;
+  padding: 0 3rem;
+  border-bottom: 0.5px solid var(--secondary-text-500);
+
+  .tabs {
+    gap: 0.5rem;
+    display: flex;
+    cursor: pointer;
+    font-weight: 600;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    color: var(--primary-text);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    font-size: nth($fontSize, 2);
+    border: 0.5px solid var(--secondary-text-500);
+
+    :global {
+      .anticon {
+        color: var(--danger);
+        transition: all 0.2s ease-in-out;
+
+        :hover {
+          opacity: 0.8;
+        }
+      }
+    }
+  }
+
+  .activeTabs {
+    @extend .tabs;
+    color: var(--bugbase-green);
+  }
+}
+
+.processDropdown {
+  :global {
+    .ant-dropdown-menu {
+      background-color: var(--cli-bg);
+      border: 1px solid var(--border-color-100);
+
+      .ant-dropdown-menu-item {
+        color: var(--primary-text);
+        font-size: nth($fontSize, 2);
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+.todoWrapper {
+  padding: 1rem 0.5rem;
+
+  .todoProcess {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    padding: 0.75rem 0.5rem;
+    justify-content: space-between;
+    border-radius: 4px;
+    transition: all 0.2s ease-in-out;
+
+    &:hover {
+      background-color: var(--cli-bg);
+
+      .editBtn,
+      .deleteBtn {
+        display: block;
+      }
+    }
+  }
+
+  .stepTitle {
+    gap: 0.5rem;
+    display: flex;
+    align-items: center;
+    color: var(--primary-text);
+
+    h4 {
+      font-weight: 800;
+      padding-left: 0.5rem;
+      color: var(--primary-text);
+      margin-bottom: 0 !important;
+      font-size: nth($fontSize, 2);
+    }
+  }
+
+  .actions {
+    gap: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .statusTag {
+      font-size: nth($fontSize, 1);
+      font-weight: 600;
+      height: 1.4rem;
+      padding: 0 0.5rem;
+      border-radius: 10px;
+      display: flex;
+      width: max-content;
+      text-align: center;
+      text-transform: capitalize;
+      align-items: center;
+      padding-bottom: 0 !important;
+      color: var(--primary-text);
+    }
+  }
+
+  .editBtn,
+  .deleteBtn {
+    display: none;
+    color: var(--secondary-text);
+    font-size: nth($fontSize, 2);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--primary-text);
+    }
+  }
+
+  :global {
+    .ant-table .ant-table-content {
+      background-color: var(--black-bg) !important;
+
+      .ant-table-thead {
+        tr th {
+          font-weight: 600;
+          color: var(--secondary-text);
+          font-size: nth($fontSize, 3);
+          background-color: var(--black-bg) !important;
+          border-bottom: 1px solid var(--border-color-100);
+
+          &::before {
+            display: none;
+          }
+
+          &:last-child {
+            text-align: center;
+          }
+        }
+      }
+
+      .ant-table-tbody {
+        background-color: var(--black-bg) !important;
+
+        tr {
+          background-color: var(--black-bg) !important;
+
+          .ant-table-cell {
+            font-weight: 500;
+            border-radius: 4px;
+            padding: 0.5rem 0.5rem;
+            font-size: nth($fontSize, 2);
+            border-bottom: none !important;
+            color: var(--primary-text) !important;
+            background-color: var(--black-bg) !important;
+          }
+
+          .ant-table-cell-row-hover {
+            background-color: var(--secondary-bg) !important;
+          }
+        }
+      }
+    }
+  }
+}
+
+.todoPlaceholder {
+  display: flex;
+  padding: 1rem;
+  gap: 1rem;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+
+  h3 {
+    font-weight: 600;
+    color: var(--secondary-text);
+    font-size: nth($fontSize, 3);
+  }
+}
+
+.todoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-color-100);
+
+  p {
+    font-weight: 800;
+    font-size: nth($fontSize, 3);
+    color: var(--secondary-text);
+    margin-bottom: 0;
+  }
+}
+
+.addTodoBtn {
+  background: none;
+  color: var(--secondary-text);
+  border: 1px solid var(--secondary-text);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+
+  .plusIcon {
+    margin-left: 0.5rem;
+    font-size: 1.4rem;
+  }
+}
+
+.addSubTodo {
+  @extend .addTodoBtn;
+  font-size: nth($fontSize, 4);
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 1rem;
+  justify-content: center;
+  border: 1px dashed var(--secondary-text);
+}
+
+.addTodoForm {
+  width: 100% !important;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  div {
+    width: 100%;
+  }
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--primary-grey);
+
+  :global {
+    .ant-form-item .ant-form-item-label > label {
+      color: white !important;
+      font-weight: 500;
+    }
+    .ant-input {
+      background: none;
+      color: var(--primary-text);
+    }
+
+    .ant-input::placeholder,
+    .ant-select-selection-placeholder {
+      color: var(--primary-grey) !important;
+    }
+    .ant-select-selector {
+      background-color: transparent !important;
+      color: var(--primary-text);
+    }
+  }
+
+  .selectAction {
+    width: 20%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    :global {
+      .ant-btn-default {
+        background-color: transparent;
+        border: 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+      }
+
+      .anticon-minus-circle {
+        color: red;
+        font-size: 1.2rem;
+      }
+
+      .anticon-check-circle {
+        font-size: 1.2rem;
+        color: var(--bugbase-green);
+      }
+    }
+  }
+}
+
+.todoForm {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 1rem 1rem 1rem 0.5rem;
+
+  .checkBtn {
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--bugbase-green);
+  }
+
+  .closeBtn {
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--danger);
+  }
+
+  :global {
+    .ant-form {
+      display: flex;
+      width: 100%;
+      gap: 1rem;
+      align-items: center;
+
+      .ant-form-item {
+        margin-bottom: 0;
+      }
+    }
+  }
+}
