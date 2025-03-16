@@ -8,7 +8,7 @@
 ![GitHub Repo stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot)
 ![GitHub forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot)
 
-Pentest Copilot is an AI-powered ethical hacking assistant tool designed to streamline your pentesting workflow. Leveraging OpenAI's GPT models, it supports you through critical stages of penetration testing, including reconnaissance, enumeration, vulnerability identification, privilege escalation and data extraction.
+Pentest Copilot is an AI-powered browser based ethical hacking assistant tool designed to streamline pentesting workflows.
 
 Explore the [Github Wiki](https://github.com/bugbasesecurity/pentest-copilot/wiki) for detailed documentation on the tool's features, installation, and usage.
 
@@ -45,7 +45,7 @@ https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 
 <h2 id="introduction">Introduction 🕵️</h2>
 
-Pentest Copilot is an open-source tool built to assist ethical hackers and penetration testers. By integrating LLMs, it automates and enhances various pentesting tasks, making the process more efficient and accessible. The tool is designed to be deployed locally and includes a Kali Linux container for running penetration testing tools directly from the browser.
+Pentest Copilot is an open-source tool built to assist ethical hackers and penetration testers. By integrating LLMs, it automates and enhances various pentesting tasks. The tool is deployable locally with Docker and includes an optional Kali Linux container for simulating a pentest environment.
 
 <h2 id="installation">Installation 🏗️</h2>
 
@@ -175,8 +175,8 @@ Below is a rundown of what Pentest Copilot brings to the table:
 
 | **Feature**                         | **Description**                                                                                                                    | **Feature**                  | **Description**                                                                                                                      |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **🤖 AI-Powered Guidance**          | Leverages GPT technology to assist users through all stages of penetration testing.                                                | **⚙️ Workflow Support**      | Facilitates reconnaissance, enumeration, vulnerability identification, privilege escalation, data extraction, and footprint cleanup. |
-| **📝 Todo List Management**         | Maintains a per-session todo list, helping you organize prospective attack vectors for structured planning.                        | **🔧 Custom Tool Selection** | Enables users to choose preferred tools by visiting `/settings/tools`, which the copilot uses to generate commands.                  |
+| **🤖 AI-Powered Guidance**          | Leverages LLMs to assist users through all stages of penetration testing.                                                | **⚙️ Workflow Support**      | Facilitates reconnaissance, enumeration, vulnerability identification, privilege escalation, data extraction, and footprint cleanup. |
+| **📝 Todo List Management**         | Maintains a per-session todo list, helping organize prospective attack vectors for structured planning.                        | **🔧 Custom Tool Selection** | Enables users to choose preferred tools by visiting `/settings/tools`, which the copilot uses to generate commands.                  |
 | **🏴‍☠️ Exploit Box (Kali Container)** | Offers a Kali Linux container with pre-installed tools (modifiable via `./kali/tools.sh`), accessible via SSH, OpenVPN, and noVNC. | **💻 Integrated Terminal**   | Provides direct terminal access to the Kali container from the workspace page for command execution.                                 |
 | **🔒 VPN Integration**              | Allows users to upload custom OpenVPN config files and connect the Kali container to a VPN via the UI.                             | **🏠 Workspace Management**  | Supports creating and managing multiple workspaces, each with isolated sessions.                                                     |
 
@@ -204,7 +204,7 @@ The frontend is built on **Next.js 13** with the app router, utilizing **server-
 
 ## Backend Technology
 
-The backend is powered by **Node.js** and **Express.js**, serving APIs and orchestrating pentesting logic. It integrates with **OpenAI models**, manages databases, and facilitates real-time communication.
+The backend is powered by **Node.js (Typescript)** and **Express.js**, serving APIs and orchestrating pentesting logic. It integrates with **OpenAI models**, manages databases, and facilitates real-time communication.
 
 #### Few Key Components:
 
@@ -278,9 +278,9 @@ The frontend server will start at `http://localhost:3000`.
 
 ## Meet the Authors
 
-- Dhruva Goyal - [dhruva@bugbase.ai](mailto:dhruva@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/dhruva-goyal/) | [Github](https://github.com/shero4) | [Twitter](https://twitter.com/dhruvagoyal)
-- Aditya Peela - [aditya@bugbase.ai](mailto:aditya@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/aditya-peela/) | [Github](https://github.com/adityamhn)
-- Sitaraman Subramanian - [sitaraman@bugbase.ai](mailto:sitaraman@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/sitaraman-s/) | [Github](https://github.com/hackerbone)
+- Dhruva Goyal - [dhruva@bugbase.ai](mailto:dhruva@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/dhruva-goyal/) | [Github](https://github.com/shero4) | [X/Twitter](https://x.com/dhruvagoyal)
+- Aditya Peela - [aditya@bugbase.ai](mailto:aditya@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/aditya-peela/) | [Github](https://github.com/adityamhn)  | [Twitter](https://x.com/adityapeela)
+- Sitaraman Subramanian - [sitaraman@bugbase.ai](mailto:sitaraman@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/sitaraman-s/) | [Github](https://github.com/hackerbone)  | [Twitter](https://x.com/situuu_ig)
 
 ## Citations
 
