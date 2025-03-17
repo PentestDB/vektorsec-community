@@ -43,11 +43,29 @@ https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 - [Authors](#authors)
 - [Citations](#citations)
 
-<h2 id="introduction">Introduction 🕵️</h2>
+<h2 id="introduction">Introduction</h2>
 
 Pentest Copilot is an open-source tool built to assist ethical hackers and penetration testers. By integrating LLMs, it automates and enhances various pentesting tasks. The tool is deployable locally with Docker and includes an optional Kali Linux container for simulating a pentest environment.
 
-<h2 id="installation">Installation 🏗️</h2>
+### Why Pentest Copilot?
+
+
+Pentest Copilot is a browser-based, AI-powered assistant that seamlessly integrates into any security professional's workflow. It is a significantly more advanced and evolved penetration testing tool compared to other open-source alternatives like [PentestGPT](https://github.com/greydgl/pentestgpt), Pentest Copilot is tightly coupled with the pentest environment, offering a unified interface where automation and manual control coexist.
+
+Key differentiators that make Pentest Copilot stand out include:
+
+- **Browser-Based AI Assistant**: Fully accessible via the browser, eliminating the need for local cli setup.
+- **Agentic AI Architecture**: Enables the AI to run commands directly in the pentest environment, reducing manual overhead.
+- **Context Preservation**: Maintains session context and provides intelligent summarization at every phase of the engagement.
+- **Dynamic Pentest Checklist**: Continuously updated task lists guide the user through a comprehensive and structured assessment.
+- **Integrated Terminal Access**: A browser-embedded terminal allows seamless interaction with the Kali container or other test environments.
+- **VPN Integration**: Supports secure remote access by connecting to private test networks via OpenVPN.
+- **Workspace Management**: Organizes and manages multiple concurrent pentest sessions with isolated contexts.
+- **Custom Tool Selection**: Offers configurable toolchains to align with individual preferences and organizational standards.
+
+This integrated, automation-first design enables more effective, streamlined, and scalable penetration testing workflows.
+
+<h2 id="installation">Installation</h2>
 
 To get started with Pentest Copilot, follow these steps:
 
@@ -169,7 +187,7 @@ To run Pentest Copilot effectively, your host machine should meet the following 
 > [!IMPORTANT]
 > The Kali container, which runs a full Kali Linux desktop with pentesting tools, requires significant resources. Allocating at least 2GB RAM to the Kali container is recommended for optimal performance.
 
-<h2 id="features">Features 🚀</h2>
+<h2 id="features">Features</h2>
 
 Below is a rundown of what Pentest Copilot brings to the table:
 
