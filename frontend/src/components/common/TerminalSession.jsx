@@ -7,6 +7,7 @@ import { FitAddon } from "xterm-addon-fit";
 import styles from "@/styles/components/CLIcomponent.module.scss";
 import { useDispatch, useSelector } from "react-redux";
 import { setSocket } from "@/store/socket.slice";
+import { useSocketContext } from "@/context/SocketContext";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI;
 
@@ -28,6 +29,7 @@ const TerminalSession = ({
   const [terminalLoading, setTerminalLoading] = useState(true);
 
   const { readyToConnect, status } = useSelector((state) => state.user);
+  const { setSocket } = useSocketContext();
 
   useEffect(() => {
     if (readyToConnect && status === "running") {
@@ -50,13 +52,8 @@ const TerminalSession = ({
         },
       });
 
-      dispatch(
-        setSocket({
-          id: session.id,
-          type: session.type,
-          is_main: session.is_main,
-        })
-      );
+      // Store the socket in context
+      setSocket(session.id, newSocket);
 
       setCurrentSocket(newSocket);
 

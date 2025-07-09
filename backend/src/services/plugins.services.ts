@@ -12,7 +12,7 @@ export const PluginInventory = {
     choice: string
   ) => {
     if (["yes", "edit"].includes(choice)) {
-      const terminalCommand = `echo "oOoOoOoOoOoORunning command - ${commandId}" ; ${command_args.command} ; echo "Command - ${commandId} - finishedqQqQqQqQqQqQ"\n`;
+      const terminalCommand = `echo "<command_id_start>${commandId}</command_id_start>" ; ${command_args.command} ; echo "<command_id_end>${commandId}</command_id_end>"\n`;
       return terminalCommand;
     } else {
       return command_args.output;

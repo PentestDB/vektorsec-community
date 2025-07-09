@@ -251,25 +251,30 @@ const initializeApp = async () => {
                 console.log("SSH shell data:", message);
                 socketServer.emit(`terminal-data-${terminalId}`, message);
                 if (runnningCommand) {
+                  console.log("🔄 Processing command output...");
                   const ansiRegex = /\x1B\[[0-?]*[-\[\]#-~]/g;
                   terminalOutput.push(data.toString());
                   const stringTerminalOutput = terminalOutput
                     .join("")
-                    .replace(ansiRegex, "");
-                  const regex = /Running command - (\w+)/;
+                    .replace(ansiRegex, "")
+                  console.log("📝 Accumulated output length:", stringTerminalOutput.length);
+                  const regex = /<command_id_start>([\w-]+)<\/command_id_start>/;
                   const [_, commandId] =
                     stringTerminalOutput.match(regex) || [];
+                  console.log("🔍 Current output:", { stringTerminalOutput });
                   if (!commandId) {
-                    console.log("Command ID not found");
-                    console.log({ stringTerminalOutput });
+                    console.log("❌ Command ID not found in output");
                   } else {
-                    console.log("Command ID found", commandId);
+                    console.log("✅ Command ID found:", commandId);
+                    console.log("🔍 Checking if command is completed...");
                     const execStatus =
                       trackExecCommandOutput(stringTerminalOutput);
+                    console.log("📊 Exec status:", execStatus?.status);
                     if (execStatus && execStatus.status === "completed") {
+                      console.log("🎉 Command completed! Emitting result...");
                       runnningCommand = false;
                       if (frontendSocket.connected) {
-                        console.log("Emitting command executed");
+                        console.log("📤 Emitting command executed");
                         frontendSocket.emit(`command_executed-${terminalId}`, {
                           status: "success",
                           message: "Command Executed",
@@ -277,10 +282,14 @@ const initializeApp = async () => {
                           commandId: commandId,
                           type: "output",
                         });
+                        console.log("✅ Command result emitted successfully");
                       } else {
-                        console.log("Frontend socket disconnected");
+                        console.log("❌ Frontend socket disconnected");
                       }
                       terminalOutput = [];
+                      console.log("🧹 Terminal output buffer cleared");
+                    } else {
+                      console.log("⏳ Command still running...");
                     }
                   }
                 }
@@ -295,18 +304,22 @@ const initializeApp = async () => {
                 console.log("Terminal input", data);  
                 const input = data.toString();
                 if (!input.includes(":bugbase:::")) {
-                  console.log("Data", input);
+                  console.log("📤 Regular input:", input);
                   stream.write(input);
                 } else {
+                  console.log("🚀 Special command detected:", input);
                   const [type, command] = input.split(":bugbase:::");
                   if (type === "run_command") {
+                    console.log("🎯 Starting new command execution...");
                     runnningCommand = true;
                     terminalOutput = [];
-                    console.log("Running command", command);
+                    console.log("📋 Command to run:", command);
+                    console.log("🔄 Command execution started");
                   }
                   stream.write(
                     command.replace(/:bugbase:::/g, "").trim() + "\n"
                   );
+                  console.log("📤 Command sent to SSH stream");
                 }
               });
               frontendSocket.on("disconnect", () => {

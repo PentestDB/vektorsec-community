@@ -31,6 +31,7 @@ import Loader from "@/components/common/loader/Loader";
 // import { DownCircleFilled } from "@ant-design/icons";
 import StepPage4 from "./Step4";
 import { checkUserAccess } from "@/services/user.service";
+import { useSocketContext } from "@/context/SocketContext";
 
 const SessionMainPage = ({ session_id }) => {
   const queryClient = useQueryClient();
@@ -48,23 +49,15 @@ const SessionMainPage = ({ session_id }) => {
   const containerRef = useRef(null);
 
   const { user, status, sessions } = useSelector((state) => state.user);
-  const { sockets: terminalSockets } = useSelector((state) => state.socket);
-
-  const [terminalSocket, setTerminalSocket] = useState(null);
+  const { getSocket } = useSocketContext();
+  const terminalSocket = getSocket(session_id);
 
   useEffect(() => {
-    if (terminalSockets && terminalSockets.length > 0) {
-      const currentSessionSocket = terminalSockets.find(
-        (socket) => socket.id === session_id && socket.type === "session"
-      );
-
-      if (currentSessionSocket) {
-        setTerminalSocket(currentSessionSocket.socket);
-        dispatch(updateTerminalHeight(window.innerHeight / 3.5));
-      }
+    if (terminalSocket) {
+      dispatch(updateTerminalHeight(window.innerHeight / 3.5));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session_id, terminalSockets]);
+  }, [session_id, terminalSocket]);
 
   useEffect(() => {
     if (terminalSocket && !storingOutput) {
@@ -365,6 +358,12 @@ const SessionMainPage = ({ session_id }) => {
       await refreshSessionData();
       if (data.type === "command") {
         setStoringOutput(true);
+        console.log("[DEBUG] terminalSocket at command emit:", terminalSocket, session_id);
+        if (!terminalSocket) {
+          message.error("Terminal connection is not ready. Please wait and try again.");
+          setStoringOutput(false);
+          return;
+        }
         terminalSocket.emit(
           `terminal-input-${session_id}`,
           `run_command:bugbase:::${data.command}`

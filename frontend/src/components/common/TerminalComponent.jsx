@@ -5,7 +5,8 @@ import styles from "@/styles/components/CLIcomponent.module.scss";
 import { ResizableBox } from "react-resizable";
 import { useDispatch, useSelector } from "react-redux";
 import { Tabs } from "antd";
-import TerminalSession from "./TerminalSession";
+import dynamic from "next/dynamic";
+const TerminalSession = dynamic(() => import("./TerminalSession"), { ssr: false });
 import { usePathname } from "next/navigation";
 import {
   updateActiveTerminal,

@@ -22,6 +22,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQueryClient } from "react-query";
 import { followGoogleTarget } from "@/services/session.service";
 import FileAnalysisModal from "./FileAnalysisModal";
+import { useSocketContext } from "@/context/SocketContext";
 
 const MessageBox = ({
   disabled,
@@ -52,6 +53,10 @@ const MessageBox = ({
   const { status, readyToConnect, recon } = useSelector((state) => state.user);
 
   const { session_id: pathSessionId } = useParams();
+  // Use SocketContext to get the socket instance
+  const { getSocket } = useSocketContext();
+  const sessionId = stepData?.sessionId ?? pathSessionId;
+  const terminalSocket = getSocket(sessionId);
 
   const [passBtnClick, setPassBtnClick] = useState(false);
 
@@ -74,7 +79,6 @@ const MessageBox = ({
 
   const [feedbackType, setFeedbackType] = useState(null);
 
-  const sessionId = stepData?.sessionId ?? null;
   const currentStep = stepData?.currentStep ?? null;
   const currentLoopNumber = stepData?.currentLoopNumber ?? null;
   const currentAction = stepData?.action ?? null;
@@ -865,7 +869,7 @@ const MessageBox = ({
                             <PrimaryButton
                               loading={loading}
                               purple
-                              disabled={disabled}
+                              disabled={disabled || !terminalSocket}
                               htmlType="submit"
                             >
                               Continue

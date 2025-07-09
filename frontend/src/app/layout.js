@@ -7,6 +7,7 @@ import QueryClientContext from "@/components/common/auth/QueryClient";
 import StoreProvider from "@/components/common/auth/StoreProvider";
 import GoogleTagManager from "@/components/common/GoogleTagManager";
 import IntercommMessenger from "@/components/common/IntercommMessenger";
+import { SocketProvider } from "@/context/SocketContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata =
@@ -56,13 +57,15 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <StoreProvider>
-          <QueryClientContext>
-            <GoogleTagManager />
-            <IntercommMessenger />
-            {children}
-          </QueryClientContext>
-        </StoreProvider>
+        <SocketProvider>
+          <StoreProvider>
+            <QueryClientContext>
+              <GoogleTagManager />
+              <IntercommMessenger />
+              {children}
+            </QueryClientContext>
+          </StoreProvider>
+        </SocketProvider>
       </body>
     </html>
   );
