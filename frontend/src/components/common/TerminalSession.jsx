@@ -21,6 +21,9 @@ const TerminalSession = ({
   const dispatch = useDispatch();
   const { sockets, terminal_height } = useSelector((state) => state.socket);
   const [terminal, setTerminal] = useState(null);
+  const [disconnected, setDisconnected] = useState(false);
+  const [forceReconnect, setForceReconnect] = useState(0); // NEW
+  const [terminalHasOutput, setTerminalHasOutput] = useState(false); // NEW
 
   const [terminalLoading, setTerminalLoading] = useState(true);
 
@@ -28,7 +31,17 @@ const TerminalSession = ({
 
   useEffect(() => {
     if (readyToConnect && status === "running") {
-      console.log("Connecting to terminal...");
+      // Clean up any previous terminal/socket
+      if (terminal) {
+        terminal.dispose();
+        setTerminal(null);
+      }
+      if (socket) {
+        socket.disconnect();
+        setCurrentSocket(null);
+      }
+
+      // Initialize new socket and terminal
       const newSocket = io(BACKEND_URL, {
         transports: ["polling", "websocket"],
         withCredentials: true,
@@ -37,10 +50,8 @@ const TerminalSession = ({
         },
       });
 
-      console.log("Socket connected");
       dispatch(
         setSocket({
-          socket: newSocket,
           id: session.id,
           type: session.type,
           is_main: session.is_main,
@@ -50,51 +61,68 @@ const TerminalSession = ({
       setCurrentSocket(newSocket);
 
       const fitAddon = new FitAddon();
-      const terminal = new Terminal({
+      const newTerminal = new Terminal({
         scrollback: 10000,
         fontSize: 13,
         cols: 100,
       });
 
-      terminal.loadAddon(fitAddon);
-
-      setTerminal(terminal);
+      newTerminal.loadAddon(fitAddon);
+      setTerminal(newTerminal);
+      setTerminalHasOutput(false); // reset output state
 
       newSocket.on(`ssh-ready-${session.id}`, () => {
-        console.log("SSH Ready");
         newSocket.emit(
           `terminal-input-${session.id}`,
           "echo 'Connected to terminal...'\n"
         );
         setTerminalLoading(false);
+        setDisconnected(false);
       });
 
       newSocket.on(`disconnect`, (data) => {
-        terminal.dispose();
+        newTerminal.dispose();
         setTerminal(null);
         message.info("Terminal session terminated due to inactivity");
         newSocket.disconnect();
+        setDisconnected(true);
       });
+
+      // Track if any data is received
+      newSocket.on(`terminal-data-${session.id}`, (data) => {
+        setTerminalHasOutput(true);
+      });
+
+      return () => {
+        newTerminal.dispose();
+        newSocket.disconnect();
+      };
     } else {
       if (terminal) {
         terminal.dispose();
         setTerminal(null);
       }
-
       if (socket) {
         socket.disconnect();
         setCurrentSocket(null);
       }
     }
-
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-    };
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyToConnect, status]);
+  }, [readyToConnect, status, session.id, forceReconnect]); // add forceReconnect
+
+  useEffect(() => {
+    if (disconnected && readyToConnect && status === "running") {
+      setDisconnected(false);
+    }
+  }, [disconnected, readyToConnect, status, session.id]);
+
+  // Handler for manual reconnect
+  const handleReconnect = () => {
+    setForceReconnect((prev) => prev + 1);
+    setTerminalHasOutput(false);
+    setDisconnected(false);
+    setTerminalLoading(true);
+  };
 
   console.log("Terminal", terminalLoading, readyToConnect);
 
@@ -109,6 +137,7 @@ const TerminalSession = ({
 
     terminal.open(terminalRef.current);
     fitAddon.fit();
+    terminal.focus();
 
     console.log("Terminal connected", socket);
 
@@ -141,20 +170,14 @@ const TerminalSession = ({
   }, [terminal_height, active_terminal]);
 
   useEffect(() => {
-    if (sockets && sockets.length > 0) {
-      const currentSessionSocket = sockets.find(
-        (socket) => socket.id === session.id && socket.type === session.type
-      );
-      if (currentSessionSocket) {
-        if (currentSessionSocket.socket.connected) {
-          setCurrentSocket(currentSessionSocket.socket);
-        } else {
-          currentSessionSocket.socket.connect();
-          setCurrentSocket(currentSessionSocket.socket);
-        }
-      }
+    // No longer syncing socket from Redux; socket is managed locally
+  }, []);
+
+  useEffect(() => {
+    if (terminal && terminalRef.current) {
+      terminal.focus();
     }
-  }, [sockets, session, active_terminal]);
+  }, [terminal]);
 
   return (
     <>
@@ -170,7 +193,15 @@ const TerminalSession = ({
           around 45-60 seconds)
         </Row>
       )}
-      <div ref={terminalRef} className="copilotTerminalContainer" />
+      {/* Show Reconnect button if disconnected or no output after loading */}
+      {(!terminalHasOutput && !terminalLoading && readyToConnect) || disconnected ? (
+        <Row align="middle" justify="center" style={{ margin: '10px 0' }}>
+          <button onClick={handleReconnect} style={{ padding: '6px 16px', background: '#6c63ff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+            Reconnect Shell
+          </button>
+        </Row>
+      ) : null}
+      <div ref={terminalRef} className="copilotTerminalContainer" tabIndex={0} />
     </>
   );
 };

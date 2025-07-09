@@ -150,9 +150,23 @@ export const exploitBoxStatus = async (req: Request, res: Response) => {
         message: "Session not found",
       });
     }
-
-    // We're now checking if the docker container "kali" is up.
-    const container = docker.getContainer("kali");
+    
+    // Find the Kali container by looking for containers with "kali" in the name
+    const containers = await docker.listContainers();
+    const kaliContainer = containers.find(container => 
+      container.Names && container.Names.some(name => 
+        name.toLowerCase().includes('kali')
+      )
+    );
+    
+    if (!kaliContainer) {
+      return res.status(200).json({
+        message: "Exploit Box is not running",
+        success: false,
+      });
+    }
+    
+    const container = docker.getContainer(kaliContainer.Id);
     let containerInfo;
     try {
       containerInfo = await container.inspect();

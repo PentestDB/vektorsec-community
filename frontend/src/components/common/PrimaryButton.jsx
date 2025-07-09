@@ -1,5 +1,5 @@
 import { Button } from "antd";
-import styles from "src/styles/components/Common.module.scss";
+import styles from "@/styles/components/Common.module.scss";
 
 const PrimaryButton = ({ className, children, ...props }) => {
   const buttonClassNames = `

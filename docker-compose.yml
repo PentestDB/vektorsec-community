@@ -21,6 +21,7 @@ services:
       - "8080:8080"
     volumes:
       - ./kali-data:/kali-data
+      - /var/run/docker.sock:/var/run/docker.sock
     env_file: ./backend/.env
     depends_on:
       - redis
@@ -30,9 +31,9 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI}
-        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT}
-        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID}
+        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
+        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
+        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
     ports:
       - "3000:3000"
     env_file:

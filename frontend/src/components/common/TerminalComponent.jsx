@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
 import styles from "@/styles/components/CLIcomponent.module.scss";
 import { ResizableBox } from "react-resizable";
@@ -116,7 +118,7 @@ const TerminalComponent = ({ show, readyToConnect }) => {
                 const height = data.size.height;
                 setTerminalHeight(height);
               }}
-              maxConstraints={[Infinity, window.innerHeight - 105]}
+              maxConstraints={[Infinity, typeof window !== 'undefined' ? window.innerHeight - 105 : 500]}
             >
               <section>
                 <Tabs

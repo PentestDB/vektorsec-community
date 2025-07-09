@@ -26,6 +26,10 @@ const SessionLayout = ({ children }) => {
 
   const validSession = sessions.find((session) => session.id === session_id);
 
+  if (pathname === "/session") {
+    router.replace("/dashboard");
+  }
+
   useEffect(() => {
     if (sessions.length && !validSession) {
       dispatch(resetSessions());

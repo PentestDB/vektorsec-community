@@ -18,7 +18,6 @@ const socketSlice = createSlice({
       currentSockets.push({
         id: action.payload.id,
         type: action.payload.type,
-        socket: action.payload.socket,
         is_main: action.payload.is_main,
       });
 

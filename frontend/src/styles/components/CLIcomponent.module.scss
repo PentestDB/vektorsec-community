@@ -57,6 +57,15 @@
         }
       }
 
+      .terminalContainer, .terminalContainer * {
+        font-family: 'Menlo', 'Consolas', 'Liberation Mono', 'Courier New', monospace !important;
+        letter-spacing: normal !important;
+        font-variant-ligatures: none !important;
+        white-space: pre !important;
+        word-break: normal !important;
+        overflow-x: auto;
+      }
+
       .terminalContainer {
         bottom: 0;
         width: 100%;

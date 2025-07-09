@@ -1733,6 +1733,32 @@ export const checkVPNStatus = async (req: Request, res: Response) => {
       });
     }
 
+    const sshConfig: any = {
+      host: (process.env.SSH_HOST || 'localhost').trim(),
+      port: parseInt(process.env.SSH_PORT || '4242', 10),
+      username: (process.env.SSH_USERNAME || 'root').trim(),
+    };
+    
+    // Check for private key authentication
+    const privateKeyPath = process.env.SSH_PRIVATE_KEY;
+    if (privateKeyPath) {
+      try {
+        sshConfig.privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+        const passphrase = process.env.SSH_PRIVATE_KEY_PASSPHRASE;
+        if (passphrase) {
+          sshConfig.passphrase = passphrase;
+        }
+        console.log('Using private key for authentication');
+      } catch (err) {
+        console.error('Failed to read private key:', err);
+        throw new Error('Invalid private key');
+      }
+    } else {
+      // Fallback to password authentication
+      sshConfig.password = (process.env.SSH_PASSWORD || '').trim();
+      console.log('Using password for authentication');
+    }
+
     const ssh = new SSHClient();
     ssh
       .on("ready", () => {
@@ -1785,12 +1811,8 @@ export const checkVPNStatus = async (req: Request, res: Response) => {
         console.error("SSH connection error (checkVPNStatus):", err);
         return res.status(400).json({ message: "SSH connection failed" });
       })
-      .connect({
-        host: "localhost",
-        port: 4242,
-        username: "root",
-        password: "",
-      });
+      .connect(sshConfig);
+
   } catch (err) {
     console.log(err);
     return res.status(400).json({

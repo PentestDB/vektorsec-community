@@ -1,6 +1,6 @@
 import { Button, Col, Form, Input, message, Row } from "antd";
 
-import styles from "src/styles/pages/Login.module.scss";
+import styles from "@/styles/pages/Login.module.scss";
 import {  useRouter } from "next/navigation";
 import session from "@/assets/onboarding/session-placeholder.svg";
 import Image from "next/image";

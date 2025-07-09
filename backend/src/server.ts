@@ -44,7 +44,8 @@ const initializeApp = async () => {
     const DEPLOYMENT = await getSecrets("DEPLOYMENT");
     const MONGO_URI = await getSecrets("MONGO_URI");
 
-    redisClient = createClient();
+    const REDIS_URL = await getSecrets("REDIS_URL");
+    redisClient = createClient({ url: REDIS_URL });
 
     const SESS_NAME = await getSecrets("SESS_NAME");
     const SESS_SECRET = await getSecrets("SESS_SECRET");

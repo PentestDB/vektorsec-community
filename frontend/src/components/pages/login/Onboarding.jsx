@@ -1,5 +1,5 @@
 import { Col, Form, Input, Row, Select, message } from "antd";
-import styles from "src/styles/pages/Login.module.scss";
+import styles from "@/styles/pages/Login.module.scss";
 import CopilotLogo from "@/components/common/CopilotLogo";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import { useEffect, useState } from "react";

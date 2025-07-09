@@ -76,45 +76,25 @@ git clone https://github.com/bugbasesecurity/pentest-copilot.git pentest-copilot
 cd pentest-copilot
 ```
 
-### Configure environment variables:
+### Automated environment setup (Recommended):
 
-1. Copy `./backend/.env.template` to `./backend/.env`.
-2. Copy `./frontent/.env.template` to `./frontend/.env`.
+Run the provided setup script to automatically configure your environment variables and perform initial setup:
 
 ```bash
-cp backend/.env.template backend/.env
-cp frontend/.env.template frontend/.env
+bash setup.sh
 ```
 
-Read more about the environment variables in the [Configuration](#configuration) section.
+The script will:
+- Create `.env` files for both backend and frontend from their templates
+- Prompt you to enter OpenAI API keys for both large and small models (optional, but required for AI features)
+- Offer to configure SSH settings for the exploit box (optional)
+- Offer to set up Google Tag Manager for the frontend (optional)
+- Detect if you are running on WSL and adjust hostnames for compatibility
 
-### Set up OpenAI API keys:
-
-In `./backend/.env`, add your OpenAI API keys for both the large and small models:
-
-```env
-MODEL_API_KEY_LARGE=your_large_model_api_key
-MODEL_API_KEY_SMALL=your_small_model_api_key
-```
-
-### Set up custom exploit box (Kali server)
-
-In case you want to use a custom host on the integrated browser terminal, you can set the `SSH_*` environment variables in `./backend/.env`:
-
-```env
-SSH_HOST=localhost
-SSH_PORT=4242
-SSH_USERNAME=root
-
-# use either SSH_PASSWORD or SSH_PRIVATE_KEY + SSH_PRIVATE_KEY_PASSPHRASE
-SSH_PASSWORD=''
-# OR
-SSH_PRIVATE_KEY='/path/to/your/private/key'
-SSH_PRIVATE_KEY_PASSPHRASE=
-```
+You can always edit the generated `.env` files later if needed.
 
 > [!NOTE]
-> If you are using a custom host, ensure that the host is accessible from the backend server.
+> If you prefer manual setup, see the [Manual Environment Setup](#manual-environment-setup) section below.
 
 ### Launch the tool using Docker Compose:
 
@@ -124,42 +104,71 @@ docker compose up --build -d
 
 ### Access the application:
 
-Once the containers are running, access the frontend at `http://127.0.0.1:3000`.
+Once the containers are running, access the frontend at `http://localhost:3000`.
+
+---
+
+### <a id="setup-sh"></a>About `setup.sh`
+
+The `setup.sh` script is an interactive setup utility that streamlines the initial configuration process. It:
+- Copies environment variable templates to `.env` files for both backend and frontend
+- Prompts for OpenAI API keys (for both large and small models)
+- Optionally configures SSH settings for the exploit box (Kali container or custom host)
+- Optionally configures Google Tag Manager for the frontend
+- Detects WSL and adjusts hostnames for compatibility
+- Provides clear instructions and warnings for each step
+
+You can rerun the script at any time to update your configuration, or manually edit the `.env` files as needed.
+
+---
+
+### <a id="manual-environment-setup"></a>Manual Environment Setup (Advanced)
+
+If you prefer to set up environment variables manually:
+
+1. Copy `./backend/.env.template` to `./backend/.env`.
+2. Copy `./frontend/.env.template` to `./frontend/.env`.
+3. Edit the `.env` files to add your API keys and adjust settings as needed.
+
+---
 
 <h2 id="configuration">Environment Variable Configuration ⚙️</h2>
 
-Pentest Copilot requires configuration through environment variables. Below are the key variables for both the main directory and the backend.
+Pentest Copilot requires configuration through environment variables. Below are the key variables for both the frontend and backend.
 
-### Main Directory (`.env`)
+### Frontend (`./frontend/.env`)
 
-| Variable                | Description                      | Default                 |
-| ----------------------- | -------------------------------- | ----------------------- |
-| NEXT_PUBLIC_BACKEND_URI | URL of the backend server        | `http://127.0.0.1:8080` |
-| NEXT_PUBLIC_DEPLOYMENT  | Deployment environment           | `LOCAL`                 |
-| NEXT_PUBLIC_GTM_ID      | Google Tag Manager ID (optional) |                         |
+| Variable                | Description                                 | Default                  |
+| ----------------------- | ------------------------------------------- | ------------------------ |
+| NEXT_PUBLIC_BACKEND_URI | URL of the backend server                   | `http://localhost:8080`  |
+| NEXT_PUBLIC_DEPLOYMENT  | Deployment environment                      | `LOCAL`                  |
+| NEXT_PUBLIC_GTM_ID      | Google Tag Manager ID (optional)            |                          |
 
 ### Backend (`./backend/.env`)
 
-| Variable                   | Description                            | Default                                    |
-| -------------------------- | -------------------------------------- | ------------------------------------------ |
-| BASE_URL_FRONTEND          | URL of the frontend server             | `http://127.0.0.1:3000`                    |
-| DEPLOYMENT                 | Deployment environment                 | `LOCAL`                                    |
-| MONGO_DATABASE             | Name of the MongoDB database           | `pentestcopilot`                           |
-| MONGO_URI                  | MongoDB connection string              | `mongodb://127.0.0.1:27017/pentestcopilot` |
-| SESS_LIFETIME              | Session lifetime in milliseconds       | `1000`                                     |
-| SESS_NAME                  | Session cookie name                    | `sid`                                      |
-| SESS_SECRET                | Secret key for signing session cookies | `thisismysessionsecret!123`                |
-| PORT                       | Port for the backend server            | `8080`                                     |
-| MODEL_LARGE                | Identifier for the large OpenAI model  | `gpt-4-1106-preview`                       |
-| MODEL_API_KEY_LARGE        | API key for the large OpenAI model     | `your_large_model_api_key`                 |
-| MODEL_SMALL                | Identifier for the small OpenAI model  | `gpt-3.5-turbo-1106`                       |
-| MODEL_API_KEY_SMALL        | API key for the small OpenAI model     | `your_small_model_api_key`                 |
-| SSH_HOST                   | Hostname for the custom exploit box    | `localhost`                                |
-| SSH_PORT                   | Port for the custom exploit box        | `4242`                                     |
-| SSH_USERNAME               | Username for the custom exploit box    | `root`                                     |
-| SSH_PASSWORD               | Password for the custom exploit box    | `''`                                       |
-| SSH_PRIVATE_KEY            | Path to the private key for SSH        | `'/path/to/private/key'`                   |
-| SSH_PRIVATE_KEY_PASSPHRASE | Passphrase for the private key         | `''`                                       |
+| Variable                   | Description                                                    | Default                                 |
+| -------------------------- | -------------------------------------------------------------- | --------------------------------------- |
+| BASE_URL_FRONTEND          | URL of the frontend server                                     | `http://localhost:3000`                 |
+| DEPLOYMENT                 | Deployment environment                                         | `LOCAL`                                 |
+| MONGO_DATABASE             | Name of the MongoDB database                                   | `pentestcopilot`                        |
+| MONGO_URI                  | MongoDB connection string                                      | `mongodb://mongodb:27017/pentestcopilot`|
+| REDIS_URL                  | Redis connection string                                        | `redis://redis:6379`                    |
+| SESS_LIFETIME              | Session lifetime in milliseconds                              | `1000`                                  |
+| SESS_NAME                  | Session cookie name                                            | `sid`                                   |
+| SESS_SECRET                | Secret key for signing session cookies                         | `thisismysessionsecret!123`             |
+| PORT                       | Port for the backend server                                    | `8080`                                  |
+| MODEL_LARGE                | Identifier for the large OpenAI model                          | `gpt-4-1106-preview`                    |
+| MODEL_API_KEY_LARGE        | API key for the large OpenAI model                             |                                         |
+| MODEL_BASE_PATH_LARGE      | Base URL/path for the large model's API (optional override)    |                                         |
+| MODEL_SMALL                | Identifier for the small OpenAI model                          | `gpt-3.5-turbo-1106`                    |
+| MODEL_API_KEY_SMALL        | API key for the small OpenAI model                             |                                         |
+| MODEL_BASE_PATH_SMALL      | Base URL/path for the small model's API (optional override)    |                                         |
+| SSH_HOST                   | Hostname for the exploit box (Kali or custom host)             | `kali`                                  |
+| SSH_PORT                   | Port for the exploit box (Kali or custom host)                 | `22`                                    |
+| SSH_USERNAME               | Username for the exploit box                                   | `root`                                  |
+| SSH_PASSWORD               | Password for the exploit box                                   | `''`                                    |
+| SSH_PRIVATE_KEY            | Path to the private key for SSH                                | `'/path/to/private/key'`                |
+| SSH_PRIVATE_KEY_PASSPHRASE | Passphrase for the private key                                 | `''`                                    |
 
 <h2 id="system-components">Architecture 🏗️</h2>
 
@@ -183,9 +192,16 @@ To run Pentest Copilot effectively, your host machine should meet the following 
 - **RAM**: 8GB (to accommodate the frontend, backend, databases, and the resource-intensive Kali container)
 - **Processor**: Multi-core processor (for smooth operation of multiple containers)
 - **Disk Space**: 20GB (for the Kali container and other components)
+- **Node.js**: Version 22 (required for both frontend and backend)
 
 > [!IMPORTANT]
 > The Kali container, which runs a full Kali Linux desktop with pentesting tools, requires significant resources. Allocating at least 2GB RAM to the Kali container is recommended for optimal performance.
+
+> [!NOTE]
+> The environment variables are configured for Docker Compose setup by default. If you're using a custom container setup or running services outside of Docker, you may need to modify variables such as:
+> - `MONGO_URI` (change from `mongodb://mongodb:27017/pentestcopilot` to your MongoDB host)
+> - `REDIS_URL` (change from `redis://redis:6379` to your Redis host)
+> - `SSH_HOST` and `SSH_PORT` (change from `kali:22` to your Kali/exploit box host and port)
 
 <h2 id="features">Features</h2>
 

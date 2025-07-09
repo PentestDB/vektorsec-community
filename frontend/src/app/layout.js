@@ -49,6 +49,7 @@ export const metadata =
     : {
         title: "Pentest Copilot - Bugbase",
         robots: "noindex, nofollow",
+        metadataBase: new URL("http://localhost:3000"),
       };
 
 export default function RootLayout({ children }) {

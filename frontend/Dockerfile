@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20 AS builder
+FROM node:22 AS builder
 
 WORKDIR /usr/src/app
 
@@ -25,7 +25,7 @@ COPY . .
 RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 # Runtime stage
-FROM node:20 AS runner
+FROM node:22 AS runner
 
 WORKDIR /usr/src/app
 
