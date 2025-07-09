@@ -103,13 +103,13 @@ prompt_ssh_config() {
     
     if [[ "$configure_ssh" =~ ^[Yy]$ ]]; then
         echo
-        echo -e "${CYAN}SSH Host (default: localhost):${NC} "
+        echo -e "${CYAN}SSH Host (default: kali [Docker installation]):${NC} "
         read -r ssh_host
-        ssh_host=${ssh_host:-localhost}
+        ssh_host=${ssh_host:-kali}
         
-        echo -e "${CYAN}SSH Port (default: 4242):${NC} "
+        echo -e "${CYAN}SSH Port (default: 22 [Docker installation]):${NC} "
         read -r ssh_port
-        ssh_port=${ssh_port:-4242}
+        ssh_port=${ssh_port:-22}
         
         echo -e "${CYAN}SSH Username (default: root):${NC} "
         read -r ssh_username
