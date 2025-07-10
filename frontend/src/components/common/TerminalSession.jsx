@@ -80,7 +80,7 @@ const TerminalSession = ({
       newSocket.on(`disconnect`, (data) => {
         newTerminal.dispose();
         setTerminal(null);
-        message.info("Terminal session terminated due to inactivity");
+        message.info("Terminal session disconnected due to page navigation/refresh/connection lost");
         newSocket.disconnect();
         setDisconnected(true);
       });

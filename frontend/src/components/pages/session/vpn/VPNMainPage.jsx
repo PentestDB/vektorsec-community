@@ -74,6 +74,7 @@ const VPNMainPage = ({ sessionId }) => {
       message.error("Exploit box is not running!");
       return;
     }
+    console.log("Connecting to VPN");
     await connectVPNmutation.mutateAsync({ session_id: sessionId });
   };
 

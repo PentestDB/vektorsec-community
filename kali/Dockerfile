@@ -35,8 +35,28 @@ EXPOSE 22 4200 1194/udp 9020
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# install just core tooling first (so this layer can cache)
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      build-essential curl git wget \
+      libpcap-dev \
+      ffuf wfuzz gobuster hydra patator crowbar nmap masscan \
+      amass whatweb wpscan sqlmap \
+      golang \
+      kali-linux-core \
+      kali-linux-default \
+      && apt-get clean \
+      && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      iputils-ping \
+      && apt-get clean \
+      && rm -rf /var/lib/apt/lists/*
+
+# install your security tools in a second layer
 COPY tools.sh /tools.sh
 RUN chmod +x /tools.sh
-# RUN /tools.sh
+# RUN DEBIAN_FRONTEND=noninteractive /tools.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

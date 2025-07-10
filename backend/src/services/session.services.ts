@@ -21,7 +21,7 @@ import SessionsModel, {
 import mongoose from "mongoose";
 import UserModel, { UserDoc } from "../models/User/User.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
-import { runRAGforMetasploit } from "./copilot.services";
+import { runCommandOnKali, runRAGforMetasploit } from "./copilot.services";
 
 export interface HistoryData {
   role: "user" | "assistant" | "system";
@@ -578,8 +578,10 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
 
     fixedRes.commands = commands;
 
+    const summary = sessionData.context?.summary ?? "";
+
     if (containsMsfvenomOrMsfconsole) {
-      fixedRes = await runRAGforMetasploit(fixedRes, commands, sessionId);
+      fixedRes = await runRAGforMetasploit(fixedRes, commands, summary, sessionId);
     }
 
     for (const command of fixedRes.commands) {
@@ -1633,114 +1635,77 @@ export const initNetcatSession = async (sessionId: string) => {
   };
 };
 
-export const trackExecCommandOutput = (output: string) => {
+export const trackExecCommandOutput = async (output: string, currentCommand: string) => {
   try {
     console.log("🔍 Starting trackExecCommandOutput...");
-    // Strip ANSI escape codes and other undesired sequences
-    const cleanedOutput = output
-      .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "") // ANSI escape sequences
-      .replace(/[^\x20-\x7E\n]+/g, "") // Remove non-ASCII and non-printable chars, but keep newline
-      .trim();
-
-    console.log("📝 Cleaned output length:", cleanedOutput.length);
+    console.log("📝 Raw output length:", output.length);
 
     const regex = /<command_id_start>([\w-]+)<\/command_id_start>/;
-    const match = cleanedOutput.match(regex);
+    const match = output.match(regex);
 
     if (!match) {
-      console.log("❌ No command ID found in cleaned output");
-      console.log("🔍 Cleaned output preview:", cleanedOutput.substring(0, 200));
+      console.log("❌ No command ID found in output");
       return;
     }
 
     const commandId = match[1];
-    console.log("✅ Command ID found in trackExecCommandOutput:", commandId);
+    console.log("✅ Command ID found:", commandId);
 
     const commandOutputStart = `<command_id_start>${commandId}</command_id_start>`;
     const commandOutputEnd = `<command_id_end>${commandId}</command_id_end>`;
 
-    // Find all occurrences of start and end markers
-    const allStartMarkers = [];
-    const allEndMarkers = [];
-    
-    let startIndex = 0;
-    while ((startIndex = cleanedOutput.indexOf(commandOutputStart, startIndex)) !== -1) {
-      allStartMarkers.push(startIndex);
-      startIndex += commandOutputStart.length;
-    }
-    
-    let endIndex = 0;
-    while ((endIndex = cleanedOutput.indexOf(commandOutputEnd, endIndex)) !== -1) {
-      allEndMarkers.push(endIndex);
-      endIndex += commandOutputEnd.length;
-    }
+    // Find the last start marker and last end marker (to handle multiple occurrences)
+    const lastStartIndex = output.lastIndexOf(commandOutputStart);
+    const lastEndIndex = output.lastIndexOf(commandOutputEnd);
 
-    console.log("📍 All start markers found at:", allStartMarkers);
-    console.log("📍 All end markers found at:", allEndMarkers);
+    console.log("📍 Last start marker at:", lastStartIndex);
+    console.log("📍 Last end marker at:", lastEndIndex);
 
-    // Find the first start marker that's not part of an echo command
-    let actualStartIdx = -1;
-    for (const startIdx of allStartMarkers) {
-      // Check if this marker is part of an echo command
-      const beforeMarker = cleanedOutput.substring(Math.max(0, startIdx - 50), startIdx);
-      if (!beforeMarker.includes('echo "') && !beforeMarker.includes('echo \'')) {
-        actualStartIdx = startIdx;
-        break;
-      }
-    }
-
-    // Find the first end marker that's not part of an echo command
-    let actualEndIdx = -1;
-    for (const endIdx of allEndMarkers) {
-      // Check if this marker is part of an echo command
-      const beforeMarker = cleanedOutput.substring(Math.max(0, endIdx - 50), endIdx);
-      if (!beforeMarker.includes('echo "') && !beforeMarker.includes('echo \'')) {
-        actualEndIdx = endIdx;
-        break;
-      }
-    }
-
-    console.log("📍 Actual start marker index:", actualStartIdx);
-    console.log("📍 Actual end marker index:", actualEndIdx);
-
-    if (actualStartIdx === -1) {
-      console.log("⏳ No actual start marker found (not in echo), still processing...");
+    if (lastStartIndex === -1) {
+      console.log("⏳ No start marker found, still processing...");
       return { status: "processing", commandId };
     }
 
-    if (actualEndIdx === -1) {
-      console.log("⏳ No actual end marker found (not in echo), still processing...");
+    if (lastEndIndex === -1) {
+      console.log("⏳ No end marker found, still processing...");
       return { status: "processing", commandId };
     }
 
     // Make sure end marker comes after start marker
-    if (actualEndIdx <= actualStartIdx) {
+    if (lastEndIndex <= lastStartIndex) {
       console.log("⏳ End marker before start marker, still processing...");
       return { status: "processing", commandId };
     }
 
-    // Check if there's actual command output between start and end markers
-    const outputBetweenMarkers = cleanedOutput.substring(
-      actualStartIdx + commandOutputStart.length,
-      actualEndIdx
-    ).trim();
+    // Extract the command output (only the content between markers, excluding the markers themselves)
+    let commandOutput = output
+      .substring(lastStartIndex + commandOutputStart.length, lastEndIndex)
+      .trim();
 
-    console.log("📄 Output between markers length:", outputBetweenMarkers.length);
-    console.log("📄 Output between markers preview:", outputBetweenMarkers.substring(0, 100));
+    console.log("📄 Command output length:", commandOutput.length);
+    console.log("📄 Command output preview:", commandOutput.substring(0, 100));
 
     // If there's no meaningful output between markers, the command hasn't actually run yet
-    if (outputBetweenMarkers.length < 10) {
+    if (commandOutput.length < 5 && !currentCommand.includes(">")) {
       console.log("⏳ Not enough output between markers, still processing...");
       return { status: "processing", commandId };
     }
 
-    // Extract the command output (only the content between markers, excluding the markers themselves)
-    const commandOutput = cleanedOutput
-      .substring(actualStartIdx + commandOutputStart.length, actualEndIdx)
-      .trim();
-
     console.log("🎉 Command completed! Output length:", commandOutput.length);
     console.log("📤 Returning completed status with output");
+
+
+    if (currentCommand.includes(">") && commandOutput.length < 5) {
+      commandOutput = "Output stored in file";
+    }
+
+    // const tempFile = `/tmp/cmd_output_${commandId}.txt`;
+    
+    // const getFileContent = `cat ${tempFile}`;
+
+    // const fileContent = await runCommandOnKali(getFileContent);
+
+    // console.log("🔍 File content:", fileContent);
 
     return {
       status: "completed",

@@ -1,0 +1,38 @@
+services:
+  mongodb:
+    image: mongo:latest
+    volumes:
+      - mongodb-data:/data/db
+    ports:
+      - "27017:27017"
+    restart: always
+
+  redis:
+    image: redis:latest
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    restart: always
+
+  kali:
+    build: ./kali
+    container_name: kali
+    privileged: true
+    ports:
+      - "4242:22"
+      - "4200:4200"
+      - "1194:1194/udp"
+      - "9020:9020"
+      - "5901:5901"
+    volumes:
+      - ./kali-data:/kali-data
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+  kali-data:
+    driver: local

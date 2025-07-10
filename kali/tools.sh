@@ -1,93 +1,73 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-# Ensure necessary dependencies are installed
-apt update -y && apt install -y git golang wget unzip tar python3-pip
+# 1) ensure env for Go tools
+export GOPATH="/root/go"
+export PATH="$PATH:$GOPATH/bin:/usr/local/bin"
 
-# List of tools to install
-TOOLS=(
-    "ffuf"
-    "feroxbuster"
-    "dirsearch"
-    "wfuzz"
-    "gobuster"
-    "subfinder"
-    "amass"
-    "findomain"
-    "assetfinder"
-    "shuffledns"
-    "puredns"
-    "dnsx"
-    "hydra"
-    "patator"
-    "crowbar"
-    "wpscan"
-    "drupwn"
-    "cmsmap"
-    "nmap"
-    "naabu"
-    "smap"
-    "masscan"
-    "waybackurls"
-    "gau"
-    "xnLinkFinder"
-    "waymore"
-    "katana"
-    "gospider"
-    "whatsweb"
-    "ttpx"
-    "sqlmap"
-    "ghauri"
-    "graphqlmap"
-    "dalfox"
-    "secretfinder"
-    "httpx"
-    "nuclei"
-    "airixss"
-    "qsreplace"
-    "cloud_enum"
-    "S3Scanner"
-    "apkleaks"
-)
+# 2) update & install system packages
+apt-get update -y
+apt-get install -y --no-install-recommends \
+    git golang wget unzip tar python3-pip build-essential \
+    libpcap-dev \
+    ffuf wfuzz gobuster hydra patator crowbar nmap masscan \
+    amass whatweb wpscan sqlmap \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-# List to store failed installations
-FAILED_INSTALLS=()
+# 3) go-install ProjectDiscovery & other Go tools
+go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install github.com/projectdiscovery/shuffledns/cmd/shuffledns@latest
+go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest
+go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/katana/cmd/katana@latest
+go install github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+go install github.com/tomnomnom/qsreplace@latest
+go install github.com/tomnomnom/waybackurls@latest
+go install github.com/lc/gau@latest
+go install github.com/hahwul/dalfox@latest
+go install github.com/ffuf/ffuf/v2@latest
+go install github.com/epi052/feroxbuster@latest
+go install github.com/jaeles-project/gospider@latest
+go install github.com/tomnomnom/assetfinder@latest
+go install github.com/d3mondev/puredns/v2@latest
 
-# Function to check installation success
-check_installation() {
-    if ! command -v "$1" &> /dev/null; then
-        FAILED_INSTALLS+=("$1")
-    fi
-}
+# 4) install Python-based tools via pip or Git
+pip3 install --no-cache-dir drupwn cmsmap apkleaks
 
-# Install tools using apt, pip, and go where necessary
-for TOOL in "${TOOLS[@]}"; do
-    echo "Installing: $TOOL"
-    case "$TOOL" in
-        "nmap") apt install -y nmap;;
-        # "feroxbuster") apt install -y feroxbuster;;
-        # "ffuf"|"gau"|"waybackurls"|"airixss"|"qsreplace") go install github.com/tomnomnom/$TOOL@latest;;
-        # # "dirsearch") git clone https://github.com/maurosoria/dirsearch.git && cd dirsearch && pip3 install -r requirements.txt && cd ..;;
-        # "wfuzz"|"gobuster"|"nmap"|"masscan"|"hydra"|"patator") apt install -y $TOOL;;
-        # "subfinder"|"naabu"|"dnsx"|"httpx"|"nuclei"|"katana") go install -v github.com/projectdiscovery/$TOOL/cmd/$TOOL@latest;;
-        # "assetfinder") go install github.com/tomnomnom/assetfinder@latest;;
-        # "findomain") wget https://github.com/Edu4rdSHL/findomain/releases/latest/download/findomain-linux -O /usr/local/bin/findomain && chmod +x /usr/local/bin/findomain;;
-        # "gospider") go install github.com/jaeles-project/gospider@latest;;
-        # # "waymore"|"whatsweb"|"xnLinkFinder") git clone https://github.com/xnl-h4ck3r/$TOOL.git && cd $TOOL && pip3 install -r requirements.txt && cd ..;;
-        # # "cloud_enum"|"S3Scanner"|"apkleaks") git clone https://github.com/initstring/$TOOL.git && cd $TOOL && pip3 install -r requirements.txt && cd ..;;
-        # # "drupwn"|"cmsmap") git clone https://github.com/immunIT/$TOOL.git && cd $TOOL && pip3 install -r requirements.txt && cd ..;;
-        # "sqlmap"|"wpscan") apt install -y $TOOL;;
-        # # "ghauri"|"graphqlmap"|"dalfox"|"secretfinder") git clone https://github.com/r0oth3x49/$TOOL.git && cd $TOOL && pip3 install -r requirements.txt && cd ..;;
-        *) echo "Skipping unknown tool: $TOOL";;
-    esac
-    check_installation "$TOOL"
+git clone https://github.com/maurosoria/dirsearch.git /opt/dirsearch \
+ && pip3 install --no-cache-dir -r /opt/dirsearch/requirements.txt \
+ && ln -s /opt/dirsearch/dirsearch.py /usr/local/bin/dirsearch
+
+git clone https://github.com/xnl-h4ck3r/xnLinkFinder.git /opt/xnLinkFinder \
+ && pip3 install --no-cache-dir -r /opt/xnLinkFinder/requirements.txt \
+ && ln -s /opt/xnLinkFinder/xnLinkFinder.py /usr/local/bin/xnLinkFinder
+
+git clone https://github.com/xnl-h4ck3r/waymore.git /opt/waymore \
+ && pip3 install --no-cache-dir -r /opt/waymore/requirements.txt \
+ && ln -s /opt/waymore/waymore.py /usr/local/bin/waymore
+
+git clone https://github.com/r0oth3x49/ghauri.git /opt/ghauri \
+ && pip3 install --no-cache-dir -r /opt/ghauri/requirements.txt \
+ && ln -s /opt/ghauri/ghauri.py /usr/local/bin/ghauri
+
+git clone https://github.com/swisskyrepo/GraphQLmap.git /opt/graphqlmap \
+ && pip3 install --no-cache-dir -r /opt/graphqlmap/requirements.txt \
+ && ln -s /opt/graphqlmap/graphqlmap.py /usr/local/bin/graphqlmap
+
+git clone https://github.com/m4ll0k/SecretFinder.git /opt/SecretFinder \
+ && pip3 install --no-cache-dir -r /opt/SecretFinder/requirements.txt \
+ && ln -s /opt/SecretFinder/SecretFinder.py /usr/local/bin/secretfinder
+
+# 5) make sure go bins are in /usr/local/bin
+for bin in $(ls $GOPATH/bin); do
+  ln -sf "$GOPATH/bin/$bin" /usr/local/bin/$bin
 done
 
-# Display unsuccessful installations
-if [ ${#FAILED_INSTALLS[@]} -ne 0 ]; then
-    echo "\nThe following tools failed to install:" 
-    for FAIL in "${FAILED_INSTALLS[@]}"; do
-        echo "- $FAIL"
-    done
-else
-    echo "\nAll tools installed successfully."
-fi
+echo
+echo "🎉 All tools installed. They're now available in any shell:"
+echo "   e.g. run: ffuf, subfinder, dirsearch, sqlmap, nuclei, etc."
+echo
+echo "If you ever add more go-based tools, just:"
+echo "  export GOPATH=/root/go; go install <>@latest"

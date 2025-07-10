@@ -226,6 +226,7 @@ const initializeApp = async () => {
         }
 
         let runnningCommand = false;
+        let currentCommand = "";
         let terminalOutput: string[] = [];
 
         const terminalId = frontendSocket.handshake.query.terminalId as string;
@@ -246,7 +247,7 @@ const initializeApp = async () => {
                 console.error(err);
                 return;
               }
-              stream.on("data", (data: any) => {
+              stream.on("data", async (data: any) => {
                 const message = data.toString();
                 console.log("SSH shell data:", message);
                 socketServer.emit(`terminal-data-${terminalId}`, message);
@@ -258,23 +259,23 @@ const initializeApp = async () => {
                     .join("")
                     .replace(ansiRegex, "")
                   console.log("📝 Accumulated output length:", stringTerminalOutput.length);
+                  
                   const regex = /<command_id_start>([\w-]+)<\/command_id_start>/;
                   const [_, commandId] =
                     stringTerminalOutput.match(regex) || [];
-                  console.log("🔍 Current output:", { stringTerminalOutput });
+                  console.log("🔍 Current output preview:", stringTerminalOutput.substring(0, 200));
                   if (!commandId) {
                     console.log("❌ Command ID not found in output");
                   } else {
                     console.log("✅ Command ID found:", commandId);
                     console.log("🔍 Checking if command is completed...");
-                    const execStatus =
-                      trackExecCommandOutput(stringTerminalOutput);
+                    const execStatus = await trackExecCommandOutput(stringTerminalOutput, currentCommand);
                     console.log("📊 Exec status:", execStatus?.status);
                     if (execStatus && execStatus.status === "completed") {
-                      console.log("🎉 Command completed! Emitting result...");
                       runnningCommand = false;
                       if (frontendSocket.connected) {
-                        console.log("📤 Emitting command executed");
+                        console.log(`Emitting command_executed-${terminalId}`)
+                        console.log("🔍 Command output:", execStatus.output);
                         frontendSocket.emit(`command_executed-${terminalId}`, {
                           status: "success",
                           message: "Command Executed",
@@ -312,6 +313,7 @@ const initializeApp = async () => {
                   if (type === "run_command") {
                     console.log("🎯 Starting new command execution...");
                     runnningCommand = true;
+                    currentCommand = command;
                     terminalOutput = [];
                     console.log("📋 Command to run:", command);
                     console.log("🔄 Command execution started");

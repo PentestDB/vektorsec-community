@@ -138,7 +138,12 @@ You can use tools like ${returnTools(
     )} exclusively in your pentest. You can use any other tools if you feel they are necessary, but you need to justify why you are using them.
 Resources like wordlists are available /usr/share/wordlists - in it is /dirb, /metasploit, /seclists, /wfuzz, /rockyou.txt, /sqlmap.txt, /john.lst, /nmap.lst and /amass. Use the common.txt located at /usr/share/wordlists/dirb/common.txt for directory enumeration by default.
         
-Please strictly adhere to the following guidelines: always return the response in JSON format specified by the user, without any additional text before or after the JSON response, and without using code blocks.`;
+Please strictly adhere to the following guidelines: always return the response in JSON format specified by the user, without any additional text before or after the JSON response, and without using code blocks.
+
+Tool Usage:
+IMPORTANT: Always try to use tools with their silent outputs since we only care about the final output and not the intermediate outputs/ debug statements.
+
+`;
   },
 
   task_description: async () => {

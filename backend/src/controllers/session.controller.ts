@@ -15,7 +15,7 @@ import {
 import SessionsModel from "../models/Sessions/Sessions.model";
 import UserModel from "../models/User/User.model";
 import FeedbackModel from "../models/Feedback/Feedback.model";
-import { deleteSubprocessOfMainThread } from "../utils/redis/store";
+import { deleteSubprocessOfMainThread, getSessionData, storeSession } from "../utils/redis/store";
 import getSecrets from "../utils/getSecrets";
 import axios from "axios";
 import { load } from "cheerio";
@@ -104,25 +104,32 @@ export const initiateCopilotSession = async (req: Request, res: Response) => {
 
 export const generateCopilotCommand = async (req: Request, res: Response) => {
   try {
+    console.log("[generateCopilotCommand] Called");
     const { userId } = res.locals;
+    console.log("[generateCopilotCommand] userId:", userId);
 
     if (!userId) {
+      console.log("[generateCopilotCommand] User ID not found in res.locals");
       return res.status(400).json({
         message: "User ID not found",
       });
     }
 
     const user = await UserModel.findById(userId);
+    console.log("[generateCopilotCommand] user:", user);
 
     if (!user) {
+      console.log("[generateCopilotCommand] User not found in DB");
       return res.status(400).json({
         message: "User not found",
       });
     }
 
     const { sessionId } = req.body;
+    console.log("[generateCopilotCommand] sessionId from body:", sessionId);
 
     if (!sessionId) {
+      console.log("[generateCopilotCommand] sessionId not provided in body");
       return res.status(400).json({
         message: "Invalid Session",
       });
@@ -132,21 +139,24 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
       sessionId: sessionId,
       uid: user._id,
     });
+    console.log("[generateCopilotCommand] session:", session);
 
     if (!session) {
+      console.log("[generateCopilotCommand] Session not found in DB");
       return res.status(400).json({
         message: "Session Not found",
       });
     }
 
     const lastLoopStep = session.loopHistory[session.loopHistory.length - 1];
+    console.log("[generateCopilotCommand] lastLoopStep:", lastLoopStep);
 
     if (
       lastLoopStep &&
       lastLoopStep.status !== "not-started" &&
       lastLoopStep.stepType === "command"
     ) {
-      console.log("Command is being processed");
+      console.log("[generateCopilotCommand] Command is being processed");
       return res.status(200).json({
         message: "Generate Command Running",
       });
@@ -154,13 +164,14 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
       lastLoopStep &&
       !["command", "init"].includes(lastLoopStep.stepType)
     ) {
-      console.log("Completing todo and updating loop");
+      console.log("[generateCopilotCommand] Completing todo and updating loop");
       await changeLastHistoryStepStatus({
         sessionId: sessionId,
         lastStepType: "todo",
         status: "completed",
       });
 
+      console.log("[generateCopilotCommand] Marked last todo as completed");
       await SessionsModel.findOneAndUpdate(
         { sessionId, uid: user._id },
         {
@@ -175,12 +186,14 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
           arrayFilters: [{ "elem.loop": session.loopStepsPerformed }],
         }
       );
+      console.log("[generateCopilotCommand] Updated loop endTimestamp and incremented loopStepsPerformed");
 
       await addNextloopHistoryStep({
         sessionId,
         type: "command",
         data: {},
       });
+      console.log("[generateCopilotCommand] Added next loop history step of type 'command'");
 
       await SessionsModel.findOneAndUpdate(
         { sessionId, uid: user._id },
@@ -193,37 +206,43 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
           },
         }
       );
+      console.log("[generateCopilotCommand] Pushed new loop to session");
 
       return res.status(200).json({
         sessionId: sessionId,
         message: "Generating Command",
       });
     } else {
-      console.log("Will generate command now");
+      console.log("[generateCopilotCommand] Will generate command now");
 
       await changeLastHistoryStepStatus({
         sessionId: sessionId,
         lastStepType: "command",
         status: "processing",
       });
+      console.log("[generateCopilotCommand] Changed last command step status to 'processing'");
 
       const response = await generateCommand({
         sessionId,
       });
+      console.log("[generateCopilotCommand] generateCommand response:", response);
 
       if (!response) {
+        console.log("[generateCopilotCommand] Error: No response from generateCommand");
         return res.status(400).json({
           message: "Error Occured while generating command",
         });
       }
 
       if (response.status === "error") {
+        console.log("[generateCopilotCommand] Error status from generateCommand:", response.message);
         return res.status(400).json({
           message: response.message,
           status: response.status,
         });
       }
 
+      console.log("[generateCopilotCommand] Command generated successfully");
       return res.status(200).json({
         sessionId: sessionId,
         message: response.message,
@@ -231,7 +250,7 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
       });
     }
   } catch (err: any) {
-    console.log(err);
+    console.log("[generateCopilotCommand] Exception:", err);
     return res.status(400).json({
       message: "Failed to initiate Copilot",
       err:

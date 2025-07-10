@@ -1443,7 +1443,7 @@ export const uploadOpenVPNforUser = async (req: Request, res: Response) => {
       }
       const fileBuffer = file.buffer;
 
-      const localFolder = "/kali-data";
+      const localFolder = "./kali-data";
 
       if (!fs.existsSync(localFolder)) {
         fs.mkdirSync(localFolder, { recursive: true });
@@ -1498,6 +1498,33 @@ export const disconnectVPN = async (req: Request, res: Response) => {
       });
     }
 
+    const sshConfig: any = {
+      host: (process.env.SSH_HOST || 'localhost').trim(),
+      port: parseInt(process.env.SSH_PORT || '4242', 10),
+      username: (process.env.SSH_USERNAME || 'root').trim(),
+    };
+    
+    // Check for private key authentication
+    const privateKeyPath = process.env.SSH_PRIVATE_KEY;
+    if (privateKeyPath) {
+      try {
+        sshConfig.privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+        const passphrase = process.env.SSH_PRIVATE_KEY_PASSPHRASE;
+        if (passphrase) {
+          sshConfig.passphrase = passphrase;
+        }
+        console.log('Using private key for authentication');
+      } catch (err) {
+        console.error('Failed to read private key:', err);
+        throw new Error('Invalid private key');
+      }
+    } else {
+      // Fallback to password authentication
+      sshConfig.password = (process.env.SSH_PASSWORD || '').trim();
+      console.log('Using password for authentication');
+    }
+
+
     const ssh = new SSHClient();
     ssh
       .on("ready", () => {
@@ -1543,12 +1570,7 @@ export const disconnectVPN = async (req: Request, res: Response) => {
         console.error("SSH connection error (disconnectVPN):", err);
         return res.status(400).json({ message: "SSH connection failed" });
       })
-      .connect({
-        host: "localhost",
-        port: 4242,
-        username: "root",
-        password: "",
-      });
+      .connect(sshConfig);
 
   } catch (err) {
     console.log(err);
@@ -1584,7 +1606,7 @@ export const connectToVPN = async (req: Request, res: Response) => {
       });
     }
 
-    const localVPNFilePath = "/kali-data/openvpn.ovpn"
+    const localVPNFilePath = "./kali-data/openvpn.ovpn"
     if (!fs.existsSync(localVPNFilePath)) {
       return res
         .status(400)
@@ -1603,53 +1625,95 @@ export const connectToVPN = async (req: Request, res: Response) => {
       });
     }
 
+    const sshConfig: any = {
+      host: (process.env.SSH_HOST || 'localhost').trim(),
+      port: parseInt(process.env.SSH_PORT || '4242', 10),
+      username: (process.env.SSH_USERNAME || 'root').trim(),
+    };
+    
+    // Check for private key authentication
+    const privateKeyPath = process.env.SSH_PRIVATE_KEY;
+    if (privateKeyPath) {
+      try {
+        sshConfig.privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+        const passphrase = process.env.SSH_PRIVATE_KEY_PASSPHRASE;
+        if (passphrase) {
+          sshConfig.passphrase = passphrase;
+        }
+        console.log('Using private key for authentication');
+      } catch (err) {
+        console.error('Failed to read private key:', err);
+        throw new Error('Invalid private key');
+      }
+    } else {
+      // Fallback to password authentication
+      sshConfig.password = (process.env.SSH_PASSWORD || '').trim();
+      console.log('Using password for authentication');
+    }
+
     const ssh = new SSHClient();
 
     ssh
       .on("ready", () => {
         console.log("SSH connection ready (connectToVPN)");
-
-        ssh.exec("openvpn --config /root/openvpn.ovpn --daemon && echo '|<<<<STARTED>>>>|'", (err, stream) => {
-          if (err) {
-            console.error("Error starting OpenVPN:", err);
+        // 1. Upload the VPN file to the remote host using SFTP
+        ssh.sftp((sftpErr, sftp) => {
+          if (sftpErr) {
+            console.error("SFTP error:", sftpErr);
             ssh.end();
-            return res
-              .status(400)
-              .json({ message: "Failed to connect to VPN" });
+            return res.status(400).json({ message: "Failed to establish SFTP connection" });
           }
+          const readStream = fs.createReadStream(localVPNFilePath);
+          const writeStream = sftp.createWriteStream("/root/openvpn.ovpn");
 
-          stream.on("close", (code: any, signal: any) => {
-            console.log("OpenVPN start command closed", { code, signal });
+          writeStream.on('close', () => {
+            console.log('VPN file uploaded to remote host.');
+            // 2. Start OpenVPN after successful upload
+            ssh.exec("openvpn --config /root/openvpn.ovpn --daemon && echo '|<<<<STARTED>>>>|'", (err, stream) => {
+              if (err) {
+                console.error("Error starting OpenVPN:", err);
+                ssh.end();
+                return res
+                  .status(400)
+                  .json({ message: "Failed to connect to VPN" });
+              }
+
+              stream.on("close", (code: any, signal: any) => {
+                console.log("OpenVPN start command closed", { code, signal });
+                ssh.end();
+
+                if (code === 0) {
+                  return res.status(200).json({ message: "Connected to VPN" });
+                } else {
+                  return res
+                    .status(400)
+                    .json({ message: "Failed to connect to VPN" });
+                }
+              });
+
+              stream.on("data", (data: Buffer) => {
+                console.log("OpenVPN stdout:", data.toString());
+              });
+              stream.stderr.on("data", (data: Buffer) => {
+                console.error("OpenVPN stderr:", data.toString());
+              });
+            });
+          });
+
+          writeStream.on('error', (err: Error) => {
+            console.error('Error uploading VPN file:', err);
             ssh.end();
-
-            if (code === 0) {
-              return res.status(200).json({ message: "Connected to VPN" });
-            } else {
-              return res
-                .status(400)
-                .json({ message: "Failed to connect to VPN" });
-            }
+            return res.status(400).json({ message: "Failed to upload VPN file to remote host" });
           });
 
-          stream.on("data", (data: Buffer) => {
-            console.log("OpenVPN stdout:", data.toString());
-
-          });
-          stream.stderr.on("data", (data: Buffer) => {
-            console.error("OpenVPN stderr:", data.toString());
-          });
+          readStream.pipe(writeStream);
         });
       })
       .on("error", (err) => {
         console.error("SSH connection error (connectToVPN):", err);
         return res.status(400).json({ message: "SSH connection failed" });
       })
-      .connect({
-        host: "localhost",
-        port: 4242,
-        username: "root",
-        password: "",
-      });
+      .connect(sshConfig);
 
   } catch (err) {
     console.log(err);
@@ -1677,7 +1741,7 @@ export const checkUserOpenVPN = async (req: Request, res: Response) => {
       });
     }
 
-    const openVPNFilePath =  "/kali-data/openvpn.ovpn"
+    const openVPNFilePath =  "./kali-data/openvpn.ovpn"
 
     if (!fs.existsSync(openVPNFilePath)) {
       return res.status(400).json({ message: "OpenVPN file not found" });
