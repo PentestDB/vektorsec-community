@@ -137,7 +137,9 @@ const VPNMainPage = ({ sessionId }) => {
               {data ? (
                 <>
                   <p>
-                    <Upload {...props} fileList={[]}>
+                    <Upload {...props} fileList={[]}
+                      accept=".ovpn,.conf"
+                    >
                       <PrimaryButton yellow icon={<FiEdit2 />}>
                         Upload a new config file
                       </PrimaryButton>

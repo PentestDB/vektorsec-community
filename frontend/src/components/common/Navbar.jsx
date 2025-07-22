@@ -47,20 +47,6 @@ const Navbar = ({ nobg }) => {
         }}
       >
         <CopilotLogo />
-        <span
-          style={{
-            color: "#fff",
-            position: "relative",
-            zIndex: 1,
-            top: "-42px",
-            left: ".8rem",
-            border: "none",
-            fontSize: "14px",
-            fontWeight: "bold",
-          }}
-        >
-          Public Beta
-        </span>{" "}
       </a>
 
       <div className={styles.navItems}>

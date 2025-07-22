@@ -10,3 +10,5 @@ tsconfig.tsbuildinfo
 ./*.pem
 
 ./logs/*
+
+kali-data/*

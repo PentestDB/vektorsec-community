@@ -66,21 +66,6 @@ const RegisterPage = () => {
           }}
         >
           <CopilotLogo plain />
-          <span
-            style={{
-              marginRight: "auto",
-              marginLeft: "0.4rem",
-              color: "#fff",
-              position: "relative",
-              zIndex: 1,
-              bottom: "-3px",
-              border: "none",
-              fontSize: "14px",
-              fontWeight: "bold",
-            }}
-          >
-            Public Beta
-          </span>{" "}
         </div>
         <div className={styles.loginForm}>
           <h1>

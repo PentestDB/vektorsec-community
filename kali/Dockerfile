@@ -43,14 +43,18 @@ RUN apt-get update && \
       ffuf wfuzz gobuster hydra patator crowbar nmap masscan \
       amass whatweb wpscan sqlmap \
       golang \
-      kali-linux-core \
-      kali-linux-default \
+      iputils-ping \
+      net-tools \
+      dnsutils \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
 
+# installing Kali Linux core tools (Comment this out if you want a smaller and faster image build)
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      iputils-ping \
+      kali-linux-headless \
+      kali-linux-core \
+      kali-linux-default \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
 

@@ -15,7 +15,7 @@ import {
 import SessionsModel from "../models/Sessions/Sessions.model";
 import UserModel from "../models/User/User.model";
 import FeedbackModel from "../models/Feedback/Feedback.model";
-import { deleteSubprocessOfMainThread, getSessionData, storeSession } from "../utils/redis/store";
+import { deleteSubprocessOfMainThread, getSessionData, storeSession, updateSessionHistory } from "../utils/redis/store";
 import getSecrets from "../utils/getSecrets";
 import axios from "axios";
 import { load } from "cheerio";
@@ -874,6 +874,23 @@ export const undoPreviousStep = async (req: Request, res: Response) => {
       session.loops.pop();
 
       await deleteSubprocessOfMainThread(sessionId);
+
+      const currentSessionData = await getSessionData(sessionId);
+
+      if (currentSessionData?.history && currentSessionData.history.length > 0) {
+        
+        for (let i = currentSessionData.history.length - 1; i >= 0; i--) {
+          if (currentSessionData.history[i].role === "assistant") {
+            currentSessionData.history.splice(i, 1);
+            break;
+          }
+        }
+
+        await updateSessionHistory({
+          sessionId,
+          history: currentSessionData.history,
+        });
+      }
 
       await session.save();
     } else if (lastLoopStep.stepType === "output") {
