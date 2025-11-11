@@ -98,9 +98,39 @@ You can always edit the generated `.env` files later if needed.
 
 ### Launch the tool using Docker Compose:
 
+Pentest Copilot offers different Docker Compose configurations depending on your needs:
+
+#### Option 1: Full Stack with Kali Container (Slower build) [Build time approx ~30mins]
+
+To deploy all containers including the Kali Linux pentest environment:
+
+```bash
+docker compose -f docker-compose.kali.yml up --build -d
+```
+
+This configuration includes:
+- Frontend
+- Backend
+- MongoDB
+- Redis
+- **Kali Linux container** (with pre-installed pentesting tools, SSH, OpenVPN, and noVNC access)
+
+#### Option 2: Core Services Only (Fast build) [Build time approx ~12-15mins]
+
+To deploy without the Kali container (useful if you have a separate exploit box):
+
 ```bash
 docker compose up --build -d
 ```
+
+This configuration includes:
+- Frontend
+- Backend
+- MongoDB
+- Redis
+
+> [!NOTE]
+> If you're using Option 2, make sure to configure the `SSH_HOST`, `SSH_PORT`, `SSH_USERNAME`, and SSH credentials in `./backend/.env` to point to your custom exploit box.
 
 ### Access the application:
 

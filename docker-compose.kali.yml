@@ -42,25 +42,24 @@ services:
       - backend
     restart: unless-stopped
 
-  # uncomment this incase you wish to use KALI box, uncomment volume as well
-  # kali:
-  #   build: ./kali
-  #   container_name: kali
-  #   privileged: true
-  #   ports:
-  #     - "4242:22"
-  #     - "4200:4200"
-  #     - "1194:1194/udp"
-  #     - "9020:9020"
-  #     - "5901:5901"
-  #   volumes:
-  #     - ./kali-data:/kali-data
-  #   restart: unless-stopped
+  kali:
+    build: ./kali
+    container_name: kali
+    privileged: true
+    ports:
+      - "4242:22"
+      - "4200:4200"
+      - "1194:1194/udp"
+      - "9020:9020"
+      - "5901:5901"
+    volumes:
+      - ./kali-data:/kali-data
+    restart: unless-stopped
 
 volumes:
   mongodb-data:
     driver: local
   redis-data:
     driver: local
-  # kali-data:
-  #   driver: local
+  kali-data:
+    driver: local

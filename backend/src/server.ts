@@ -90,11 +90,18 @@ const initializeApp = async () => {
         "x-csrf-token",
         "Set-Cookie",
       ],
-      origin: localWhitelist,
+      origin: (origin: any, callback: any) => {
+        if (!origin || localWhitelist.includes(origin)) {
+          return callback(null, true);
+        }
+        callback(new Error("Not allowed by CORS"));
+      },
       credentials: true,
       methods: "GET,HEAD,OPTIONS,PUT,PATCH,POST,DELETE",
     };
+
     app.use(cors(corsOptions));
+    app.options("*", cors(corsOptions));
 
     app.use(
       express.urlencoded({
@@ -147,7 +154,7 @@ const initializeApp = async () => {
       port: parseInt(process.env.SSH_PORT || '4242', 10),
       username: (process.env.SSH_USERNAME || 'root').trim(),
     };
-    
+
     // Check for private key authentication
     const privateKeyPath = process.env.SSH_PRIVATE_KEY;
     if (privateKeyPath) {
@@ -259,7 +266,7 @@ const initializeApp = async () => {
                     .join("")
                     .replace(ansiRegex, "")
                   console.log("📝 Accumulated output length:", stringTerminalOutput.length);
-                  
+
                   const regex = /<command_id_start>([\w-]+)<\/command_id_start>/;
                   const [_, commandId] =
                     stringTerminalOutput.match(regex) || [];
@@ -302,7 +309,7 @@ const initializeApp = async () => {
               });
 
               frontendSocket.on(`terminal-input-${terminalId}`, (data) => {
-                console.log("Terminal input", data);  
+                console.log("Terminal input", data);
                 const input = data.toString();
                 if (!input.includes(":bugbase:::")) {
                   console.log("📤 Regular input:", input);
