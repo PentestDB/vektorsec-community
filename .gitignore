@@ -15,3 +15,8 @@
 
 **/.DS_Store
 **/.vscode
+
+# Run script generated files
+.run.conf
+docker-compose.override.yml
+ssh-keys/

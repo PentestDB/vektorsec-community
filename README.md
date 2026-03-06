@@ -76,61 +76,40 @@ git clone https://github.com/bugbasesecurity/pentest-copilot.git pentest-copilot
 cd pentest-copilot
 ```
 
-### Automated environment setup (Recommended):
+### One-command setup & launch (Recommended):
 
-Run the provided setup script to automatically configure your environment variables and perform initial setup:
+Run the all-in-one launcher to configure, build, and start Pentest Copilot:
 
 ```bash
-bash setup.sh
+bash run.sh
 ```
 
-The script will:
+On **first run** the script will:
 - Create `.env` files for both backend and frontend from their templates
-- Prompt you to enter OpenAI API keys for both large and small models (optional, but required for AI features)
-- Offer to configure SSH settings for the exploit box (optional)
-- Offer to set up Google Tag Manager for the frontend (optional)
-- Detect if you are running on WSL and adjust hostnames for compatibility
+- Prompt you to enter API keys for both large and small models (optional, but required for AI features)
+- Let you choose a deployment mode — **Full Stack with Kali** or **Core Services Only**
+- Configure SSH to the exploit box (Kali defaults, or your external box with password / private-key auth)
+- Automatically copy SSH private keys into a Docker-mounted directory so the backend container can access them
+- Detect WSL and adjust hostnames for compatibility
+- Offer to configure Google Tag Manager for the frontend (optional)
+- Build and start all Docker containers
 
-You can always edit the generated `.env` files later if needed.
+On **subsequent runs** the script detects the existing configuration and asks whether to:
+1. Start with the existing config (fast restart)
+2. Rebuild images with the existing config
+3. Reconfigure everything from scratch
+
+Additional commands:
+
+```bash
+bash run.sh stop      # Stop all containers
+bash run.sh logs      # Tail container logs (e.g. run.sh logs backend)
+bash run.sh status    # Show running containers
+bash run.sh --help    # Show help
+```
 
 > [!NOTE]
 > If you prefer manual setup, see the [Manual Environment Setup](#manual-environment-setup) section below.
-
-### Launch the tool using Docker Compose:
-
-Pentest Copilot offers different Docker Compose configurations depending on your needs:
-
-#### Option 1: Full Stack with Kali Container (Slower build) [Build time approx ~30mins]
-
-To deploy all containers including the Kali Linux pentest environment:
-
-```bash
-docker compose -f docker-compose.kali.yml up --build -d
-```
-
-This configuration includes:
-- Frontend
-- Backend
-- MongoDB
-- Redis
-- **Kali Linux container** (with pre-installed pentesting tools, SSH, OpenVPN, and noVNC access)
-
-#### Option 2: Core Services Only (Fast build) [Build time approx ~12-15mins]
-
-To deploy without the Kali container (useful if you have a separate exploit box):
-
-```bash
-docker compose up --build -d
-```
-
-This configuration includes:
-- Frontend
-- Backend
-- MongoDB
-- Redis
-
-> [!NOTE]
-> If you're using Option 2, make sure to configure the `SSH_HOST`, `SSH_PORT`, `SSH_USERNAME`, and SSH credentials in `./backend/.env` to point to your custom exploit box.
 
 ### Access the application:
 
@@ -138,17 +117,20 @@ Once the containers are running, access the frontend at `http://localhost:3000`.
 
 ---
 
-### <a id="setup-sh"></a>About `setup.sh`
+### <a id="run-sh"></a>About `run.sh`
 
-The `setup.sh` script is an interactive setup utility that streamlines the initial configuration process. It:
+`run.sh` is an all-in-one interactive launcher that handles setup, configuration, building, and running Pentest Copilot. It:
 - Copies environment variable templates to `.env` files for both backend and frontend
-- Prompts for OpenAI API keys (for both large and small models)
-- Optionally configures SSH settings for the exploit box (Kali container or custom host)
-- Optionally configures Google Tag Manager for the frontend
+- Prompts for model API keys (large and small), model names, and optional base URL overrides
+- Lets you choose between Full Stack (with Kali) or Core Services Only deployment
+- Configures SSH for the Kali container or an external exploit box (password or private-key auth)
+- Copies SSH private keys into a Docker-mounted volume (`./ssh-keys/`) so they are accessible inside the backend container
+- Generates a `docker-compose.override.yml` when SSH key mounts are needed
 - Detects WSL and adjusts hostnames for compatibility
-- Provides clear instructions and warnings for each step
+- Saves your deployment preference to `.run.conf` for fast re-runs
+- Builds and starts all containers via Docker Compose
 
-You can rerun the script at any time to update your configuration, or manually edit the `.env` files as needed.
+Run it again at any time — it will detect existing config and let you restart, rebuild, or reconfigure.
 
 ---
 
