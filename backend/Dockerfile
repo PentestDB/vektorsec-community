@@ -1,26 +1,22 @@
-FROM node:20-alpine
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
 # Install required packages for building native modules
 RUN apk add --no-cache openssh make gcc g++ python3
 
-# Set the working directory
 WORKDIR /usr/src/backend
 
-# Copy package.json and install dependencies
-COPY package*.json ./
-RUN npm install
+COPY package.json pnpm-lock.yaml* ./
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
-# Copy the rest of the application code
 COPY . .
 
-# Increase memory for Node.js during build
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
-# Build the application
-RUN npm run build
+RUN pnpm run build
 
-# Expose the port
 EXPOSE 8080
 
-# Start the application
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]

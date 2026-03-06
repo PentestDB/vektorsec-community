@@ -16,19 +16,15 @@
   min-width: 80%;
   border-radius: 4px;
   color: var(--primary-text);
-  :global {
-    .ant-input {
-      background-color: transparent;
-      color: var(--primary-text);
-    }
-
-    .ant-input::placeholder {
-      color: var(--secondary-text);
-    }
-
-    .ant-input-suffix {
-      color: var(--primary-text);
-    }
+  :global(.ant-input) {
+    background-color: transparent;
+    color: var(--primary-text);
+  }
+  :global(.ant-input::placeholder) {
+    color: var(--secondary-text);
+  }
+  :global(.ant-input-suffix) {
+    color: var(--primary-text);
   }
 
   .label {
@@ -118,24 +114,20 @@
   padding: 0 2rem;
 
   .netcatFormItem {
-    :global {
-      label {
-        font-size: nth($fontSize, 3);
-        color: var(--primary-text);
-        margin-bottom: 0.5rem;
-        letter-spacing: 0.6px;
-      }
-
-      .ant-input {
-        background-color: var(--secondary-text-100);
-        border: 1px solid var(--secondary-text-500);
-        height: 2.4rem;
-        color: var(--primary-text);
-
-        &::placeholder {
-          color: var(--secondary-text-500);
-        }
-      }
+    :global(label) {
+      font-size: nth($fontSize, 3);
+      color: var(--primary-text);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.6px;
+    }
+    :global(.ant-input) {
+      background-color: var(--secondary-text-100);
+      border: 1px solid var(--secondary-text-500);
+      height: 2.4rem;
+      color: var(--primary-text);
+    }
+    :global(.ant-input::placeholder) {
+      color: var(--secondary-text-500);
     }
   }
 }

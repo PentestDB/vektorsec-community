@@ -34,30 +34,28 @@
       border: 1px solid var(--border-color);
     }
 
-    :global {
-      .ant-form-item-label label {
-        color: var(--primary-text);
-      }
+    :global(.ant-form-item-label label) {
+      color: var(--primary-text);
+    }
 
-      .ant-input {
-        background-color: transparent;
-        color: var(--primary-text);
-        height: 2.5rem;
-      }
+    :global(.ant-input) {
+      background-color: transparent;
+      color: var(--primary-text);
+      height: 2.5rem;
+    }
 
-      .ant-input::placeholder {
-        color: var(--secondary-text-500);
-      }
+    :global(.ant-input::placeholder) {
+      color: var(--secondary-text-500);
+    }
 
-      .anticon-camera {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        background-color: var(--primary-text);
-        border-radius: 50%;
-        padding: 0.5rem;
-        font-size: nth($fontSize, 3);
-      }
+    :global(.anticon-camera) {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background-color: var(--primary-text);
+      border-radius: 50%;
+      padding: 0.5rem;
+      font-size: nth($fontSize, 3);
     }
   }
 

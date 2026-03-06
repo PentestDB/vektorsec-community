@@ -18,43 +18,15 @@
       position: relative;
       transition: all 0.3s ease-in-out;
 
-      :global {
-        // .xterm-viewport {
-        //   overflow:auto !important;
-
-        //   &::-webkit-scrollbar {
-        //     width: 10px;
-        //   }
-
-        //   /* Track */
-        //   &::-webkit-scrollbar-track {
-        //     background: #f1f1f1;
-        //   }
-
-        //   /* Handle */
-        //   &::-webkit-scrollbar-thumb {
-        //     background: #888;
-        //   }
-
-        //   /* Handle on hover */
-        //   &::-webkit-scrollbar-thumb:hover {
-        //     background: #555;
-        //   }
-        // }
-        div:first-child {
-          .xterm-screen {
-            background-color: var(--cli-bg);
-            width: 100% !important;
-
-            .xterm-rows {
-              height: 100%;
-
-              * {
-                font-family: "Menlo for powerline", "Menlo", monospace !important;
-              }
-            }
-          }
-        }
+      :global(div:first-child .xterm-screen) {
+        background-color: var(--cli-bg);
+        width: 100% !important;
+      }
+      :global(div:first-child .xterm-screen .xterm-rows) {
+        height: 100%;
+      }
+      :global(div:first-child .xterm-screen .xterm-rows *) {
+        font-family: "Menlo for powerline", "Menlo", monospace !important;
       }
 
       .terminalContainer, .terminalContainer * {
@@ -113,37 +85,22 @@
       }
 
       .terminalTabs {
-        :global {
-          .ant-tabs-nav {
-            &::before {
-              border: none;
-            }
-
-            .ant-tabs-nav-wrap {
-              .ant-tabs-nav-list {
-                .ant-tabs-tab {
-                  padding: 0.3rem 0;
-
-                  .ant-tabs-tab-btn {
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-
-                    color: var(--secondary-text);
-                  }
-                }
-
-                .ant-tabs-tab-active {
-                  .ant-tabs-tab-btn {
-                    color: var(--primary-purple);
-                  }
-                }
-              }
-
-              .ant-tabs-ink-bar {
-                background-color: var(--primary-purple);
-              }
-            }
-          }
+        :global(.ant-tabs-nav::before) {
+          border: none;
+        }
+        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab) {
+          padding: 0.3rem 0;
+        }
+        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab .ant-tabs-tab-btn) {
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--secondary-text);
+        }
+        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab-active .ant-tabs-tab-btn) {
+          color: var(--primary-purple);
+        }
+        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-ink-bar) {
+          background-color: var(--primary-purple);
         }
       }
 

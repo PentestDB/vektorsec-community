@@ -5,43 +5,35 @@
   border-radius: 16px;
   background: var(--secondary-bg);
 
-  :global {
-    .anticon {
-      color: var(--primary-text);
-    }
-    .ant-modal-content {
-      background: var(--primary-bg);
-      border-radius: 16px;
-      padding: 2rem;
-    }
-
-    .ant-modal-body {
-      color: var(--secondary-text);
-      border-radius: 1rem;
-      border-radius: 16px;
-    }
-
-    .ant-modal-footer {
-      display: none;
-    }
-    .ant-modal-close-x {
-      display: none;
-    }
-
-    .ant-form-item-control-input-content {
-      textarea {
-        background: var(--input-bg) !important;
-        border: 0.1px solid var(--border-color-100);
-        color: var(--primary-text) !important;
-        background-color: var(--input-bg);
-        border-radius: 4px;
-        padding: 0.8rem 1rem;
-
-        &::placeholder {
-          color: var(--secondary-text-500);
-        }
-      }
-    }
+  :global(.anticon) {
+    color: var(--primary-text);
+  }
+  :global(.ant-modal-content) {
+    background: var(--primary-bg);
+    border-radius: 16px;
+    padding: 2rem;
+  }
+  :global(.ant-modal-body) {
+    color: var(--secondary-text);
+    border-radius: 1rem;
+    border-radius: 16px;
+  }
+  :global(.ant-modal-footer) {
+    display: none;
+  }
+  :global(.ant-modal-close-x) {
+    display: none;
+  }
+  :global(.ant-form-item-control-input-content textarea) {
+    background: var(--input-bg) !important;
+    border: 0.1px solid var(--border-color-100);
+    color: var(--primary-text) !important;
+    background-color: var(--input-bg);
+    border-radius: 4px;
+    padding: 0.8rem 1rem;
+  }
+  :global(.ant-form-item-control-input-content textarea::placeholder) {
+    color: var(--secondary-text-500);
   }
   .headingController {
     display: flex;

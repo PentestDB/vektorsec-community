@@ -60,31 +60,25 @@
         color: var(--secondary-text);
       }
 
-      :global {
-        .ant-form {
-          .ant-form-item {
-            margin-bottom: 0.6rem;
-          }
-          .ant-input-affix-wrapper {
-            background-color: transparent;
-            width: 264px;
-            height: 38px;
-
-            border-radius: 6px;
-            border: 1px solid var(--secondary-text);
-          }
-          .ant-input {
-            background: var(--cli-bg) !important;
-            color: var(--primary-text) !important;
-            &::placeholder {
-              color: var(--secondary-text);
-            }
-          }
-
-          .ant-input-suffix {
-            color: var(--secondary-text);
-          }
-        }
+      :global(.ant-form .ant-form-item) {
+        margin-bottom: 0.6rem;
+      }
+      :global(.ant-form .ant-input-affix-wrapper) {
+        background-color: transparent;
+        width: 264px;
+        height: 38px;
+        border-radius: 6px;
+        border: 1px solid var(--secondary-text);
+      }
+      :global(.ant-form .ant-input) {
+        background: var(--cli-bg) !important;
+        color: var(--primary-text) !important;
+      }
+      :global(.ant-form .ant-input::placeholder) {
+        color: var(--secondary-text);
+      }
+      :global(.ant-form .ant-input-suffix) {
+        color: var(--secondary-text);
       }
     }
 

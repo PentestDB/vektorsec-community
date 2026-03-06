@@ -26,21 +26,19 @@
       }
     }
 
-    :global {
-      .ant-checkbox-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-      }
+    :global(.ant-checkbox-group) {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
 
-      .ant-checkbox-inner {
-        background: none !important;
-      }
+    :global(.ant-checkbox-inner) {
+      background: none !important;
+    }
 
-      .ant-checkbox-wrapper {
-        color: var(--primary-text);
-        font-weight: 500;
-      }
+    :global(.ant-checkbox-wrapper) {
+      color: var(--primary-text);
+      font-weight: 500;
     }
   }
 }

@@ -155,7 +155,7 @@ export async function fix_json_with_ai(
 
   let badjsonStr: string = String(badjson);
 
-  if (["command", "summary"]) {
+  if (["command", "summary"].includes(type)) {
     badjsonStr = extractJSON(badjsonStr) || badjsonStr; // Extract JSON if possible, otherwise use the original string
   }
 

@@ -14,10 +14,8 @@
   align-items: center;
   justify-content: center;
 
-  :global {
-    .ant-btn-icon {
-      font-size: nth($fontSize, 3);
-    }
+  :global(.ant-btn-icon) {
+    font-size: nth($fontSize, 3);
   }
 
   &:hover {
@@ -144,10 +142,8 @@
 
   .alertWarning {
     margin-bottom: 1rem;
-    :global {
-      .anticon-close:hover {
-        color: var(--secondary-text) !important;
-      }
+    :global(.anticon-close:hover) {
+      color: var(--secondary-text) !important;
     }
   }
 }
@@ -281,17 +277,15 @@
     color: var(--danger);
   }
 
-  :global {
-    .ant-dropdown-menu {
-      background-color: var(--cli-bg);
-      border: 1px solid var(--border-color-100);
+  :global(.ant-dropdown-menu) {
+    background-color: var(--cli-bg);
+    border: 1px solid var(--border-color-100);
+  }
 
-      .ant-dropdown-menu-item {
-        color: var(--primary-text);
-        font-size: nth($fontSize, 2);
-        font-weight: 500;
-      }
-    }
+  :global(.ant-dropdown-menu .ant-dropdown-menu-item) {
+    color: var(--primary-text);
+    font-size: nth($fontSize, 2);
+    font-weight: 500;
   }
 }
 

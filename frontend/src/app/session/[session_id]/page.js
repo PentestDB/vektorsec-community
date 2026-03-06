@@ -3,12 +3,12 @@
 import SessionMainPage from "@/components/pages/session/sessionId/SessionMainPage";
 import { updateSessions } from "@/store/user.slice";
 import { Spin } from "antd";
-import { useEffect } from "react";
+import { use, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 const SessionPage = ({ params }) => {
+  const { session_id } = use(params);
   const dispatch = useDispatch();
-  const session_id = params.session_id;
   const { sessions } = useSelector((state) => state.user);
 
   useEffect(() => {

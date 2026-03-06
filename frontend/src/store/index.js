@@ -5,7 +5,7 @@ import socketReducer from "./socket.slice";
 import vpnReducer from "./vpn.slice"; // Import the VPN slice
 
 import { persistReducer } from "redux-persist";
-import thunk from "redux-thunk";
+import { thunk } from "redux-thunk";
 
 const isClient = typeof window !== "undefined";
 

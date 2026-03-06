@@ -36,19 +36,17 @@
         background: var(--input-bg) !important;
         border: 0.1px solid var(--border-color-100);
 
-        :global {
-          .ant-input {
-            background: none;
-            color: var(--primary-text);
-          }
+        :global(.ant-input) {
+          background: none;
+          color: var(--primary-text);
+        }
 
-          .ant-input::placeholder {
-            color: var(--secondary-text);
-          }
+        :global(.ant-input::placeholder) {
+          color: var(--secondary-text);
+        }
 
-          .ant-input-suffix {
-            color: var(--primary-text);
-          }
+        :global(.ant-input-suffix) {
+          color: var(--primary-text);
         }
       }
     }
@@ -101,113 +99,97 @@
     color: var(--secondary-text);
   }
 
-  :global {
-    ::-webkit-scrollbar {
-      height: 0.4rem;
-    }
-    ::-webkit-scrollbar-thumb {
-      border-radius: 12px;
-    }
+  :global(::-webkit-scrollbar) {
+    height: 0.4rem;
+  }
+  :global(::-webkit-scrollbar-thumb) {
+    border-radius: 12px;
+  }
 
-    ::-webkit-scrollbar-track {
-      background: var(--secondary-text);
-    }
+  :global(::-webkit-scrollbar-track) {
+    background: var(--secondary-text);
+  }
 
-    .ant-table {
-      background-color: inherit;
-      overflow: auto;
-      color: var(--secondary-text);
-      .ant-table-container {
-        thead tr th {
-          font-weight: 500;
-          border-radius: 0 !important;
-        }
+  :global(.ant-table) {
+    background-color: inherit;
+    overflow: auto;
+    color: var(--secondary-text);
+  }
 
-        .ant-table-content {
-          .ant-table-thead {
-            tr {
-              .ant-table-cell {
-                background-color: var(--secondary-bg) !important;
-                color: var(--primary-text) !important;
-                font-size: nth($fontSize, 3);
-                border: none;
-              }
-            }
-          }
+  :global(.ant-table .ant-table-container thead tr th) {
+    font-weight: 500;
+    border-radius: 0 !important;
+  }
 
-          .ant-table-tbody {
-            .ant-table-cell-row-hover {
-              background: var(--secondary-bg);
-            }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-thead tr .ant-table-cell) {
+    background-color: var(--secondary-bg) !important;
+    color: var(--primary-text) !important;
+    font-size: nth($fontSize, 3);
+    border: none;
+  }
 
-            .ant-table-cell {
-              background-color: var(--secondary-bg);
-            }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-cell-row-hover) {
+    background: var(--secondary-bg);
+  }
 
-            .ant-table-placeholder {
-              background-color: var(--secondary-bg) !important;
-              .ant-table-cell {
-                background-color: inherit;
-                border: none;
-                .ant-empty {
-                  color: var(--primary-text) !important;
-                }
-              }
-            }
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-cell) {
+    background-color: var(--secondary-bg);
+  }
 
-          .ant-table-tbody > tr > td {
-            cursor: pointer;
-            font-size: nth($fontSize, 3);
-            border-top: 0.5px solid var(--border-color);
-            border-bottom: 0.5px solid var(--border-color);
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-placeholder) {
+    background-color: var(--secondary-bg) !important;
+  }
 
-          .ant-table-tbody > tr > td {
-            border-radius: 0;
-          }
-        }
-      }
-    }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-placeholder .ant-table-cell) {
+    background-color: inherit;
+    border: none;
+  }
 
-    .ant-table table {
-      border-spacing: 0 0.5rem !important;
-    }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-placeholder .ant-table-cell .ant-empty) {
+    color: var(--primary-text) !important;
+  }
 
-    .ant-table-pagination {
-      .ant-pagination-prev,
-      .ant-pagination-next {
-        // background-color: var(--primary-text);
-        background: none;
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody > tr > td) {
+    cursor: pointer;
+    font-size: nth($fontSize, 3);
+    border-top: 0.5px solid var(--border-color);
+    border-bottom: 0.5px solid var(--border-color);
+    border-radius: 0;
+  }
 
-        span {
-          color: var(--bugbase-green);
-        }
-      }
+  :global(.ant-table table) {
+    border-spacing: 0 0.5rem !important;
+  }
 
-      .ant-pagination-disabled {
-        background: none;
+  :global(.ant-table-pagination .ant-pagination-prev),
+  :global(.ant-table-pagination .ant-pagination-next) {
+    background: none;
+  }
 
-        span {
-          color: var(--bugbase-green);
-        }
-      }
+  :global(.ant-table-pagination .ant-pagination-prev span),
+  :global(.ant-table-pagination .ant-pagination-next span) {
+    color: var(--bugbase-green);
+  }
 
-      .ant-pagination-item {
-        a {
-          color: var(--secondary-text);
-        }
-      }
+  :global(.ant-table-pagination .ant-pagination-disabled) {
+    background: none;
+  }
 
-      .ant-pagination-item-active {
-        background: none;
-        border: 1px solid var(--border-color-100);
+  :global(.ant-table-pagination .ant-pagination-disabled span) {
+    color: var(--bugbase-green);
+  }
 
-        a {
-          color: var(--primary-text);
-        }
-      }
-    }
+  :global(.ant-table-pagination .ant-pagination-item a) {
+    color: var(--secondary-text);
+  }
+
+  :global(.ant-table-pagination .ant-pagination-item-active) {
+    background: none;
+    border: 1px solid var(--border-color-100);
+  }
+
+  :global(.ant-table-pagination .ant-pagination-item-active a) {
+    color: var(--primary-text);
   }
 }
 
@@ -215,145 +197,128 @@
   width: 100%;
   @extend .TableWrapper;
 
-  :global {
-    .ant-table {
-      .ant-table-container {
-        thead {
-          tr th {
-            border-radius: 0 !important;
-          }
-        }
+  :global(.ant-table .ant-table-container thead tr th) {
+    border-radius: 0 !important;
+  }
 
-        .ant-table-content {
-          .ant-table-thead {
-            tr {
-              .ant-table-cell {
-                background-color: transparent !important;
-                color: var(--secondary-text) !important;
-                font-size: 1rem;
-                border: none;
-                border-bottom: 0.5px solid var(--border-color-100);
-                padding-left: 1.5rem !important;
-              }
-            }
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-thead tr .ant-table-cell) {
+    background-color: transparent !important;
+    color: var(--secondary-text) !important;
+    font-size: 1rem;
+    border: none;
+    border-bottom: 0.5px solid var(--border-color-100);
+    padding-left: 1.5rem !important;
+  }
 
-          .ant-table-thead
-            > tr
-            > th:not(:last-child):not(.ant-table-selection-column):not(
-              .ant-table-row-expand-icon-cell
-            ):not([colspan])::before {
-            display: none;
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-thead > tr > th:not(:last-child):not(.ant-table-selection-column):not(.ant-table-row-expand-icon-cell):not([colspan])::before) {
+    display: none;
+  }
 
-          .ant-table-tbody {
-            .ant-table-row {
-              border: none;
-            }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-row) {
+    border: none;
+  }
 
-            .ant-table-cell-row-hover {
-              background: var(--table-bg) !important;
-            }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-cell-row-hover) {
+    background: var(--table-bg) !important;
+  }
 
-            .ant-table-cell {
-              padding: 0;
-              font-weight: 800;
-              color: var(--primary-text);
-              background-color: var(--secondary-bg);
-              height: 4rem;
-              border: none;
-              cursor: pointer;
-              padding-left: 1.5rem !important;
-            }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-cell) {
+    padding: 0;
+    font-weight: 800;
+    color: var(--primary-text);
+    background-color: var(--secondary-bg);
+    height: 4rem;
+    border: none;
+    cursor: pointer;
+    padding-left: 1.5rem !important;
+  }
 
-            .ant-table-placeholder {
-              background-color: transparent !important;
-              .ant-table-cell {
-                background-color: inherit;
-                border: none;
-                .ant-empty {
-                  color: var(--primary-text) !important;
-                }
-              }
-            }
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-placeholder) {
+    background-color: transparent !important;
+  }
 
-          .ant-table-tbody > tr > td {
-            font-size: nth($fontSize, 3);
-            border-top: 0.5px solid var(--border-color);
-            border-bottom: 0.5px solid var(--border-color);
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-placeholder .ant-table-cell) {
+    background-color: inherit;
+    border: none;
+  }
 
-          .ant-table-tbody > tr > td:first-child {
-            border-top-left-radius: 4px;
-            border-bottom-left-radius: 4px;
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody .ant-table-placeholder .ant-table-cell .ant-empty) {
+    color: var(--primary-text) !important;
+  }
 
-            span {
-              height: 100%;
-              display: flex;
-              padding-right: 0;
-              align-items: center;
-              border-top-left-radius: 4px;
-              border-bottom-left-radius: 4px;
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody > tr > td) {
+    font-size: nth($fontSize, 3);
+    border-top: 0.5px solid var(--border-color);
+    border-bottom: 0.5px solid var(--border-color);
+  }
 
-              p {
-                margin-bottom: 0;
-                padding-left: 1rem;
-              }
-            }
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody > tr > td:first-child) {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
 
-          .ant-table-tbody > tr > td:last-child {
-            padding-right: 1.5rem;
-            border-top-right-radius: 4px;
-            border-bottom-right-radius: 4px;
-          }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody > tr > td:first-child span) {
+    height: 100%;
+    display: flex;
+    padding-right: 0;
+    align-items: center;
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
 
-          .ant-table-placeholder .ant-empty-description {
-            color: var(--secondary-text) !important;
-          }
-        }
-      }
-    }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody > tr > td:first-child span p) {
+    margin-bottom: 0;
+    padding-left: 1rem;
+  }
 
-    .ant-table-pagination {
-      .ant-pagination-prev,
-      .ant-pagination-next {
-        background-color: var(--primary-text);
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-tbody > tr > td:last-child) {
+    padding-right: 1.5rem;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+  }
 
-        span {
-          color: var(--black-bg);
-        }
-      }
+  :global(.ant-table .ant-table-container .ant-table-content .ant-table-placeholder .ant-empty-description) {
+    color: var(--secondary-text) !important;
+  }
 
-      .ant-pagination-item {
-        background-color: var(--secondary-text);
-        border: none;
-        span {
-          color: var(--black-bg);
-        }
+  :global(.ant-table-pagination .ant-pagination-prev),
+  :global(.ant-table-pagination .ant-pagination-next) {
+    background-color: var(--primary-text);
+  }
 
-        a {
-          color: var(--black-bg);
-        }
+  :global(.ant-table-pagination .ant-pagination-prev span),
+  :global(.ant-table-pagination .ant-pagination-next span) {
+    color: var(--black-bg);
+  }
 
-        &:hover {
-          background-color: var(--primary-text);
-        }
-      }
+  :global(.ant-table-pagination .ant-pagination-item) {
+    background-color: var(--secondary-text);
+    border: none;
+  }
 
-      .ant-pagination-item-active {
-        background-color: var(--primary-text);
-        border: none;
-        a {
-          color: var(--black-bg);
-        }
-      }
+  :global(.ant-table-pagination .ant-pagination-item span) {
+    color: var(--black-bg);
+  }
 
-      .ant-pagination-disabled {
-        background-color: var(--secondary-text);
-      }
-    }
+  :global(.ant-table-pagination .ant-pagination-item a) {
+    color: var(--black-bg);
+  }
+
+  :global(.ant-table-pagination .ant-pagination-item:hover) {
+    background-color: var(--primary-text);
+  }
+
+  :global(.ant-table-pagination .ant-pagination-item-active) {
+    background-color: var(--primary-text);
+    border: none;
+  }
+
+  :global(.ant-table-pagination .ant-pagination-item-active a) {
+    color: var(--black-bg);
+  }
+
+  :global(.ant-table-pagination .ant-pagination-disabled) {
+    background-color: var(--secondary-text);
   }
 
   .placeholder {
@@ -470,42 +435,32 @@
 .subprocessTable {
   @extend .sessionsListTable;
 
-  :global {
-    .ant-table .ant-table-content {
-      .ant-table-thead {
-        tr {
-          .ant-table-cell {
-            color: var(--secondary-text) !important;
-            font-size: 1.1rem !important;
-            border: none;
-            padding-left: 0;
-            font-weight: bold;
-            border-bottom: 0.5px solid var(--border-color-100);
-          }
-        }
-      }
+  :global(.ant-table .ant-table-content .ant-table-thead tr .ant-table-cell) {
+    color: var(--secondary-text) !important;
+    font-size: 1.1rem !important;
+    border: none;
+    padding-left: 0;
+    font-weight: bold;
+    border-bottom: 0.5px solid var(--border-color-100);
+  }
 
-      .ant-table-tbody {
-        .ant-table-row {
-          border: none;
-          background: transparent;
-        }
+  :global(.ant-table .ant-table-content .ant-table-tbody .ant-table-row) {
+    border: none;
+    background: transparent;
+  }
 
-        .ant-table-cell-row-hover {
-          opacity: 0.9;
-        }
+  :global(.ant-table .ant-table-content .ant-table-tbody .ant-table-cell-row-hover) {
+    opacity: 0.9;
+  }
 
-        .ant-table-cell {
-          font-weight: 800;
-          color: var(--primary-text);
-          background: transparent !important;
-          height: 4rem;
-          border: none;
-          cursor: text;
-          padding: 0.5rem 0.25rem !important;
-        }
-      }
-    }
+  :global(.ant-table .ant-table-content .ant-table-tbody .ant-table-cell) {
+    font-weight: 800;
+    color: var(--primary-text);
+    background: transparent !important;
+    height: 4rem;
+    border: none;
+    cursor: text;
+    padding: 0.5rem 0.25rem !important;
   }
 
   .Link {
@@ -515,103 +470,85 @@
 
 .createSession {
   padding-top: 1rem;
-  :global {
-    .ant-form {
-      .ant-form-item {
-        .ant-form-item-label > label {
-          font-weight: 700;
-          letter-spacing: 0.42px;
-          font-size: nth($fontSize, 3);
-          color: var(--primary-text) !important;
-        }
+  :global(.ant-form .ant-form-item .ant-form-item-label > label) {
+    font-weight: 700;
+    letter-spacing: 0.42px;
+    font-size: nth($fontSize, 3);
+    color: var(--primary-text) !important;
+  }
 
-        .ant-form-item-control {
-          .ant-input {
-            min-height: 2.8rem;
-            min-width: 25rem;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            background: var(--input-bg) !important;
-            border: 0.1px solid var(--border-color-100);
-            color: var(--primary-text);
-          }
-          .ant-input::placeholder {
-            color: var(--secondary-text);
-          }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input) {
+    min-height: 2.8rem;
+    min-width: 25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background: var(--input-bg) !important;
+    border: 0.1px solid var(--border-color-100);
+    color: var(--primary-text);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input::placeholder) {
+    color: var(--secondary-text);
+  }
 
-          .ant-picker {
-            width: 100%;
-            min-height: 2.8rem;
-            min-width: 25rem;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            background: var(--input-bg) !important;
-            border: 0.1px solid var(--border-color-100);
-            color: var(--primary-text);
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-picker) {
+    width: 100%;
+    min-height: 2.8rem;
+    min-width: 25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background: var(--input-bg) !important;
+    border: 0.1px solid var(--border-color-100);
+    color: var(--primary-text);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-picker .ant-picker-input input) {
+    color: var(--primary-text);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-picker .ant-picker-input input::placeholder) {
+    color: var(--secondary-text);
+  }
 
-            .ant-picker-input {
-              input {
-                color: var(--primary-text);
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-number) {
+    width: 100%;
+    min-height: 2.8rem;
+    min-width: 25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background: var(--input-bg) !important;
+    border: 0.1px solid var(--border-color-100);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-number input) {
+    color: var(--primary-text);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-number input::placeholder) {
+    color: var(--secondary-text);
+  }
 
-                &::placeholder {
-                  color: var(--secondary-text);
-                }
-              }
-            }
-          }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select) {
+    min-height: 2.8rem;
+    min-width: 25rem;
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-selector) {
+    min-height: 2.8rem;
+    min-width: 25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background: var(--input-bg) !important;
+    border: 0.1px solid var(--border-color-100);
+    color: var(--primary-text);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-selector .ant-select-selection-search) {
+    display: flex;
+    align-items: center;
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-selector .ant-select-selection-placeholder) {
+    color: var(--secondary-text);
+  }
 
-          .ant-input-number {
-            width: 100%;
-            min-height: 2.8rem;
-            min-width: 25rem;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            background: var(--input-bg) !important;
-            border: 0.1px solid var(--border-color-100);
-            input {
-              color: var(--primary-text);
-
-              &::placeholder {
-                color: var(--secondary-text);
-              }
-            }
-          }
-
-          .ant-select {
-            min-height: 2.8rem;
-            min-width: 25rem;
-
-            .ant-select-selector {
-              min-height: 2.8rem;
-              min-width: 25rem;
-              padding: 0.5rem 1rem;
-              border-radius: 4px;
-              background: var(--input-bg) !important;
-              border: 0.1px solid var(--border-color-100);
-              color: var(--primary-text);
-
-              .ant-select-selection-search {
-                display: flex;
-                align-items: center;
-              }
-              .ant-select-selection-placeholder {
-                color: var(--secondary-text);
-              }
-            }
-          }
-
-          .ant-upload-list {
-            .ant-upload-list-item {
-              color: var(--primary-text);
-
-              .anticon {
-                color: var(--primary-text);
-              }
-            }
-          }
-        }
-      }
-    }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-upload-list .ant-upload-list-item) {
+    color: var(--primary-text);
+  }
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-upload-list .ant-upload-list-item .anticon) {
+    color: var(--primary-text);
   }
 }
 
@@ -645,13 +582,11 @@
     border: 1px solid var(--bugbase-green);
   }
 
-  :global {
-    .anticon {
-      font-size: 1.2rem;
-    }
+  :global(.anticon) {
+    font-size: 1.2rem;
+  }
 
-    .ant-radio-inner {
-      display: none !important;
-    }
+  :global(.ant-radio-inner) {
+    display: none !important;
   }
 }

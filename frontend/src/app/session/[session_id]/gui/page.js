@@ -3,12 +3,13 @@
 import { connectToVNC } from "@/services/copilot.service";
 import { updateSessions, updateVNC } from "@/store/user.slice";
 import { Spin } from "antd";
+import { use } from "react";
 import { useQuery } from "react-query";
 import { useDispatch, useSelector } from "react-redux";
 
 const GUIpage = ({ params }) => {
+  const { session_id: sessionId } = use(params);
   const dispatch = useDispatch();
-  const sessionId = params.session_id;
   const { sessions } = useSelector((state) => state.user);
 
   const guiSession = sessions.find((session) => session.type === "gui");

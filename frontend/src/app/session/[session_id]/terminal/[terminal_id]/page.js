@@ -5,14 +5,14 @@ import { updateTerminalHeight } from "@/store/socket.slice";
 import { updateSessions } from "@/store/user.slice";
 import { message } from "antd";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { use, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { validate as uuidValidate } from "uuid";
 
 const TerminalPage = ({ params }) => {
+  const { terminal_id, session_id } = use(params);
   const router = useRouter();
   const dispatch = useDispatch();
-  const { terminal_id, session_id } = params;
   const { sessions } = useSelector((state) => state.user);
 
   useEffect(() => {

@@ -102,6 +102,7 @@ On **subsequent runs** the script detects the existing configuration and asks wh
 Additional commands:
 
 ```bash
+bash run.sh dev       # Developer mode — run frontend/backend locally, infra in Docker
 bash run.sh stop      # Stop all containers
 bash run.sh logs      # Tail container logs (e.g. run.sh logs backend)
 bash run.sh status    # Show running containers
@@ -204,7 +205,8 @@ To run Pentest Copilot effectively, your host machine should meet the following 
 - **RAM**: 8GB (to accommodate the frontend, backend, databases, and the resource-intensive Kali container)
 - **Processor**: Multi-core processor (for smooth operation of multiple containers)
 - **Disk Space**: 20GB (for the Kali container and other components)
-- **Node.js**: Version 22 (required for both frontend and backend)
+- **Node.js**: Version 22+ (required for both frontend and backend)
+- **pnpm**: Version 9+ (package manager for both frontend and backend)
 
 > [!IMPORTANT]
 > The Kali container, which runs a full Kali Linux desktop with pentesting tools, requires significant resources. Allocating at least 2GB RAM to the Kali container is recommended for optimal performance.
@@ -228,7 +230,7 @@ Below is a rundown of what Pentest Copilot brings to the table:
 
 ## Frontend Technology
 
-The frontend is built on **Next.js 13** with the app router, utilizing **server-side rendering** and **static site generation** for performance. It integrates with the backend via **REST APIs** and **WebSockets** for real-time functionality.
+The frontend is built on **Next.js 16** with the app router, utilizing **server-side rendering** and **static site generation** for performance. It integrates with the backend via **REST APIs** and **WebSockets** for real-time functionality.
 
 #### Few Key Technologies:
 
@@ -264,63 +266,61 @@ The backend routes all logic through a **central service** (default port: `8080`
 
 ## Local Development
 
-To run Pentest Copilot locally for development, follow these steps:
+### Using Developer Mode (Recommended)
 
-### Backend
+The easiest way to develop locally is using the built-in developer mode in `run.sh`:
 
-1. Navigate to the `backend` directory:
+```bash
+bash run.sh dev
+```
+
+This starts only the infrastructure services (MongoDB, Redis) in Docker while you run the frontend and backend manually on your host machine. It automatically:
+- Sets `MONGO_URI` and `REDIS_URL` to `localhost` in the backend `.env`
+- Installs dependencies via `pnpm`
+
+Then start the backend and frontend in separate terminals:
+
+```bash
+# Terminal 1 — Backend TypeScript compiler (watch mode)
+cd backend
+pnpm run watch
+
+# Terminal 2 — Backend dev server
+cd backend
+pnpm run dev
+
+# Terminal 3 — Frontend dev server
+cd frontend
+pnpm run dev
+```
+
+The backend server will start at `http://localhost:8080` and the frontend at `http://localhost:3000`.
+
+### Manual Setup
+
+If you prefer to set things up manually:
+
+#### Prerequisites
+
+- **Node.js 22+**
+- **pnpm 9+** — install via `corepack enable` (bundled with Node.js 22)
+
+#### Backend
 
 ```bash
 cd backend
+pnpm install
+pnpm run watch   # Terminal 1: TypeScript compiler in watch mode
+pnpm run dev     # Terminal 2: Start dev server (after initial compilation)
 ```
 
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Start the backend server:
-
-- Start the TS Server in watch mode for compilation in first terminal:
-
-```bash
-npm run watch
-```
-
-Once the inital compilation is done, start the server in the second terminal:
-
-- Start the server in the second terminal:
-
-```bash
-npm run dev
-```
-
-Now, on subsequent changes, the server will automatically restart.
-
-The backend server will start at `http://localhost:8080`.
-
-### Frontend
-
-1. Navigate to the `frontend` directory:
+#### Frontend
 
 ```bash
 cd frontend
+pnpm install
+pnpm run dev     # Starts Next.js dev server with Turbopack
 ```
-
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Start the frontend server:
-
-```bash
-npm run dev
-```
-
-The frontend server will start at `http://localhost:3000`.
 
 ## Meet the Authors
 

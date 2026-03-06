@@ -2,7 +2,7 @@
 
 import { AuthContextProvider } from "@/components/common/auth/AuthContext";
 import Loader from "@/components/common/loader/Loader";
-import React, { useEffect, useState } from "react";
+import React, { use, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import styles from "@/styles/pages/Session.module.scss";
 import { Alert, Col, Row, message, notification } from "antd";
@@ -40,7 +40,7 @@ import { setVpnConnected, setVpnLogs, setIsLoading } from "@/store/vpn.slice";
 import { checkVPNStatus } from "@/services/copilot.service";
 
 const SessionLayout = ({ children, params }) => {
-  const session_id = params.session_id;
+  const { session_id } = use(params);
   const router = useRouter();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
@@ -85,7 +85,7 @@ const SessionLayout = ({ children, params }) => {
     () => getSessionInfo({ session_id }),
     {
       onSuccess: () => {
-        if (!sessions?.length && session_id === params.session_id) {
+        if (!sessions?.length) {
           dispatch(
             updateSessions([
               {

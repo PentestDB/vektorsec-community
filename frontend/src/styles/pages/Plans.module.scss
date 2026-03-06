@@ -37,47 +37,47 @@
       width: 35%;
     }
 
-    :global {
-      .ant-segmented {
-        background: white !important;
-        border-radius: 100px;
-        position: relative;
-        width: 215px;
-        height: 3rem;
-        display: flex;
-        align-items: center;
+    :global(.ant-segmented) {
+      background: white !important;
+      border-radius: 100px;
+      position: relative;
+      width: 215px;
+      height: 3rem;
+      display: flex;
+      align-items: center;
+    }
 
-        .ant-segmented-group {
-          width: 100%;
-          padding-right: 0.1rem;
-        }
+    :global(.ant-segmented .ant-segmented-group) {
+      width: 100%;
+      padding-right: 0.1rem;
+    }
 
-        .ant-segmented-item {
-          width: 100%;
-          padding: 0.4rem 0.8rem;
-          border-radius: 100px;
-          .ant-segmented-item-label {
-            color: black !important;
-            opacity: 0.8;
-            font-weight: 600;
-          }
-        }
+    :global(.ant-segmented .ant-segmented-item) {
+      width: 100%;
+      padding: 0.4rem 0.8rem;
+      border-radius: 100px;
+    }
 
-        .ant-segmented-item-selected {
-          background: var(--primary-purple);
-          .ant-segmented-item-label {
-            color: var(--primary-text) !important;
-            border-radius: 100px;
-            opacity: 1;
-          }
-        }
+    :global(.ant-segmented .ant-segmented-item .ant-segmented-item-label) {
+      color: black !important;
+      opacity: 0.8;
+      font-weight: 600;
+    }
 
-        .ant-segmented-thumb {
-          border-radius: 100px;
-          transition: all 0.3s ease-in-out;
-          background-color: var(--primary-purple) !important;
-        }
-      }
+    :global(.ant-segmented .ant-segmented-item-selected) {
+      background: var(--primary-purple);
+    }
+
+    :global(.ant-segmented .ant-segmented-item-selected .ant-segmented-item-label) {
+      color: var(--primary-text) !important;
+      border-radius: 100px;
+      opacity: 1;
+    }
+
+    :global(.ant-segmented .ant-segmented-thumb) {
+      border-radius: 100px;
+      transition: all 0.3s ease-in-out;
+      background-color: var(--primary-purple) !important;
     }
   }
 
@@ -109,19 +109,15 @@
           #8e35ff 82.58%
         );
 
-        :global {
-          .ant-btn {
-            color: var(--primary-text);
-            border: 2px solid var(--primary-text) !important;
-          }
+        :global(.ant-btn) {
+          color: var(--primary-text);
+          border: 2px solid var(--primary-text) !important;
         }
       }
 
-      :global {
-        .ant-card-body {
-          display: flex;
-          flex-direction: column;
-        }
+      :global(.ant-card-body) {
+        display: flex;
+        flex-direction: column;
       }
 
       .planHeader {
@@ -134,18 +130,16 @@
           align-items: center;
           gap: 1rem;
 
-          :global {
-            .ant-tag {
-              height: min-content;
-              padding: 0.4rem 0.5rem;
-              border-radius: 13px;
-              border: none;
-              background: rgba(16, 202, 0, 0.2);
-              color: var(--bugbase-green);
-              font-size: 8.708px;
-              font-weight: 700;
-              line-height: normal;
-            }
+          :global(.ant-tag) {
+            height: min-content;
+            padding: 0.4rem 0.5rem;
+            border-radius: 13px;
+            border: none;
+            background: rgba(16, 202, 0, 0.2);
+            color: var(--bugbase-green);
+            font-size: 8.708px;
+            font-weight: 700;
+            line-height: normal;
           }
 
           .discountTag {
@@ -182,18 +176,16 @@
           font-weight: 500;
         }
 
-        :global {
-          .ant-tag {
-            height: min-content;
-            padding: 0.4rem 0.5rem;
-            border-radius: 13px;
-            border: none;
-            color: var(--navbar-bg);
-            font-size: 0.7rem;
-            font-weight: 700;
-            line-height: normal;
-            margin-bottom: 0.5rem;
-          }
+        :global(.ant-tag) {
+          height: min-content;
+          padding: 0.4rem 0.5rem;
+          border-radius: 13px;
+          border: none;
+          color: var(--navbar-bg);
+          font-size: 0.7rem;
+          font-weight: 700;
+          line-height: normal;
+          margin-bottom: 0.5rem;
         }
       }
 
@@ -283,42 +275,42 @@
   justify-content: center;
   align-items: center;
 
-  :global {
-    .ant-segmented {
-      background: var(--navbar-bg) !important;
-      border-radius: 7px;
-      position: relative;
-      width: 307px;
-      height: 3rem;
-      display: flex;
-      align-items: center;
+  :global(.ant-segmented) {
+    background: var(--navbar-bg) !important;
+    border-radius: 7px;
+    position: relative;
+    width: 307px;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+  }
 
-      .ant-segmented-item {
-        width: 100%;
-        padding: 0.4rem 0.8rem;
-        margin: 0 0.1rem;
-        border-radius: 4px;
-        .ant-segmented-item-label {
-          color: var(--primary-text) !important;
-          opacity: 0.8;
-          font-weight: 600;
-        }
-      }
+  :global(.ant-segmented .ant-segmented-item) {
+    width: 100%;
+    padding: 0.4rem 0.8rem;
+    margin: 0 0.1rem;
+    border-radius: 4px;
+  }
 
-      .ant-segmented-item-selected {
-        background: var(--primary-text);
-        .ant-segmented-item-label {
-          color: var(--navbar-bg) !important;
-          border-radius: 100px;
-          opacity: 1;
-        }
-      }
+  :global(.ant-segmented .ant-segmented-item .ant-segmented-item-label) {
+    color: var(--primary-text) !important;
+    opacity: 0.8;
+    font-weight: 600;
+  }
 
-      .ant-segmented-thumb {
-        transition: all 0.3s ease-in-out;
-        background-color: var(--primary-text) !important;
-      }
-    }
+  :global(.ant-segmented .ant-segmented-item-selected) {
+    background: var(--primary-text);
+  }
+
+  :global(.ant-segmented .ant-segmented-item-selected .ant-segmented-item-label) {
+    color: var(--navbar-bg) !important;
+    border-radius: 100px;
+    opacity: 1;
+  }
+
+  :global(.ant-segmented .ant-segmented-thumb) {
+    transition: all 0.3s ease-in-out;
+    background-color: var(--primary-text) !important;
   }
 
   .plans {

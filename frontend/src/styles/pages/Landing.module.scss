@@ -431,12 +431,8 @@
           transform: translate(-50%, -48%);
           color: #fff;
 
-          :global {
-            .ant-result {
-              .ant-result-title {
-                color: #fff;
-              }
-            }
+          :global(.ant-result .ant-result-title) {
+            color: #fff;
           }
 
           // change scrollbar css
@@ -489,24 +485,21 @@
             .formItem {
               justify-self: center;
 
-              :global {
-                .ant-input {
-                  padding: 0rem 1.5rem;
-                  height: 2.5rem;
-                  width: 30rem;
-                  max-width: 70vw;
-                  font-size: 1rem;
-                  border-radius: 4rem;
-                  color: #fff;
-                  background-color: rgba(#fff, 0.1);
-                  border: 0.5px solid #fff;
-                  display: flex;
-                  align-items: center;
-
-                  &::placeholder {
-                    color: rgba(#fff, 0.5);
-                  }
-                }
+              :global(.ant-input) {
+                padding: 0rem 1.5rem;
+                height: 2.5rem;
+                width: 30rem;
+                max-width: 70vw;
+                font-size: 1rem;
+                border-radius: 4rem;
+                color: #fff;
+                background-color: rgba(#fff, 0.1);
+                border: 0.5px solid #fff;
+                display: flex;
+                align-items: center;
+              }
+              :global(.ant-input::placeholder) {
+                color: rgba(#fff, 0.5);
               }
             }
 

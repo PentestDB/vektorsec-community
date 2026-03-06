@@ -2,13 +2,14 @@
 
 import Loader from "@/components/common/loader/Loader";
 import VPNMainPage from "@/components/pages/session/vpn/VPNMainPage";
+import { use } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { updateSessions } from "@/store/user.slice";
 
 const VPNPage = ({ params }) => {
+  const { session_id: sessionId } = use(params);
   const { user, sessions } = useSelector((state) => state.user);
   const dispatch = useDispatch();
-  const sessionId = params.session_id;
 
   const vpnSession = sessions.find((session) => session.type === "vpn");
 

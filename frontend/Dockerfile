@@ -1,41 +1,32 @@
 # Build stage
-FROM node:22 AS builder
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
+FROM base AS builder
 WORKDIR /usr/src/app
 
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml* ./
 
-ARG NEXT_PUBLIC_BACKEND_URI
-ARG NEXT_PUBLIC_DEPLOYMENT
-ARG NEXT_PUBLIC_GTM_ID
-
-ENV NEXT_PUBLIC_BACKEND_URI=$NEXT_PUBLIC_BACKEND_URI
-ENV NEXT_PUBLIC_DEPLOYMENT=$NEXT_PUBLIC_DEPLOYMENT
-ENV NEXT_PUBLIC_GTM_ID=$NEXT_PUBLIC_GTM_ID
-
-# Update browserslist and install dependencies
-RUN npx browserslist@latest --update-db
-RUN npm install --silent
-# Install optional WebSocket dependencies
-RUN npm install bufferutil utf-8-validate --save-optional
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY . .
 
-# Build with increased memory and optimized settings
-RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 
 # Runtime stage
-FROM node:22 AS runner
-
+FROM base AS runner
 WORKDIR /usr/src/app
 
-COPY --from=builder /usr/src/app/package*.json ./
+COPY --from=builder /usr/src/app/package.json ./
+COPY --from=builder /usr/src/app/pnpm-lock.yaml ./
 COPY --from=builder /usr/src/app/.next ./.next
 COPY --from=builder /usr/src/app/public ./public
 COPY --from=builder /usr/src/app/next.config.js ./
 
-RUN npm install --production --silent
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]

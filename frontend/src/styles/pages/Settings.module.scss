@@ -329,11 +329,9 @@
     margin-bottom: 0.5rem !important;
   }
 
-  :global {
-    .ant-input {
-      background: none;
-      color: var(--primary-text);
-    }
+  :global(.ant-input) {
+    background: none;
+    color: var(--primary-text);
   }
 
   .shareButtons {
@@ -361,33 +359,31 @@
 }
 
 .inviteInput {
-  :global {
-    .ant-input-wrapper {
-      pointer-events: none;
+  :global(.ant-input-wrapper) {
+    pointer-events: none;
+  }
 
-      .ant-input {
-        background-color: var(--input-bg);
-        color: var(--primary-text);
-        height: 2.5rem;
-        border: 0.5px solid var(--border-color-100);
-        border-radius: 4px 0 0 4px;
-        min-width: 30rem;
-      }
+  :global(.ant-input-wrapper .ant-input) {
+    background-color: var(--input-bg);
+    color: var(--primary-text);
+    height: 2.5rem;
+    border: 0.5px solid var(--border-color-100);
+    border-radius: 4px 0 0 4px;
+    min-width: 30rem;
+  }
 
-      .anticon {
-        pointer-events: all;
-        cursor: pointer;
-      }
-    }
+  :global(.ant-input-wrapper .anticon) {
+    pointer-events: all;
+    cursor: pointer;
+  }
 
-    .ant-input-group-addon {
-      height: 2.5rem;
-      cursor: pointer;
-      pointer-events: all;
-      background-color: var(--input-bg);
-      color: var(--primary-text);
-      border: 0.5px solid var(--border-color-100);
-      border-radius: 0 4px 4px 0;
-    }
+  :global(.ant-input-group-addon) {
+    height: 2.5rem;
+    cursor: pointer;
+    pointer-events: all;
+    background-color: var(--input-bg);
+    color: var(--primary-text);
+    border: 0.5px solid var(--border-color-100);
+    border-radius: 0 4px 4px 0;
   }
 }

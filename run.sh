@@ -32,6 +32,7 @@ DEPLOY_MODE=""
 COMPOSE_FILE=""
 IS_WSL=false
 NEED_SSH_KEY_MOUNT=false
+DEV_MODE=false
 
 # ── Helpers ────────────────────────────────────────────────
 print_banner() {
@@ -154,7 +155,11 @@ show_config_summary() {
 
     if [[ -f "$RUN_CONF" ]]; then
         source "$RUN_CONF"
-        echo -e "   Deploy Mode : ${BOLD}${DEPLOY_MODE:-unknown}${NC}  (${COMPOSE_FILE:-?})"
+        local mode_label="${DEPLOY_MODE:-unknown}"
+        if [[ "${DEV_MODE:-false}" == true ]]; then
+            mode_label="${mode_label} ${YELLOW}(developer — frontend & backend run manually)${NC}"
+        fi
+        echo -e "   Deploy Mode : ${BOLD}${mode_label}${NC}  (${COMPOSE_FILE:-?})"
     else
         warn "No saved deploy mode (.run.conf missing)"
     fi
@@ -166,19 +171,33 @@ select_deploy_mode() {
     echo
     echo -e "   ${BOLD}1)${NC} Full Stack ${YELLOW}with${NC} Kali container   ${DIM}(~30 min first build, includes pentesting tools)${NC}"
     echo -e "   ${BOLD}2)${NC} Core Services only              ${DIM}(~12-15 min build, bring your own exploit box)${NC}"
+    echo -e "   ${BOLD}3)${NC} Developer Mode                  ${DIM}(infra only: MongoDB + Redis [+ Kali], run frontend & backend manually)${NC}"
     echo
-    prompt_input "Choose [1/2]:"
+    prompt_input "Choose [1/2/3]:"
     read -r choice
 
     case "$choice" in
         1)
             DEPLOY_MODE="kali"
             COMPOSE_FILE="docker-compose.kali.yml"
+            DEV_MODE=false
             info "Selected: Full Stack with Kali container"
+            ;;
+        3)
+            DEV_MODE=true
+            COMPOSE_FILE="docker-compose.dev.yml"
+            if confirm "Include Kali container?" "y"; then
+                DEPLOY_MODE="dev-kali"
+                info "Selected: Developer Mode (MongoDB + Redis + Kali)"
+            else
+                DEPLOY_MODE="dev"
+                info "Selected: Developer Mode (MongoDB + Redis only)"
+            fi
             ;;
         *)
             DEPLOY_MODE="core"
             COMPOSE_FILE="docker-compose.yml"
+            DEV_MODE=false
             info "Selected: Core Services only"
             ;;
     esac
@@ -381,6 +400,7 @@ save_run_conf() {
     cat > "$RUN_CONF" <<EOF
 DEPLOY_MODE=${DEPLOY_MODE}
 COMPOSE_FILE=${COMPOSE_FILE}
+DEV_MODE=${DEV_MODE}
 EOF
     info "Saved deploy preferences → .run.conf"
 }
@@ -401,11 +421,17 @@ compose() {
     $COMPOSE_CMD "${args[@]}" "$@"
 }
 
+# ── Check pnpm is available ───────────────────────────────
+check_pnpm() {
+    if ! command -v pnpm &>/dev/null; then
+        err "pnpm is not installed. Install it via: corepack enable && corepack prepare pnpm@latest --activate"
+        exit 1
+    fi
+}
+
 # ── Launch ────────────────────────────────────────────────
 launch() {
     local build_flag="${1:-}"
-
-    section "Launching Pentest Copilot"
 
     if [[ -z "${COMPOSE_FILE:-}" ]]; then
         if ! load_run_conf; then
@@ -413,6 +439,13 @@ launch() {
             DEPLOY_MODE="core"
         fi
     fi
+
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        launch_dev "$build_flag"
+        return
+    fi
+
+    section "Launching Pentest Copilot"
 
     ensure_compose_override
 
@@ -449,6 +482,78 @@ launch() {
     echo -e "   ${DIM}$0${NC}          Reconfigure or restart"
 }
 
+# ── Launch dev mode (infra only, frontend & backend run manually) ──
+launch_dev() {
+    local build_flag="${1:-}"
+
+    section "Launching Developer Mode"
+
+    check_pnpm
+
+    local dev_services="mongodb redis"
+    if [[ "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
+        dev_services="mongodb redis kali"
+    fi
+
+    info "Starting infrastructure: ${BOLD}${dev_services}${NC}"
+    echo
+    compose up ${build_flag} -d ${dev_services}
+    echo
+
+    section "Configuring Backend for Local Development"
+    local mongo_db
+    mongo_db=$(get_env "$BACKEND_ENV" "MONGO_DATABASE" 2>/dev/null || echo "pentestcopilot")
+    if [[ ! -f "$BACKEND_ENV" ]]; then
+        [[ -f "$BACKEND_TMPL" ]] && cp "$BACKEND_TMPL" "$BACKEND_ENV"
+    fi
+    set_env_var "$BACKEND_ENV" "MONGO_URI" "mongodb://localhost:27017/${mongo_db}"
+    set_env_var "$BACKEND_ENV" "REDIS_URL" "redis://localhost:6379"
+    info "Set MONGO_URI and REDIS_URL to localhost (backend runs outside Docker)"
+    echo
+
+    section "Installing Dependencies"
+    info "Installing backend dependencies..."
+    (cd "$SCRIPT_DIR/backend" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
+    info "Installing frontend dependencies..."
+    (cd "$SCRIPT_DIR/frontend" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
+    echo
+
+    section "Developer Mode — Infrastructure Running"
+    echo
+    echo -e "   ${GREEN}MongoDB${NC}    localhost:27017"
+    echo -e "   ${GREEN}Redis${NC}      localhost:6379"
+
+    if [[ "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
+        echo
+        echo -e "   ${GREEN}Kali SSH${NC}   ssh root@localhost -p 4242"
+        echo -e "   ${GREEN}Kali noVNC${NC} http://localhost:4200"
+        echo -e "   ${GREEN}Kali VPN${NC}   localhost:1194/udp"
+    fi
+
+    echo
+    section "Start Frontend & Backend Manually"
+    echo
+    echo -e "   ${CYAN}Backend:${NC}"
+    echo -e "     ${DIM}cd backend${NC}"
+    echo -e "     ${DIM}pnpm run build   ${NC}${DIM}# compile TypeScript (first time / after changes)${NC}"
+    echo -e "     ${DIM}pnpm run dev     ${NC}${DIM}# start with nodemon (watches dist/)${NC}"
+    echo
+    echo -e "   ${CYAN}Frontend:${NC}"
+    echo -e "     ${DIM}cd frontend${NC}"
+    echo -e "     ${DIM}pnpm run dev     ${NC}${DIM}# start Next.js dev server with Turbopack${NC}"
+    echo
+    echo -e "   ${CYAN}Endpoints when running:${NC}"
+    echo -e "     ${GREEN}Frontend${NC}   http://localhost:3000"
+    echo -e "     ${GREEN}Backend${NC}    http://localhost:8080"
+    echo
+    info "Useful commands:"
+    echo -e "   ${DIM}$0 stop${NC}     Stop infrastructure containers"
+    echo -e "   ${DIM}$0 logs${NC}     Tail container logs"
+    echo -e "   ${DIM}$0 status${NC}   Show container status"
+    echo -e "   ${DIM}$0 dev${NC}      Restart developer mode"
+    echo -e "   ${DIM}$0${NC}          Reconfigure or restart"
+}
+
 # ── Full first-time configure ─────────────────────────────
 full_configure() {
     detect_wsl
@@ -478,6 +583,32 @@ cmd_status() {
     check_prerequisites
     load_run_conf 2>/dev/null || true
     compose ps
+}
+
+cmd_dev() {
+    check_prerequisites
+    detect_wsl
+
+    if load_run_conf 2>/dev/null && [[ "${DEV_MODE:-false}" == true ]]; then
+        info "Reusing saved developer mode config"
+    else
+        DEV_MODE=true
+        COMPOSE_FILE="docker-compose.dev.yml"
+        if confirm "Include Kali container?" "y"; then
+            DEPLOY_MODE="dev-kali"
+        else
+            DEPLOY_MODE="dev"
+        fi
+        save_run_conf
+    fi
+
+    if [[ ! -f "$BACKEND_ENV" ]] || [[ ! -f "$FRONTEND_ENV" ]]; then
+        configure_backend
+        configure_ssh
+        configure_frontend
+    fi
+
+    launch
 }
 
 cmd_config() {
@@ -515,6 +646,7 @@ cmd_help() {
     echo
     echo "Commands:"
     echo "  (none)    Interactive setup & start"
+    echo "  dev       Developer mode (infra containers only, run frontend & backend manually)"
     echo "  config    Update configuration only (no rebuild)"
     echo "  stop      Stop all containers"
     echo "  logs      Tail logs (optionally: $0 logs backend)"
@@ -533,6 +665,7 @@ main() {
         logs)            shift; cmd_logs "$@"; return ;;
         status)          cmd_status;          return ;;
         config)          cmd_config;          return ;;
+        dev)             cmd_dev;             return ;;
         -h|--help|help)  cmd_help;            return ;;
     esac
 
@@ -545,11 +678,15 @@ main() {
         echo -e "   ${BOLD}2)${NC} Rebuild images & start (existing config)"
         echo -e "   ${BOLD}3)${NC} Update configuration only ${DIM}(edit .env files, no build/start)${NC}"
         echo -e "   ${BOLD}4)${NC} Reconfigure everything from scratch"
+        echo -e "   ${BOLD}5)${NC} Developer mode ${DIM}(infra only, run frontend & backend manually with pnpm)${NC}"
         echo
-        prompt_input "Choose [1/2/3/4]:"
+        prompt_input "Choose [1/2/3/4/5]:"
         read -r choice
 
         case "$choice" in
+            5)
+                cmd_dev
+                ;;
             4)
                 full_configure
                 launch --build

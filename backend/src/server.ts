@@ -65,7 +65,7 @@ const initializeApp = async () => {
     const app = express();
     const port = 8080;
 
-    const localWhitelist = [
+    const defaultWhitelist = [
       "http://127.0.0.1:8080",
       "http://127.0.0.1:3000",
       "http://127.0.0.1:3001",
@@ -76,7 +76,16 @@ const initializeApp = async () => {
       "http://localhost:3000",
     ];
 
+    const corsOriginsEnv = process.env.CORS_ORIGINS;
+    const localWhitelist = corsOriginsEnv
+      ? [
+          ...defaultWhitelist,
+          ...corsOriginsEnv.split(",").map((o) => o.trim()).filter(Boolean),
+        ]
+      : defaultWhitelist;
+
     const corsOptions = {
+      origin: localWhitelist,
       allowedHeaders: [
         "Origin",
         "X-Requested-With",
@@ -90,12 +99,6 @@ const initializeApp = async () => {
         "x-csrf-token",
         "Set-Cookie",
       ],
-      origin: (origin: any, callback: any) => {
-        if (!origin || localWhitelist.includes(origin)) {
-          return callback(null, true);
-        }
-        callback(new Error("Not allowed by CORS"));
-      },
       credentials: true,
       methods: "GET,HEAD,OPTIONS,PUT,PATCH,POST,DELETE",
     };
@@ -189,7 +192,7 @@ const initializeApp = async () => {
       console.log("Connected to socket server");
     });
 
-    socketServer.use(socketSession(session(sessionConfig), { autoSave: true }));
+    socketServer.use(socketSession(session(sessionConfig), { autoSave: true }) as any);
 
     // write a socketServer middleware to check if the user is authenticated
     socketServer.use(async (socket, next) => {

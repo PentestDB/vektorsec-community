@@ -162,50 +162,47 @@
     }
 
     .invoiceTable {
-      :global {
-        .ant-table-content {
-          background: var(--primary-bg) !important;
-          .ant-table-tbody {
-            .ant-table-row {
-              background: var(--secondary-text-100) !important;
-            }
-            .ant-table-cell-row-hover {
-              background: var(--primary-bg) !important;
-            }
-          }
+      :global(.ant-table-content) {
+        background: var(--primary-bg) !important;
+      }
 
-          .ant-table-thead > tr {
-            td,
-            th {
-              background-color: var(--secondary-bg);
-              color: var(--primary-text);
-              font-size: nth($fontSize, 3);
-              font-weight: bold;
-              border: none;
+      :global(.ant-table-content .ant-table-tbody .ant-table-row) {
+        background: var(--secondary-text-100) !important;
+      }
 
-              &::before {
-                display: none;
-              }
-            }
-          }
+      :global(.ant-table-content .ant-table-tbody .ant-table-cell-row-hover) {
+        background: var(--primary-bg) !important;
+      }
 
-          .ant-table-tbody > tr > td {
-            border: none;
-            color: var(--primary-text);
-            font-size: nth($fontSize, 3);
-            font-weight: 400;
-            background-color: var(--secondary-bg);
-          }
+      :global(.ant-table-content .ant-table-thead > tr td),
+      :global(.ant-table-content .ant-table-thead > tr th) {
+        background-color: var(--secondary-bg);
+        color: var(--primary-text);
+        font-size: nth($fontSize, 3);
+        font-weight: bold;
+        border: none;
+      }
 
-          .ant-table-placeholder {
-            border: none;
-            background: var(--secondary-bg) !important;
+      :global(.ant-table-content .ant-table-thead > tr td::before),
+      :global(.ant-table-content .ant-table-thead > tr th::before) {
+        display: none;
+      }
 
-            .ant-empty-description {
-              color: var(--secondary-text);
-            }
-          }
-        }
+      :global(.ant-table-content .ant-table-tbody > tr > td) {
+        border: none;
+        color: var(--primary-text);
+        font-size: nth($fontSize, 3);
+        font-weight: 400;
+        background-color: var(--secondary-bg);
+      }
+
+      :global(.ant-table-content .ant-table-placeholder) {
+        border: none;
+        background: var(--secondary-bg) !important;
+      }
+
+      :global(.ant-table-content .ant-table-placeholder .ant-empty-description) {
+        color: var(--secondary-text);
       }
     }
   }
