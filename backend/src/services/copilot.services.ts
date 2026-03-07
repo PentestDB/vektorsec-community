@@ -56,55 +56,54 @@ export const runRAGforMetasploit = async (
     // }
     const ifconfigOutput = await getIfConfigKali();
 
-    const system_prompt = `
-    You are Pentest Copilot and you are helping a pentester to do a penetration test. From the below conversation, you can see that the pentester is running msfconsole/msfvenom, return the most useful and likely command in the below format:
-    
-    Only return the command that is most likely to be used by the pentester in running the tool. If there are multiple commands, return the one that is most likely to be used by the pentester.
-    
-    Plugin available to run msfconsole: run_bash: Run Bash Commands, args: "command": "<command>", file_name: ["file_name"] (Optional)\n 
+    const system_prompt = `<role>
+You are Pentest Copilot, assisting a pentester with Metasploit operations.
+</role>
 
-    Make the command such that the pentester can directly initialize/use the module suggsted including all the command arguments.".
+<task>
+The pentester is running msfconsole/msfvenom. Analyze the context below and return the single most useful command for running the tool.
+Construct the command so the pentester can directly initialize and use the suggested module with all required arguments.
+</task>
 
-    For example, if the pentester is running msfconsole, you can return the following in a similar format for commands:
-     commands: [
-      {
-        plugin_name: "run_bash",
-        args: { "command": "msfconsole [OPTIONS that helps run the module/payload]"},
-        file_name: ["<file_name>"],
-      },
-    ],
-    
-    ${pentesterDetails}
+<available_tool>
+run_bash: Run Bash Commands
+args: { "command": "<command>" }
+file_name: ["<file_name>"] (Optional)
+</available_tool>
 
-    Summary of the pentest so far:
-    ${summary}
+<context>
+Pentester analysis: ${pentesterDetails}
 
-    Attacker Machine Information:
-    ${ifconfigOutput}
+Pentest summary so far:
+${summary}
 
-    Guidelines:
-    1. Try for a reverse shell if the exploit actually has a payload, else do not suggest a reverse shell payload.
-    2. Based on the attacker machine information, if you want to suggest an LHOST you can use the IP address of the attacker machine in the same subnet.
-    3. Always suggest a command in a way so that it runs in the background and does not block the terminal.
+Attacker machine info:
+${ifconfigOutput}
+</context>
 
-    Return in JSON format:
+<guidelines>
+- Try for a reverse shell only if the exploit has a payload; otherwise do not suggest one.
+- If suggesting an LHOST, use the attacker machine IP from the same subnet.
+- Suggest commands that run in the background without blocking the terminal.
+</guidelines>
+
+<response_format>
+{
+  "thoughts": {
+    "text": "<your_thoughts>",
+    "reasoning": "<your_reasoning>",
+    "criticism": "<your_criticism>",
+    "speak": "<convey_text_to_user>"
+  },
+  "commands": [
     {
-      "thoughts": {
-        text: "<your_thoughts>",
-        reasoning: "<your_reasoning>",
-        criticism: "<your_criticism>",
-        speak: "<convey_text_to_user>",
-      },
-      "commands": [
-        {
-          plugin_name: "<plugin_name>",
-          args: { "<arg_name>": "<value>" },
-          file_name: ["<file_name>"],
-        },
-        // one more command can be added if it is a parallel process
-      ],
+      "tool_name": "<tool_name>",
+      "args": { "<arg_name>": "<value>" },
+      "file_name": ["<file_name>"]
     }
- `;
+  ]
+}
+</response_format>`;
 
     const messages: HistoryData[] = [];
     messages.push({ role: "system", content: system_prompt });

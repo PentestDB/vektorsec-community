@@ -35,11 +35,11 @@ const SubprocessTableComponent = ({
               maxWidth: 400,
             }}
           >
-            {command?.plugin_name}
+            {command?.tool_name}
           </div>
           {/* <CopyOutlined
             onClick={() => {
-              navigator.clipboard.writeText(command?.plugin_name);
+              navigator.clipboard.writeText(command?.tool_name);
               message.success("Copied to clipboard!");
             }}
           /> */}

@@ -267,7 +267,7 @@ export const finalizeCopilotCommand = async (req: Request, res: Response) => {
       return res.status(200).json({
         sessionId: sessionId,
         message: response.message,
-        plugin_response: response.plugin_response ?? null,
+        tool_response: response.tool_response ?? null,
         type: response.type,
         command: response.command ?? null,
       });
@@ -284,7 +284,7 @@ export const finalizeCopilotCommand = async (req: Request, res: Response) => {
   }
 };
 
-export const storePluginOutputData = async (req: Request, res: Response) => {
+export const storeToolOutputData = async (req: Request, res: Response) => {
   try {
     const user = res.locals.user;
     const userId = res.locals.userId;
@@ -336,16 +336,16 @@ export const storePluginOutputData = async (req: Request, res: Response) => {
       commandId,
       sessionId,
       output,
-      commandData?.plugin_name ?? ""
+      commandData?.tool_name ?? ""
     );
 
     return res.status(200).json({
-      message: "Plugin output data stored",
+      message: "Tool output data stored",
     });
   } catch (error) {
     console.log(error);
     return res.status(400).json({
-      message: "Failed to store plugin output data",
+      message: "Failed to store tool output data",
     });
   }
 };

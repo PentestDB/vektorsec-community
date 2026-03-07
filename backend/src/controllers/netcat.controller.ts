@@ -11,7 +11,7 @@ import {
   updateNetcatSession,
 } from "../utils/redis/store";
 import { v4 as uuidv4 } from "uuid";
-import { PluginInventory } from "../services/plugins.services";
+import { netcatOperations } from "../tools/handlers/netcat-listener";
 import { requireActiveSession } from "../services/session.helpers";
 import { getUserContainerIp } from "../services/task.helpers";
 import { initNetcatSession } from "../services/session.services";
@@ -173,7 +173,7 @@ export const startNetcat = async (req: Request, res: Response) => {
       });
     }
 
-    const data = await PluginInventory.netcat_listener.start({
+    const data = await netcatOperations.start({
       ip: containerIp,
       port: netcatSession.port,
       netcat_id: netcat_id,
@@ -225,7 +225,7 @@ export const sendNetcatInput = async (req: Request, res: Response) => {
 
     await storeNetcatInput({ netcat_id, input });
 
-    const response = await PluginInventory.netcat_listener.sendInput({
+    const response = await netcatOperations.sendInput({
       ip: containerIp,
       netcat_id: netcat_id,
       input: input,
@@ -316,7 +316,7 @@ export const stopNetcat = async (req: Request, res: Response) => {
       });
     }
 
-    const response = await PluginInventory.netcat_listener.stop({
+    const response = await netcatOperations.stop({
       ip: containerIp,
       netcat_id: netcat_id,
     });

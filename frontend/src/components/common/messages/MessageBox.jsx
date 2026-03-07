@@ -46,7 +46,7 @@ const MessageBox = ({
   generateCommandMutation,
 }) => {
   const [form] = Form.useForm();
-  const choice = Form.useWatch("run_plugin_choice", form);
+  const choice = Form.useWatch("run_tool_choice", form);
   const queryClient = useQueryClient();
 
   const [selectedTarget, setSelectedTarget] = useState(null);
@@ -115,7 +115,7 @@ const MessageBox = ({
 
         await runPluginsBasedOnCommand({
           commandId: activeCommands[0]?._id,
-          pluginName: activeCommands[0]?.plugin_name,
+          toolName: activeCommands[0]?.tool_name,
           commandArgs: activeCommands[0]?.args,
           values,
         });
@@ -144,10 +144,10 @@ const MessageBox = ({
     }
   };
 
-  const renderOptions = (plugin_name) => {
+  const renderOptions = (tool_name) => {
     if (
       ["run_bash", "searchsploit", "msf_listener", "python_server"].includes(
-        plugin_name
+        tool_name
       )
     ) {
       return (
@@ -165,7 +165,7 @@ const MessageBox = ({
         </Radio.Group>
       );
     }
-    if (["msfvenom_payload"].includes(plugin_name)) {
+    if (["msfvenom_payload"].includes(tool_name)) {
       return (
         <Radio.Group>
           {((status === "running" && readyToConnect) || disabled) && (
@@ -182,7 +182,7 @@ const MessageBox = ({
       );
     }
 
-    if (["google"].includes(plugin_name)) {
+    if (["google"].includes(tool_name)) {
       return (
         <Radio.Group>
           <Radio value="yes">Yes</Radio>
@@ -193,7 +193,7 @@ const MessageBox = ({
       );
     }
 
-    if (["generic_response"].includes(plugin_name)) {
+    if (["generic_response"].includes(tool_name)) {
       return (
         <Radio.Group>
           <Radio value="provide_guidance">Provide Next Steps</Radio>
@@ -201,7 +201,7 @@ const MessageBox = ({
       );
     }
 
-    if (["netcat_listener"].includes(plugin_name)) {
+    if (["netcat_listener"].includes(tool_name)) {
       return (
         <Radio.Group>
           <Radio value="start-nc">Start Netcat Listener</Radio>
@@ -313,8 +313,8 @@ const MessageBox = ({
     );
   };
 
-  const getLabel = (plugin_name) => {
-    switch (plugin_name) {
+  const getLabel = (tool_name) => {
+    switch (tool_name) {
       case "run_bash":
         return "Do you want to execute the command?";
       case "google":
@@ -362,7 +362,7 @@ const MessageBox = ({
           initialValues.new_term_select = stepData.choice;
         } else {
           const selectedChoice = stepData.choice;
-          initialValues.run_plugin_choice = stepData.choice;
+          initialValues.run_tool_choice = stepData.choice;
           switch (selectedChoice) {
             case "edit":
               initialValues.editCommand = stepData.additionalContext;
@@ -395,7 +395,7 @@ const MessageBox = ({
   };
 
   const renderOutputData = (stepData) => {
-    if (stepData?.plugin === "google" && !stepData?.siteContext) {
+    if (stepData?.tool === "google" && !stepData?.siteContext) {
       return (
         <div className={`${styles.messageBoxLabel}`}>
           {stepData?.content &&
@@ -424,7 +424,7 @@ const MessageBox = ({
             })}
         </div>
       );
-    } else if (stepData?.plugin === "google" && stepData?.siteContext) {
+    } else if (stepData?.tool === "google" && stepData?.siteContext) {
       return (
         <div
           ref={markdownBoxRef}
@@ -707,13 +707,12 @@ const MessageBox = ({
                             style={{
                               pointerEvents: disabled ? "none" : "auto",
                             }}
-                            name="run_plugin_choice"
+                            name="run_tool_choice"
                             label={getLabel(
-                              // run_bash -> do you want to execute the command?
-                              activeCommands[0]?.plugin_name
+                              activeCommands[0]?.tool_name
                             )}
                             initialValue={
-                              activeCommands[0]?.plugin_name ===
+                              activeCommands[0]?.tool_name ===
                               "netcat_listener"
                                 ? "start-nc"
                                 : "yes"
@@ -725,12 +724,12 @@ const MessageBox = ({
                               },
                             ]}
                           >
-                            {renderOptions(activeCommands[0]?.plugin_name)}
+                            {renderOptions(activeCommands[0]?.tool_name)}
                           </Form.Item>
                           {/* if Edit or provide out put is there show a textbox */}
                           {choice === "edit" && (
                             <>
-                              {activeCommands[0]?.plugin_name ===
+                              {activeCommands[0]?.tool_name ===
                               "msfvenom_payload" ? (
                                 <>
                                   <Form.Item
@@ -887,7 +886,7 @@ const MessageBox = ({
           {type === "output" && (
             <>
               <div>
-                {stepData?.plugin === "google" ? (
+                {stepData?.tool === "google" ? (
                   <div className={styles.messageBoxLabel}>
                     View your search results, select the target which you want
                     to follow:
@@ -907,7 +906,7 @@ const MessageBox = ({
 
               {!disabled && (
                 <>
-                  {stepData?.plugin === "google" ? (
+                  {stepData?.tool === "google" ? (
                     <>
                       {!!stepData?.siteContext ? (
                         <>

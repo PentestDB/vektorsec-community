@@ -242,7 +242,7 @@ export const createCopilotSubprocess = async (req: Request, res: Response) => {
         mainSessionId: session_id,
         storeCommands: [
           {
-            plugin_name: process.command.plugin_name,
+            tool_name: process.command.tool_name,
             args: process.command.args,
             active: true,
             loop: 0,
@@ -256,7 +256,7 @@ export const createCopilotSubprocess = async (req: Request, res: Response) => {
               content: JSON.stringify({
                 commands: [
                   {
-                    plugin_name: process.command.plugin_name,
+                    tool_name: process.command.tool_name,
                     args: process.command.args,
                   },
                 ],

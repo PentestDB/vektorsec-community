@@ -14,7 +14,7 @@ import { CopilotPrompts } from "../utils/copilot/prompts";
 import { ask_gpt4_model, ask_gpt3_model } from "./llm.service";
 import { fix_json_with_ai } from "../utils/jsonfix";
 import { genericInitTodo } from "../utils/copilot/todo";
-import { PluginInventory } from "./plugins.services";
+import { toolRegistry } from "../tools/registry";
 import SessionsModel, {
   loopHistoryDoc,
 } from "../models/Sessions/Sessions.model";
@@ -387,12 +387,12 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
     let containsMsfvenomOrMsfconsole = false;
 
     commands = commands.map((command: any) => {
-      if (command.plugin_name === "msfvenom_payload") {
+      if (command.tool_name === "msfvenom_payload") {
         containsMsfvenomOrMsfconsole = true;
       }
 
       if (
-        command?.plugin_name === "run_bash" &&
+        command?.tool_name === "run_bash" &&
         command?.args?.command?.includes("msfconsole")
       ) {
         containsMsfvenomOrMsfconsole = true;
@@ -514,44 +514,23 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
 
     const sessionHistory = sessionData.history;
     const commandId = command.commandId;
-    const plugin_name = command.plugin_name;
+    const tool_name = command.tool_name;
     const command_args = command.command_args;
     const choice = command.choice;
 
-    let pluginResponse: string = "";
+    let toolResponse: string = "";
 
-    switch (plugin_name) {
-      case "run_bash":
-        pluginResponse =
-          PluginInventory.run_bash(commandId, command_args, choice) ?? "";
-        break;
-      case "generic_response":
-        pluginResponse = command_args.output;
-        console.log(pluginResponse);
-        break;
-      case "netcat_listener":
-        pluginResponse = command_args.output;
-        console.log(pluginResponse);
-        break;
-      case "msfvenom_payload":
-        pluginResponse =
-          (await PluginInventory.msfvenom_payload(
-            commandId,
-            command_args,
-            choice
-          )) ?? "";
-        break;
-      case "google":
-        pluginResponse =
-          (await PluginInventory.googleSearch(command_args, choice)) ?? "";
-        break;
-      default:
-        break;
+    if (toolRegistry.has(tool_name)) {
+      toolResponse = await toolRegistry.execute(tool_name, {
+        commandId,
+        args: command_args,
+        choice,
+      });
     }
 
     const newData: any = {
       choice,
-      plugin: plugin_name,
+      tool: tool_name,
     };
 
     if (choice === "edit") {
@@ -567,11 +546,11 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
     });
 
     if (
-      pluginResponse &&
+      toolResponse &&
       (["provide_output", "no", "provide_guidance"].includes(choice) ||
-        plugin_name === "generic_response" ||
-        plugin_name === "google" ||
-        plugin_name === "netcat_listener")
+        tool_name === "generic_response" ||
+        tool_name === "google" ||
+        tool_name === "netcat_listener")
     ) {
       const commandToEdit: SingleCommandData | undefined =
         dbSession.storeCommands.find(
@@ -579,7 +558,7 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
         );
 
       if (!!commandToEdit) {
-        commandToEdit.plugin_name = plugin_name;
+        commandToEdit.tool_name = tool_name;
         commandToEdit.args = command_args;
         commandToEdit.active = false;
       }
@@ -601,12 +580,11 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
 
       sessionHistory.push({
         role: "user",
-        content: pluginResponse,
+        content: toolResponse,
         loopStep: 2,
         isContextual: true,
       });
 
-      // Updates the command status to pending
       await changeLastHistoryStepStatus({
         sessionId,
         lastStepType: "command",
@@ -617,8 +595,8 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
         sessionId,
         type: "output",
         data: {
-          content: pluginResponse,
-          plugin: plugin_name,
+          content: toolResponse,
+          tool: tool_name,
         },
       });
 
@@ -635,19 +613,11 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
         history: sessionHistory,
       });
 
-      const metadataForKPI = JSON.stringify({
-        commandId: commandId,
-        plugin_name: plugin_name,
-        command_args: command_args,
-        output: pluginResponse,
-      });
-
-
       return {
         success: true,
         message: "Command Executed",
         session_id: sessionId,
-        plugin_response: pluginResponse,
+        tool_response: toolResponse,
         type: "output",
       };
     } else {
@@ -661,23 +631,15 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
         sessionId,
         type: "output",
         data: {
-          plugin: plugin_name,
+          tool: tool_name,
         },
       });
-
-      const metadataForKPI = JSON.stringify({
-        commandId: commandId,
-        plugin_name: plugin_name,
-        command_args: command_args,
-        output: "",
-      });
-
 
       return {
         success: true,
         message: "Command Generated",
         session_id: sessionId,
-        command: pluginResponse,
+        command: toolResponse,
         type: "command",
       };
     }
@@ -687,7 +649,7 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
       success: false,
       message: "Error Executing Command",
       session_id: sessionId,
-      plugin_response: null,
+      tool_response: null,
     };
   }
 };
@@ -696,7 +658,7 @@ export const storeExecutedCommandOutput = async (
   commandId: string,
   session_id: string,
   output: string,
-  plugin_name: string
+  tool_name: string
 ) => {
   console.log("storing command", commandId);
   const session = await SessionsModel.findOne({
@@ -742,7 +704,7 @@ export const storeExecutedCommandOutput = async (
     lastStepType: "output",
     newData: {
       content: output,
-      plugin: plugin_name,
+      tool: tool_name,
     },
   });
 
@@ -1048,19 +1010,12 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
       dbSession.loopHistory[dbSession.loopHistory.length - 1].data
         .additionalContext;
 
-    let summaryPrompt = `Here is the Performed Pentest Summary: ${contextSummary}. Here are some suggested Next Steps: ${contextNextSteps}. ${
-      additionalContext
-        ? `Here is some additional context that you can use to provide next steps: ${additionalContext}`
-        : ""
-    }`;
-
-    if (!sessionData.isMainThread) {
-      summaryPrompt = `Here is the Performed Pentest Summary: ${contextSummary}. Since you are a subthread, you can either continue analyzing the results or you can pass the results to the main thread.${
-        additionalContext
-          ? `Here is some additional context that you can use to provide next steps: ${additionalContext}`
-          : ""
-      }`;
-    }
+    const summaryPrompt = CopilotPrompts.summary_context_message(
+      contextSummary,
+      contextNextSteps,
+      additionalContext,
+      !!sessionData.isMainThread
+    );
     const todoSummaryPrompt = await CopilotPrompts.todo_update_init(sessionId);
     // Update Todo List
     const todoHistory: HistoryData[] = [];
@@ -1183,7 +1138,7 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
 
     newHistory.push({
       role: "user",
-      content: CopilotPrompts.plugin_inventory_maintain_json(
+      content: CopilotPrompts.tool_inventory_maintain_json(
         !!sessionData.isMainThread,
         user.configs.tools,
         summaryPrompt
@@ -1558,7 +1513,7 @@ export const extractRelevantContextUsingGPT3 = async (
   content: string
 ) => {
   try {
-    const systemPrompt = `You are website pentester GPT, your aim is to analyze the webpage contents and identify possible attack vectors or places where you can perform pentest on. Don't return any remediating comments.`;
+    const systemPrompt = CopilotPrompts.web_analysis_system_prompt();
     const history: HistoryData[] = [
       {
         role: "system",

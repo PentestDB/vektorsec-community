@@ -269,7 +269,7 @@ const initializeApp = async () => {
                         frontendSocket.emit(`command_executed-${terminalId}`, {
                           status: "success",
                           message: "Command Executed",
-                          plugin_response: execStatus.output,
+                          tool_response: execStatus.output,
                           commandId: commandId,
                           type: "output",
                         });

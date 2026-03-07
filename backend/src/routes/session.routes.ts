@@ -7,7 +7,7 @@ import {
   generateLoopSummary,
   initiateCopilotSession,
   finalizeSummary,
-  storePluginOutputData,
+  storeToolOutputData,
   finalizeTodoAndResetHistory,
   undoPreviousStep,
   takeActionOnResponse,
@@ -24,7 +24,7 @@ router.post("/generate-command", [verifySess], generateCopilotCommand);
 
 router.post("/finalize-command", [verifySess], finalizeCopilotCommand);
 
-router.post("/store-command-output", [verifySess], storePluginOutputData);
+router.post("/store-command-output", [verifySess], storeToolOutputData);
 
 router.post("/generate-summary", [verifySess], generateLoopSummary);
 

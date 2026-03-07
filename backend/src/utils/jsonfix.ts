@@ -1,132 +1,74 @@
 import { HistoryData } from "../services/copilot.services";
 
-const COMMAND_JSON_FIX_PROMPT = `The Response needs to strictly be in the following format:
+function commonJsonFixRules(additionalRules = ""): string {
+  return `<rules>
+- Remove any text before or after the JSON object — return only valid JSON.
+- Escape unescaped quotes where needed.
+- Fix comma placement to form proper JSON.
+- Correct missing or misnamed fields to match the required format.
+- Add or remove brackets as needed to produce valid JSON.${additionalRules}
+- If the JSON is already correct, return it as-is.
+</rules>`;
+}
 
+const COMMAND_JSON_FIX_PROMPT = `<required_format>
 {
   "thoughts": {
     "text": "<your_thoughts>",
     "reasoning": "<your_reasoning>",
     "criticism": "<your_criticism>",
-    "speak": "<convey_text_to_user>",
+    "speak": "<convey_text_to_user>"
   },
   "commands": [
     {
-      "plugin_name": "<plugin_name>",
-      "args": { "<arg_key>": "<arg_value>" }
+      "tool_name": "<tool_name>",
+      "args": { "<arg_key>": "<arg_value>" },
+      "file_name": ["<file_name>"]
     }
   ]
 }
+</required_format>
 
-The following things need to be in consideration:
-- Please note that any additional text or broken JSON should be removed, and only the fixed JSON should be returned.
-- If there's any text before and after the JSON object, it should be removed and only the valid JSON object should be returned. For Example: \n
-  "This is some text before the JSON object. \n
+${commonJsonFixRules()}`;
+
+const TODO_JSON_FIX_PROMPT = `<required_format>
 {
-  "thoughts": {
-    "text": "<your_thoughts>",
-    "reasoning": "<your_reasoning>",
-    "criticism": "<your_criticism>",
-    "speak": "<convey_text_to_user>",
-  },
-  "commands": [
+  "todo": [
     {
-      "plugin_name": "<plugin_name>",
-      "args": { "<arg_key>": "<arg_value>" }
+      "step": "<step_number>",
+      "title": "<step_title>",
+      "status": "<step_status>",
+      "substeps": [
+        {
+          "substep": "<substep_number>",
+          "title": "<substep_title>",
+          "status": "<status>",
+          "command": "<command>"
+        }
+      ]
     }
   ]
-}\n
-  "This is some text after the JSON object. \n
-
-  Should be converted to: \n
- {
-  "thoughts": {
-    "text": "<your_thoughts>",
-    "reasoning": "<your_reasoning>",
-    "criticism": "<your_criticism>",
-    "speak": "<convey_text_to_user>",
-  },
-  "commands": [
-    {
-      "plugin_name": "<plugin_name>",
-      "args": { "<arg_key>": "<arg_value>" }
-      "file_name": ["<file_name>"] // This is an optional field
-    }
-  ]
-}\n     
-- If quotes are not escaped in the response i.e. " is present instead of \" then the quotes need to be escaped.
-- If commas are not placed in a way that represent a proper json object then additional commas must be added.
-- If one or more heading are missing or different from the given format, they need to be corrected to fit the format.
-- If brackets are missing or extra which make the json object invalid, they should be added/removed.
-- You can only return the raw JSON object. Do not return any other text. If there is extra text before or after the JSON object, remove it.
-- If the JSON is already in the correct format, then you can just return the JSON object as it is.`;
-
-const TODO_JSON_FIX_PROMPT = `The Response needs to strictly be in the following format:
-{
-    todo: [
-      {
-        step: "<step_number>",
-        title: "<step_title>",
-        status: "<step_status>",
-        substeps: [
-          {
-            substep: "<substep_number>",
-            title: "<substep_title>",
-            status: "<status>",
-            command: "<command>",
-          },
-        ],
-      },
-      {
-        step: "<next_step_number>",
-        title: "<step_title>",
-        status: "<step_status>",
-        substeps: [
-          {
-            substep: "<substep_number>",
-            title: "<substep_title>",
-            status: "<status>",
-            command: "<command>",
-          },
-        ],
-      },
-    ],
-  }
-
-The following things need to be in consideration:
-- Please note that any additional text or broken JSON will be removed, and only the fixed JSON will be returned.
-- If quotes are not escaped in the response i.e. " is present instead of \" then the quotes need to be escaped.
-- If commas are not placed in a way that represent a proper json object then additional commas must be added.
-- Ensure "todo" field is present and is an array of objects with specified above structure.
-- If one or more heading are missing or different from the given format, they need to be corrected to fit the format.
-- If brackets are missing or extra which make the json object invalid, they should be added/removed.
-- You can only return the raw JSON object. Do not return any other text. If there is extra text before or after the JSON object, remove it.
-- If the JSON is already in the correct format, then you can just return the JSON object as it is.`;
-
-const SUMMARY_JSON_FIX_PROMPT = `The Response needs to strictly be in the following format:
-
-{
-    "summary": "summary of the session so far", 
-    "nextSteps": "next steps to be performed"
-}.
-
-The following things need to be in consideration:
-- Please note that any additional text or broken JSON will be removed, and only the fixed JSON will be returned.
-- If quotes are not escaped in the response i.e. " is present instead of \" then the quotes need to be escaped.
-- If commas are not placed in a way that represent a proper json object then additional commas must be added.
-- If one or more heading are missing or different from the given format, they need to be corrected to fit the format.
-- If brackets are missing or extra which make the json object invalid, they should be added/removed.
-- You can only return the raw JSON object. Do not return any other text. If there is extra text before or after the JSON object, remove it.
-- If the JSON is already in the correct format, then you can just return the JSON object as it is.`;
-
-const CONTINUE_JSON_FIX_PROMPT = `The Response needs to strictly be in the following format:
-{
-  "continue": true
 }
-or 
+</required_format>
+
+${commonJsonFixRules('\n- Ensure the "todo" field is present and is an array of objects matching the structure above.')}`;
+
+const SUMMARY_JSON_FIX_PROMPT = `<required_format>
 {
-  "continue": false
+  "summary": "<summary of the session so far>",
+  "nextSteps": "<next steps to be performed>"
 }
-`;
+</required_format>
+
+${commonJsonFixRules()}`;
+
+const CONTINUE_JSON_FIX_PROMPT = `<required_format>
+{ "continue": true }
+or
+{ "continue": false }
+</required_format>
+
+${commonJsonFixRules()}`;
 
 function extractJSON(inputStr: string): string | null {
   const regex = /{[\s\S]*}/;
@@ -140,8 +82,16 @@ export async function fix_json_with_ai(
   type: string = "command",
   sessionId: string = ""
 ): Promise<any> {
-  const system_prompt: string =
-    "You are a JSON Formatter AI which can correct a wrongly formatted JSON String. You are given a response from the user to identify the JSON in the response and correct it if it's wrong. You need to fix the JSON and return the raw JSON. If there is extra text before or after the JSON object, you can remove it. You can only return the correct formatted raw JSON object. Do not return any other text.";
+  const system_prompt: string = `<role>
+You are a JSON Formatter AI. Your task is to extract and fix malformed JSON from user input.
+</role>
+
+<rules>
+- Identify the JSON object in the response and correct any formatting issues.
+- Return only the raw, correctly formatted JSON object.
+- Remove any non-JSON text before or after the JSON object.
+- Do not include any explanatory text in your response.
+</rules>`;
   let template: string = COMMAND_JSON_FIX_PROMPT;
   if (type === "todo") {
     template = TODO_JSON_FIX_PROMPT;
@@ -190,8 +140,8 @@ export async function fix_json_with_ai(
 
       if (jsonTest["commands"] != null) {
         for (let i = 0; i < jsonTest["commands"].length; i++) {
-          if (jsonTest["commands"][i]["plugin_name"] == null) {
-            console.log("BadJSONFR no plugin_name");
+          if (jsonTest["commands"][i]["tool_name"] == null) {
+            console.log("BadJSONFR no tool_name");
             is_valid_json = false;
           }
           if (jsonTest["commands"][i]["args"] == null) {

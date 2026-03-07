@@ -14,7 +14,7 @@ export interface ContextData {
 
 export interface SingleCommandData {
   _id?: mongoose.Types.ObjectId;
-  plugin_name: string;
+  tool_name: string;
   args: {
     [key: string]: string;
   };

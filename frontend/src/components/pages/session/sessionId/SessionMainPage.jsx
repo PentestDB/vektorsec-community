@@ -67,7 +67,7 @@ const SessionMainPage = ({ session_id }) => {
           await storeCommandMutation.mutateAsync({
             session_id: session_id,
             commandId: data.commandId,
-            output: data.plugin_response,
+            output: data.tool_response,
           });
         }
       });
@@ -388,23 +388,23 @@ const SessionMainPage = ({ session_id }) => {
 
   const runPluginsBasedOnCommand = async ({
     commandId,
-    pluginName,
+    toolName,
     commandArgs,
     values,
   }) => {
     let command = {
       commandId,
-      plugin_name: pluginName,
+      tool_name: toolName,
       command_args: commandArgs,
-      choice: values.run_plugin_choice,
+      choice: values.run_tool_choice,
     };
 
-    const choice = values.run_plugin_choice;
+    const choice = values.run_tool_choice;
 
     if (
       status !== "running" &&
       ["yes", "edit"].includes(choice) &&
-      pluginName !== "google"
+      toolName !== "google"
     ) {
       message.error(
         "Exploit box is not running cannot pick yes/edit as choice"
@@ -420,7 +420,7 @@ const SessionMainPage = ({ session_id }) => {
         command,
       });
     } else if (choice === "edit") {
-      if (pluginName !== "msfvenom_payload") {
+      if (toolName !== "msfvenom_payload") {
         const { editCommand } = values;
 
         command.command_args = {

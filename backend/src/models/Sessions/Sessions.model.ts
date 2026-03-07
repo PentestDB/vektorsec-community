@@ -12,7 +12,7 @@ export interface loopHistoryDoc {
   data: {
     content?: string;
     choice?: string;
-    plugin?: string;
+    tool?: string;
     additionalContext?: string;
     fileAnalysis?: string;
     siteContext?: string;
@@ -91,7 +91,7 @@ const SessionSchema = new Schema({
           type: String,
           enum: ["yes", "no", "edit", "provide_output", "provide_guidance"],
         },
-        plugin: {
+        tool: {
           type: String,
         },
         additionalContext: {
@@ -119,7 +119,7 @@ const SessionSchema = new Schema({
   storeCommands: {
     type: [
       {
-        plugin_name: { type: String, required: true },
+        tool_name: { type: String, required: true },
         args: { type: Object, required: true },
         file_name: { type: [String], required: false },
         active: { type: Boolean, required: true, default: false },

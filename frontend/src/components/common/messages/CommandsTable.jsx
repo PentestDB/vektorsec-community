@@ -3,22 +3,22 @@ import styles from "@/styles/components/Messages.module.scss";
 
 const CommandsTable = ({ data }) => {
   const isMsfvenomPayloadPresent = data.some(
-    (item) => item.plugin_name === "msfvenom_payload"
+    (item) => item.tool_name === "msfvenom_payload"
   );
 
   const isGenericResponse = data.some(
-    (item) => item.plugin_name === "generic_response"
+    (item) => item.tool_name === "generic_response"
   );
 
   const isNetcatListener = data.some(
-    (item) => item.plugin_name === "netcat_listener"
+    (item) => item.tool_name === "netcat_listener"
   );
 
   const defaultColumns = [
     {
-      title: "Plugin Name",
-      dataIndex: "plugin_name",
-      key: "plugin_name",
+      title: "Tool",
+      dataIndex: "tool_name",
+      key: "tool_name",
     },
     {
       title: "Command",
@@ -40,9 +40,9 @@ const CommandsTable = ({ data }) => {
 
   const genericColumns = [
     {
-      title: "Plugin Name",
-      dataIndex: "plugin_name",
-      key: "plugin_name",
+      title: "Tool",
+      dataIndex: "tool_name",
+      key: "tool_name",
     },
     {
       title: "Thoughts",
@@ -64,9 +64,9 @@ const CommandsTable = ({ data }) => {
 
   const ncColumns = [
     {
-      title: "Plugin Name",
-      dataIndex: "plugin_name",
-      key: "plugin_name",
+      title: "Tool",
+      dataIndex: "tool_name",
+      key: "tool_name",
     },
     {
       title: "Listener Port Number",
@@ -80,9 +80,9 @@ const CommandsTable = ({ data }) => {
 
   const msfvenomColumns = [
     {
-      title: "Plugin Name",
-      dataIndex: "plugin_name",
-      key: "plugin_name",
+      title: "Tool",
+      dataIndex: "tool_name",
+      key: "tool_name",
     },
     {
       title: "LHOST",
