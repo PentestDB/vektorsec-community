@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import { CopilotPrompts } from "../utils/copilot/prompts";
 import { ask_gpt4_model, ask_gpt3_model } from "./llm.service";
 import { fix_json_with_ai } from "../utils/jsonfix";
-import { genericInitTodo, initTodo } from "../utils/copilot/todo";
+import { genericInitTodo } from "../utils/copilot/todo";
 import { PluginInventory } from "./plugins.services";
 import SessionsModel, {
   loopHistoryDoc,
@@ -153,18 +153,16 @@ const updateLastloopHistoryStep = async ({
 export const createNewSession = async ({
   uid,
   isMainThread = true,
-  engagementType,
 }: {
   uid: string;
   isMainThread?: boolean;
-  engagementType: "generic" | "formal";
 }) => {
   const sessionId = uuidv4().toString();
 
   await storeSession({
     uid,
     sessionId,
-    todo: engagementType === "generic" ? genericInitTodo : initTodo,
+    todo: genericInitTodo,
     isMainThread: isMainThread ? 1 : 0,
   });
 

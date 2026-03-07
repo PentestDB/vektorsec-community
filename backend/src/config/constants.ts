@@ -15,8 +15,6 @@ export const KALI_API_PATH = "/api";
 export const SESSION_NAME_MAX_LENGTH = 50;
 export const SESSION_DESC_MAX_LENGTH = 500;
 
-export const ENGAGEMENT_TYPES = ["generic", "formal"] as const;
-
 export const OPENVPN_CONFIG_PATH = "/root/openvpn.ovpn";
 export const OPENVPN_START_CMD = `openvpn --config ${OPENVPN_CONFIG_PATH} --daemon && echo '|<<<<STARTED>>>>|'`;
 export const OPENVPN_KILL_CMD = "pkill openvpn";

@@ -59,7 +59,6 @@ export interface SessionDoc extends mongoose.Document {
     loop: number;
   }[];
   redoContext: string | null;
-  engagementType: "generic" | "formal";
 }
 
 const SessionSchema = new Schema({
@@ -178,11 +177,6 @@ const SessionSchema = new Schema({
   totalTokens3: { type: Number, required: true, default: 0 },
   redoContext: {
     type: String,
-  },
-  engagementType: {
-    type: String,
-    enum: ["generic", "formal"],
-    default: "generic",
   },
 });
 

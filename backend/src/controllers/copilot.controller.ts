@@ -30,15 +30,15 @@ export const createCopilotSession = async (req: Request, res: Response) => {
   try {
     const user = res.locals.user;
     const userId = res.locals.userId;
-    const { name, description, engagementType } = req.body;
+    const { name, description } = req.body;
 
-    if (!name || !["generic", "formal"].includes(engagementType)) {
+    if (!name) {
       return res.status(400).json({
         message: "Session details missing",
       });
     }
 
-    const sessionID = await createNewSession({ uid: userId, engagementType });
+    const sessionID = await createNewSession({ uid: userId });
 
     const archiveHistory = new HistoryArchiveModel({
       sessionId: sessionID,
@@ -61,7 +61,6 @@ export const createCopilotSession = async (req: Request, res: Response) => {
       sessionId: sessionID,
       type: "main",
       archiveHistoryId: savedHistory._id,
-      engagementType,
     });
 
     await newSession.save();
