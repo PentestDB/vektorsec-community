@@ -31,8 +31,8 @@ export const verifySess = async (
     return res.status(403).send({ message: "User not found" });
   }
 
-
   res.locals.userId = userId;
+  res.locals.user = user;
 
   next();
 };

@@ -42,7 +42,7 @@ const ModalComponent = ({
         style={{
           maxWidth: maxWidth ? maxWidth : "900px",
         }}
-        destroyOnClose={destroyOnClose}
+        destroyOnHidden={destroyOnClose}
         confirmLoading={confirmLoading}
         onCancel={onCancel ? onCancel : closeModal}
         maskClosable={maskClosable}

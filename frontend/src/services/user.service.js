@@ -1,5 +1,4 @@
-import { apiBaseURL, apiClient } from "@/utils/axios.config";
-import axios from "axios";
+import { apiClient } from "@/utils/axios.config";
 
 export const updateUserProfile = async (body) => {
   const res = await apiClient.post(`/user/update-user-profile`, body);
@@ -7,16 +6,11 @@ export const updateUserProfile = async (body) => {
 };
 
 export const uploadUserProfileImage = async (body) => {
-  const res = await axios.post(
-    apiBaseURL + `/user/update-user-profile-image`,
-    body,
-    {
-      withCredentials: true,
-      headers: {
-        "Content-type": "multipart/form-data",
-      },
-    }
-  );
+  const res = await apiClient.post(`/user/update-user-profile-image`, body, {
+    headers: {
+      "Content-type": "multipart/form-data",
+    },
+  });
   return res.data;
 };
 
@@ -56,8 +50,7 @@ export const verifyPANNumber = async (body) => {
 };
 
 export const verifyPassport = async (body) => {
-  const res = await axios.post(apiBaseURL + `/user/verify-passport`, body, {
-    withCredentials: true,
+  const res = await apiClient.post(`/user/verify-passport`, body, {
     headers: {
       "Content-type": "multipart/form-data",
     },

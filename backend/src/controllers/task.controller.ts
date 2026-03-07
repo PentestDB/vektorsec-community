@@ -3,28 +3,16 @@ import ServiceTaskModel from "../models/ServiceTask/ServiceTask.model";
 import UserModel from "../models/User/User.model";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import getSecrets from "../utils/getSecrets";
+import { requireActiveSession } from "../services/session.helpers";
 import Docker from "dockerode";
 
 const docker = new Docker(); // Uses default socket (/var/run/docker.sock)
 
 export const startupNewTask = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
     const { sessionId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!sessionId) {
       return res.status(400).json({
@@ -32,16 +20,8 @@ export const startupNewTask = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const previousServiceTask = await ServiceTaskModel.find({
       uid: userId,
@@ -115,41 +95,20 @@ export const startupNewTask = async (req: Request, res: Response) => {
 };
 
 export const exploitBoxStatus = async (req: Request, res: Response) => {
+  const user = res.locals.user;
   const userId = res.locals.userId;
 
   const { sessionId } = req.params;
 
   try {
-    if (!userId) {
-      return res.status(400).json({
-        message: "Invalid User",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
     if (!sessionId) {
       return res.status(400).json({
         message: "Invalid session ID",
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
     
     // Find the Kali container by looking for containers with "kali" in the name
     const containers = await docker.listContainers();
@@ -160,6 +119,17 @@ export const exploitBoxStatus = async (req: Request, res: Response) => {
     );
     
     if (!kaliContainer) {
+      const sshHost = (process.env.SSH_HOST || "").trim();
+      if (sshHost) {
+        return res.status(200).json({
+          success: true,
+          message: "Exploit Box is running (local SSH)",
+          status: "running",
+          readyToConnect: true,
+          containerIP: sshHost,
+          type: "local",
+        });
+      }
       return res.status(200).json({
         message: "Exploit Box is not running",
         success: false,
@@ -217,23 +187,10 @@ export const exploitBoxStatus = async (req: Request, res: Response) => {
 
 export const extendTaskExpiration = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
 
     const { serviceId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!serviceId) {
       return res.status(400).json({

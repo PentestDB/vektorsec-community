@@ -9,6 +9,7 @@ import TerminalComponent from "@/components/common/TerminalComponent";
 import { useBeforeunload } from "react-beforeunload";
 import { resetToInitialState } from "@/store/socket.slice";
 import RefreshAlert from "@/components/common/RefreshAlert";
+import { useSocketContext } from "@/context/SocketContext";
 
 const SessionLayout = ({ children }) => {
   const router = useRouter();
@@ -18,10 +19,10 @@ const SessionLayout = ({ children }) => {
   const { sessions, status, readyToConnect } = useSelector(
     (state) => state.user
   );
-  const { sockets } = useSelector((state) => state.socket);
+  const { getAllSockets, clearAllSockets } = useSocketContext();
 
   useBeforeunload(
-    sockets.length > 0 ? (event) => event.preventDefault() : null
+    getAllSockets().length > 0 ? (event) => event.preventDefault() : null
   );
 
   const validSession = sessions.find((session) => session.id === session_id);
@@ -39,12 +40,7 @@ const SessionLayout = ({ children }) => {
 
     return () => {
       dispatch(resetToInitialState());
-      sockets.forEach((socket) => {
-        if (socket.socket) {
-          socket.socket.emit("disconnect_ssh");
-          socket.socket.disconnect();
-        }
-      });
+      clearAllSockets();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session_id, router]);

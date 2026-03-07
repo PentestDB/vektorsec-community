@@ -1,9 +1,8 @@
 import styles from "@/styles/components/Common.module.scss";
 
-const FeatureCard = ({ title, description, icon, key, active, onClick }) => {
+const FeatureCard = ({ title, description, icon, active, onClick }) => {
   return (
     <div
-      key={key}
       onClick={onClick}
       className={
         active ? styles.featureCardContainerActive : styles.featureCardContainer

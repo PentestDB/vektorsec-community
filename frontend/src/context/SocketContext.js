@@ -23,8 +23,22 @@ export const SocketProvider = ({ children }) => {
     delete socketsRef.current[sessionId];
   };
 
+  const getAllSockets = () => {
+    return Object.entries(socketsRef.current);
+  };
+
+  const clearAllSockets = () => {
+    for (const [sessionId, socket] of Object.entries(socketsRef.current)) {
+      if (socket) {
+        socket.emit("disconnect_ssh");
+        socket.disconnect();
+      }
+      delete socketsRef.current[sessionId];
+    }
+  };
+
   return (
-    <SocketContext.Provider value={{ setSocket, getSocket, removeSocket }}>
+    <SocketContext.Provider value={{ setSocket, getSocket, removeSocket, getAllSockets, clearAllSockets }}>
       {children}
     </SocketContext.Provider>
   );

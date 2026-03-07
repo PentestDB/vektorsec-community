@@ -1,7 +1,7 @@
-import { AuthContextProvider } from "@/components/common/auth/AuthContext";
+import AuthOnlyLayout from "@/components/layouts/AuthOnlyLayout";
 
 const OnboardingLayout = ({ children }) => {
-  return <AuthContextProvider>{children}</AuthContextProvider>;
+  return <AuthOnlyLayout>{children}</AuthOnlyLayout>;
 };
 
 export default OnboardingLayout;

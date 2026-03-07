@@ -6,7 +6,6 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import styles from "@/styles/components/CLIcomponent.module.scss";
 import { useDispatch, useSelector } from "react-redux";
-import { setSocket } from "@/store/socket.slice";
 import { useSocketContext } from "@/context/SocketContext";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI;
@@ -27,6 +26,7 @@ const TerminalSession = ({
   const [terminalHasOutput, setTerminalHasOutput] = useState(false); // NEW
 
   const [terminalLoading, setTerminalLoading] = useState(true);
+  const [sshError, setSSHError] = useState(null);
 
   const { readyToConnect, status } = useSelector((state) => state.user);
   const { setSocket } = useSocketContext();
@@ -75,6 +75,15 @@ const TerminalSession = ({
         );
         setTerminalLoading(false);
         setDisconnected(false);
+        setSSHError(null);
+      });
+
+      newSocket.on(`ssh-error-${session.id}`, (data) => {
+        setTerminalLoading(false);
+        setSSHError(
+          data.message ||
+            "SSH connection failed"
+        );
       });
 
       newSocket.on(`disconnect`, (data) => {
@@ -119,6 +128,7 @@ const TerminalSession = ({
     setTerminalHasOutput(false);
     setDisconnected(false);
     setTerminalLoading(true);
+    setSSHError(null);
   };
 
   console.log("Terminal", terminalLoading, readyToConnect);
@@ -178,7 +188,17 @@ const TerminalSession = ({
 
   return (
     <>
-      {(terminalLoading || !readyToConnect) && (
+      {sshError && (
+        <div className={styles.sshErrorContainer}>
+          <div className={styles.sshErrorMessage}>
+            SSH Connection Error: {sshError}
+          </div>
+          <button className={styles.sshReconnectBtn} onClick={handleReconnect}>
+            Reconnect
+          </button>
+        </div>
+      )}
+      {!sshError && (terminalLoading || !readyToConnect) && (
         <Row
           align="middle"
           justify="center"
@@ -186,19 +206,23 @@ const TerminalSession = ({
           className={styles.loadBox}
         >
           <Spin indicator={<LoadingOutlined className={styles.loadIcon} />} />{" "}
-          Establising secure connection with your exploit box... (This may take
-          around 45-60 seconds)
+          Establishing secure connection with your exploit box...
         </Row>
       )}
-      {/* Show Reconnect button if disconnected or no output after loading */}
-      {(!terminalHasOutput && !terminalLoading && readyToConnect) || disconnected ? (
+      {!sshError &&
+      ((!terminalHasOutput && !terminalLoading && readyToConnect) || disconnected) ? (
         <Row align="middle" justify="center" style={{ margin: '10px 0' }}>
-          <button onClick={handleReconnect} style={{ padding: '6px 16px', background: '#6c63ff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          <button className={styles.sshReconnectBtn} onClick={handleReconnect}>
             Reconnect Shell
           </button>
         </Row>
       ) : null}
-      <div ref={terminalRef} className="copilotTerminalContainer" tabIndex={0} />
+      <div
+        ref={terminalRef}
+        className="copilotTerminalContainer"
+        tabIndex={0}
+        style={{ display: sshError || !terminal ? "none" : undefined }}
+      />
     </>
   );
 };

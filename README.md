@@ -244,9 +244,9 @@ The frontend is built on **Next.js 16** with the app router, utilizing **server-
 
 - **`/login`, `/register`**: User authentication endpoints.
 - **`/dashboard`**: Workspace creation and management hub.
-- **`/session/[workspace_id]`**: Primary interface for AI interaction and pentesting tasks.
-- **`/session/[workspace_id]/gui`**: VNC-based graphical access to the Kali container.
-- **`/session/[workspace_id]/vpn`**: UI for uploading and connecting custom OpenVPN configs.
+- **`/session/[session_id]`**: Primary interface for AI interaction and pentesting tasks.
+- **`/session/[session_id]/gui`**: VNC-based graphical access to the Kali container.
+- **`/session/[session_id]/vpn`**: UI for uploading and connecting custom OpenVPN configs.
 
 ---
 

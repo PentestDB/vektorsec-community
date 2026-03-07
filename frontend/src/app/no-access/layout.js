@@ -1,15 +1,7 @@
-import HeaderLinks from "@/components/common/HeaderLinks";
-import { AuthContextProvider } from "@/components/common/auth/AuthContext";
+import DashboardLayout from "@/components/layouts/DashboardLayout";
 
 const NoAccessLayout = ({ children }) => {
-  return (
-    <>
-    <AuthContextProvider>
-      <HeaderLinks />
-      {children}
-    </AuthContextProvider>
-    </>
-  );
+  return <DashboardLayout>{children}</DashboardLayout>;
 };
 
 export default NoAccessLayout;

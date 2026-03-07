@@ -24,6 +24,9 @@ import RedisStore from "connect-redis";
 import { taskRoutes } from "./routes/task.routes";
 import UserModel from "./models/User/User.model";
 import { copilotRoutes } from "./routes/copilot.routes";
+import { netcatRoutes } from "./routes/netcat.routes";
+import { vpnRoutes } from "./routes/vpn.routes";
+import { vncRoutes } from "./routes/vnc.routes";
 import getSecrets from "./utils/getSecrets";
 import { buildSSHConfig } from "./utils/sshConfig";
 import { sessionRoutes } from "./routes/session.routes";
@@ -318,8 +321,14 @@ const initializeApp = async () => {
               });
             });
           })
-          .on("error", (err) => {
+          .on("error", (err: any) => {
             console.error("SSH connection error:", err);
+            frontendSocket.emit(`ssh-error-${terminalId}`, {
+              message: err.message || "SSH connection failed",
+              code: err.code,
+              address: err.address,
+              port: err.port,
+            });
           })
           .connect(sshConfig);
       } catch (err) {
@@ -349,8 +358,17 @@ const initializeApp = async () => {
     // Task routes
     app.use("/api/task", taskRoutes);
 
-    // Task routes
+    // Copilot routes
     app.use("/api/copilot", copilotRoutes);
+
+    // Netcat routes
+    app.use("/api/copilot", netcatRoutes);
+
+    // VPN routes
+    app.use("/api/copilot", vpnRoutes);
+
+    // VNC routes
+    app.use("/api/copilot", vncRoutes);
 
     // User routes
     app.use("/api/user", userRoutes);

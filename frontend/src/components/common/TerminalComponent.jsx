@@ -127,27 +127,21 @@ const TerminalComponent = ({ show, readyToConnect }) => {
                   onChange={(key) => setActiveTerminal(key)}
                   className={styles.terminalTabs}
                   style={{ height: `${terminal_height}` }}
-                >
-                  {sessions.map((session, index) => {
-                    return (
-                      <>
-                        {!["vpn", "gui"].includes(session.type) && (
-                          <Tabs.TabPane
-                            tab={getTabName(session)}
-                            key={session.id}
-                          >
-                            <TerminalSession
-                              session={session}
-                              show={show}
-                              active_terminal={active_terminal}
-                              readyToConnect={readyToConnect}
-                            />
-                          </Tabs.TabPane>
-                        )}
-                      </>
-                    );
-                  })}
-                </Tabs>
+                  items={sessions
+                    .filter((session) => !["vpn", "gui"].includes(session.type))
+                    .map((session) => ({
+                      key: session.id,
+                      label: getTabName(session),
+                      children: (
+                        <TerminalSession
+                          session={session}
+                          show={show}
+                          active_terminal={active_terminal}
+                          readyToConnect={readyToConnect}
+                        />
+                      ),
+                    }))}
+                />
               </section>
             </ResizableBox>
           )}

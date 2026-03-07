@@ -119,6 +119,43 @@
       }
     }
 
+    .sshErrorContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem 1rem;
+      gap: 0.75rem;
+      background-color: var(--cli-bg);
+      pointer-events: all;
+    }
+
+    .sshErrorMessage {
+      color: #ff4444;
+      font-family: "Menlo", "Consolas", monospace;
+      font-size: 13px;
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .sshReconnectBtn {
+      padding: 6px 20px;
+      background: transparent;
+      color: #e0e0e0;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: "Menlo", "Consolas", monospace;
+      pointer-events: all;
+      transition: background 0.2s, border-color 0.2s;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+    }
+
     .terminalWrapperHide {
       @extend .terminalWrapper;
       transform: translateY(110vh);

@@ -2,7 +2,6 @@ import { Response, Request } from "express";
 
 // User profile
 
-import UserModel from "../models/User/User.model";
 import axios from "axios";
 import getSecrets from "../utils/getSecrets";
 import KYCModel from "../models/KYC/KYC.model";
@@ -12,35 +11,14 @@ import {
   verifyAadhaarOtpService,
   verifyPanService,
   verifyPassportService,
-} from "../utils/kyc/kyc.service";
+} from "../services/kyc.service";
+import { calculateBillingDetails } from "../services/billing.service";
 import moment from "moment";
-
-const getFormattedDate = (dateObj: Date) => {
-  const date = new Date(dateObj);
-
-  const month = date.toLocaleString("default", { month: "short" });
-  const day = date.getDate();
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
-};
 
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { name } = req.body;
 
@@ -69,21 +47,8 @@ export const sendLinkBugBaseRequest = async (req: Request, res: Response) => {
   try {
     const DEPLOYMENT = await getSecrets("DEPLOYMENT");
 
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const LINK_BUGBASE_LAMBDA_URL = await getSecrets("LINK-BUGBASE-LAMBDA-URL");
     const COPILOT_LAMBDA_KEY = await getSecrets("LINK-BUGBASE-LAMBDA-KEY");
@@ -120,21 +85,8 @@ export const sendLinkBugBaseRequest = async (req: Request, res: Response) => {
 
 export const updateUserProfileImage = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const file = req.file;
 
@@ -163,21 +115,7 @@ export const updateUserProfileImage = async (req: Request, res: Response) => {
 
 export const getUserBillingDetails = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
+    const user = res.locals.user;
 
     let { month, year } = req.body;
 
@@ -203,115 +141,12 @@ export const getUserBillingDetails = async (req: Request, res: Response) => {
     month = parseInt(month);
     year = parseInt(year);
 
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const lastDayOfMonth = new Date(year, month, 0);
-
-    const allDatesInMonth: string[] = [];
-    const currentDate = new Date(firstDayOfMonth);
-
-    while (currentDate <= lastDayOfMonth) {
-      allDatesInMonth.push(getFormattedDate(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    const allTransactions = user.transactions.filter((transaction) => {
-      const transactionDate = new Date(transaction.date);
-      const transactionYear = transactionDate.getFullYear();
-      const transactionMonth = transactionDate.getMonth() + 1;
-      return (
-        transactionMonth === month &&
-        transactionYear === year &&
-        (transaction.usageType === "command-gen" ||
-          transaction.usageType === "exploit-box")
-      );
-    });
-
-    const transactionPerDay: {
-      date: string;
-      commGenUsage: number;
-      expBoxUsage: number;
-    }[] = [];
-
-    const monthTransactions: {
-      date: Date;
-      description: string;
-      amount: number;
-      type: string;
-      usageType: string;
-    }[] = [];
-
-    let commandDebit = 0;
-    let commandCredit = 0;
-    let exploitBoxDebit = 0;
-    let exploitBoxCredit = 0;
-
-    if (allTransactions.length > 0) {
-      allDatesInMonth.map((date) => {
-        transactionPerDay.push({
-          date,
-          commGenUsage: 0,
-          expBoxUsage: 0,
-        });
-      });
-
-      for (let i = 0; i < allTransactions.length; i++) {
-        const transaction = allTransactions[i];
-
-        const entryIndex = transactionPerDay.findIndex(
-          (entry) => entry.date === getFormattedDate(transaction.date)
-        );
-
-        if (entryIndex !== -1) {
-          if (transaction.usageType === "command-gen") {
-            if (transaction.type === "debit") {
-              commandDebit += transaction.amount;
-              transactionPerDay[entryIndex].commGenUsage += transaction.amount;
-            } else {
-              commandCredit += transaction.amount;
-            }
-          } else if (transaction.usageType === "exploit-box") {
-            if (transaction.type === "debit") {
-              exploitBoxDebit += transaction.amount;
-              transactionPerDay[entryIndex].expBoxUsage += transaction.amount;
-            } else {
-              exploitBoxCredit += transaction.amount;
-            }
-          } else {
-            continue;
-          }
-        }
-
-        monthTransactions.unshift({
-          date: transaction.date,
-          description: transaction.description,
-          amount: transaction.amount,
-          type: transaction.type,
-          usageType: transaction.usageType,
-        });
-      }
-    }
-
-    let remainingCommands, remainingExploitBox;
-
-    if (
-      month === new Date().getMonth() + 1 &&
-      year === new Date().getFullYear()
-    ) {
-      remainingCommands = credits.remainingCredits - credits.usedCredits;
-      remainingExploitBox = exploitBox.remainingHours - exploitBox.usedHours;
-    }
+    const billingDetails = calculateBillingDetails(user, month, year);
 
     return res.status(200).json({
       message: "User billing details fetched",
       data,
-      transactionPerDay,
-      monthTransactions,
-      commandDebit,
-      commandCredit,
-      exploitBoxDebit,
-      exploitBoxCredit,
-      remainingCommands,
-      remainingExploitBox,
+      ...billingDetails,
     });
   } catch (error) {
     console.log(error);
@@ -323,21 +158,8 @@ export const getUserBillingDetails = async (req: Request, res: Response) => {
 
 export const checkAccess = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { billing, credits, exploitBox } = user;
 
@@ -371,7 +193,7 @@ export const checkAccess = async (req: Request, res: Response) => {
       netCreditUsage + netHoursUsage >= 100
     ) {
       const manualInvoice = user.invoices.find(
-        (invoice) => invoice.type === "exhausted" && invoice.status !== "paid"
+        (invoice: any) => invoice.type === "exhausted" && invoice.status !== "paid"
       );
 
       if (!manualInvoice) {
@@ -406,21 +228,8 @@ export const checkAccess = async (req: Request, res: Response) => {
 
 export const getUserKycDetails = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { bugbase, kycId } = user;
 
@@ -482,21 +291,8 @@ export const syncBugbaseKycDetails = async (req: Request, res: Response) => {
   try {
     const DEPLOYMENT = await getSecrets("DEPLOYMENT");
 
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const GET_BUGBASE_KYC_LAMBDA_URL = await getSecrets(
       "GET-BUGBASE-KYC-LAMBDA-URL"
@@ -598,21 +394,8 @@ export const syncBugbaseKycDetails = async (req: Request, res: Response) => {
 
 export const updateKycDetails = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const userKYC = await KYCModel.findOne({ uid: userId });
 
@@ -748,21 +531,8 @@ export const updateKycDetails = async (req: Request, res: Response) => {
 
 export const generateAadharOTP = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!user.kycId) {
       return res.status(400).json({
@@ -839,21 +609,8 @@ export const generateAadharOTP = async (req: Request, res: Response) => {
 
 export const verifyAadhaarOtp = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!user.kycId) {
       return res.status(400).json({
@@ -937,21 +694,8 @@ export const verifyAadhaarOtp = async (req: Request, res: Response) => {
 
 export const verifyPAN = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!user.kycId) {
       return res.status(400).json({
@@ -1020,21 +764,8 @@ export const verifyPAN = async (req: Request, res: Response) => {
 
 export const verifyPassport = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!user.kycId) {
       return res.status(400).json({
@@ -1122,16 +853,8 @@ export const verifyPassport = async (req: Request, res: Response) => {
 
 export const requestKYCVerification = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
-
-    const user = await UserModel.findOne({ _id: userId });
-
-    if (user == null) {
-      return res.status(400).json({
-        success: false,
-        message: "USER_NOT_FOUND",
-      });
-    }
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     if (!user.kycId) {
       return res.status(400).json({
@@ -1347,21 +1070,8 @@ export const requestKYCVerification = async (req: Request, res: Response) => {
 
 export const updateToolsPreference = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { tools } = req.body;
 
@@ -1388,21 +1098,8 @@ export const updateToolsPreference = async (req: Request, res: Response) => {
 
 export const getUserTools = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     return res.status(200).json({ tools: user.configs.tools });
   } catch (error) {
@@ -1501,19 +1198,13 @@ export const getUserTools = async (req: Request, res: Response) => {
 
 export const saveUserInformation = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { industry, experience, discoveryMethod } = req.body;
 
     if (!industry || !experience || !discoveryMethod) {
       return res.status(400).json({ message: "Missing user information!" });
-    }
-
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({ message: "User not found!" });
     }
 
     if (user.firstLogin === false) {

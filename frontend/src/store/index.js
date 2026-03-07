@@ -27,6 +27,7 @@ if (isClient) {
   const persistConfig = {
     key: "root",
     storage,
+    whitelist: ["user", "socket", "vpn"],
   };
 
   const persistedReducer = persistReducer(persistConfig, reducers);

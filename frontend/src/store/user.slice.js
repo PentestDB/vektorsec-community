@@ -101,7 +101,6 @@ export const {
   update,
   logout,
   resetSessions,
-  updateContainerIp,
   updateExpiry,
   updateExploitBox,
   updateSessions,

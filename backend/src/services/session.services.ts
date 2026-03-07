@@ -11,181 +11,20 @@ import {
 } from "../utils/redis/store";
 import { v4 as uuidv4 } from "uuid";
 import { CopilotPrompts } from "../utils/copilot/prompts";
-import { chatCompletion, chatCompletion3 } from "../utils/openai/config";
+import { ask_gpt4_model, ask_gpt3_model } from "./llm.service";
 import { fix_json_with_ai } from "../utils/jsonfix";
 import { genericInitTodo, initTodo } from "../utils/copilot/todo";
 import { PluginInventory } from "./plugins.services";
 import SessionsModel, {
   loopHistoryDoc,
 } from "../models/Sessions/Sessions.model";
-import mongoose from "mongoose";
 import UserModel, { UserDoc } from "../models/User/User.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
 import { runCommandOnKali, runRAGforMetasploit } from "./copilot.services";
+import { HistoryData, ContextData, SingleCommandData, CommandData, CopilotSessionData } from "../types/copilot.types";
 
-export interface HistoryData {
-  role: "user" | "assistant" | "system";
-  content: string;
-  isContextual?: boolean;
-  loopStep?: number;
-}
-
-export interface ContextData {
-  summary: string;
-  nextSteps: string;
-}
-
-export interface SingleCommandData {
-  _id?: mongoose.Types.ObjectId;
-  plugin_name: string;
-  args: {
-    [key: string]: string;
-  };
-  file_name?: string[];
-  active: boolean;
-}
-
-export interface CommandData {
-  thoughts: {
-    text: string;
-    reasoning: string;
-    criticism: string;
-    speak: string;
-  };
-  commands: SingleCommandData[];
-}
-
-export interface CopilotSessionData {
-  uid: string;
-  sessionId: string;
-  history: HistoryData[];
-  context?: ContextData;
-  command: CommandData;
-  isMainThread: number;
-  todo: any;
-  mainSessionId?: string;
-  scans?: any;
-  subprocess?: any;
-  netcat?: any;
-  previousContexts?: ContextData[];
-}
-
-async function ask_gpt4_model(
-  history: HistoryData[],
-  sessionId: string,
-  tries = 0
-): Promise<any> {
-  if (tries > 1) {
-    throw new Error("Error Generating Completion - GPT4");
-    return {
-      success: false,
-    };
-  }
-
-  const history_to_send = history.map((item) => {
-    return {
-      role: item.role,
-      content: item.content,
-    };
-  });
-
-  try {
-    const response = await chatCompletion({
-      history: history_to_send,
-      model: "gpt-4",
-    });
-
-    if (response === null || response?.content === null) {
-      throw new Error("Empty Response, retrying...");
-    }
-
-    if (sessionId) {
-      const sessionData = await SessionsModel.findOne({ sessionId });
-
-      if (
-        sessionData &&
-        response?.usage &&
-        response?.content &&
-        response?.usage?.total_tokens
-      ) {
-        sessionData.tokenHistory.push({
-          content: response?.content,
-          usage: response?.usage,
-        });
-
-        sessionData.totalTokens += response?.usage?.total_tokens;
-
-        await sessionData.save();
-      }
-    }
-
-    return {
-      success: true,
-      content: response?.content,
-    };
-  } catch (e) {
-    console.log(e);
-    console.log("Retrying GPT-4");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    return await ask_gpt4_model(history, sessionId, tries + 1);
-  }
-}
-
-export async function ask_gpt3_model(
-  history: HistoryData[],
-  sessionId: string,
-  tries = 0
-): Promise<any> {
-  if (tries > 2) {
-    throw new Error("Error Generating Completion - GPT3");
-  }
-
-  const history_to_send = history.map((item) => {
-    return {
-      role: item.role,
-      content: item.content,
-    };
-  });
-
-  try {
-    const response = await chatCompletion3({
-      history: history_to_send,
-      model: "gpt-3.5-turbo",
-    });
-
-    if (response === null || response?.content === null) {
-      throw new Error("Empty Response, retrying...");
-    }
-
-    if (sessionId) {
-      const sessionData = await SessionsModel.findOne({ sessionId });
-
-      if (
-        sessionData &&
-        response?.usage &&
-        response?.content &&
-        response?.usage?.total_tokens
-      ) {
-        sessionData.tokenHistory3.push({
-          content: response?.content,
-          usage: response?.usage,
-        });
-        sessionData.totalTokens3 += response?.usage?.total_tokens;
-
-        await sessionData.save();
-      }
-    }
-    return {
-      success: true,
-      content: response?.content,
-    };
-  } catch (e) {
-    console.log(e);
-    console.log("Retrying GPT-3");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    return await ask_gpt3_model(history, sessionId, tries + 1);
-  }
-}
+export type { HistoryData, ContextData, SingleCommandData, CommandData, CopilotSessionData };
+export { ask_gpt3_model };
 
 export const getNextStepType = (currentStep: string) => {
   let nextStep;
@@ -1047,7 +886,7 @@ export const finalizeOutputAndGetSummary = async (sessionId: string) => {
   let { content: context, success } = await ask_gpt4_model(
     contextualHistory,
     sessionId
-  );
+  ) as { content: any; success: boolean };
 
   if (!success) {
     throw new Error("Error generating GPT4 summary");
@@ -1548,9 +1387,6 @@ export const analyzeSubprocessData = async (
   const {
     content: global_summary,
     success,
-  }: {
-    content: string;
-    success: boolean;
   } = await ask_gpt4_model(new_history, sessionId);
 
   if (!success) {

@@ -1,13 +1,13 @@
 import { apiClient } from "@/utils/axios.config";
 
 export const createNewSession = async (body) => {
-  const res = await apiClient.post(`/copilot/create_session`, body);
+  const res = await apiClient.post(`/copilot/create-session`, body);
   return res.data;
 };
 
 export const getSessionData = async ({ session_id }) => {
   // post req
-  const res = await apiClient.post(`/copilot/get_session`, {
+  const res = await apiClient.post(`/copilot/get-session`, {
     session_id,
   });
 
@@ -16,7 +16,7 @@ export const getSessionData = async ({ session_id }) => {
 
 export const getSessionLoopHistory = async ({ session_id }) => {
   // post req
-  const res = await apiClient.post(`/copilot/get_session_history`, {
+  const res = await apiClient.post(`/copilot/get-session-history`, {
     session_id,
   });
 
@@ -24,7 +24,7 @@ export const getSessionLoopHistory = async ({ session_id }) => {
 };
 
 export const createSubprocesses = async ({ commands_list, session_id }) => {
-  const res = await apiClient.post(`/copilot/create_subprocess`, {
+  const res = await apiClient.post(`/copilot/create-subprocess`, {
     commands_list,
     session_id,
   });
@@ -32,24 +32,24 @@ export const createSubprocesses = async ({ commands_list, session_id }) => {
 };
 
 export const getUserSessions = async () => {
-  const res = await apiClient.post(`/copilot/get_user_sessions`);
+  const res = await apiClient.post(`/copilot/get-user-sessions`);
   return res.data;
 };
 
 export const deleteSession = async ({ session_id }) => {
-  const res = await apiClient.post(`/copilot/delete_session`, {
+  const res = await apiClient.post(`/copilot/delete-session`, {
     session_id,
   });
   return res.data;
 };
 
 export const getSessionInfo = async (body) => {
-  const res = await apiClient.post(`/copilot/get_session_info`, body);
+  const res = await apiClient.post(`/copilot/get-session-info`, body);
   return res.data;
 };
 
 export const getSessionTodoList = async (body) => {
-  const res = await apiClient.post(`/copilot/get_session_todo_list`, body);
+  const res = await apiClient.post(`/copilot/get-session-todo-list`, body);
   return res.data;
 };
 
@@ -59,14 +59,14 @@ export const updateSessionTodoList = async (body) => {
 };
 
 export const completeSubprocess = async ({ session_id }) => {
-  const res = await apiClient.post(`/copilot/complete_subprocess`, {
+  const res = await apiClient.post(`/copilot/complete-subprocess`, {
     session_id,
   });
   return res.data;
 };
 
 export const getUserInfo = async () => {
-  const res = await apiClient.get(`/copilot/get_user_details`);
+  const res = await apiClient.get(`/copilot/get-user-details`);
   return res.data;
 };
 
@@ -112,18 +112,9 @@ export const startNetcat = async (body) => {
   return res.data;
 };
 
-export const uploadUserProfileImage = async (data) => {
-  const res = await apiClient.post(`/copilot/upload-user-profile-image`, data, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-  return res.data;
-};
-
 // OpenVPN
 export const uploadOpenVPN = async (data) => {
-  const res = await apiClient.post(`/copilot/upload_openvpn`, data, {
+  const res = await apiClient.post(`/copilot/upload-openvpn`, data, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
@@ -132,26 +123,26 @@ export const uploadOpenVPN = async (data) => {
 };
 
 export const checkUserVPN = async (body) => {
-  const res = await apiClient.post(`/copilot/check_user_vpn`);
+  const res = await apiClient.post(`/copilot/check-user-vpn`);
   return res.data;
 };
 
 export const connectOpenVPN = async (body) => {
-  const res = await apiClient.post(`/copilot/connect_openvpn`, body);
+  const res = await apiClient.post(`/copilot/connect-openvpn`, body);
   return res.data;
 };
 
 export const disconnectOpenVPN = async (body) => {
-  const res = await apiClient.post(`/copilot/disconnect_openvpn`, body);
+  const res = await apiClient.post(`/copilot/disconnect-openvpn`, body);
   return res.data;
 };
 
 export const checkVPNStatus = async (body) => {
-  const res = await apiClient.post(`/copilot/check_openvpn_status`, body);
+  const res = await apiClient.post(`/copilot/check-openvpn-status`, body);
   return res.data;
 };
 
 export const connectToVNC = async (body) => {
-  const res = await apiClient.post(`/copilot/connect_vnc`, body);
+  const res = await apiClient.post(`/copilot/connect-vnc`, body);
   return res.data;
 };

@@ -12,7 +12,6 @@
     "start": "node dist/server.js",
     "watch": "tsc -w",
     "dev": "nodemon dist/server.js",
-    "dev2": "nodemon src/server.ts",
     "build": "tsc -p ./tsconfig.json",
     "lint": "eslint . --config .eslintrc.json",
     "lint:fix": "eslint . --fix --config .eslintrc.json"

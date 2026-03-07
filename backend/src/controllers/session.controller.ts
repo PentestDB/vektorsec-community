@@ -21,24 +21,12 @@ import axios from "axios";
 import { load } from "cheerio";
 import { HistoryData } from "../services/copilot.services";
 import { chatCompletion } from "../utils/openai/config";
+import { requireActiveSession } from "../services/session.helpers";
 
 export const initiateCopilotSession = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User ID not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { sessionId, target_info, recon_info, recon } = req.body;
 
@@ -54,16 +42,8 @@ export const initiateCopilotSession = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      sessionId: sessionId,
-      uid: user._id,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session Not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     session.loops = [
       {
@@ -105,25 +85,8 @@ export const initiateCopilotSession = async (req: Request, res: Response) => {
 export const generateCopilotCommand = async (req: Request, res: Response) => {
   try {
     console.log("[generateCopilotCommand] Called");
-    const { userId } = res.locals;
-    console.log("[generateCopilotCommand] userId:", userId);
-
-    if (!userId) {
-      console.log("[generateCopilotCommand] User ID not found in res.locals");
-      return res.status(400).json({
-        message: "User ID not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-    console.log("[generateCopilotCommand] user:", user);
-
-    if (!user) {
-      console.log("[generateCopilotCommand] User not found in DB");
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { sessionId } = req.body;
     console.log("[generateCopilotCommand] sessionId from body:", sessionId);
@@ -135,18 +98,8 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      sessionId: sessionId,
-      uid: user._id,
-    });
-    console.log("[generateCopilotCommand] session:", session);
-
-    if (!session) {
-      console.log("[generateCopilotCommand] Session not found in DB");
-      return res.status(400).json({
-        message: "Session Not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const lastLoopStep = session.loopHistory[session.loopHistory.length - 1];
     console.log("[generateCopilotCommand] lastLoopStep:", lastLoopStep);
@@ -263,21 +216,8 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
 
 export const finalizeCopilotCommand = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User ID not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { sessionId, command } = req.body;
 
@@ -293,16 +233,8 @@ export const finalizeCopilotCommand = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      sessionId: sessionId,
-      uid: user._id,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session Not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const lastLoopStep = session.loopHistory.find(
       (step) =>
@@ -354,21 +286,8 @@ export const finalizeCopilotCommand = async (req: Request, res: Response) => {
 
 export const storePluginOutputData = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { commandId, session_id: sessionId, output } = req.body;
 
@@ -378,16 +297,8 @@ export const storePluginOutputData = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     if (!commandId) {
       return res.status(400).json({
@@ -441,21 +352,8 @@ export const storePluginOutputData = async (req: Request, res: Response) => {
 
 export const generateLoopSummary = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { sessionId } = req.body;
 
@@ -465,16 +363,8 @@ export const generateLoopSummary = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const lastLoopStep = session.loopHistory.find(
       (step) =>
@@ -538,21 +428,8 @@ export const generateLoopSummary = async (req: Request, res: Response) => {
 
 export const finalizeSummary = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { sessionId, additionalContext } = req.body;
 
@@ -562,16 +439,8 @@ export const finalizeSummary = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const lastLoopStep = session.loopHistory.find(
       (step) =>
@@ -631,21 +500,8 @@ export const finalizeTodoAndResetHistory = async (
   res: Response
 ) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { sessionId } = req.body;
 
@@ -655,16 +511,8 @@ export const finalizeTodoAndResetHistory = async (
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const lastLoopStep = session.loopHistory.find(
       (step) =>
@@ -716,21 +564,8 @@ export const finalizeTodoAndResetHistory = async (
 
 export const analyzeAllSubprocessData = async (req: Request, res: Response) => {
   try {
+    const user = res.locals.user;
     const userId = res.locals.userId;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     const { sessionId } = req.body;
 
@@ -740,16 +575,8 @@ export const analyzeAllSubprocessData = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const lastLoopStep = session.loopHistory.find(
       (step) =>
@@ -796,23 +623,10 @@ export const analyzeAllSubprocessData = async (req: Request, res: Response) => {
 
 export const undoPreviousStep = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { sessionId, redoContext } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "Invalid user id",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!sessionId) {
       return res.status(400).json({
@@ -820,16 +634,8 @@ export const undoPreviousStep = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     if (redoContext) {
       session.redoContext = redoContext;
@@ -939,23 +745,10 @@ export const undoPreviousStep = async (req: Request, res: Response) => {
 
 export const takeActionOnResponse = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { sessionId, action } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "Invalid user id",
-      });
-    }
-
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
 
     if (!sessionId) {
       return res.status(400).json({
@@ -963,16 +756,8 @@ export const takeActionOnResponse = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     if (!["like", "dislike"].includes(action)) {
       return res.status(400).json({
@@ -1026,15 +811,10 @@ export const takeActionOnResponse = async (req: Request, res: Response) => {
 
 export const uploadAnalysisFile = async (req: Request, res: Response) => {
   try {
-    const { userId } = res.locals;
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     const { session_id: sessionId, comment } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "Invalid user id",
-      });
-    }
 
     if (!sessionId) {
       return res.status(400).json({
@@ -1042,24 +822,8 @@ export const uploadAnalysisFile = async (req: Request, res: Response) => {
       });
     }
 
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
-
-    const session = await SessionsModel.findOne({
-      uid: userId,
-      sessionId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const findSummary = session.loopHistory.find(
       (step) =>
@@ -1103,13 +867,8 @@ export const followGoogleTarget = async (req: Request, res: Response) => {
   try {
     const { target, sessionId, stepId } = req.body;
 
-    const { userId } = res.locals;
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User not found",
-      });
-    }
+    const user = res.locals.user;
+    const userId = res.locals.userId;
 
     if (!target) {
       return res.status(400).json({
@@ -1143,16 +902,8 @@ export const followGoogleTarget = async (req: Request, res: Response) => {
       });
     }
 
-    const session = await SessionsModel.findOne({
-      sessionId,
-      uid: userId,
-    });
-
-    if (!session) {
-      return res.status(400).json({
-        message: "Session not found",
-      });
-    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
 
     const step = session.loopHistory.find(
       (step) => step._id?.toString() === stepId
