@@ -260,7 +260,7 @@ configure_backend() {
 configure_ssh() {
     section "SSH / Exploit Box"
 
-    # ── Kali container: use well-known defaults ──────
+    # ── Kali container (Docker mode): use well-known defaults ──────
     if [[ "$DEPLOY_MODE" == "kali" ]]; then
         info "Using built-in Kali container defaults (root@kali:22, no password)"
         set_env_var "$BACKEND_ENV" "SSH_HOST"                   "kali"
@@ -276,9 +276,44 @@ configure_ssh() {
         return
     fi
 
-    # ── External exploit box ─────────────────────────
-    warn "No Kali container — you must point to an external exploit box."
-    configure_external_ssh
+    # ── Dev mode with Kali container: backend runs on host, Kali in Docker ──
+    if [[ "$DEPLOY_MODE" == "dev-kali" ]]; then
+        info "Using Kali container via localhost:4242 (backend runs on host)"
+        set_env_var "$BACKEND_ENV" "SSH_HOST"                   "localhost"
+        set_env_var "$BACKEND_ENV" "SSH_PORT"                   "4242"
+        set_env_var "$BACKEND_ENV" "SSH_USERNAME"               "root"
+        set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
+        set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            ""
+        set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+
+        if confirm "Do you also want to configure SSH to an external box instead?"; then
+            configure_external_ssh
+        fi
+        return
+    fi
+
+    # ── Dev mode without Kali or Core mode: optional external exploit box ──
+    echo
+    echo -e "   ${BOLD}1)${NC} Configure SSH to an external exploit box"
+    echo -e "   ${BOLD}2)${NC} Skip SSH for now ${DIM}(backend will start without an exploit box)${NC}"
+    prompt_input "Choose [1/2]:"
+    read -r ssh_choice
+
+    case "$ssh_choice" in
+        1)
+            configure_external_ssh
+            ;;
+        *)
+            info "Skipping SSH configuration — no exploit box configured"
+            set_env_var "$BACKEND_ENV" "SSH_HOST"                   ""
+            set_env_var "$BACKEND_ENV" "SSH_PORT"                   "22"
+            set_env_var "$BACKEND_ENV" "SSH_USERNAME"               ""
+            set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
+            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            ""
+            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+            warn "You can configure SSH later with: $0 config"
+            ;;
+    esac
 }
 
 configure_external_ssh() {
@@ -316,26 +351,42 @@ configure_external_ssh() {
                 err "File not found: $key_path"; exit 1
             fi
 
-            mkdir -p "$SSH_KEYS_DIR"
-            local key_name
-            key_name="$(basename "$key_path")"
-            cp "$key_path" "$SSH_KEYS_DIR/$key_name"
-            chmod 600 "$SSH_KEYS_DIR/$key_name"
-            info "Copied key → ssh-keys/$key_name"
+            if [[ "${DEV_MODE:-false}" == true ]]; then
+                # Dev mode: backend runs on host, use the key path directly
+                local resolved_path
+                resolved_path="$(cd "$(dirname "$key_path")" && pwd)/$(basename "$key_path")"
 
-            # /ssh-keys/ is mounted read-only inside the backend container
-            local container_path="/ssh-keys/$key_name"
+                set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
+                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            "$resolved_path"
+                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
 
-            prompt_input "Passphrase for this key (Enter if none):"
-            read -rs passphrase; echo
+                prompt_input "Passphrase for this key (Enter if none):"
+                read -rs passphrase; echo
+                [[ -n "$passphrase" ]] && set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
 
-            set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
-            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            "$container_path"
-            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
-            NEED_SSH_KEY_MOUNT=true
+                info "Private key auth configured (host path: $resolved_path)"
+            else
+                # Docker mode: copy key into ssh-keys/ and use container mount path
+                mkdir -p "$SSH_KEYS_DIR"
+                local key_name
+                key_name="$(basename "$key_path")"
+                cp "$key_path" "$SSH_KEYS_DIR/$key_name"
+                chmod 600 "$SSH_KEYS_DIR/$key_name"
+                info "Copied key → ssh-keys/$key_name"
 
-            info "Private key auth configured"
-            warn "The key will be mounted at ${BOLD}$container_path${NC} inside the backend container"
+                local container_path="/ssh-keys/$key_name"
+
+                prompt_input "Passphrase for this key (Enter if none):"
+                read -rs passphrase; echo
+
+                set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
+                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            "$container_path"
+                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
+                NEED_SSH_KEY_MOUNT=true
+
+                info "Private key auth configured"
+                warn "The key will be mounted at ${BOLD}$container_path${NC} inside the backend container"
+            fi
             ;;
         *)
             prompt_input "SSH Password:"

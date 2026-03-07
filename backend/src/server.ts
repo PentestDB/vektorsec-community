@@ -25,6 +25,7 @@ import { taskRoutes } from "./routes/task.routes";
 import UserModel from "./models/User/User.model";
 import { copilotRoutes } from "./routes/copilot.routes";
 import getSecrets from "./utils/getSecrets";
+import { buildSSHConfig } from "./utils/sshConfig";
 import { sessionRoutes } from "./routes/session.routes";
 import { trackExecCommandOutput } from "./services/session.services";
 import { userRoutes } from "./routes/user.routes";
@@ -152,31 +153,7 @@ const initializeApp = async () => {
     const httpServer = createServer(app);
 
 
-    const sshConfig: any = {
-      host: (process.env.SSH_HOST || 'localhost').trim(),
-      port: parseInt(process.env.SSH_PORT || '4242', 10),
-      username: (process.env.SSH_USERNAME || 'root').trim(),
-    };
-
-    // Check for private key authentication
-    const privateKeyPath = process.env.SSH_PRIVATE_KEY;
-    if (privateKeyPath) {
-      try {
-        sshConfig.privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-        const passphrase = process.env.SSH_PRIVATE_KEY_PASSPHRASE;
-        if (passphrase) {
-          sshConfig.passphrase = passphrase;
-        }
-        console.log('Using private key for authentication');
-      } catch (err) {
-        console.error('Failed to read private key:', err);
-        throw new Error('Invalid private key');
-      }
-    } else {
-      // Fallback to password authentication
-      sshConfig.password = (process.env.SSH_PASSWORD || '').trim();
-      console.log('Using password for authentication');
-    }
+    const sshConfig = buildSSHConfig();
 
 
     // backend-frontend socket

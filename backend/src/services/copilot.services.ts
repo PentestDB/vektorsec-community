@@ -8,6 +8,7 @@ import { fix_json_with_ai } from "../utils/jsonfix";
 import { ask_gpt3_model } from "./session.services";
 import { Client as SSHClient } from 'ssh2';
 import * as fs from 'fs';
+import { buildSSHConfig } from '../utils/sshConfig';
 import { Response } from 'express';
 export interface HistoryData {
   role: "user" | "assistant" | "system";
@@ -106,31 +107,7 @@ async function ask_gpt4_model(
 }
 
 async function getIfConfigKali(): Promise<string> {
-  const sshConfig: any = {
-    host: (process.env.SSH_HOST || 'localhost').trim(),
-    port: parseInt(process.env.SSH_PORT || '4242', 10),
-    username: (process.env.SSH_USERNAME || 'root').trim(),
-  };
-  
-  // Check for private key authentication
-  const privateKeyPath = process.env.SSH_PRIVATE_KEY;
-  if (privateKeyPath) {
-    try {
-      sshConfig.privateKey = fs.readFileSync(privateKeyPath, 'utf8');
-      const passphrase = process.env.SSH_PRIVATE_KEY_PASSPHRASE;
-      if (passphrase) {
-        sshConfig.passphrase = passphrase;
-      }
-      console.log('Using private key for authentication');
-    } catch (err) {
-      console.error('Failed to read private key:', err);
-      throw new Error('Invalid private key');
-    }
-  } else {
-    // Fallback to password authentication
-    sshConfig.password = (process.env.SSH_PASSWORD || '').trim();
-    console.log('Using password for authentication');
-  }
+  const sshConfig = buildSSHConfig();
 
   return new Promise((resolve, reject) => {
     let ifconfigOutput = "";
@@ -168,29 +145,7 @@ async function getIfConfigKali(): Promise<string> {
 }
 
 export const runCommandOnKali = async (command: string): Promise<string> => {
-  const sshConfig: any = {
-    host: (process.env.SSH_HOST || 'localhost').trim(),
-    port: parseInt(process.env.SSH_PORT || '4242', 10),
-    username: (process.env.SSH_USERNAME || 'root').trim(),
-  };
-
-  // Check for private key authentication first
-  const privateKeyPath = process.env.SSH_PRIVATE_KEY_PATH;
-  if (privateKeyPath) {
-    try {
-      const privateKey = fs.readFileSync(privateKeyPath);
-      sshConfig.privateKey = privateKey;
-      const passphrase = process.env.SSH_PRIVATE_KEY_PASSPHRASE;
-      if (passphrase) {
-        sshConfig.passphrase = passphrase;
-      }
-    } catch (err) {
-      console.error('Failed to read private key:', err);
-      throw new Error('Invalid private key');
-    }
-  } else {
-    sshConfig.password = (process.env.SSH_PASSWORD || '').trim();
-  }
+  const sshConfig = buildSSHConfig();
 
   return new Promise<string>((resolve, reject) => {
     let commandOutput = "";
