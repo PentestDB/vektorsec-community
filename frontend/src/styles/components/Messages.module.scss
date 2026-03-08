@@ -1,57 +1,81 @@
 @import "../_variables";
 
+@keyframes thinkingPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .infoMessage {
   color: var(--primary-text);
-  font-weight: bold;
-  font-size: 1.1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
 }
 
 .messageBoxContainer {
-  border: 1px solid var(--border-color-100);
-  background: none;
-  margin: 2rem 0;
-  margin-bottom: 3rem;
-  border-radius: 4px;
+  border: none;
+  border-left: 2px solid var(--border-default);
+  background: transparent;
+  margin: 1.5rem 0;
+  margin-bottom: 2rem;
+  border-radius: 0;
+  padding-left: 0.5rem;
+  transition: border-color var(--transition-fast);
+
+  &:hover {
+    border-left-color: var(--primary-purple);
+  }
+
+  :global(.ant-card-body) {
+    padding: 1rem 1.25rem;
+  }
 
   .actionPanel {
     position: absolute;
-    right: 1.5rem;
+    right: 1rem;
     top: 0;
     transform: translateY(-50%);
     display: flex;
-    // flex-direction: column;
-    gap: 1.5rem;
+    gap: 0.5rem;
 
     .actionButton {
       cursor: pointer;
-      border: 2px solid var(--border-color-100);
-      border-radius: 4rem;
-      padding: 0.4rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 0.35rem;
       display: flex;
       justify-content: center;
       align-items: center;
-      background-color: var(--status-grey);
-      color: #fff;
-      transition: all 0.2s ease-in-out;
+      background-color: var(--primary-bg);
+      color: var(--secondary-text);
+      transition: all var(--transition-fast);
 
       &:hover {
-        background-color: var(--primary-grey);
+        background-color: var(--surface-hover);
+        color: var(--primary-text);
+        border-color: var(--border-default);
       }
     }
   }
 
   .todoLabel {
-    font-size: nth($fontSize, 4);
+    font-size: 0.95rem;
     color: var(--primary-text);
-    letter-spacing: 0.6px;
-    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-weight: 600;
   }
 
   .todoPara {
-    font-size: nth($fontSize, 3);
-    letter-spacing: 0.6px;
-    color: var(--primary-text);
+    font-size: 0.85rem;
+    letter-spacing: -0.01em;
+    color: var(--secondary-text);
     font-weight: 400;
+    line-height: 1.5;
   }
 
   .messageBoxForm {
@@ -59,18 +83,26 @@
 
     .messageBoxFormItem {
       :global(label) {
-        font-size: nth($fontSize, 3);
+        font-size: 0.85rem;
         color: var(--primary-text);
         margin-bottom: 0.5rem;
-        letter-spacing: 0.6px;
+        letter-spacing: -0.01em;
+        font-weight: 500;
       }
       :global(.ant-input) {
-        background-color: var(--input-bg);
-        border: none;
+        background-color: var(--surface-hover);
+        border: 1px solid var(--border-subtle);
         height: 2.4rem;
         color: var(--primary-text);
-        border-radius: 2px;
-        padding: 0.8rem 1rem;
+        border-radius: 6px;
+        padding: 0.6rem 0.875rem;
+        font-size: 0.875rem;
+        transition: border-color var(--transition-fast);
+
+        &:hover,
+        &:focus {
+          border-color: var(--primary-purple);
+        }
       }
       :global(.ant-input::placeholder) {
         color: var(--secondary-text-500);
@@ -87,71 +119,93 @@
     }
 
     .submitBtn {
-      padding: 0 1.5rem;
-      height: 2.5rem;
-      border-radius: 4px;
+      padding: 0 1.25rem;
+      height: 2.25rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
     }
 
     .messageBoxLabel {
-      font-size: nth($fontSize, 3);
+      font-size: 0.85rem;
       color: var(--primary-text);
-      letter-spacing: 0.6px;
-      font-weight: 700;
+      letter-spacing: -0.01em;
+      font-weight: 600;
     }
 
     .googleSearchCard {
-      background: var(--filled-purple);
-      border: 1px solid var(--filled-purple);
-      margin: 1rem 0;
+      background: var(--surface-hover);
+      border: 1px solid var(--border-subtle);
+      margin: 0.75rem 0;
       cursor: pointer;
+      border-radius: 8px;
+      transition: all var(--transition-fast);
 
       :global(.ant-card-body) {
-        padding: 0.8rem 1.4rem;
+        padding: 0.75rem 1.25rem;
       }
 
       &:hover {
-        background: var(--filled-purple-100);
+        background: var(--surface-active);
+        border-color: var(--primary-purple);
       }
 
       h2 {
         color: var(--primary-text);
-        font-size: nth($fontSize, 3);
-        font-weight: 700;
-        letter-spacing: 0.6px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
         margin-bottom: 0;
       }
 
       a {
-        color: var(--primary-text);
-        font-size: nth($fontSize, 2);
+        color: var(--primary-purple);
+        font-size: 0.75rem;
         font-weight: 400;
-        letter-spacing: 0.6px;
       }
 
       p {
         color: var(--secondary-text);
-        font-size: nth($fontSize, 2);
+        font-size: 0.8rem;
         font-weight: 400;
         margin-bottom: 0;
-        letter-spacing: 0.6px;
+        line-height: 1.4;
       }
     }
 
     .googleSearchCardSelected {
-      background: var(--filled-purple-50);
+      background: var(--surface-active);
+      border-color: var(--primary-purple);
+      box-shadow: 0 0 0 1px var(--primary-purple);
     }
+
     .messageMarkdownContainer {
       margin-bottom: 1rem;
       position: relative;
 
       :global(.codeStyle) {
-        border: 1px solid var(--border-color-100);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
         font-weight: 400 !important;
+        font-family: "JetBrains Mono", "Menlo for powerline", monospace !important;
+        font-size: 0.8rem;
+        background: var(--primary-bg) !important;
+      }
+
+      :global(code) {
+        font-family: "JetBrains Mono", "Menlo for powerline", monospace;
+        font-size: 0.8rem;
+      }
+
+      :global(pre) {
+        background: var(--primary-bg) !important;
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        padding: 1rem;
       }
     }
 
     .showMoreContainer {
-      height: 5rem;
+      height: 4rem;
       position: absolute;
       bottom: 0;
       left: 0;
@@ -162,9 +216,15 @@
       .showMoreButton {
         background: none;
         border: none;
-        color: var(--primary-text);
-        gap: 10px;
+        color: var(--secondary-text);
+        gap: 6px;
         cursor: pointer;
+        font-size: 0.8rem;
+        transition: color var(--transition-fast);
+
+        &:hover {
+          color: var(--primary-text);
+        }
       }
     }
 
@@ -172,17 +232,19 @@
       background: linear-gradient(
         0deg,
         var(--primary-bg) 0%,
-        rgba(#202020, 0.8) 50%,
+        rgba(#0a0a0a, 0.8) 50%,
         rgba(255, 255, 255, 0) 100%
       );
     }
 
     .messageBoxLabelOutput {
-      font-size: nth($fontSize, 2);
+      font-size: 0.8rem;
       color: var(--text-light);
-      letter-spacing: 0.8px;
-      margin: 1rem 0;
-      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0.75rem 0;
+      font-weight: 400;
+      font-family: "JetBrains Mono", "Menlo for powerline", monospace;
+      line-height: 1.6;
     }
 
     .loader {
@@ -194,40 +256,54 @@
     }
 
     :global(.ant-form-item-label label) {
-      font-size: nth($fontSize, 3);
+      font-size: 0.85rem;
       color: var(--primary-text);
       margin-bottom: 0.5rem;
-      letter-spacing: 0.6px;
+      letter-spacing: -0.01em;
+      font-weight: 500;
     }
     :global(.ant-input) {
-      min-height: 2.8rem;
+      min-height: 2.4rem;
       min-width: 25rem;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      background: var(--input-bg) !important;
-      border: 0.1px solid var(--border-color-100);
+      padding: 0.5rem 0.875rem;
+      border-radius: 6px;
+      background: var(--surface-hover) !important;
+      border: 1px solid var(--border-subtle);
       color: var(--primary-text);
+      font-size: 0.875rem;
+      transition: border-color var(--transition-fast);
+
+      &:hover,
+      &:focus {
+        border-color: var(--primary-purple);
+      }
     }
     :global(.ant-input::placeholder) {
       color: var(--secondary-text);
     }
     :global(.ant-radio-group .ant-radio-wrapper) {
-      color: var(--primary-text);
+      color: var(--secondary-text);
+      font-size: 0.85rem;
+      transition: color var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+      }
     }
   }
 
   .divider {
-    border-top: 1px solid var(--border-color-100);
-    margin: 1rem 0 2rem;
+    border-top: 1px solid var(--border-subtle);
+    margin: 1rem 0 1.5rem;
   }
 }
 
 .messagestep1Summary {
-  font-size: nth($fontSize, 3);
+  font-size: 0.85rem;
   color: var(--primary-text);
   margin: 1rem 0;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 
   span {
     color: var(--secondary-text);
@@ -238,18 +314,21 @@
   :global(.ant-table-content) {
     overflow: auto;
     background: var(--primary-bg) !important;
+    border-radius: 6px;
   }
   :global(.ant-table-content .ant-table-tbody .ant-table-row) {
-    background: var(--secondary-text-100) !important;
+    background: transparent !important;
   }
   :global(.ant-table-content .ant-table-tbody .ant-table-cell-row-hover) {
-    background: var(--secondary-bg) !important;
+    background: var(--surface-hover) !important;
   }
   :global(.ant-table-content .ant-table-thead > tr > th) {
-    background-color: var(--secondary-bg);
-    color: var(--primary-text);
-    font-size: nth($fontSize, 3);
-    font-weight: bold;
+    background-color: var(--primary-bg);
+    color: var(--secondary-text);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     border: none;
   }
   :global(.ant-table-content .ant-table-thead > tr > th::before) {
@@ -258,23 +337,24 @@
   :global(.ant-table-content .ant-table-tbody > tr > td) {
     border: none;
     color: var(--primary-text);
-    font-size: nth($fontSize, 3);
+    font-size: 0.8rem;
     font-weight: 400;
-    background-color: var(--secondary-bg);
+    font-family: "JetBrains Mono", "Menlo for powerline", monospace;
+    background-color: var(--primary-bg);
   }
   :global(.ant-table-content .ant-table-placeholder) {
     border: none;
-    background: var(--secondary-bg) !important;
+    background: var(--primary-bg) !important;
   }
   :global(.ant-table-content .ant-table-placeholder .ant-empty-description) {
     color: var(--secondary-text);
   }
   :global(table) {
-    border: 1px solid var(--border-color-100);
-    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
   }
   :global(table tr:last-child td) {
-    border-bottom-left-radius: 4px;
-    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
   }
 }

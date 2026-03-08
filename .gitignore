@@ -1,14 +1,20 @@
-/frontend/.env
-
-/kali-data/*
-/kali_data/*
-
+# ── Secrets & generated config (NEVER commit these) ──
+config.toml
+backend/.env
+frontend/.env
 .env
+*.env.local
+*.env.production
 
-**/.DS_Store
-**/.vscode
-
-# Run script generated files
+# ── Run script generated files ──
 .run.conf
 docker-compose.override.yml
 ssh-keys/
+
+# ── Runtime data ──
+/kali-data/
+/kali_data/
+
+# ── Editor / OS ──
+**/.DS_Store
+**/.vscode

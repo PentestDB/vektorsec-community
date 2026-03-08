@@ -76,7 +76,7 @@ const Navbar = ({ nobg }) => {
         )}
 
         <div className={styles.login}>
-          <PrimaryButton purpleFilled onClick={() => router.push("/login")}>
+          <PrimaryButton onClick={() => router.push("/login")}>
             Sign In
           </PrimaryButton>
         </div>

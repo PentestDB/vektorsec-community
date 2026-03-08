@@ -2,7 +2,7 @@ import { Checkbox, Form, Input, Row, message, notification } from "antd";
 import ModalComponent from "../ModalComponent";
 import PrimaryButton from "../PrimaryButton";
 import { useMutation, useQueryClient } from "react-query";
-import { actionOnResponse, undoPreviousStep } from "@/services/session.service";
+import { actionOnResponse, undoPreviousStep, agenticContinue } from "@/services/session.service";
 import { useDispatch, useSelector } from "react-redux";
 import { updateSessions } from "@/store/user.slice";
 import { RedoOutlined, UndoOutlined } from "@ant-design/icons";
@@ -83,13 +83,19 @@ export const RedoModal = ({ close, sessionId, pathSessionId }) => {
 
   const [type, setType] = useState("undo");
 
+  const agenticContinueMutation = useMutation(agenticContinue, {
+    onSuccess: async () => {
+      await queryClient.invalidateQueries(["get-session-data", sessionId]);
+      await queryClient.invalidateQueries(["get-session-loop-history", sessionId]);
+    },
+  });
+
   const undoPreviousStepMutation = useMutation(undoPreviousStep, {
     onSuccess: async (data) => {
       notification.success({
         message: data?.message ?? "Moved to previous step",
-        description: "Continue to the next step to regenerate your response",
+        description: "Auto-resuming from the previous step...",
       });
-      // cancel all mutations
 
       await queryClient.invalidateQueries(["get-session-data", sessionId]);
       await queryClient.invalidateQueries([
@@ -112,6 +118,9 @@ export const RedoModal = ({ close, sessionId, pathSessionId }) => {
 
         dispatch(updateSessions(currentSessions));
       }
+
+      close();
+      agenticContinueMutation.mutate({ sessionId });
     },
     onError: (error) => {
       console.log(error);

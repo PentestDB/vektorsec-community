@@ -227,20 +227,18 @@ const MessageBox = ({
             <Tooltip title="Undo/Redo this step">
               <div
                 style={{
-                  backgroundColor: "#daab00",
+                  backgroundColor: "rgba(218, 171, 0, 0.15)",
+                  borderColor: "rgba(218, 171, 0, 0.4)",
+                  color: "#daab00",
                 }}
                 className={styles.actionButton}
                 onClick={async () => {
                   setFeedbackType("redo");
-                  // await undoPreviousStepMutation.mutateAsync({
-                  //   sessionId,
-                  // });
                 }}
-                // disabled={undoPreviousStepMutation.isLoading}
               >
                 <UndoOutlined
                   style={{
-                    fontSize: 16,
+                    fontSize: 14,
                   }}
                 />
               </div>
@@ -256,7 +254,7 @@ const MessageBox = ({
                 <Tooltip title="Like Copilot Response">
                   <LikeOutlined
                     style={{
-                      fontSize: 16,
+                      fontSize: 14,
                     }}
                   />
                 </Tooltip>
@@ -268,7 +266,7 @@ const MessageBox = ({
                 <Tooltip title="Dislike Copilot Response">
                   <DislikeOutlined
                     style={{
-                      fontSize: 16,
+                      fontSize: 14,
                     }}
                   />
                 </Tooltip>
@@ -281,12 +279,14 @@ const MessageBox = ({
             <div
               className={styles.actionButton}
               style={{
-                backgroundColor: "#13a106",
+                backgroundColor: "rgba(19, 161, 6, 0.15)",
+                borderColor: "rgba(19, 161, 6, 0.4)",
+                color: "#13a106",
               }}
             >
               <LikeOutlined
                 style={{
-                  fontSize: 16,
+                  fontSize: 14,
                 }}
               />
             </div>
@@ -298,12 +298,14 @@ const MessageBox = ({
             <div
               className={styles.actionButton}
               style={{
-                backgroundColor: "#bc0000",
+                backgroundColor: "rgba(188, 0, 0, 0.15)",
+                borderColor: "rgba(188, 0, 0, 0.4)",
+                color: "#ff4444",
               }}
             >
               <DislikeOutlined
                 style={{
-                  fontSize: 16,
+                  fontSize: 14,
                 }}
               />
             </div>
@@ -612,17 +614,56 @@ const MessageBox = ({
             <>
               <Row
                 align="middle"
-                style={{ gap: "1rem" }}
+                style={{ gap: "0.75rem" }}
                 className={styles.messageBoxLabel}
               >
-                <Spin size={"small"} className={styles.loader} />
-                {thinkType === "summary"
-                  ? "Pentest Copilot is summarizing the context..."
-                  : thinkType === "output"
-                  ? "Finalizing the output..."
-                  : thinkType === "todo"
-                  ? "Updating To-Do Checklist..."
-                  : "Pentest Copilot is thinking 🤔💭"}
+                <span
+                  style={{
+                    display: "inline-flex",
+                    gap: "3px",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: "50%",
+                      backgroundColor: "var(--primary-purple)",
+                      animation: "thinkingPulse 1.4s ease-in-out infinite",
+                      animationDelay: "0s",
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: "50%",
+                      backgroundColor: "var(--primary-purple)",
+                      animation: "thinkingPulse 1.4s ease-in-out infinite",
+                      animationDelay: "0.2s",
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: "50%",
+                      backgroundColor: "var(--primary-purple)",
+                      animation: "thinkingPulse 1.4s ease-in-out infinite",
+                      animationDelay: "0.4s",
+                    }}
+                  />
+                </span>
+                <span style={{ color: "var(--secondary-text)", fontWeight: 400, fontSize: "0.85rem" }}>
+                  {thinkType === "summary"
+                    ? "Copilot is summarizing context..."
+                    : thinkType === "output"
+                    ? "Finalizing output..."
+                    : thinkType === "todo"
+                    ? "Updating checklist..."
+                    : "Copilot is thinking..."}
+                </span>
               </Row>
             </>
           )}
@@ -961,16 +1002,13 @@ const MessageBox = ({
                       )}
                     </>
                   ) : (
-                    <Form.Item label="Continue to summary & next steps">
-                      <PrimaryButton
-                        purple
-                        htmlType="submit"
-                        className={styles.submitBtn}
-                        loading={loading}
-                      >
-                        Continue
-                      </PrimaryButton>
-                    </Form.Item>
+                    <Row
+                      align="middle"
+                      style={{ gap: "0.5rem", padding: "0.75rem 0", color: "var(--secondary-text)", fontSize: "0.85rem" }}
+                    >
+                      <Spin size="small" />
+                      <span>Auto-continuing to summary & next steps...</span>
+                    </Row>
                   )}
                 </>
               )}
@@ -1075,23 +1113,33 @@ const MessageBox = ({
                       >
                         Continue to Main Workspace
                       </PrimaryButton>
-                    )}{" "}
-                    <PrimaryButton
-                      purple
-                      htmlType="submit"
-                      loading={!passBtnClick && loading}
-                      className={styles.submitBtn}
-                    >
-                      Continue
-                    </PrimaryButton>
+                    )}
+                    {addContext ? (
+                      <PrimaryButton
+                        purple
+                        htmlType="submit"
+                        loading={!passBtnClick && loading}
+                        className={styles.submitBtn}
+                      >
+                        Submit Context & Continue
+                      </PrimaryButton>
+                    ) : (
+                      <Row
+                        align="middle"
+                        style={{ gap: "0.5rem", color: "var(--secondary-text)", fontSize: "0.85rem" }}
+                      >
+                        <Spin size="small" />
+                        <span>Auto-continuing to next loop...</span>
+                      </Row>
+                    )}
                     <PrimaryButton
                       green
                       className={styles.submitBtn}
                       onClick={() => setAddContext((p) => !p)}
                     >
                       {addContext
-                        ? "I don't want to give additional context"
-                        : "Add additional context"}
+                        ? "Skip additional context"
+                        : "Pause & add context"}
                     </PrimaryButton>
                     <PrimaryButton
                       yellow
@@ -1126,34 +1174,19 @@ const MessageBox = ({
               </Row>
 
               {["pending"].includes(stepStatus) && (
-                <>
-                  <p
-                    className={styles.todoPara}
-                    style={{
-                      marginTop: "1rem",
-                    }}
-                  >
-                    To continue with the next loop, click on the button below.
-                    Next step is to generate the command.
-                  </p>
-                  <PrimaryButton
-                    style={{
-                      marginTop: "1rem",
-                    }}
-                    purple
-                    onClick={async () => {
-                      await generateCommandMutation.mutateAsync({
-                        sessionId,
-                      });
-                    }}
-                    loading={
-                      generateCommandMutation.isLoading &&
-                      ["pending"].includes(stepStatus)
-                    }
-                  >
-                    Continue with next loop
-                  </PrimaryButton>
-                </>
+                <Row
+                  align="middle"
+                  style={{
+                    gap: "0.5rem",
+                    padding: "0.75rem 0",
+                    marginTop: "1rem",
+                    color: "var(--secondary-text)",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <Spin size="small" />
+                  <span>Auto-generating next command...</span>
+                </Row>
               )}
             </>
           )}

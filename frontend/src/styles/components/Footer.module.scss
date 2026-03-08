@@ -1,32 +1,31 @@
 @import "../_variables";
 
 .footerContainer {
-  @media only screen and (min-width: 1600px) {
-    border-top: 1px solid var(--table-bg);
-  }
   position: relative;
   z-index: 1;
 
   .footerContent {
     padding: 2.5rem 5rem;
     position: relative;
-    background-color: var(--cli-bg);
+    background-color: var(--primary-bg);
 
     .footerText {
-      margin: 1rem 0;
-      font-weight: 600;
+      margin: 0.75rem 0;
+      font-weight: 400;
       max-width: 30rem;
-      line-height: 1.5;
+      line-height: 1.6;
       color: var(--secondary-text);
-      font-size: nth($fontSize, 2);
-
-   
+      font-size: 0.8rem;
     }
 
     .footerMailLink {
-
       a {
         color: var(--secondary-text);
+        transition: color var(--transition-fast);
+
+        &:hover {
+          color: var(--primary-text);
+        }
       }
     }
 
@@ -36,42 +35,42 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 0.5px;
+      height: 1px;
       background-image: linear-gradient(
-        270deg,
-        rgba(#fff, 0) 2%,
-        rgba(#fff, 0.6) 42%,
-        rgba(#fff, 0.6) 58%,
-        rgba(#fff, 0) 98%
+        90deg,
+        transparent 0%,
+        var(--border-default) 30%,
+        var(--border-default) 70%,
+        transparent 100%
       );
     }
 
     .newsLetter {
       p {
         color: var(--primary-text);
-        font-size: nth($fontSize, 3);
-        font-weight: 600;
+        font-size: 0.85rem;
+        font-weight: 500;
         padding-top: 1rem;
       }
 
       .successMessage {
         padding-top: 0;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--secondary-text);
       }
 
       :global(.ant-form .ant-form-item) {
-        margin-bottom: 0.6rem;
+        margin-bottom: 0.5rem;
       }
       :global(.ant-form .ant-input-affix-wrapper) {
         background-color: transparent;
         width: 264px;
-        height: 38px;
+        height: 36px;
         border-radius: 6px;
-        border: 1px solid var(--secondary-text);
+        border: 1px solid var(--border-default);
       }
       :global(.ant-form .ant-input) {
-        background: var(--cli-bg) !important;
+        background: var(--primary-bg) !important;
         color: var(--primary-text) !important;
       }
       :global(.ant-form .ant-input::placeholder) {
@@ -83,22 +82,29 @@
     }
 
     .footerHeading {
-      margin-bottom: 1rem;
-      color: var(--primary-grey);
-      font-size: nth($fontSize, 4);
-
-      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: var(--secondary-text);
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
 
     .footerList {
-      gap: 0.75rem;
+      gap: 0.6rem;
       display: flex;
       flex-direction: column;
 
       .footerLink {
-        font-weight: 500;
-        color: var(--primary-text);
-        font-size: nth($fontSize, 3);
+        font-weight: 400;
+        color: var(--secondary-text);
+        font-size: 0.85rem;
+        transition: color var(--transition-fast);
+        text-decoration: none;
+
+        &:hover {
+          color: var(--primary-text);
+        }
       }
     }
   }
@@ -106,11 +112,11 @@
   .footerBottom {
     display: flex;
     position: relative;
-    padding: 1rem 5rem;
+    padding: 0.75rem 5rem;
     gap: 1rem;
     flex-wrap: wrap-reverse;
     justify-content: space-between;
-    background-color: var(--cli-bg);
+    background-color: var(--primary-bg);
 
     &::before {
       content: "";
@@ -118,53 +124,65 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 0.5px;
+      height: 1px;
       background-image: linear-gradient(
-        270deg,
-        rgba(#fff, 0) 2%,
-        rgba(#fff, 0.6) 42%,
-        rgba(#fff, 0.6) 58%,
-        rgba(#fff, 0) 98%
+        90deg,
+        transparent 0%,
+        var(--border-subtle) 30%,
+        var(--border-subtle) 70%,
+        transparent 100%
       );
     }
 
     p {
       margin-bottom: 0;
-      font-weight: 600;
-      font-size: nth($fontSize, 2);
+      font-weight: 400;
+      font-size: 0.75rem;
       color: var(--secondary-text);
     }
 
     .socialIcons {
-      gap: 1rem;
+      gap: 0.75rem;
       display: flex;
+      align-items: center;
 
       .socialIconLink {
-        color: var(--primary-text);
+        color: var(--secondary-text);
         text-decoration: none;
-        font-size: 1rem;
+        font-size: 0.9rem;
+        transition: color var(--transition-fast);
+
+        &:hover {
+          color: var(--primary-text);
+        }
       }
     }
   }
 }
 
 .helperEmailContainer {
-  position:fixed;
-  bottom: 2rem;
-  right: 2rem;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
   z-index: 1000;
-  width: 3.2rem;
-  height: 3.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
   background-color: var(--filled-purple);
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(#8e35ff, 0.3);
 
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(#8e35ff, 0.4);
+  }
 
   .mailIcon {
     color: var(--primary-text);
-    font-size: 1.3rem;
+    font-size: 1.1rem;
   }
 }

@@ -7,7 +7,7 @@ Firstly, thank you for considering contributing to **Pentest Copilot**! As an op
 ### Prerequisites
 Before you begin, ensure you have the following installed:
 - **Git**
-- **Node.js 18+**
+- **Node.js 22+**
 - **Docker**
 
 ### Setting Up Your Development Environment

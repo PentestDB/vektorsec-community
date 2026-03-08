@@ -36,8 +36,8 @@ import {
 import Image from "next/image";
 import moment from "moment";
 import vpn from "@/assets/sidebar/vpn.svg";
-import { setVpnConnected, setVpnLogs, setIsLoading } from "@/store/vpn.slice";
-import { checkVPNStatus } from "@/services/copilot.service";
+import { setVpnConnected, setVpnConnections, setIsLoading } from "@/store/vpn.slice";
+import { getVPNStatus } from "@/services/copilot.service";
 
 const SessionLayout = ({ children, params }) => {
   const { session_id } = use(params);
@@ -46,32 +46,25 @@ const SessionLayout = ({ children, params }) => {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [serviceId, setServiceId] = useState(null);
-  const [vpnConnected, setVPNconnected] = useState(false);
   const [cpuUtilization, setCpuUtilization] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
 
   const isVpnConnected = useSelector((state) => state.vpn.isVpnConnected);
+  const vpnConnections = useSelector((state) => state.vpn.connections) ?? [];
 
   const { user, status, sessions, vnc, disclaimer, readyToConnect } =
     useSelector((state) => state.user);
-  const { sockets: terminalSockets } = useSelector((state) => state.socket);
 
   const { isLoading: reduxLoading } = useQuery(
     ["check-vpn-status", session_id],
-    () => checkVPNStatus({ session_id }),
+    () => getVPNStatus({ session_id }),
     {
       refetchInterval: 10000,
       onSuccess: (data) => {
-        if (data?.success) {
-          dispatch(setVpnConnected(true));
-        } else {
-          dispatch(setVpnConnected(false));
-        }
-        dispatch(setVpnLogs(data.logs));
+        dispatch(setVpnConnections(data?.connections ?? []));
       },
-      onError: (error) => {
-        dispatch(setVpnLogs(error.response?.data?.logs));
-        dispatch(setVpnConnected(false));
+      onError: () => {
+        dispatch(setVpnConnections([]));
       },
     }
   );
@@ -164,11 +157,11 @@ const SessionLayout = ({ children, params }) => {
     onSuccess: () => {
       setServiceId(null);
       dispatch(expireContainer());
-      setVPNconnected(false);
+      dispatch(setVpnConnections([]));
 
       let filteredSession = sessions.filter(
         (session) =>
-          session.id !== session_id + "/gui" ||
+          session.id !== session_id + "/gui" &&
           session.id !== session_id + "/vpn"
       );
 
@@ -292,17 +285,6 @@ const SessionLayout = ({ children, params }) => {
     }
   }, [timeLeft, containerData, isLoading]);
 
-  useEffect(() => {
-    if (terminalSockets && terminalSockets.length > 0) {
-      const currentSessionSocket = terminalSockets.find(
-        (socket) => socket.id === `${session_id}/vpn` && socket.type === "vpn"
-      );
-
-      if (currentSessionSocket) {
-        setVPNconnected(currentSessionSocket.connected || false);
-      }
-    }
-  }, [terminalSockets, session_id]);
 
   if (!user) {
     return <Loader />;
@@ -422,29 +404,21 @@ const SessionLayout = ({ children, params }) => {
                     </PrimaryButton> */}
                     {status === "running" && readyToConnect && (
                       <>
-                        {vpnConnected ? (
-                          <PrimaryButton
-                            green
-                            onClick={() =>
-                              router.push(`/session/${session_id}/vpn`)
-                            }
-                            icon={<MdOutlineVpnLock />}
-                          >
-                            VPN Connected
-                          </PrimaryButton>
-                        ) : (
-                          <PrimaryButton
-                            orange
-                            onClick={() =>
-                              router.push(`/session/${session_id}/vpn`)
-                            }
-                            icon={
-                              <Image src={vpn} width={16} height={16} alt="" />
-                            }
-                          >
-                            {isVpnConnected ? "VPN Connected" : "Connect VPN"}
-                          </PrimaryButton>
-                        )}
+                        <PrimaryButton
+                          {...(isVpnConnected ? { green: true } : { orange: true })}
+                          onClick={() =>
+                            router.push(`/session/${session_id}/vpn`)
+                          }
+                          icon={
+                            isVpnConnected
+                              ? <MdOutlineVpnLock />
+                              : <Image src={vpn} width={16} height={16} alt="" />
+                          }
+                        >
+                          {isVpnConnected
+                            ? `VPN (${vpnConnections.length})`
+                            : "Connect VPN"}
+                        </PrimaryButton>
                         {vnc && vnc.host && vnc.password && (
                           <PrimaryButton
                             yellow

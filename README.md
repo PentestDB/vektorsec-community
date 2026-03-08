@@ -36,7 +36,7 @@ https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 - [Architecture](#architecture)
 - [Features](#features)
 - [System Requirements](#system-requirements)
-- [Usage](#usage)
+- [Local Development](#local-development)
 - [Contributing](#contributing)
 - [License](#license)
 - [Disclaimer](#disclaimer)
@@ -48,7 +48,6 @@ https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 Pentest Copilot is an open-source tool built to assist ethical hackers and penetration testers. By integrating LLMs, it automates and enhances various pentesting tasks. The tool is deployable locally with Docker and includes an optional Kali Linux container for simulating a pentest environment.
 
 ### Why Pentest Copilot?
-
 
 Pentest Copilot is a browser-based, AI-powered assistant that seamlessly integrates into any security professional's workflow. It is a significantly more advanced and evolved penetration testing tool compared to other open-source alternatives like [PentestGPT](https://github.com/greydgl/pentestgpt), Pentest Copilot is tightly coupled with the pentest environment, offering a unified interface where automation and manual control coexist.
 
@@ -85,24 +84,26 @@ bash run.sh
 ```
 
 On **first run** the script will:
-- Create `.env` files for both backend and frontend from their templates
-- Prompt you to enter API keys for both large and small models (optional, but required for AI features)
-- Let you choose a deployment mode — **Full Stack with Kali** or **Core Services Only**
+- Let you choose a deployment mode — **Full Stack with Kali**, **Core Services Only**, or **Developer Mode**
+- Prompt for frontend URL, CORS origins, and database URIs (with sensible defaults)
+- Auto-generate a secure session secret
 - Configure SSH to the exploit box (Kali defaults, or your external box with password / private-key auth)
-- Automatically copy SSH private keys into a Docker-mounted directory so the backend container can access them
-- Detect WSL and adjust hostnames for compatibility
-- Offer to configure Google Tag Manager for the frontend (optional)
+- Prompt for LLM model provider, model name, and API key (supports OpenAI, Anthropic, and OpenAI-compatible providers)
+- Set up frontend environment variables
 - Build and start all Docker containers
 
 On **subsequent runs** the script detects the existing configuration and asks whether to:
 1. Start with the existing config (fast restart)
 2. Rebuild images with the existing config
-3. Reconfigure everything from scratch
+3. Update configuration only
+4. Reconfigure everything from scratch
+5. Developer mode
 
 Additional commands:
 
 ```bash
 bash run.sh dev       # Developer mode — run frontend/backend locally, infra in Docker
+bash run.sh config    # Update configuration only (no rebuild)
 bash run.sh stop      # Stop all containers
 bash run.sh logs      # Tail container logs (e.g. run.sh logs backend)
 bash run.sh status    # Show running containers
@@ -120,12 +121,20 @@ Once the containers are running, access the frontend at `http://localhost:3000`.
 
 ### <a id="run-sh"></a>About `run.sh`
 
-`run.sh` is an all-in-one interactive launcher that handles setup, configuration, building, and running Pentest Copilot. It:
-- Copies environment variable templates to `.env` files for both backend and frontend
-- Prompts for model API keys (large and small), model names, and optional base URL overrides
-- Lets you choose between Full Stack (with Kali) or Core Services Only deployment
-- Configures SSH for the Kali container or an external exploit box (password or private-key auth)
-- Copies SSH private keys into a Docker-mounted volume (`./ssh-keys/`) so they are accessible inside the backend container
+`run.sh` is an all-in-one interactive launcher that handles setup, configuration, building, and running Pentest Copilot.
+
+Configuration is split into two files:
+
+| File | Purpose | When read |
+|------|---------|-----------|
+| `config.toml` | Static infrastructure: server port, deployment mode, frontend URL, CORS origins, database URIs, session secret | Read once at startup (bind-mounted into the container at `/srv/data/config.toml`) |
+| `.env` | Dynamic config: LLM provider & API keys, SSH credentials, Anthropic OAuth tokens | Read at startup and on-the-fly; editable via the Settings UI |
+
+The script:
+- Creates `config.toml` from `config.toml.template` and `.env` from `backend/.env.template`
+- Prompts for model provider, model name, API key, and optional base URL override
+- Configures SSH credentials (password or private-key auth) — stored in `.env` only
+- Copies SSH private keys into a Docker-mounted volume (`./ssh-keys/`) when needed
 - Generates a `docker-compose.override.yml` when SSH key mounts are needed
 - Detects WSL and adjusts hostnames for compatibility
 - Saves your deployment preference to `.run.conf` for fast re-runs
@@ -133,55 +142,77 @@ Once the containers are running, access the frontend at `http://localhost:3000`.
 
 Run it again at any time — it will detect existing config and let you restart, rebuild, or reconfigure.
 
+> [!IMPORTANT]
+> `config.toml`, `backend/.env`, and `frontend/.env` contain secrets and are **gitignored**. Only the `.template` files are committed. Never commit these files.
+
 ---
 
 ### <a id="manual-environment-setup"></a>Manual Environment Setup (Advanced)
 
 If you prefer to set up environment variables manually:
 
-1. Copy `./backend/.env.template` to `./backend/.env`.
-2. Copy `./frontend/.env.template` to `./frontend/.env`.
-3. Edit the `.env` files to add your API keys and adjust settings as needed.
+1. Copy `./config.toml.template` to `./config.toml` and edit it (server, DB, CORS, session settings).
+2. Copy `./backend/.env.template` to `./backend/.env` and add your model API keys and SSH credentials.
+3. Copy `./frontend/.env.template` to `./frontend/.env` and set the backend URL.
+
+Then start the stack:
+
+```bash
+docker compose up -d --build
+```
 
 ---
 
-<h2 id="configuration">Environment Variable Configuration ⚙️</h2>
+<h2 id="configuration">Configuration ⚙️</h2>
 
-Pentest Copilot requires configuration through environment variables. Below are the key variables for both the frontend and backend.
+Pentest Copilot uses two configuration files. All sensitive files are **gitignored** — only the `.template` files are committed.
 
-### Frontend (`./frontend/.env`)
+### Static Configuration (`config.toml`)
 
-| Variable                | Description                                 | Default                  |
-| ----------------------- | ------------------------------------------- | ------------------------ |
-| NEXT_PUBLIC_BACKEND_URI | URL of the backend server                   | `http://localhost:8080`  |
-| NEXT_PUBLIC_DEPLOYMENT  | Deployment environment                      | `LOCAL`                  |
-| NEXT_PUBLIC_GTM_ID      | Google Tag Manager ID (optional)            |                          |
+Generated from `config.toml.template` by `run.sh`. Read once at startup. Bind-mounted into the backend container so changes take effect on `docker compose down && docker compose up`.
 
-### Backend (`./backend/.env`)
+| Key | Section | Description | Default |
+|-----|---------|-------------|---------|
+| `port` | `[server]` | Backend server port | `8080` |
+| `deployment` | `[server]` | Deployment environment (`LOCAL` or `PROD`) | `LOCAL` |
+| `base_url_frontend` | `[server]` | Frontend URL for CORS & redirects | `http://localhost:3000` |
+| `cors_origins` | `[server]` | Additional CORS origins (comma-separated) | _(none)_ |
+| `mongo_uri` | `[database]` | MongoDB connection string | `mongodb://mongodb:27017/pentestcopilot` |
+| `mongo_database` | `[database]` | MongoDB database name | `pentestcopilot` |
+| `redis_url` | `[database]` | Redis connection string | `redis://redis:6379` |
+| `secret` | `[session]` | Session cookie signing secret (auto-generated by `run.sh`) | _(random)_ |
+| `lifetime` | `[session]` | Session lifetime (ms) | `1000` |
+| `backend_uri` | `[frontend]` | Backend URL used by the frontend | `http://localhost:8080` |
+| `deployment` | `[frontend]` | Frontend deployment mode | `LOCAL` |
 
-| Variable                   | Description                                                    | Default                                 |
-| -------------------------- | -------------------------------------------------------------- | --------------------------------------- |
-| BASE_URL_FRONTEND          | URL of the frontend server                                     | `http://localhost:3000`                 |
-| DEPLOYMENT                 | Deployment environment                                         | `LOCAL`                                 |
-| MONGO_DATABASE             | Name of the MongoDB database                                   | `pentestcopilot`                        |
-| MONGO_URI                  | MongoDB connection string                                      | `mongodb://mongodb:27017/pentestcopilot`|
-| REDIS_URL                  | Redis connection string                                        | `redis://redis:6379`                    |
-| SESS_LIFETIME              | Session lifetime in milliseconds                              | `1000`                                  |
-| SESS_NAME                  | Session cookie name                                            | `sid`                                   |
-| SESS_SECRET                | Secret key for signing session cookies                         | `thisismysessionsecret!123`             |
-| PORT                       | Port for the backend server                                    | `8080`                                  |
-| MODEL_LARGE                | Identifier for the large OpenAI model                          | `gpt-4-1106-preview`                    |
-| MODEL_API_KEY_LARGE        | API key for the large OpenAI model                             |                                         |
-| MODEL_BASE_PATH_LARGE      | Base URL/path for the large model's API (optional override)    |                                         |
-| MODEL_SMALL                | Identifier for the small OpenAI model                          | `gpt-3.5-turbo-1106`                    |
-| MODEL_API_KEY_SMALL        | API key for the small OpenAI model                             |                                         |
-| MODEL_BASE_PATH_SMALL      | Base URL/path for the small model's API (optional override)    |                                         |
-| SSH_HOST                   | Hostname for the exploit box (Kali or custom host)             | `kali`                                  |
-| SSH_PORT                   | Port for the exploit box (Kali or custom host)                 | `22`                                    |
-| SSH_USERNAME               | Username for the exploit box                                   | `root`                                  |
-| SSH_PASSWORD               | Password for the exploit box                                   | `''`                                    |
-| SSH_PRIVATE_KEY            | Path to the private key for SSH                                | `'/path/to/private/key'`                |
-| SSH_PRIVATE_KEY_PASSPHRASE | Passphrase for the private key                                 | `''`                                    |
+### Dynamic Configuration (`.env`)
+
+Generated from `backend/.env.template` by `run.sh`. Located at `backend/.env` in dev mode or `/srv/data/.env` inside the Docker container. Editable at runtime via the Settings UI.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MODEL_PROVIDER` | LLM provider (`openai`, `anthropic`, `openai-compatible`) | `openai` |
+| `MODEL` | Model identifier | `gpt-4o` |
+| `MODEL_API_KEY` | API key for the model provider | |
+| `MODEL_BASE_PATH` | Base URL override for OpenAI-compatible providers | |
+| `SSH_HOST` | Hostname for the exploit box | |
+| `SSH_PORT` | SSH port | `22` |
+| `SSH_USERNAME` | SSH username | `root` |
+| `SSH_PASSWORD` | SSH password | |
+| `SSH_PRIVATE_KEY` | Path to SSH private key file | |
+| `SSH_PRIVATE_KEY_PASSPHRASE` | Passphrase for the private key | |
+| `ANTHROPIC_OAUTH_ACCESS_TOKEN` | Anthropic OAuth token (auto-populated) | |
+| `ANTHROPIC_OAUTH_REFRESH_TOKEN` | Anthropic OAuth refresh token (auto-populated) | |
+| `ANTHROPIC_OAUTH_EXPIRES_AT` | Anthropic OAuth token expiry (auto-populated) | |
+
+### Frontend Configuration (`frontend/.env`)
+
+Generated from `frontend/.env.template` by `run.sh`.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXT_PUBLIC_BACKEND_URI` | URL of the backend server | `http://localhost:8080` |
+| `NEXT_PUBLIC_DEPLOYMENT` | Deployment environment | `LOCAL` |
 
 <h2 id="system-components">Architecture 🏗️</h2>
 
@@ -194,6 +225,16 @@ Pentest Copilot follows a microservices architecture using Docker containers:
 | Backend  | 8080                 | Node.js application that runs the API and socket connections for real-time communication with the frontend and Kali container |
 | Frontend | 3000                 | Hosts the user interface built with Next.js                                                                                   |
 | Kali     | 4200, 1194/udp, 9020 | Kali Linux container with pre-installed pentesting tools, accessible via SSH, OpenVPN, and noVNC                              |
+
+### Data directories
+
+| Path | Purpose |
+|------|---------|
+| `config.toml` | Static config — bind-mounted into the backend container (read-only) |
+| `backend/.env` | Dynamic config (dev mode) — model keys, SSH credentials |
+| `/srv/data/.env` | Dynamic config (Docker) — provisioned into the container volume |
+| `kali-data/` | Shared host directory mounted into both the backend and Kali containers. Used for VPN profiles and other data that needs to be accessible from both services. |
+| `ssh-keys/` | SSH private keys copied here by `run.sh` and mounted into the backend container |
 
 > [!NOTE]
 > You can see the list of tools being installed in the Kali container by checking `./kali/tools.sh`. This file installs all tools, tool names, and the download commands.
@@ -213,9 +254,9 @@ To run Pentest Copilot effectively, your host machine should meet the following 
 
 > [!NOTE]
 > The environment variables are configured for Docker Compose setup by default. If you're using a custom container setup or running services outside of Docker, you may need to modify variables such as:
-> - `MONGO_URI` (change from `mongodb://mongodb:27017/pentestcopilot` to your MongoDB host)
-> - `REDIS_URL` (change from `redis://redis:6379` to your Redis host)
-> - `SSH_HOST` and `SSH_PORT` (change from `kali:22` to your Kali/exploit box host and port)
+> - `mongo_uri` in `config.toml` (change from `mongodb://mongodb:27017/pentestcopilot` to your MongoDB host)
+> - `redis_url` in `config.toml` (change from `redis://redis:6379` to your Redis host)
+> - `SSH_HOST` and `SSH_PORT` in `.env` (change from `kali:22` to your Kali/exploit box host and port)
 
 <h2 id="features">Features</h2>
 
@@ -230,9 +271,9 @@ Below is a rundown of what Pentest Copilot brings to the table:
 
 ## Frontend Technology
 
-The frontend is built on **Next.js 16** with the app router, utilizing **server-side rendering** and **static site generation** for performance. It integrates with the backend via **REST APIs** and **WebSockets** for real-time functionality.
+The frontend is built on **Next.js** with the app router, utilizing **server-side rendering** and **static site generation** for performance. It integrates with the backend via **REST APIs** and **WebSockets** for real-time functionality.
 
-#### Few Key Technologies:
+#### Key Technologies:
 
 - **Ant Design**: Reusable UI components for a consistent, responsive interface.
 - **Redux Toolkit**: Manages application state for complex interactions.
@@ -252,19 +293,19 @@ The frontend is built on **Next.js 16** with the app router, utilizing **server-
 
 ## Backend Technology
 
-The backend is powered by **Node.js (Typescript)** and **Express.js**, serving APIs and orchestrating pentesting logic. It integrates with **OpenAI models**, manages databases, and facilitates real-time communication.
+The backend is powered by **Node.js (TypeScript)** and **Express.js**, serving APIs and orchestrating pentesting logic. It integrates with LLM providers (OpenAI, Anthropic, OpenAI-compatible), manages databases, and facilitates real-time communication.
 
-#### Few Key Components:
+#### Key Components:
 
 - **Socket.IO**: Enables real-time, bidirectional communication between the frontend and Kali container for live terminal interactions.
-- **OpenAI API**: Powers AI-driven command generation and analysis using configurable models (e.g., `gpt-4-1106-preview`, `gpt-3.5-turbo-1106`).
+- **LLM Integration**: Supports OpenAI, Anthropic (including OAuth), and OpenAI-compatible providers via configurable model settings.
 - **MongoDB**: Persistent storage for user data, sessions, and application state (default port: `27017`).
 - **Redis**: Fast key-value store for session management and authentication tokens (default port: `6379`).
-- **Express.js** - Used to build APIs.
+- **Express.js**: Used to build APIs.
 
 The backend routes all logic through a **central service** (default port: `8080`), connecting user inputs to AI outputs and Kali container execution.
 
-## Local Development
+<h2 id="local-development">Local Development</h2>
 
 ### Using Developer Mode (Recommended)
 
@@ -275,8 +316,8 @@ bash run.sh dev
 ```
 
 This starts only the infrastructure services (MongoDB, Redis) in Docker while you run the frontend and backend manually on your host machine. It automatically:
-- Sets `MONGO_URI` and `REDIS_URL` to `localhost` in the backend `.env`
-- Installs dependencies via `pnpm`
+- Sets `mongo_uri` and `redis_url` to `localhost` in `config.toml`
+- Creates `backend/.env` and `frontend/.env` from their templates
 
 Then start the backend and frontend in separate terminals:
 
@@ -304,6 +345,14 @@ If you prefer to set things up manually:
 
 - **Node.js 22+**
 - **pnpm 9+** — install via `corepack enable` (bundled with Node.js 22)
+
+#### Configuration
+
+```bash
+cp config.toml.template config.toml        # Edit: set mongo_uri/redis_url to localhost
+cp backend/.env.template backend/.env       # Edit: add model API key, SSH details
+cp frontend/.env.template frontend/.env     # Edit: set backend URL if needed
+```
 
 #### Backend
 

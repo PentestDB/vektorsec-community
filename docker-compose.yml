@@ -22,7 +22,8 @@ services:
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
-    env_file: ./backend/.env
+      - data:/srv/data
+      - ./config.toml:/srv/data/config.toml:ro
     depends_on:
       - redis
       - mongodb
@@ -57,6 +58,8 @@ volumes:
   mongodb-data:
     driver: local
   redis-data:
+    driver: local
+  data:
     driver: local
   # kali-data:
   #   driver: local

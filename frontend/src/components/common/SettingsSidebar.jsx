@@ -7,7 +7,7 @@ import { RiAccountCircleLine } from "react-icons/ri";
 import { PiChartDonutBold } from "react-icons/pi";
 import { MdPayment } from "react-icons/md";
 import { TiCloudStorageOutline } from "react-icons/ti";
-import { TbTools } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2 } from "react-icons/tb";
 import { usePathname, useRouter } from "next/navigation";
 
 
@@ -29,6 +29,18 @@ const settingItems = [
         name: "Tools",
         path: "/settings/tools",
         icon: <TbTools className={styles.sidebarIcon} />
+    },
+    {
+        title: "Models",
+        name: "Models",
+        path: "/settings/models",
+        icon: <TbBrain className={styles.sidebarIcon} />
+    },
+    {
+        title: "SSH / Exploit Box",
+        name: "SSH",
+        path: "/settings/ssh",
+        icon: <TbTerminal2 className={styles.sidebarIcon} />
     }
 ];
 

@@ -11,8 +11,7 @@ import {
 } from "../utils/redis/store";
 import { v4 as uuidv4 } from "uuid";
 import { CopilotPrompts } from "../utils/copilot/prompts";
-import { ask_gpt4_model, ask_gpt3_model } from "./llm.service";
-import { fix_json_with_ai } from "../utils/jsonfix";
+import { invoke_llm_with_retry } from "./llm.service";
 import { genericInitTodo } from "../utils/copilot/todo";
 import { toolRegistry } from "../tools/registry";
 import SessionsModel, {
@@ -24,7 +23,7 @@ import { runCommandOnKali, runRAGforMetasploit } from "./copilot.services";
 import { HistoryData, ContextData, SingleCommandData, CommandData, CopilotSessionData } from "../types/copilot.types";
 
 export type { HistoryData, ContextData, SingleCommandData, CommandData, CopilotSessionData };
-export { ask_gpt3_model };
+export { invoke_llm_with_retry };
 
 export const getNextStepType = (currentStep: string) => {
   let nextStep;
@@ -364,7 +363,7 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
       dbSession.redoContext = null;
     }
 
-    const { content: gptRes, success } = await ask_gpt4_model(
+    const { content: gptRes, success } = await invoke_llm_with_retry(
       sessionHistory,
       sessionId
     );
@@ -375,12 +374,7 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
       throw new Error("Error generating GPT4 command");
     }
 
-    let fixedRes = await fix_json_with_ai(
-      ask_gpt3_model,
-      gptRes,
-      "command",
-      sessionId
-    );
+    let fixedRes = JSON.parse(gptRes ?? "{}");
 
     let commands = fixedRes.commands;
 
@@ -640,6 +634,7 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
         message: "Command Generated",
         session_id: sessionId,
         command: toolResponse,
+        commandId: command.commandId,
         type: "command",
       };
     }
@@ -843,7 +838,7 @@ export const finalizeOutputAndGetSummary = async (sessionId: string) => {
     session.redoContext = null;
   }
 
-  let { content: context, success } = await ask_gpt4_model(
+  let { content: context, success } = await invoke_llm_with_retry(
     contextualHistory,
     sessionId
   ) as { content: any; success: boolean };
@@ -852,14 +847,7 @@ export const finalizeOutputAndGetSummary = async (sessionId: string) => {
     throw new Error("Error generating GPT4 summary");
   }
 
-  // await storeInputTokensGPT3(sessionId, context);
-
-  context = await fix_json_with_ai(
-    ask_gpt3_model,
-    context,
-    "summary",
-    sessionId
-  );
+  context = JSON.parse(context);
 
   sessionData.history.push({
     role: "assistant",
@@ -1043,7 +1031,7 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
       dbSession.redoContext = null;
     }
 
-    const { success, content: todoResponse } = await ask_gpt4_model(
+    const { success, content: todoResponse } = await invoke_llm_with_retry(
       todoHistory,
       sessionId
     );
@@ -1053,14 +1041,8 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
     }
 
     console.log("todoResponse\n", todoResponse);
-    // await storeInputTokensGPT3(sessionId, todoResponse);
 
-    const todoResponseFixed = await fix_json_with_ai(
-      ask_gpt3_model,
-      todoResponse,
-      "todo",
-      sessionId
-    );
+    const todoResponseFixed = JSON.parse(todoResponse ?? "{}");
 
 
     await updateSessionTodo({
@@ -1340,7 +1322,7 @@ export const analyzeSubprocessData = async (
   const {
     content: global_summary,
     success,
-  } = await ask_gpt4_model(new_history, sessionId);
+  } = await invoke_llm_with_retry(new_history, sessionId);
 
   if (!success) {
     throw new Error("Error generating GPT4 summary");
@@ -1424,89 +1406,6 @@ export const initNetcatSession = async (sessionId: string) => {
   };
 };
 
-export const trackExecCommandOutput = async (output: string, currentCommand: string) => {
-  try {
-    console.log("🔍 Starting trackExecCommandOutput...");
-    console.log("📝 Raw output length:", output.length);
-
-    const regex = /<command_id_start>([\w-]+)<\/command_id_start>/;
-    const match = output.match(regex);
-
-    if (!match) {
-      console.log("❌ No command ID found in output");
-      return;
-    }
-
-    const commandId = match[1];
-    console.log("✅ Command ID found:", commandId);
-
-    const commandOutputStart = `<command_id_start>${commandId}</command_id_start>`;
-    const commandOutputEnd = `<command_id_end>${commandId}</command_id_end>`;
-
-    // Find the last start marker and last end marker (to handle multiple occurrences)
-    const lastStartIndex = output.lastIndexOf(commandOutputStart);
-    const lastEndIndex = output.lastIndexOf(commandOutputEnd);
-
-    console.log("📍 Last start marker at:", lastStartIndex);
-    console.log("📍 Last end marker at:", lastEndIndex);
-
-    if (lastStartIndex === -1) {
-      console.log("⏳ No start marker found, still processing...");
-      return { status: "processing", commandId };
-    }
-
-    if (lastEndIndex === -1) {
-      console.log("⏳ No end marker found, still processing...");
-      return { status: "processing", commandId };
-    }
-
-    // Make sure end marker comes after start marker
-    if (lastEndIndex <= lastStartIndex) {
-      console.log("⏳ End marker before start marker, still processing...");
-      return { status: "processing", commandId };
-    }
-
-    // Extract the command output (only the content between markers, excluding the markers themselves)
-    let commandOutput = output
-      .substring(lastStartIndex + commandOutputStart.length, lastEndIndex)
-      .trim();
-
-    console.log("📄 Command output length:", commandOutput.length);
-    console.log("📄 Command output preview:", commandOutput.substring(0, 100));
-
-    // If there's no meaningful output between markers, the command hasn't actually run yet
-    if (commandOutput.length < 5 && !currentCommand.includes(">")) {
-      console.log("⏳ Not enough output between markers, still processing...");
-      return { status: "processing", commandId };
-    }
-
-    console.log("🎉 Command completed! Output length:", commandOutput.length);
-    console.log("📤 Returning completed status with output");
-
-
-    if (currentCommand.includes(">") && commandOutput.length < 5) {
-      commandOutput = "Output stored in file";
-    }
-
-    // const tempFile = `/tmp/cmd_output_${commandId}.txt`;
-    
-    // const getFileContent = `cat ${tempFile}`;
-
-    // const fileContent = await runCommandOnKali(getFileContent);
-
-    // console.log("🔍 File content:", fileContent);
-
-    return {
-      status: "completed",
-      commandId,
-      output: commandOutput,
-    };
-  } catch (error) {
-    console.log("❌ Error in trackExecCommandOutput:", error);
-    return;
-  }
-};
-
 export const extractRelevantContextUsingGPT3 = async (
   title: string,
   url: string,
@@ -1525,7 +1424,7 @@ export const extractRelevantContextUsingGPT3 = async (
       },
     ];
 
-    const { content: gptRes, success } = await ask_gpt3_model(history, "");
+    const { content: gptRes, success } = await invoke_llm_with_retry(history, "");
 
     console.log(gptRes);
     if (!success) {
@@ -1537,4 +1436,186 @@ export const extractRelevantContextUsingGPT3 = async (
     console.log(error);
     throw new Error("Error contextualizing context");
   }
+};
+
+/**
+ * Agentic Continue — chains output → summary → todo → next command
+ * in a single call. The loop pauses only when a new command is generated
+ * and awaits human approval.
+ */
+export const agenticContinue = async ({
+  sessionId,
+  additionalContext,
+}: {
+  sessionId: string;
+  additionalContext?: string;
+}) => {
+  console.log("[agenticContinue] Starting agentic loop for", sessionId);
+
+  const dbSession = await SessionsModel.findOne({ sessionId });
+  if (!dbSession) throw new Error("Session not found");
+
+  const lastStep = dbSession.loopHistory[dbSession.loopHistory.length - 1];
+  const currentStepType = lastStep?.stepType;
+  const currentStatus = lastStep?.status;
+
+  console.log("[agenticContinue] Current step:", currentStepType, "status:", currentStatus);
+
+  // Phase 0: If at init/pending (after undo), re-create command step and generate
+  if (currentStepType === "init" && (currentStatus === "pending" || currentStatus === "completed")) {
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "init",
+      status: "completed",
+    });
+
+    await addNextloopHistoryStep({ sessionId, type: "command", data: {} });
+
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "command",
+      status: "processing",
+    });
+
+    const commandResult = await generateCommand({ sessionId });
+    console.log("[agenticContinue] Command generated from init step");
+
+    return {
+      success: true,
+      phase: "command_ready",
+      message: "Agentic loop completed — command ready for approval",
+      copilotResponse: commandResult?.copilotResponse ?? null,
+    };
+  }
+
+  // Phase 0b: If at command/pending (after undo), generate command directly
+  if (currentStepType === "command" && (currentStatus === "pending" || currentStatus === "not-started")) {
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "command",
+      status: "processing",
+    });
+
+    const commandResult = await generateCommand({ sessionId });
+    console.log("[agenticContinue] Command generated from pending command step");
+
+    return {
+      success: true,
+      phase: "command_ready",
+      message: "Agentic loop completed — command ready for approval",
+      copilotResponse: commandResult?.copilotResponse ?? null,
+    };
+  }
+
+  // Phase 1: If we're at output/pending, generate summary
+  if (currentStepType === "output" && currentStatus === "pending") {
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "output",
+      status: "completed",
+    });
+
+    await addNextloopHistoryStep({ sessionId, type: "summary", data: {} });
+
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "summary",
+      status: "processing",
+    });
+
+    const summaryResult = await finalizeOutputAndGetSummary(sessionId);
+    if (!summaryResult?.success) {
+      throw new Error("Failed to generate summary in agentic loop");
+    }
+    console.log("[agenticContinue] Summary generated");
+  }
+
+  // Re-fetch session state
+  const dbSession2 = await SessionsModel.findOne({ sessionId });
+  if (!dbSession2) throw new Error("Session not found");
+  const step2 = dbSession2.loopHistory[dbSession2.loopHistory.length - 1];
+
+  // Phase 2: If at summary/pending, finalize it and generate todo
+  if (step2?.stepType === "summary" && step2?.status === "pending") {
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "summary",
+      status: "completed",
+    });
+
+    if (additionalContext) {
+      await finalizeSummaryContext({ sessionId, additionalContext });
+    } else {
+      await addNextloopHistoryStep({ sessionId, type: "todo", data: {} });
+    }
+
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "todo",
+      status: "processing",
+    });
+
+    await finalizeTodoAndGetNewCommand(sessionId);
+    console.log("[agenticContinue] Todo generated, history reset");
+  }
+
+  // Re-fetch session state
+  const dbSession3 = await SessionsModel.findOne({ sessionId });
+  if (!dbSession3) throw new Error("Session not found");
+  const step3 = dbSession3.loopHistory[dbSession3.loopHistory.length - 1];
+
+  // Phase 3: If at todo/pending, finalize it and generate next command
+  if (step3?.stepType === "todo" && step3?.status === "pending") {
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "todo",
+      status: "completed",
+    });
+
+    await SessionsModel.findOneAndUpdate(
+      { sessionId },
+      {
+        $set: { "loops.$[elem].endTimestamp": new Date() },
+        $inc: { loopStepsPerformed: 1 },
+      },
+      { arrayFilters: [{ "elem.loop": dbSession3.loopStepsPerformed }] }
+    );
+
+    await addNextloopHistoryStep({ sessionId, type: "command", data: {} });
+
+    const updatedSession = await SessionsModel.findOne({ sessionId });
+    await SessionsModel.findOneAndUpdate(
+      { sessionId },
+      {
+        $push: {
+          loops: {
+            startTimestamp: new Date(),
+            loop: (updatedSession?.loopStepsPerformed ?? 0),
+          },
+        },
+      }
+    );
+
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: "command",
+      status: "processing",
+    });
+
+    const commandResult = await generateCommand({ sessionId });
+    console.log("[agenticContinue] Next command generated");
+
+    return {
+      success: true,
+      phase: "command_ready",
+      message: "Agentic loop completed — command ready for approval",
+      copilotResponse: commandResult?.copilotResponse ?? null,
+    };
+  }
+
+  return {
+    success: true,
+    phase: step3?.stepType ?? "unknown",
+    message: "Agentic continue processed",
+  };
 };

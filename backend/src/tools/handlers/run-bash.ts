@@ -13,8 +13,7 @@ export const runBashTool: ToolDefinition = {
   outputFileField: "file_name",
   async execute({ commandId, args, choice }) {
     if (["yes", "edit"].includes(choice)) {
-      const terminalCommand = `echo "<command_id_start>${commandId}</command_id_start>"; ${args.command} ;echo "<command_id_end>${commandId}</command_id_end>";`;
-      return terminalCommand;
+      return args.command;
     }
     return args.output ?? "";
   },

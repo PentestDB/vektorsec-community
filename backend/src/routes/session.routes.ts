@@ -13,6 +13,7 @@ import {
   takeActionOnResponse,
   uploadAnalysisFile,
   followGoogleTarget,
+  agenticContinueHandler,
 } from "../controllers/session.controller";
 import { uploadMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -39,6 +40,8 @@ router.post("/undo-previous-step", [verifySess], undoPreviousStep);
 router.post("/response-actions", [verifySess], takeActionOnResponse);
 
 router.post("/follow-target", [verifySess], followGoogleTarget);
+
+router.post("/agentic-continue", [verifySess], agenticContinueHandler);
 
 router.post(
   "/upload-analysis-file",

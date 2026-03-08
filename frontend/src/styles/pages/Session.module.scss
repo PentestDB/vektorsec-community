@@ -1,31 +1,36 @@
 @import "../_variables";
 
 .sessionHeaderContainer {
-  padding: 1.4rem 2rem;
+  padding: 1.25rem 2rem;
   color: var(--primary-text);
-  border-bottom: 1px solid var(--border-color-100);
+  border-bottom: 1px solid var(--border-subtle);
 
   .sessionType {
     color: var(--secondary-text);
-    font-size: nth($fontSize, 3);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 500;
   }
 
   .sessionName {
-    font-size: nth($fontSize, 9);
-    font-weight: bold;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.03em;
   }
 
   .sessionDescription {
     color: var(--secondary-text);
-    font-weight: 600;
-    padding-top: 0.4rem;
+    font-weight: 400;
+    padding-top: 0.3rem;
+    font-size: 0.875rem;
   }
 
   .exploitBoxAlert {
     margin-top: 1rem;
-    border-radius: 4px;
-    background-color: #e1ae474d;
-    border: 1px solid #faad14;
+    border-radius: 6px;
+    background-color: rgba(#e1ae47, 0.15);
+    border: 1px solid rgba(#faad14, 0.3);
 
     b,
     div {
@@ -35,7 +40,7 @@
 
   .sessionActions {
     float: right;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: center;
     display: flex;
 
@@ -45,8 +50,8 @@
 
     .runStatusLabel {
       margin: 0;
-      font-size: nth($fontSize, 3);
-      font-weight: 700;
+      font-size: 0.8rem;
+      font-weight: 600;
       color: var(--bugbase-green);
     }
   }
@@ -56,11 +61,11 @@
   @extend .sessionHeaderContainer;
   border-bottom: none;
   padding: 0 2rem;
-  padding-top: 1.4rem;
+  padding-top: 1.25rem;
   padding-bottom: 2rem;
 
   .sessionName {
-    font-size: nth($fontSize, 6);
+    font-size: 1.25rem;
   }
 }
 
@@ -69,12 +74,12 @@
   top: 0;
   left: 0;
 
-  background: var(--secondary-bg);
+  background: var(--primary-bg);
   min-height: 100vh;
-  border-right: 1px solid var(--border-color-100);
+  border-right: 1px solid var(--border-subtle);
 
   width: 16.5%;
-  padding: 1rem;
+  padding: 0.75rem;
 
   display: flex;
   flex-direction: column;
@@ -82,118 +87,181 @@
 
   .createNew {
     .exitSession {
-      padding: 0 1rem 2rem 0;
-      font-size: nth($fontSize, 2);
-      font-weight: 600;
-      color: var(--danger);
+      padding: 0 0.75rem 1rem 0;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--secondary-text);
 
       display: flex;
       align-items: center;
-      gap: 0.2rem;
+      gap: 0.3rem;
       cursor: pointer;
+      transition: color var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+      }
     }
 
     .exitSessionSettings {
       @extend .exitSession;
       color: var(--secondary-text-500);
     }
+
+    .newProcessGroup {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .newProcessBtn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.5rem 0;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--secondary-text);
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+        background: var(--surface-hover);
+        border-color: var(--border-default);
+      }
+
+      &:active {
+        transform: scale(0.97);
+      }
+    }
+
+    .newProcessBtnDisabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
   }
 
   .additionalOptions {
-    color: var(--primary-text-100);
+    color: var(--secondary-text);
     .supportStep {
       .options {
-        font-size: nth($fontSize, 2);
-        font-weight: 600;
-        padding: 0.8rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding: 0.6rem 0.75rem;
         display: flex;
-        gap: 0.6rem;
+        gap: 0.5rem;
         cursor: pointer;
+        border-radius: 6px;
+        transition: all var(--transition-fast);
+        align-items: center;
+
+        &:hover {
+          background: var(--surface-hover);
+          color: var(--primary-text);
+        }
       }
-      padding-bottom: 1rem;
+      padding-bottom: 0.75rem;
     }
 
     .helpOptions {
       @extend .supportStep;
-      border-top: 2px solid var(--border-color-100);
-      padding-top: 1rem;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 0.75rem;
       padding-bottom: 0;
     }
   }
 
   .settingsHeader {
-    font-size: nth($fontSize, 4);
+    font-size: 0.85rem;
     font-weight: 600;
-    color: var(--primary-text);
+    color: var(--secondary-text);
     margin: 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.7rem;
   }
 
   .sessionOptions {
-    padding: 1.5rem 0 1rem 0;
+    padding: 1rem 0 0.75rem 0;
 
     .sidebarIcon {
-      font-size: 16px;
+      font-size: 14px;
     }
 
     .tab {
       gap: 0.5rem;
       display: flex;
       cursor: pointer;
-      font-weight: 600;
-      border-radius: 4px;
+      font-weight: 500;
+      border-radius: 6px;
       align-items: center;
-      padding: 0.75rem 1rem;
-      margin-bottom: 0.5rem;
-      color: var(--primary-text);
-      transition: all 0.2s ease-in-out;
+      padding: 0.6rem 0.75rem;
+      margin-bottom: 0.2rem;
+      color: var(--secondary-text);
+      font-size: 0.8rem;
+      transition: all var(--transition-fast);
 
       &:hover {
-        opacity: 0.9;
+        background-color: var(--surface-hover);
+        color: var(--primary-text);
       }
     }
 
     .activeTab {
       @extend .tab;
-      background-color: var(--table-bg);
+      background-color: var(--surface-active);
+      color: var(--primary-text);
     }
   }
 }
 
 .divider {
-  background-color: var(--secondary-text-500);
+  background-color: var(--border-subtle);
   height: 0.5px;
 }
 
 .statusBar {
   position: sticky;
-  top: 5rem;
+  top: 4rem;
   display: flex;
-  padding: 0.5rem;
-  color: var(--primary-text);
-  font-size: nth($fontSize, 2);
-  background: var(--status-grey);
+  padding: 0.4rem 1rem;
+  color: var(--secondary-text);
+  font-size: 0.75rem;
+  background: var(--primary-bg);
+  border-bottom: 1px solid var(--border-subtle);
   justify-content: space-around;
   z-index: 10;
 
   .status {
     display: flex;
-    font-weight: 600;
+    font-weight: 500;
     align-items: center;
 
     span {
-      font-weight: 700;
+      font-weight: 600;
       margin-left: 0.3rem;
       color: var(--bugbase-green);
     }
 
     .addTimeBtn {
-      font-size: nth($fontSize, 1);
+      font-size: 0.7rem;
       margin-left: 1rem;
-      border: 1px solid var(--primary-text);
-      padding: 0.2rem 0.4rem;
+      border: 1px solid var(--border-default);
+      padding: 0.15rem 0.4rem;
       border-radius: 4px;
-
       cursor: pointer;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        background: var(--surface-hover);
+      }
     }
   }
 }
@@ -201,18 +269,18 @@
 .sessionMainWrapper {
   display: flex;
   gap: 1rem;
-  // padding-bottom: 50rem;
 
   .sessionContainer {
     color: var(--primary-text);
-    padding: 2rem;
+    padding: 1.5rem 2rem;
     width: 100%;
 
     .intro {
-      font-size: nth($fontSize, 2);
-      letter-spacing: 0.5px;
-      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: -0.01em;
+      font-weight: 500;
       margin-bottom: 1rem;
+      color: var(--secondary-text);
     }
 
     .noGoldResult {
@@ -229,7 +297,7 @@
     .errorText {
       font-weight: 600;
       color: var(--danger);
-      font-size: nth($fontSize, 5);
+      font-size: 1rem;
     }
   }
 
@@ -238,23 +306,28 @@
     top: 16rem;
     position: fixed;
     display: flex;
-    padding: 1rem;
+    padding: 0.75rem;
     min-width: 7rem;
     text-align: center;
     flex-direction: column;
-    border-top-right-radius: 4px;
-    border-bottom-right-radius: 4px;
-    background-color: var(--secondary-bg);
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background-color: var(--primary-bg);
+    border: 1px solid var(--border-subtle);
+    border-left: none;
 
     .loop {
       cursor: pointer;
-      font-weight: 700;
-      padding: 0.25rem 0.5rem;
-      color: var(--primary-text);
-      transition: all 0.2s ease-in-out;
+      font-weight: 600;
+      padding: 0.2rem 0.5rem;
+      color: var(--secondary-text);
+      transition: all var(--transition-fast);
+      border-radius: 4px;
+      font-size: 0.8rem;
 
       &:hover {
-        opacity: 0.8;
+        color: var(--primary-text);
+        background: var(--surface-hover);
       }
     }
 
@@ -269,27 +342,34 @@
 }
 
 .tabsContainer {
-  gap: 0.5rem;
+  gap: 0.25rem;
   display: flex;
-  padding: 0 3rem;
-  border-bottom: 0.5px solid var(--secondary-text-500);
+  padding: 0 2rem;
+  border-bottom: 1px solid var(--border-subtle);
 
   .tabs {
     gap: 0.5rem;
     display: flex;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 500;
     align-items: center;
-    padding: 0.5rem 1rem;
-    color: var(--primary-text);
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-    font-size: nth($fontSize, 2);
-    border: 0.5px solid var(--secondary-text-500);
+    padding: 0.5rem 0.75rem;
+    color: var(--secondary-text);
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    font-size: 0.8rem;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: all var(--transition-fast);
+
+    &:hover {
+      color: var(--primary-text);
+      background: var(--surface-hover);
+    }
 
     :global(.anticon) {
       color: var(--danger);
-      transition: all 0.2s ease-in-out;
+      transition: all var(--transition-fast);
     }
 
     :global(.anticon:hover) {
@@ -299,37 +379,47 @@
 
   .activeTabs {
     @extend .tabs;
-    color: var(--bugbase-green);
+    color: var(--primary-text);
+    background: var(--surface-active);
+    border-color: var(--border-subtle);
   }
 }
 
 .processDropdown {
   :global(.ant-dropdown-menu) {
-    background-color: var(--cli-bg);
-    border: 1px solid var(--border-color-100);
+    background-color: var(--primary-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
   }
 
   :global(.ant-dropdown-menu .ant-dropdown-menu-item) {
-    color: var(--primary-text);
-    font-size: nth($fontSize, 2);
+    color: var(--secondary-text);
+    font-size: 0.8rem;
     font-weight: 500;
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+
+    &:hover {
+      color: var(--primary-text);
+      background: var(--surface-hover);
+    }
   }
 }
 
 .todoWrapper {
-  padding: 1rem 0.5rem;
+  padding: 0.75rem 0.5rem;
 
   .todoProcess {
     display: flex;
     width: 100%;
     flex-wrap: wrap;
-    padding: 0.75rem 0.5rem;
+    padding: 0.6rem 0.5rem;
     justify-content: space-between;
-    border-radius: 4px;
-    transition: all 0.2s ease-in-out;
+    border-radius: 6px;
+    transition: all var(--transition-fast);
 
     &:hover {
-      background-color: var(--cli-bg);
+      background-color: var(--surface-hover);
 
       .editBtn,
       .deleteBtn {
@@ -345,11 +435,11 @@
     color: var(--primary-text);
 
     h4 {
-      font-weight: 800;
+      font-weight: 600;
       padding-left: 0.5rem;
       color: var(--primary-text);
       margin-bottom: 0 !important;
-      font-size: nth($fontSize, 2);
+      font-size: 0.8rem;
     }
   }
 
@@ -360,9 +450,9 @@
     justify-content: center;
 
     .statusTag {
-      font-size: nth($fontSize, 1);
+      font-size: 0.7rem;
       font-weight: 600;
-      height: 1.4rem;
+      height: 1.3rem;
       padding: 0 0.5rem;
       border-radius: 10px;
       display: flex;
@@ -379,8 +469,9 @@
   .deleteBtn {
     display: none;
     color: var(--secondary-text);
-    font-size: nth($fontSize, 2);
+    font-size: 0.8rem;
     cursor: pointer;
+    transition: color var(--transition-fast);
 
     &:hover {
       color: var(--primary-text);
@@ -388,15 +479,15 @@
   }
 
   :global(.ant-table .ant-table-content) {
-    background-color: var(--black-bg) !important;
+    background-color: var(--primary-bg) !important;
   }
 
   :global(.ant-table .ant-table-content .ant-table-thead tr th) {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--secondary-text);
-    font-size: nth($fontSize, 3);
-    background-color: var(--black-bg) !important;
-    border-bottom: 1px solid var(--border-color-100);
+    font-size: 0.8rem;
+    background-color: var(--primary-bg) !important;
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   :global(.ant-table .ant-table-content .ant-table-thead tr th::before) {
@@ -408,25 +499,25 @@
   }
 
   :global(.ant-table .ant-table-content .ant-table-tbody) {
-    background-color: var(--black-bg) !important;
+    background-color: var(--primary-bg) !important;
   }
 
   :global(.ant-table .ant-table-content .ant-table-tbody tr) {
-    background-color: var(--black-bg) !important;
+    background-color: var(--primary-bg) !important;
   }
 
   :global(.ant-table .ant-table-content .ant-table-tbody tr .ant-table-cell) {
     font-weight: 500;
     border-radius: 4px;
     padding: 0.5rem 0.5rem;
-    font-size: nth($fontSize, 2);
+    font-size: 0.8rem;
     border-bottom: none !important;
     color: var(--primary-text) !important;
-    background-color: var(--black-bg) !important;
+    background-color: var(--primary-bg) !important;
   }
 
   :global(.ant-table .ant-table-content .ant-table-tbody tr .ant-table-cell-row-hover) {
-    background-color: var(--secondary-bg) !important;
+    background-color: var(--surface-hover) !important;
   }
 }
 
@@ -439,9 +530,9 @@
   justify-content: center;
 
   h3 {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--secondary-text);
-    font-size: nth($fontSize, 3);
+    font-size: 0.85rem;
   }
 }
 
@@ -449,71 +540,86 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1rem;
+  padding: 0.75rem 1rem;
   margin-bottom: 0;
-  border-bottom: 1px solid var(--border-color-100);
+  border-bottom: 1px solid var(--border-subtle);
 
   p {
-    font-weight: 800;
-    font-size: nth($fontSize, 3);
+    font-weight: 600;
+    font-size: 0.8rem;
     color: var(--secondary-text);
     margin-bottom: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 }
 
 .addTodoBtn {
   background: none;
   color: var(--secondary-text);
-  border: 1px solid var(--secondary-text);
-  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  font-weight: 500;
   display: flex;
   align-items: center;
   cursor: pointer;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    border-color: var(--border-default);
+    color: var(--primary-text);
+  }
 
   .plusIcon {
     margin-left: 0.5rem;
-    font-size: 1.4rem;
+    font-size: 1.2rem;
   }
 }
 
 .addSubTodo {
   @extend .addTodoBtn;
-  font-size: nth($fontSize, 4);
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 1rem;
+  font-size: 0.9rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
   justify-content: center;
-  border: 1px dashed var(--secondary-text);
+  border: 1px dashed var(--border-default);
 }
 
 .addTodoForm {
   width: 100% !important;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   div {
     width: 100%;
   }
-  padding-top: 1rem;
-  margin-top: 1rem;
-  border-top: 1px solid var(--primary-grey);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
 
   :global(.ant-form-item .ant-form-item-label > label) {
     color: white !important;
     font-weight: 500;
+    font-size: 0.85rem;
   }
   :global(.ant-input) {
-    background: none;
+    background: var(--surface-hover);
     color: var(--primary-text);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
   }
 
   :global(.ant-input::placeholder),
   :global(.ant-select-selection-placeholder) {
-    color: var(--primary-grey) !important;
+    color: var(--secondary-text) !important;
   }
   :global(.ant-select-selector) {
-    background-color: transparent !important;
+    background-color: var(--surface-hover) !important;
     color: var(--primary-text);
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 6px !important;
   }
 
   .selectAction {
@@ -531,12 +637,12 @@
     }
 
     :global(.anticon-minus-circle) {
-      color: red;
-      font-size: 1.2rem;
+      color: var(--danger);
+      font-size: 1.1rem;
     }
 
     :global(.anticon-check-circle) {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       color: var(--bugbase-green);
     }
   }
@@ -546,7 +652,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  padding: 1rem 1rem 1rem 0.5rem;
+  padding: 0.75rem 0.75rem 0.75rem 0.5rem;
 
   .checkBtn {
     cursor: pointer;
@@ -563,7 +669,7 @@
   :global(.ant-form) {
     display: flex;
     width: 100%;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: center;
   }
 

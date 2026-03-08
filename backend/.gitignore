@@ -1,14 +1,14 @@
 node_modules/
-.env
-package-lock.json
-./dist
-.env.local
-.env.production
-dist
+dist/
 tsconfig.tsbuildinfo
-./src/*.pem
-./*.pem
+package-lock.json
 
-./logs/*
+# Secrets
+.env
+.env.*
+!.env.template
+*.pem
 
-kali-data/*
+# Runtime data
+logs/
+kali-data/

@@ -18,7 +18,11 @@ const returnSessionTodo = async (session_id: string): Promise<string> => {
 // ─── Format Helpers ────────────────────────────────────────────────
 
 function commandResponseFormat(): string {
-  return JSON.stringify(
+  const toolNames = toolRegistry.getToolNames().join(", ");
+  return `IMPORTANT: "tool_name" MUST be exactly one of: ${toolNames}
+To run any pentest tool (nmap, feroxbuster, gobuster, sqlmap, etc.), use "tool_name": "run_bash" with the full command in the "command" arg.
+
+${JSON.stringify(
     {
       thoughts: {
         text: "<your_thoughts>",
@@ -28,15 +32,15 @@ function commandResponseFormat(): string {
       },
       commands: [
         {
-          tool_name: "<tool_name>",
-          args: { "<arg_name>": "<value>" },
-          file_name: ["<file_name>"],
+          tool_name: "run_bash",
+          args: { command: "<full_shell_command>" },
+          file_name: ["<output_file_name_if_any>"],
         },
       ],
     },
     null,
     2
-  );
+  )}`;
 }
 
 function todoResponseFormat(): string {
@@ -98,12 +102,15 @@ function outputGuidelinesSection(isMainThread: boolean): string {
 
 function toolsAndResourcesSection(tools?: string[]): string {
   const pentestLine = tools?.length
-    ? `Approved pentest tools: ${pentestToolsList(tools)}.\nAdditional tools may be used with justification.\n\n`
+    ? `Recommended pentest tools (run via run_bash): ${pentestToolsList(tools)}.\nAdditional CLI tools may be used with justification — always via run_bash.\n\n`
     : "";
 
   return `<tools>
-${pentestLine}Exclusively use the tool commands listed below:
+${pentestLine}Exclusively use these tool_name values in your JSON response:
 ${toolRegistry.generatePromptList()}
+
+NEVER use tool names like "nmap", "feroxbuster", "gobuster", "sqlmap" etc. as tool_name.
+Always use "run_bash" and put the full command in the "command" arg.
 </tools>
 
 <resources>
@@ -149,12 +156,20 @@ Use the run_bash tool to execute this command.
 </initial_action>` : ""}
 
 <tools>
-Approved tools: ${pentestToolsList(tools)}.
-Additional tools may be used with justification.
+Recommended pentest tools (run via run_bash): ${pentestToolsList(tools)}.
+Additional CLI tools may be used with justification — always via run_bash.
 
+Exclusively use these tool_name values in your JSON response:
+${toolRegistry.generatePromptList()}
+
+NEVER use tool names like "nmap", "feroxbuster", "gobuster", "sqlmap" etc. as tool_name.
+Always use "run_bash" and put the full command in the "command" arg.
+</tools>
+
+<resources>
 Wordlists at /usr/share/wordlists: /dirb, /metasploit, /seclists, /wfuzz, /rockyou.txt, /sqlmap.txt, /john.lst, /nmap.lst, /amass.
 Default directory enumeration wordlist: /usr/share/wordlists/dirb/common.txt
-</tools>
+</resources>
 
 <guidelines>
 - Always return responses in the JSON format specified by the user, with no additional text and no code blocks.

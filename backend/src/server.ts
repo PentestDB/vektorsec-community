@@ -18,7 +18,6 @@ import { Server } from "socket.io";
 import { createServer } from "http";
 // import mongoSanitize
 const mongoSanitize = require("express-mongo-sanitize");
-import fs from "fs";
 import multer from "multer";
 import RedisStore from "connect-redis";
 import { taskRoutes } from "./routes/task.routes";
@@ -30,7 +29,6 @@ import { vncRoutes } from "./routes/vnc.routes";
 import getSecrets from "./utils/getSecrets";
 import { buildSSHConfig } from "./utils/sshConfig";
 import { sessionRoutes } from "./routes/session.routes";
-import { trackExecCommandOutput } from "./services/session.services";
 import { userRoutes } from "./routes/user.routes";
 import { Client as SSHClient } from "ssh2";
 
@@ -51,7 +49,6 @@ const initializeApp = async () => {
     const REDIS_URL = await getSecrets("REDIS_URL");
     redisClient = createClient({ url: REDIS_URL });
 
-    const SESS_NAME = await getSecrets("SESS_NAME");
     const SESS_SECRET = await getSecrets("SESS_SECRET");
 
     const connectToDB = async () => {
@@ -140,7 +137,7 @@ const initializeApp = async () => {
     const sessionConfig = {
       secret: SESS_SECRET as string,
       resave: false,
-      name: SESS_NAME as string,
+      name: "sid",
       saveUninitialized: false,
       proxy: true,
       store: redisStore,
@@ -198,131 +195,102 @@ const initializeApp = async () => {
       }
     });
 
-    // (Frontend - Backend Socket Connection) used to connect to exploit box - opens the socket for frontend to connect on
     socketServer.on("connection", async (frontendSocket) => {
       try {
-        console.log("Connected to socket server");
-
         const userId = (frontendSocket as any).userId;
-
-        if (!userId) {
-          return;
-        }
+        if (!userId) return;
 
         const user = await UserModel.findById(userId);
-
-        if (!user) {
-          return;
-        }
-
-        let runnningCommand = false;
-        let currentCommand = "";
-        let terminalOutput: string[] = [];
+        if (!user) return;
 
         const terminalId = frontendSocket.handshake.query.terminalId as string;
+        if (!terminalId) return;
 
-        if (!terminalId) {
-          console.log("Terminal ID not provided");
-          return;
-        }
-
-        console.log("Terminal ID", terminalId);
+        console.log(`[terminal:${terminalId}] Socket connected`);
         const conn = new SSHClient();
+
         conn
           .on("ready", () => {
-            console.log("SSH connection ready");
+            console.log(`[terminal:${terminalId}] SSH ready`);
             frontendSocket.emit(`ssh-ready-${terminalId}`, {});
-            conn.shell((err, stream) => {
+
+            conn.shell((err, shellStream) => {
               if (err) {
-                console.error(err);
+                console.error(`[terminal:${terminalId}] Shell error:`, err);
                 return;
               }
-              stream.on("data", async (data: any) => {
-                const message = data.toString();
-                console.log("SSH shell data:", message);
-                socketServer.emit(`terminal-data-${terminalId}`, message);
-                if (runnningCommand) {
-                  console.log("🔄 Processing command output...");
-                  const ansiRegex = /\x1B\[[0-?]*[-\[\]#-~]/g;
-                  terminalOutput.push(data.toString());
-                  const stringTerminalOutput = terminalOutput
-                    .join("")
-                    .replace(ansiRegex, "")
-                  console.log("📝 Accumulated output length:", stringTerminalOutput.length);
 
-                  const regex = /<command_id_start>([\w-]+)<\/command_id_start>/;
-                  const [_, commandId] =
-                    stringTerminalOutput.match(regex) || [];
-                  console.log("🔍 Current output preview:", stringTerminalOutput.substring(0, 200));
-                  if (!commandId) {
-                    console.log("❌ Command ID not found in output");
-                  } else {
-                    console.log("✅ Command ID found:", commandId);
-                    console.log("🔍 Checking if command is completed...");
-                    const execStatus = await trackExecCommandOutput(stringTerminalOutput, currentCommand);
-                    console.log("📊 Exec status:", execStatus?.status);
-                    if (execStatus && execStatus.status === "completed") {
-                      runnningCommand = false;
-                      if (frontendSocket.connected) {
-                        console.log(`Emitting command_executed-${terminalId}`)
-                        console.log("🔍 Command output:", execStatus.output);
-                        frontendSocket.emit(`command_executed-${terminalId}`, {
-                          status: "success",
-                          message: "Command Executed",
-                          tool_response: execStatus.output,
-                          commandId: commandId,
-                          type: "output",
-                        });
-                        console.log("✅ Command result emitted successfully");
-                      } else {
-                        console.log("❌ Frontend socket disconnected");
-                      }
-                      terminalOutput = [];
-                      console.log("🧹 Terminal output buffer cleared");
-                    } else {
-                      console.log("⏳ Command still running...");
-                    }
-                  }
-                }
+              shellStream.on("data", (data: Buffer) => {
+                socketServer.emit(`terminal-data-${terminalId}`, data.toString());
               });
-              stream.on("close", () => {
-                console.log("SSH shell closed");
+
+              shellStream.on("close", () => {
+                console.log(`[terminal:${terminalId}] Shell closed`);
                 frontendSocket.disconnect();
                 conn.end();
               });
 
-              frontendSocket.on(`terminal-input-${terminalId}`, (data) => {
-                console.log("Terminal input", data);
-                const input = data.toString();
-                if (!input.includes(":bugbase:::")) {
-                  console.log("📤 Regular input:", input);
-                  stream.write(input);
-                } else {
-                  console.log("🚀 Special command detected:", input);
-                  const [type, command] = input.split(":bugbase:::");
-                  if (type === "run_command") {
-                    console.log("🎯 Starting new command execution...");
-                    runnningCommand = true;
-                    currentCommand = command;
-                    terminalOutput = [];
-                    console.log("📋 Command to run:", command);
-                    console.log("🔄 Command execution started");
-                  }
-                  stream.write(
-                    command.replace(/:bugbase:::/g, "").trim() + "\n"
-                  );
-                  console.log("📤 Command sent to SSH stream");
-                }
+              frontendSocket.on(`terminal-input-${terminalId}`, (data: string) => {
+                shellStream.write(data);
               });
+
+              frontendSocket.on(`exec_command-${terminalId}`, (payload: { command: string; commandId: string }) => {
+                const { command, commandId } = payload;
+                console.log(`[exec:${commandId}] Running: ${command.substring(0, 120)}`);
+
+                const ansiRegex = /\x1B\[[0-?]*[-\[\]#-~]/g;
+                let outputBuf = "";
+
+                conn.exec(command, (execErr, execStream) => {
+                  if (execErr) {
+                    console.error(`[exec:${commandId}] exec error:`, execErr);
+                    frontendSocket.emit(`command_executed-${terminalId}`, {
+                      status: "error",
+                      message: execErr.message,
+                      tool_response: `Error: ${execErr.message}`,
+                      commandId,
+                      type: "output",
+                    });
+                    return;
+                  }
+
+                  execStream.on("data", (chunk: Buffer) => {
+                    const text = chunk.toString();
+                    outputBuf += text;
+                    socketServer.emit(`terminal-data-${terminalId}`, text);
+                  });
+
+                  execStream.stderr.on("data", (chunk: Buffer) => {
+                    const text = chunk.toString();
+                    outputBuf += text;
+                    socketServer.emit(`terminal-data-${terminalId}`, text);
+                  });
+
+                  execStream.on("close", (code: number) => {
+                    const cleanOutput = outputBuf.replace(ansiRegex, "").trim();
+                    console.log(`[exec:${commandId}] Completed (exit ${code}), output length: ${cleanOutput.length}`);
+
+                    frontendSocket.emit(`command_executed-${terminalId}`, {
+                      status: code === 0 ? "success" : "error",
+                      message: "Command Executed",
+                      tool_response: cleanOutput || (command.includes(">") ? "Output stored in file" : "(no output)"),
+                      commandId,
+                      exitCode: code,
+                      type: "output",
+                    });
+                  });
+                });
+              });
+
               frontendSocket.on("disconnect", () => {
-                console.log("Frontend socket disconnected");
-                stream.end();
+                console.log(`[terminal:${terminalId}] Frontend disconnected`);
+                shellStream.end();
                 conn.end();
               });
             });
           })
           .on("error", (err: any) => {
-            console.error("SSH connection error:", err);
+            console.error(`[terminal:${terminalId}] SSH error:`, err);
             frontendSocket.emit(`ssh-error-${terminalId}`, {
               message: err.message || "SSH connection failed",
               code: err.code,
@@ -332,8 +300,7 @@ const initializeApp = async () => {
           })
           .connect(sshConfig);
       } catch (err) {
-        console.log("Error connecting to socket");
-        console.log(err);
+        console.error("[terminal] Socket setup error:", err);
       }
     });
 

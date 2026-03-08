@@ -87,3 +87,44 @@ export const checkUserAccess = async (body) => {
   const res = await apiClient.post("/user/check-access", body);
   return res.data;
 };
+
+export const getModelConfig = async () => {
+  const res = await apiClient.get("/user/get-model-config");
+  return res.data;
+};
+
+export const updateModelConfig = async (body) => {
+  const res = await apiClient.post("/user/update-model-config", body);
+  return res.data;
+};
+
+export const deleteModelConfig = async (body) => {
+  const res = await apiClient.post("/user/delete-model-config", body);
+  return res.data;
+};
+
+export const initiateAnthropicOAuth = async (body) => {
+  const res = await apiClient.post("/user/anthropic-oauth/initiate", body);
+  return res.data;
+};
+
+export const exchangeAnthropicOAuth = async (body) => {
+  const res = await apiClient.post("/user/anthropic-oauth/exchange", body);
+  return res.data;
+};
+
+export const disconnectAnthropicOAuth = async (body) => {
+  const res = await apiClient.post("/user/anthropic-oauth/disconnect", body);
+  return res.data;
+};
+
+export const getSSHConfig = async () => {
+  const res = await apiClient.get("/user/get-ssh-config");
+  return res.data;
+};
+
+export const updateSSHConfig = async (body) => {
+  const res = await apiClient.post("/user/update-ssh-config", body);
+  return res.data;
+};
+

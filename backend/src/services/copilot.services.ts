@@ -1,9 +1,6 @@
-import { chatCompletion, chatCompletion3 } from "../utils/openai/config";
-import SessionsModel, {
-  loopHistoryDoc,
-} from "../models/Sessions/Sessions.model";
-import { fix_json_with_ai } from "../utils/jsonfix";
-import { ask_gpt3_model } from "./session.services";
+import { invoke_llm } from "../utils/llm/providers";
+import SessionsModel from "../models/Sessions/Sessions.model";
+
 import { HistoryData, ContextData, SingleCommandData, CommandData, CopilotSessionData } from "../types/copilot.types";
 import { getIfConfigKali, runCommandOnKali } from "./ssh.service";
 
@@ -88,6 +85,8 @@ ${ifconfigOutput}
 </guidelines>
 
 <response_format>
+"tool_name" MUST be "run_bash". Put the full msfconsole/msfvenom command in the "command" arg.
+
 {
   "thoughts": {
     "text": "<your_thoughts>",
@@ -97,8 +96,8 @@ ${ifconfigOutput}
   },
   "commands": [
     {
-      "tool_name": "<tool_name>",
-      "args": { "<arg_name>": "<value>" },
+      "tool_name": "run_bash",
+      "args": { "command": "<full_shell_command>" },
       "file_name": ["<file_name>"]
     }
   ]
@@ -116,9 +115,9 @@ ${ifconfigOutput}
 
     console.dir(messages, { depth: null });
 
-    const gptResponse = await chatCompletion({
-      history: messages,
-      model: "gpt-4",
+    const gptResponse = await invoke_llm({
+      messages,
+      format: "json",
     });
 
     console.log("GPT RES", gptResponse?.content);
@@ -127,12 +126,7 @@ ${ifconfigOutput}
       throw new Error("Empty Response");
     }
 
-    const fixedRes = await fix_json_with_ai(
-      ask_gpt3_model,
-      gptResponse?.content,
-      "command",
-      session_id
-    );
+    const fixedRes = JSON.parse(gptResponse.content ?? "{}");
 
     console.log({ fixedRes });
 

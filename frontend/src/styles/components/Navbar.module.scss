@@ -42,21 +42,32 @@
 
   .navItems {
     display: flex;
-    gap: 4rem;
+    gap: 2.5rem;
     z-index: 11;
     align-items: center;
 
     .navItem {
-      font-weight: 700;
-      color: var(--primary-text);
-      font-size: nth($fontSize, 3);
+      font-weight: 500;
+      color: var(--secondary-text);
+      font-size: 0.875rem;
       text-decoration: none;
+      letter-spacing: -0.01em;
+      transition: color var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+      }
     }
 
     .navItemSelected {
-      color: var(--filled-pink);
-      font-weight: 900;
+      color: var(--primary-text);
+      font-weight: 600;
       text-decoration: none;
+      font-size: 0.875rem;
+    }
+
+    .login {
+      margin-left: 0.5rem;
     }
 
     @media only screen and (max-width: 1207px) {
@@ -74,9 +85,14 @@
   }
 
   .ham {
-    color: #fff;
-    font-size: 1.5rem;
+    color: var(--secondary-text);
+    font-size: 1.25rem;
     cursor: pointer;
+    transition: color var(--transition-fast);
+
+    &:hover {
+      color: var(--primary-text);
+    }
   }
 }
 
@@ -89,19 +105,25 @@
   min-height: 100vh;
   overflow-y: auto;
   z-index: 1000;
-  box-shadow: 0px 0px 30px rgba(0, 0, 0, 0.08);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+  border-left: 1px solid var(--border-subtle);
 
   .closeSec {
-    height: 100px;
+    height: 64px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0rem 1.2rem;
 
     .close {
-      font-size: 1.3rem;
+      font-size: 1.1rem;
       cursor: pointer;
-      color: var(--primary-text);
+      color: var(--secondary-text);
+      transition: color var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+      }
     }
   }
 
@@ -114,12 +136,12 @@
     }
 
     .loginBtn {
-      background-color: var(--filled-pink) !important;
-      border-radius: 4px;
+      background-color: var(--filled-purple) !important;
+      border-radius: 6px;
     }
 
     :global(.ant-menu) {
-      height: calc(100vh - 100px);
+      height: calc(100vh - 64px);
       width: 100%;
       display: flex;
       flex-direction: column;
@@ -127,45 +149,50 @@
     }
     :global(.ant-menu .ant-menu-item) {
       width: 90%;
-      color: var(--primary-text);
-      font-weight: 600;
-      font-size: nth($fontSize, 3);
+      color: var(--secondary-text);
+      font-weight: 500;
+      font-size: 0.875rem;
+      border-radius: 6px;
+      transition: all var(--transition-fast);
     }
     :global(.ant-menu .ant-menu-item:hover) {
       color: var(--primary-text);
+      background-color: var(--surface-hover);
     }
     :global(.ant-menu .ant-menu-item-selected) {
-      background-color: var(--filled-pink) !important;
-      border-radius: 4px;
+      background-color: var(--surface-active) !important;
+      border-radius: 6px;
+      color: var(--primary-text);
     }
 
     .navLink {
-      font-size: nth($fontSize, 3);
+      font-size: 0.875rem;
       font-weight: 500;
     }
 
     .activeLink {
-      color: #111;
+      color: var(--primary-text);
     }
   }
 }
 
 .navbar {
   display: flex;
-  height: 108px;
-  background: linear-gradient(
-    180deg,
-    #0b0b12 50.5%,
-    rgba(11, 11, 18, 0) 97.24%
-  );
-
+  height: 64px;
+  position: sticky;
   top: 0;
   left: 0;
   right: 0;
-  padding: 0 4rem;
+  z-index: 100;
+  padding: 0 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+
   @include responsive(tablet2) {
     padding: 0 1rem;
   }
@@ -173,6 +200,8 @@
 
 .noNavbarbg {
   background: transparent !important;
+  backdrop-filter: none !important;
+  border-bottom: none !important;
 }
 
 @keyframes gradientAnimation {

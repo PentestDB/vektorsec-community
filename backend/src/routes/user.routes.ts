@@ -2,15 +2,23 @@ import express from "express";
 import { verifySess } from "../middlewares/VerifySession.middleware";
 import {
   checkAccess,
+  deleteModelConfig,
+  disconnectAnthropicOAuth,
+  exchangeAnthropicOAuth,
   generateAadharOTP,
+  getModelConfig,
+  getSSHConfig,
   getUserBillingDetails,
   getUserKycDetails,
   getUserTools,
+  initiateAnthropicOAuth,
   requestKYCVerification,
   saveUserInformation,
   sendLinkBugBaseRequest,
   syncBugbaseKycDetails,
   updateKycDetails,
+  updateModelConfig,
+  updateSSHConfig,
   updateToolsPreference,
   updateUserProfile,
   updateUserProfileImage,
@@ -61,5 +69,16 @@ router.post("/get-billing-details", [verifySess], getUserBillingDetails);
 router.post("/save-user-information", [verifySess], saveUserInformation);
 
 router.post("/check-access", [verifySess], checkAccess);
+
+router.get("/get-model-config", [verifySess], getModelConfig);
+router.post("/update-model-config", [verifySess], updateModelConfig);
+router.post("/delete-model-config", [verifySess], deleteModelConfig);
+
+router.post("/anthropic-oauth/initiate", [verifySess], initiateAnthropicOAuth);
+router.post("/anthropic-oauth/exchange", [verifySess], exchangeAnthropicOAuth);
+router.post("/anthropic-oauth/disconnect", [verifySess], disconnectAnthropicOAuth);
+
+router.get("/get-ssh-config", [verifySess], getSSHConfig);
+router.post("/update-ssh-config", [verifySess], updateSSHConfig);
 
 export { router as userRoutes };

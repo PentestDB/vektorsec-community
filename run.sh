@@ -3,6 +3,10 @@
 #  Pentest Copilot — All-in-one launcher
 #  Configures, builds, and runs the entire stack.
 #  Re-run at any time to start, reconfigure, or manage.
+#
+#  Configuration is split into two files:
+#    config.toml  — static infrastructure: server, DB, CORS, session (set once)
+#    .env         — dynamic config: model providers, API keys, SSH, OAuth
 # ============================================================
 
 set -euo pipefail
@@ -19,8 +23,10 @@ NC='\033[0m'
 
 # ── Paths (always relative to this script, not $PWD) ──────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_ENV="$SCRIPT_DIR/backend/.env"
-BACKEND_TMPL="$SCRIPT_DIR/backend/.env.template"
+CONFIG_TOML="$SCRIPT_DIR/config.toml"
+CONFIG_TOML_TMPL="$SCRIPT_DIR/config.toml.template"
+DYNAMIC_ENV=""  # set by resolve_env_path after mode is known
+DYNAMIC_ENV_TMPL="$SCRIPT_DIR/backend/.env.template"
 FRONTEND_ENV="$SCRIPT_DIR/frontend/.env"
 FRONTEND_TMPL="$SCRIPT_DIR/frontend/.env.template"
 RUN_CONF="$SCRIPT_DIR/.run.conf"
@@ -33,6 +39,35 @@ COMPOSE_FILE=""
 IS_WSL=false
 NEED_SSH_KEY_MOUNT=false
 DEV_MODE=false
+
+resolve_env_path() {
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        DYNAMIC_ENV="$SCRIPT_DIR/backend/.env"
+    else
+        DYNAMIC_ENV=$(mktemp "${TMPDIR:-/tmp}/pentest-copilot-env.XXXXXX")
+        trap 'rm -f "$DYNAMIC_ENV" 2>/dev/null' EXIT
+    fi
+}
+
+# When reconfiguring in Docker mode, pull the existing .env from the container
+# so the user sees current values as defaults
+seed_env_from_container() {
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        return
+    fi
+
+    local container_id
+    container_id=$(compose ps -q backend 2>/dev/null | head -1 || true)
+    if [[ -n "$container_id" ]]; then
+        docker cp "${container_id}:/srv/data/.env" "$DYNAMIC_ENV" 2>/dev/null && \
+            info "Loaded current .env from container" || true
+    fi
+
+    # If nothing was pulled, seed from template
+    if [[ ! -s "$DYNAMIC_ENV" ]]; then
+        cp "$DYNAMIC_ENV_TMPL" "$DYNAMIC_ENV"
+    fi
+}
 
 # ── Helpers ────────────────────────────────────────────────
 print_banner() {
@@ -72,14 +107,30 @@ set_env_var() {
     echo "${var}=${val}" >> "$file"
 }
 
-get_env_var() {
-    grep "^${1##*/}" "$1" 2>/dev/null | head -1 | cut -d'=' -f2-
-    :
-}
-# Overloaded: get_env_var FILE VAR
 get_env() {
     local file="$1" var="$2"
     grep "^${var}=" "$file" 2>/dev/null | head -1 | cut -d'=' -f2- || true
+}
+
+set_toml_var() {
+    local file="$1" key="$2" val="$3"
+    if grep -q "^${key} " "$file" 2>/dev/null || grep -q "^${key}=" "$file" 2>/dev/null; then
+        local tmp="${file}.tmp.$$"
+        sed "s|^${key} *=.*|${key} = \"${val}\"|" "$file" > "$tmp"
+        mv "$tmp" "$file"
+    elif grep -q "^# *${key} " "$file" 2>/dev/null || grep -q "^# *${key}=" "$file" 2>/dev/null; then
+        local tmp="${file}.tmp.$$"
+        sed "s|^# *${key} *=.*|${key} = \"${val}\"|" "$file" > "$tmp"
+        mv "$tmp" "$file"
+    else
+        echo "${key} = \"${val}\"" >> "$file"
+    fi
+}
+
+get_toml_var() {
+    local file="$1" key="$2"
+    grep "^${key} " "$file" 2>/dev/null | head -1 \
+        | sed 's/[^=]*= *//; s/ *#.*//; s/^"//; s/"$//' || true
 }
 
 # ── Prerequisite checks ───────────────────────────────────
@@ -119,7 +170,18 @@ detect_wsl() {
 
 # ── Existing-config helpers ───────────────────────────────
 has_existing_config() {
-    [[ -f "$BACKEND_ENV" || -f "$FRONTEND_ENV" ]]
+    [[ -f "$CONFIG_TOML" ]] && return 0
+    # In dev mode, check for local .env
+    [[ -f "$SCRIPT_DIR/backend/.env" ]] && return 0
+    # In Docker mode, check if container has config
+    if [[ -n "${COMPOSE_CMD:-}" ]]; then
+        local cid
+        cid=$(compose ps -q backend 2>/dev/null | head -1 || true)
+        if [[ -n "$cid" ]]; then
+            docker exec "$cid" test -f /srv/data/.env 2>/dev/null && return 0
+        fi
+    fi
+    return 1
 }
 
 mask_key() {
@@ -136,21 +198,47 @@ mask_key() {
 show_config_summary() {
     section "Current Configuration"
 
-    if [[ -f "$BACKEND_ENV" ]]; then
-        local ml ms kl ks sh sp su
-        ml=$(get_env "$BACKEND_ENV" "MODEL_LARGE")
-        ms=$(get_env "$BACKEND_ENV" "MODEL_SMALL")
-        kl=$(get_env "$BACKEND_ENV" "MODEL_API_KEY_LARGE")
-        ks=$(get_env "$BACKEND_ENV" "MODEL_API_KEY_SMALL")
-        sh=$(get_env "$BACKEND_ENV" "SSH_HOST")
-        sp=$(get_env "$BACKEND_ENV" "SSH_PORT")
-        su=$(get_env "$BACKEND_ENV" "SSH_USERNAME")
-
-        echo -e "   Large Model : ${BOLD}${ml:-not set}${NC}  (key: $(mask_key "$kl"))"
-        echo -e "   Small Model : ${BOLD}${ms:-not set}${NC}  (key: $(mask_key "$ks"))"
-        echo -e "   SSH Target  : ${BOLD}${su:-?}@${sh:-?}:${sp:-?}${NC}"
+    # Try to read .env -- from host in dev mode, from container in Docker mode
+    local env_content=""
+    if [[ -f "$SCRIPT_DIR/backend/.env" ]]; then
+        env_content="$SCRIPT_DIR/backend/.env"
     else
-        warn "No backend .env found"
+        local cid
+        cid=$(compose ps -q backend 2>/dev/null | head -1 || true)
+        if [[ -n "$cid" ]]; then
+            local tmp_summary
+            tmp_summary=$(mktemp "${TMPDIR:-/tmp}/pentest-env-summary.XXXXXX")
+            if docker cp "${cid}:/srv/data/.env" "$tmp_summary" 2>/dev/null; then
+                env_content="$tmp_summary"
+            fi
+        fi
+    fi
+
+    if [[ -n "$env_content" && -f "$env_content" ]]; then
+        local m k oauth
+        m=$(get_env "$env_content" "MODEL")
+        k=$(get_env "$env_content" "MODEL_API_KEY")
+        oauth=$(get_env "$env_content" "ANTHROPIC_OAUTH_ACCESS_TOKEN")
+
+        echo -e "   Model       : ${BOLD}${m:-not set}${NC}  (key: $(mask_key "$k"))"
+        if [[ -n "$oauth" ]]; then
+            echo -e "   Claude OAuth: ${GREEN}connected${NC}"
+        fi
+
+        local sh sp su
+        sh=$(get_env "$env_content" "SSH_HOST")
+        sp=$(get_env "$env_content" "SSH_PORT")
+        su=$(get_env "$env_content" "SSH_USERNAME")
+        if [[ -n "$sh" ]]; then
+            echo -e "   SSH Target  : ${BOLD}${su:-?}@${sh}:${sp:-22}${NC}"
+        else
+            echo -e "   SSH Target  : ${DIM}not configured${NC}"
+        fi
+
+        # Clean up temp file if we created one
+        [[ "$env_content" != "$SCRIPT_DIR/backend/.env" ]] && rm -f "$env_content" 2>/dev/null
+    else
+        warn "No .env found (dynamic config)"
     fi
 
     if [[ -f "$RUN_CONF" ]]; then
@@ -203,72 +291,122 @@ select_deploy_mode() {
     esac
 }
 
-# ── Backend .env configuration ────────────────────────────
-configure_backend() {
-    section "Backend Environment"
+# ── Static configuration (config.toml) ────────────────────
+configure_static() {
+    section "Static Configuration (config.toml)"
 
-    if [[ ! -f "$BACKEND_TMPL" ]]; then
-        err "Template not found: $BACKEND_TMPL"
+    if [[ ! -f "$CONFIG_TOML_TMPL" ]]; then
+        err "Template not found: $CONFIG_TOML_TMPL"
         exit 1
     fi
 
-    # Start from template only if no .env exists yet
-    if [[ ! -f "$BACKEND_ENV" ]]; then
-        cp "$BACKEND_TMPL" "$BACKEND_ENV"
-        info "Created backend/.env from template"
+    if [[ ! -f "$CONFIG_TOML" ]]; then
+        cp "$CONFIG_TOML_TMPL" "$CONFIG_TOML"
+        info "Created config.toml from template"
     fi
 
-    if [[ "$IS_WSL" == true ]]; then
-        sed -i 's/127\.0\.0\.1/localhost/g' "$BACKEND_ENV"
-    fi
-
-    # ── Large model ──────────────────────────────────
-    section "Large Model  (reasoning, complex analysis)"
+    # ── Server settings ──
+    section "Server Settings"
     local cur
-    cur=$(get_env "$BACKEND_ENV" "MODEL_LARGE")
-    prompt_input "Model name [${cur:-gpt-4-1106-preview}]:"
+    cur=$(get_toml_var "$CONFIG_TOML" "base_url_frontend")
+    local default_url="http://localhost:3000"
+    [[ "$IS_WSL" == true ]] && default_url="http://localhost:3000"
+    prompt_input "Frontend URL [${cur:-$default_url}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$BACKEND_ENV" "MODEL_LARGE" "$val"
+    if [[ -n "$val" ]]; then
+        set_toml_var "$CONFIG_TOML" "base_url_frontend" "$val"
+    fi
 
-    prompt_input "API key (Enter to keep existing):"
+    cur=$(get_toml_var "$CONFIG_TOML" "deployment")
+    prompt_input "Deployment mode [${cur:-LOCAL}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$BACKEND_ENV" "MODEL_API_KEY_LARGE" "$val"
+    if [[ -n "$val" ]]; then
+        set_toml_var "$CONFIG_TOML" "deployment" "$val"
+    fi
 
-    prompt_input "Base URL override (Enter to skip):"
+    cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
+    echo
+    echo -e "   ${DIM}The frontend URL above is always allowed. Add extra origins here${NC}"
+    echo -e "   ${DIM}(comma-separated, e.g. http://myapp.local:3000,http://other:8080)${NC}"
+    prompt_input "Additional CORS origins [${cur:-none}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$BACKEND_ENV" "MODEL_BASE_PATH_LARGE" "$val"
+    if [[ -n "$val" ]]; then
+        set_toml_var "$CONFIG_TOML" "cors_origins" "$val"
+    fi
 
-    # ── Small model ──────────────────────────────────
-    section "Small Model  (summarization, quick tasks)"
-    cur=$(get_env "$BACKEND_ENV" "MODEL_SMALL")
-    prompt_input "Model name [${cur:-gpt-3.5-turbo-1106}]:"
+    # ── Database ──
+    section "Database"
+    cur=$(get_toml_var "$CONFIG_TOML" "mongo_uri")
+    local default_mongo="mongodb://mongodb:27017/pentestcopilot"
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        default_mongo="mongodb://localhost:27017/pentestcopilot"
+        if [[ "$cur" == *"mongodb://"* && "$cur" != *"localhost"* ]]; then
+            cur="$default_mongo"
+            set_toml_var "$CONFIG_TOML" "mongo_uri" "$cur"
+        fi
+    else
+        if [[ "$cur" == *"localhost"* ]]; then
+            cur="$default_mongo"
+            set_toml_var "$CONFIG_TOML" "mongo_uri" "$cur"
+        fi
+    fi
+    prompt_input "MongoDB URI [${cur:-$default_mongo}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$BACKEND_ENV" "MODEL_SMALL" "$val"
+    if [[ -n "$val" ]]; then
+        set_toml_var "$CONFIG_TOML" "mongo_uri" "$val"
+    elif [[ -z "$cur" ]]; then
+        set_toml_var "$CONFIG_TOML" "mongo_uri" "$default_mongo"
+    fi
 
-    prompt_input "API key (Enter to keep existing):"
+    cur=$(get_toml_var "$CONFIG_TOML" "redis_url")
+    local default_redis="redis://redis:6379"
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        default_redis="redis://localhost:6379"
+        if [[ "$cur" == *"redis://"* && "$cur" != *"localhost"* ]]; then
+            cur="$default_redis"
+            set_toml_var "$CONFIG_TOML" "redis_url" "$cur"
+        fi
+    else
+        if [[ "$cur" == *"localhost"* ]]; then
+            cur="$default_redis"
+            set_toml_var "$CONFIG_TOML" "redis_url" "$cur"
+        fi
+    fi
+    prompt_input "Redis URL [${cur:-$default_redis}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$BACKEND_ENV" "MODEL_API_KEY_SMALL" "$val"
+    if [[ -n "$val" ]]; then
+        set_toml_var "$CONFIG_TOML" "redis_url" "$val"
+    elif [[ -z "$cur" ]]; then
+        set_toml_var "$CONFIG_TOML" "redis_url" "$default_redis"
+    fi
 
-    prompt_input "Base URL override (Enter to skip):"
-    read -r val
-    [[ -n "$val" ]] && set_env_var "$BACKEND_ENV" "MODEL_BASE_PATH_SMALL" "$val"
+    # ── Session ──
+    section "Session"
+    cur=$(get_toml_var "$CONFIG_TOML" "secret")
+    if [[ -z "$cur" || "$cur" == "thisismysessionsecret!123" ]]; then
+        local generated
+        generated=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | base64 | tr -d '/+=' | head -c 64)
+        set_toml_var "$CONFIG_TOML" "secret" "$generated"
+        info "Generated random session secret"
+    else
+        info "Session secret already configured"
+    fi
 
-    info "Model configuration saved"
+    info "Static configuration saved → config.toml"
 }
 
-# ── SSH / exploit-box configuration ───────────────────────
+# ── SSH / exploit-box configuration (writes to .env) ──
 configure_ssh() {
     section "SSH / Exploit Box"
 
-    # ── Kali container (Docker mode): use well-known defaults ──────
     if [[ "$DEPLOY_MODE" == "kali" ]]; then
         info "Using built-in Kali container defaults (root@kali:22, no password)"
-        set_env_var "$BACKEND_ENV" "SSH_HOST"                   "kali"
-        set_env_var "$BACKEND_ENV" "SSH_PORT"                   "22"
-        set_env_var "$BACKEND_ENV" "SSH_USERNAME"               "root"
-        set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
-        set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            ""
-        set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+        set_env_var "$DYNAMIC_ENV" "SSH_HOST"                   "kali"
+        set_env_var "$DYNAMIC_ENV" "SSH_PORT"                   "22"
+        set_env_var "$DYNAMIC_ENV" "SSH_USERNAME"               "root"
+        set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD"               ""
+        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY"            ""
+        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
 
         if confirm "Do you also want to configure SSH to an external box instead?"; then
             configure_external_ssh
@@ -276,15 +414,14 @@ configure_ssh() {
         return
     fi
 
-    # ── Dev mode with Kali container: backend runs on host, Kali in Docker ──
     if [[ "$DEPLOY_MODE" == "dev-kali" ]]; then
         info "Using Kali container via localhost:4242 (backend runs on host)"
-        set_env_var "$BACKEND_ENV" "SSH_HOST"                   "localhost"
-        set_env_var "$BACKEND_ENV" "SSH_PORT"                   "4242"
-        set_env_var "$BACKEND_ENV" "SSH_USERNAME"               "root"
-        set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
-        set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            ""
-        set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+        set_env_var "$DYNAMIC_ENV" "SSH_HOST"                   "localhost"
+        set_env_var "$DYNAMIC_ENV" "SSH_PORT"                   "4242"
+        set_env_var "$DYNAMIC_ENV" "SSH_USERNAME"               "root"
+        set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD"               ""
+        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY"            ""
+        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
 
         if confirm "Do you also want to configure SSH to an external box instead?"; then
             configure_external_ssh
@@ -292,7 +429,6 @@ configure_ssh() {
         return
     fi
 
-    # ── Dev mode without Kali or Core mode: optional external exploit box ──
     echo
     echo -e "   ${BOLD}1)${NC} Configure SSH to an external exploit box"
     echo -e "   ${BOLD}2)${NC} Skip SSH for now ${DIM}(backend will start without an exploit box)${NC}"
@@ -305,12 +441,12 @@ configure_ssh() {
             ;;
         *)
             info "Skipping SSH configuration — no exploit box configured"
-            set_env_var "$BACKEND_ENV" "SSH_HOST"                   ""
-            set_env_var "$BACKEND_ENV" "SSH_PORT"                   "22"
-            set_env_var "$BACKEND_ENV" "SSH_USERNAME"               ""
-            set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
-            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            ""
-            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+            set_env_var "$DYNAMIC_ENV" "SSH_HOST"                   ""
+            set_env_var "$DYNAMIC_ENV" "SSH_PORT"                   "22"
+            set_env_var "$DYNAMIC_ENV" "SSH_USERNAME"               ""
+            set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD"               ""
+            set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY"            ""
+            set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
             warn "You can configure SSH later with: $0 config"
             ;;
     esac
@@ -332,9 +468,9 @@ configure_external_ssh() {
     read -r ssh_user
     ssh_user="${ssh_user:-root}"
 
-    set_env_var "$BACKEND_ENV" "SSH_HOST"     "$ssh_host"
-    set_env_var "$BACKEND_ENV" "SSH_PORT"     "$ssh_port"
-    set_env_var "$BACKEND_ENV" "SSH_USERNAME" "$ssh_user"
+    set_env_var "$DYNAMIC_ENV" "SSH_HOST"     "$ssh_host"
+    set_env_var "$DYNAMIC_ENV" "SSH_PORT"     "$ssh_port"
+    set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" "$ssh_user"
 
     echo
     echo -e "   ${BOLD}1)${NC} Password authentication"
@@ -352,21 +488,19 @@ configure_external_ssh() {
             fi
 
             if [[ "${DEV_MODE:-false}" == true ]]; then
-                # Dev mode: backend runs on host, use the key path directly
                 local resolved_path
                 resolved_path="$(cd "$(dirname "$key_path")" && pwd)/$(basename "$key_path")"
 
-                set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
-                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            "$resolved_path"
-                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+                set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD"               ""
+                set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY"            "$resolved_path"
+                set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
 
                 prompt_input "Passphrase for this key (Enter if none):"
                 read -rs passphrase; echo
-                [[ -n "$passphrase" ]] && set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
+                [[ -n "$passphrase" ]] && set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
 
                 info "Private key auth configured (host path: $resolved_path)"
             else
-                # Docker mode: copy key into ssh-keys/ and use container mount path
                 mkdir -p "$SSH_KEYS_DIR"
                 local key_name
                 key_name="$(basename "$key_path")"
@@ -379,9 +513,9 @@ configure_external_ssh() {
                 prompt_input "Passphrase for this key (Enter if none):"
                 read -rs passphrase; echo
 
-                set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               ""
-                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            "$container_path"
-                set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
+                set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD"               ""
+                set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY"            "$container_path"
+                set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" "$passphrase"
                 NEED_SSH_KEY_MOUNT=true
 
                 info "Private key auth configured"
@@ -392,13 +526,180 @@ configure_external_ssh() {
             prompt_input "SSH Password:"
             read -rs ssh_pass; echo
 
-            set_env_var "$BACKEND_ENV" "SSH_PASSWORD"               "$ssh_pass"
-            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY"            ""
-            set_env_var "$BACKEND_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+            set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD"               "$ssh_pass"
+            set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY"            ""
+            set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
 
             info "Password auth configured"
             ;;
     esac
+}
+
+# ── Dynamic model configuration (.env) ────────────────────
+configure_models() {
+    section "Model Configuration (.env — dynamic)"
+
+    if [[ ! -f "$DYNAMIC_ENV_TMPL" ]]; then
+        err "Template not found: $DYNAMIC_ENV_TMPL"
+        exit 1
+    fi
+
+    if [[ ! -s "$DYNAMIC_ENV" ]]; then
+        cp "$DYNAMIC_ENV_TMPL" "$DYNAMIC_ENV"
+        if [[ "${DEV_MODE:-false}" == true ]]; then
+            info "Created backend/.env from template"
+        fi
+    fi
+
+    section "Model Configuration"
+    local cur
+    cur=$(get_env "$DYNAMIC_ENV" "MODEL_PROVIDER")
+    echo
+    echo -e "   ${BOLD}Providers:${NC} openai, anthropic, openai-compatible"
+    prompt_input "Provider [${cur:-openai}]:"
+    read -r val
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_PROVIDER" "$val"
+    local model_provider="${val:-${cur:-openai}}"
+
+    cur=$(get_env "$DYNAMIC_ENV" "MODEL")
+    prompt_input "Model name [${cur:-gpt-4o}]:"
+    read -r val
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL" "$val"
+
+    if [[ "$model_provider" == "anthropic" ]]; then
+        echo
+        echo -e "   ${BOLD}Authentication:${NC}"
+        echo -e "   ${BOLD}1)${NC} API Key"
+        echo -e "   ${BOLD}2)${NC} Connect Claude Account (OAuth)"
+        prompt_input "Choose [1/2]:"
+        read -r auth_choice
+
+        if [[ "$auth_choice" == "2" ]]; then
+            configure_claude_oauth
+        else
+            prompt_input "API key (Enter to keep existing):"
+            read -r val
+            [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_API_KEY" "$val"
+        fi
+    else
+        prompt_input "API key (Enter to keep existing):"
+        read -r val
+        [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_API_KEY" "$val"
+    fi
+
+    prompt_input "Base URL override (Enter to skip):"
+    read -r val
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_BASE_PATH" "$val"
+
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        info "Model configuration saved → backend/.env"
+    else
+        info "Model configuration saved (will be provisioned into container)"
+    fi
+}
+
+# ── Claude OAuth PKCE flow ────────────────────────────────
+configure_claude_oauth() {
+    section "Claude OAuth (PKCE)"
+
+    if ! command -v openssl &>/dev/null; then
+        err "openssl is required for OAuth PKCE. Please install it."
+        return 1
+    fi
+
+    local client_id="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+    local auth_url="https://claude.ai/oauth/authorize"
+    local token_url="https://console.anthropic.com/v1/oauth/token"
+    local redirect_uri="https://console.anthropic.com/oauth/code/callback"
+    local scopes="org:create_api_key user:profile user:inference"
+
+    local code_verifier
+    code_verifier=$(openssl rand 32 | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+
+    local code_challenge
+    code_challenge=$(printf '%s' "$code_verifier" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+
+    local state
+    state=$(openssl rand -hex 16)
+
+    local auth_params="code=true"
+    auth_params+="&client_id=${client_id}"
+    auth_params+="&response_type=code"
+    auth_params+="&redirect_uri=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${redirect_uri}', safe=''))" 2>/dev/null || echo "${redirect_uri}")"
+    auth_params+="&scope=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${scopes}', safe=''))" 2>/dev/null || echo "${scopes// /+}")"
+    auth_params+="&code_challenge=${code_challenge}"
+    auth_params+="&code_challenge_method=S256"
+    auth_params+="&state=${state}"
+
+    local full_url="${auth_url}?${auth_params}"
+
+    echo
+    info "Open this URL in your browser to authorize Claude:"
+    echo
+    echo -e "   ${CYAN}${full_url}${NC}"
+    echo
+    echo -e "   After authorizing, you'll be redirected to a page showing an authorization code."
+    echo -e "   Copy the full code and paste it below."
+    echo
+    prompt_input "Paste the authorization code here:"
+    read -r auth_code
+
+    if [[ -z "$auth_code" ]]; then
+        err "No authorization code provided"
+        return 1
+    fi
+
+    auth_code="${auth_code%%#*}"
+
+    info "Exchanging authorization code for tokens..."
+
+    if ! command -v curl &>/dev/null; then
+        err "curl is required for token exchange. Please install it."
+        return 1
+    fi
+
+    local token_response
+    token_response=$(curl -s -X POST "$token_url" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "code=${auth_code}" \
+        -d "state=${state}" \
+        -d "grant_type=authorization_code" \
+        -d "client_id=${client_id}" \
+        -d "redirect_uri=${redirect_uri}" \
+        -d "code_verifier=${code_verifier}")
+
+    local access_token refresh_token expires_in
+
+    if command -v python3 &>/dev/null; then
+        access_token=$(echo "$token_response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
+        refresh_token=$(echo "$token_response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('refresh_token',''))" 2>/dev/null || true)
+        expires_in=$(echo "$token_response" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('expires_in',3600))" 2>/dev/null || echo "3600")
+    elif command -v jq &>/dev/null; then
+        access_token=$(echo "$token_response" | jq -r '.access_token // empty')
+        refresh_token=$(echo "$token_response" | jq -r '.refresh_token // empty')
+        expires_in=$(echo "$token_response" | jq -r '.expires_in // 3600')
+    else
+        err "Neither python3 nor jq found. Cannot parse token response."
+        echo -e "   ${DIM}Raw response: ${token_response}${NC}"
+        return 1
+    fi
+
+    if [[ -z "$access_token" ]]; then
+        err "Failed to get access token from Claude OAuth"
+        echo -e "   ${DIM}Response: ${token_response}${NC}"
+        return 1
+    fi
+
+    local expires_at
+    expires_at=$(( $(date +%s) + ${expires_in:-3600} ))
+
+    set_env_var "$DYNAMIC_ENV" "ANTHROPIC_OAUTH_ACCESS_TOKEN"  "$access_token"
+    set_env_var "$DYNAMIC_ENV" "ANTHROPIC_OAUTH_REFRESH_TOKEN" "$refresh_token"
+    set_env_var "$DYNAMIC_ENV" "ANTHROPIC_OAUTH_EXPIRES_AT"    "$expires_at"
+
+    set_env_var "$DYNAMIC_ENV" "MODEL_API_KEY" ""
+
+    info "Claude account connected via OAuth"
 }
 
 # ── Frontend .env configuration ───────────────────────────
@@ -417,14 +718,6 @@ configure_frontend() {
 
     if [[ "$IS_WSL" == true ]]; then
         sed -i 's/127\.0\.0\.1/localhost/g' "$FRONTEND_ENV"
-    fi
-
-    if confirm "Configure Google Tag Manager?"; then
-        prompt_input "GTM ID (e.g. GTM-XXXXXXX):"
-        read -r gtm_id
-        [[ -n "$gtm_id" ]] && set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_GTM_ID" "$gtm_id"
-    else
-        info "Skipping GTM"
     fi
 
     info "Frontend configuration saved"
@@ -472,6 +765,29 @@ compose() {
     $COMPOSE_CMD "${args[@]}" "$@"
 }
 
+# ── Copy .env into data volume (config.toml is bind-mounted) ──
+provision_data_volume() {
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        return
+    fi
+
+    section "Provisioning Data Volume"
+
+    local container_id
+    container_id=$(compose ps -q backend 2>/dev/null | head -1)
+
+    if [[ -z "$container_id" ]]; then
+        warn "Backend container not running — skipping volume provisioning"
+        return
+    fi
+
+    if [[ -s "$DYNAMIC_ENV" ]]; then
+        docker cp "$DYNAMIC_ENV" "${container_id}:/srv/data/.env"
+        info "Provisioned .env → container /srv/data/.env"
+        rm -f "$DYNAMIC_ENV" 2>/dev/null
+    fi
+}
+
 # ── Check pnpm is available ───────────────────────────────
 check_pnpm() {
     if ! command -v pnpm &>/dev/null; then
@@ -511,6 +827,8 @@ launch() {
     compose up ${build_flag} -d
     echo
 
+    provision_data_volume
+
     section "Pentest Copilot is Running"
     echo
     echo -e "   ${GREEN}Frontend${NC}   http://localhost:3000"
@@ -525,6 +843,10 @@ launch() {
         echo -e "   ${GREEN}Kali VPN${NC}   localhost:1194/udp"
     fi
 
+    echo
+    info "Config files:"
+    echo -e "   ${DIM}config.toml${NC}          Static infrastructure (edit & restart)"
+    echo -e "   ${DIM}/srv/data/.env${NC}      Dynamic model config (inside container, editable via Settings UI)"
     echo
     info "Useful commands:"
     echo -e "   ${DIM}$0 stop${NC}     Stop all containers"
@@ -551,24 +873,6 @@ launch_dev() {
     compose up ${build_flag} -d ${dev_services}
     echo
 
-    section "Configuring Backend for Local Development"
-    local mongo_db
-    mongo_db=$(get_env "$BACKEND_ENV" "MONGO_DATABASE" 2>/dev/null || echo "pentestcopilot")
-    if [[ ! -f "$BACKEND_ENV" ]]; then
-        [[ -f "$BACKEND_TMPL" ]] && cp "$BACKEND_TMPL" "$BACKEND_ENV"
-    fi
-    set_env_var "$BACKEND_ENV" "MONGO_URI" "mongodb://localhost:27017/${mongo_db}"
-    set_env_var "$BACKEND_ENV" "REDIS_URL" "redis://localhost:6379"
-    info "Set MONGO_URI and REDIS_URL to localhost (backend runs outside Docker)"
-    echo
-
-    section "Installing Dependencies"
-    info "Installing backend dependencies..."
-    (cd "$SCRIPT_DIR/backend" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
-    info "Installing frontend dependencies..."
-    (cd "$SCRIPT_DIR/frontend" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install)
-    echo
-
     section "Developer Mode — Infrastructure Running"
     echo
     echo -e "   ${GREEN}MongoDB${NC}    localhost:27017"
@@ -581,6 +885,10 @@ launch_dev() {
         echo -e "   ${GREEN}Kali VPN${NC}   localhost:1194/udp"
     fi
 
+    echo
+    info "Config files:"
+    echo -e "   ${DIM}config.toml${NC}    Static infrastructure"
+    echo -e "   ${DIM}backend/.env${NC}   Dynamic model config"
     echo
     section "Start Frontend & Backend Manually"
     echo
@@ -609,8 +917,10 @@ launch_dev() {
 full_configure() {
     detect_wsl
     select_deploy_mode
-    configure_backend
+    resolve_env_path
+    configure_static
     configure_ssh
+    configure_models
     configure_frontend
     save_run_conf
 }
@@ -653,9 +963,12 @@ cmd_dev() {
         save_run_conf
     fi
 
-    if [[ ! -f "$BACKEND_ENV" ]] || [[ ! -f "$FRONTEND_ENV" ]]; then
-        configure_backend
+    resolve_env_path
+
+    if [[ ! -f "$CONFIG_TOML" ]] || [[ ! -f "$DYNAMIC_ENV" ]] || [[ ! -f "$FRONTEND_ENV" ]]; then
+        configure_static
         configure_ssh
+        configure_models
         configure_frontend
     fi
 
@@ -669,24 +982,28 @@ cmd_config() {
         select_deploy_mode
         save_run_conf
     fi
-    configure_backend
+    resolve_env_path
+    seed_env_from_container
+    configure_static
     configure_ssh
+    configure_models
     configure_frontend
     ensure_compose_override
     echo
-    info "Configuration updated. Files changed:"
-    echo -e "   ${DIM}backend/.env${NC}"
-    echo -e "   ${DIM}frontend/.env${NC}"
-    [[ -f "$COMPOSE_OVERRIDE" ]] && echo -e "   ${DIM}docker-compose.override.yml${NC}"
+    info "Configuration updated."
     echo
     if confirm "Restart running containers to apply changes?" "y"; then
         if [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; then
             NEED_SSH_KEY_MOUNT=true
         fi
         compose restart
+        provision_data_volume
         echo
         info "Containers restarted with updated config"
     else
+        if [[ "${DEV_MODE:-false}" != true ]]; then
+            provision_data_volume
+        fi
         info "Done. Run '$0' to start containers when ready."
     fi
 }
@@ -703,6 +1020,12 @@ cmd_help() {
     echo "  logs      Tail logs (optionally: $0 logs backend)"
     echo "  status    Show running containers"
     echo "  -h|--help This help message"
+    echo
+    echo "Configuration Files:"
+    echo "  config.toml      Static infrastructure (server, DB, CORS, session)"
+    echo "  .env             Dynamic config (model providers, API keys, SSH, OAuth)"
+    echo "                   Dev mode: backend/.env | Docker: /srv/data/.env (inside container)"
+    echo "  frontend/.env    Frontend environment variables"
     echo
 }
 
@@ -727,7 +1050,7 @@ main() {
         echo
         echo -e "   ${BOLD}1)${NC} Start with existing configuration"
         echo -e "   ${BOLD}2)${NC} Rebuild images & start (existing config)"
-        echo -e "   ${BOLD}3)${NC} Update configuration only ${DIM}(edit .env files, no build/start)${NC}"
+        echo -e "   ${BOLD}3)${NC} Update configuration only ${DIM}(edit config files, no build/start)${NC}"
         echo -e "   ${BOLD}4)${NC} Reconfigure everything from scratch"
         echo -e "   ${BOLD}5)${NC} Developer mode ${DIM}(infra only, run frontend & backend manually with pnpm)${NC}"
         echo
@@ -743,36 +1066,11 @@ main() {
                 launch --build
                 ;;
             3)
-                detect_wsl
-                if ! load_run_conf 2>/dev/null; then
-                    select_deploy_mode
-                    save_run_conf
-                fi
-                configure_backend
-                configure_ssh
-                configure_frontend
-                ensure_compose_override
-                echo
-                info "Configuration updated. Files changed:"
-                echo -e "   ${DIM}backend/.env${NC}"
-                echo -e "   ${DIM}frontend/.env${NC}"
-                [[ -f "$COMPOSE_OVERRIDE" ]] && echo -e "   ${DIM}docker-compose.override.yml${NC}"
-                echo
-                if confirm "Restart running containers to apply changes?" "y"; then
-                    if [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; then
-                        NEED_SSH_KEY_MOUNT=true
-                    fi
-                    compose restart
-                    echo
-                    info "Containers restarted with updated config"
-                else
-                    info "Done. Restart containers manually when ready:"
-                    echo -e "   ${DIM}$0${NC}       (option 1 to start)"
-                    echo -e "   ${DIM}$0 stop${NC}  then ${DIM}$0${NC} to do a full restart"
-                fi
+                cmd_config
                 ;;
             2)
                 load_run_conf 2>/dev/null || select_deploy_mode
+                resolve_env_path
                 if [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; then
                     NEED_SSH_KEY_MOUNT=true
                 fi
@@ -780,6 +1078,7 @@ main() {
                 ;;
             *)
                 load_run_conf 2>/dev/null || select_deploy_mode
+                resolve_env_path
                 if [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; then
                     NEED_SSH_KEY_MOUNT=true
                 fi

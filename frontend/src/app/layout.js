@@ -5,7 +5,6 @@ import "xterm/css/xterm.css";
 import { Inter } from "next/font/google";
 import QueryClientContext from "@/components/common/auth/QueryClient";
 import StoreProvider from "@/components/common/auth/StoreProvider";
-import GoogleTagManager from "@/components/common/GoogleTagManager";
 import IntercommMessenger from "@/components/common/IntercommMessenger";
 import { SocketProvider } from "@/context/SocketContext";
 const inter = Inter({ subsets: ["latin"] });
@@ -60,7 +59,6 @@ export default function RootLayout({ children }) {
         <SocketProvider>
           <StoreProvider>
             <QueryClientContext>
-              <GoogleTagManager />
               <IntercommMessenger />
               {children}
             </QueryClientContext>

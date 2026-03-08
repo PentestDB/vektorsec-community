@@ -4,6 +4,147 @@
   padding: 0rem 2rem;
   padding-bottom: 5rem;
 
+  :global(.ant-form-item-label > label) {
+    color: var(--secondary-text) !important;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input),
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-affix-wrapper) {
+    min-height: 2.3rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    background: var(--input-bg) !important;
+    border: 1px solid var(--border-color-100);
+    color: var(--primary-text);
+    font-size: 0.8rem;
+    transition: border-color var(--transition-fast);
+
+    &:hover,
+    &:focus,
+    &:focus-within {
+      border-color: var(--filled-purple-100);
+      background: var(--input-bg) !important;
+    }
+
+    input {
+      background: transparent !important;
+      color: var(--primary-text);
+    }
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-affix-wrapper .ant-input) {
+    border: none !important;
+    padding: 0 !important;
+    min-height: unset;
+    box-shadow: none !important;
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-number) {
+    min-height: 2.3rem;
+    border-radius: 6px;
+    background: var(--input-bg) !important;
+    border: 1px solid var(--border-color-100);
+    color: var(--primary-text);
+    font-size: 0.8rem;
+    transition: border-color var(--transition-fast);
+    display: flex;
+    align-items: center;
+
+    &:hover,
+    &:focus-within {
+      border-color: var(--filled-purple-100);
+      background: var(--input-bg) !important;
+    }
+
+    :global(.ant-input-number-input) {
+      background: transparent !important;
+      color: var(--primary-text);
+      padding: 0 0.75rem;
+    }
+
+    :global(.ant-input-number-input::placeholder) {
+      color: var(--secondary-text-500);
+    }
+
+    :global(.ant-input-number-handler-wrap) {
+      background: var(--input-bg);
+      border-left: 1px solid var(--border-color-100);
+
+      :global(.ant-input-number-handler) {
+        border-color: var(--border-color-100);
+        color: var(--secondary-text);
+
+        &:hover {
+          color: var(--primary-text);
+        }
+      }
+    }
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input::placeholder),
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-affix-wrapper input::placeholder) {
+    color: var(--secondary-text-500);
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-password .ant-input-suffix) {
+    color: var(--secondary-text);
+
+    .anticon {
+      color: var(--secondary-text);
+      cursor: pointer;
+
+      &:hover {
+        color: var(--primary-text);
+      }
+    }
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-selector) {
+    min-height: 2.3rem;
+    padding: 0 0.75rem;
+    border-radius: 6px;
+    background: var(--input-bg) !important;
+    border: 1px solid var(--border-color-100);
+    color: var(--primary-text);
+    font-size: 0.8rem;
+    transition: border-color var(--transition-fast);
+    display: flex;
+    align-items: center;
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select:hover .ant-select-selector),
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select-focused .ant-select-selector) {
+    border-color: var(--filled-purple-100) !important;
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-arrow) {
+    color: var(--secondary-text);
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-selection-search input) {
+    color: var(--primary-text);
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-selection-placeholder) {
+    color: var(--secondary-text-500);
+  }
+
+  :global(.ant-form .ant-form-item .ant-form-item-control .ant-select .ant-select-clear) {
+    background: var(--input-bg);
+    color: var(--secondary-text);
+  }
+
+  :global(.ant-form-item-explain-error) {
+    font-size: 0.7rem;
+    margin-top: 4px;
+  }
+
+  :global(.ant-radio-wrapper) {
+    color: var(--primary-text);
+  }
+
   .kycAlert {
     background-color: var(--lime-green-100);
     border: 1px solid var(--lime-green);

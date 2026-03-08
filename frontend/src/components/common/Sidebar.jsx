@@ -1,18 +1,15 @@
-import { Col, Dropdown, Tooltip, message, notification } from "antd";
+import { Col, Tooltip, message, notification } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
-import PrimaryButton from "./PrimaryButton";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
 import vpn from "@/assets/sidebar/vpn.svg";
 import terminal from "@/assets/sidebar/terminal.svg";
 import netcat from "@/assets/sidebar/netcat.svg";
 import todo from "@/assets/sidebar/todo.svg";
-// import findstep from "@/assets/sidebar/findstep.svg";
 import quad from "@/assets/sidebar/quad.svg";
 import docs from "@/assets/sidebar/docs.svg";
 import help from "@/assets/sidebar/help.svg";
 import rect from "@/assets/sidebar/rect.svg";
-import { PlusOutlined } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import { setRecon, updateCurrentSession } from "@/store/user.slice";
 import { useRouter } from "next/navigation";
@@ -127,32 +124,7 @@ const Sidebar = ({ sessionId }) => {
     router.push(`/session/${sessionId}/terminal/${terminalId}`);
   };
 
-  const items = [
-    {
-      label: (
-        <div
-          style={{ display: "flex", gap: "0.6rem" }}
-          onClick={handleCreateNetcatSession}
-        >
-          <Image src={netcat} width={18} height={18} alt="i" />
-          Netcat Session
-        </div>
-      ),
-      key: "1",
-    },
-    {
-      label: (
-        <div
-          style={{ display: "flex", gap: "0.6rem" }}
-          onClick={createTerminalSession}
-        >
-          <Image src={terminal} width={18} height={18} alt="i" />
-          Terminal
-        </div>
-      ),
-      key: "2",
-    },
-  ];
+  const isDisabled = status !== "running";
 
   return (
     <Col span={4}>
@@ -160,7 +132,6 @@ const Sidebar = ({ sessionId }) => {
         <div className={styles.createNew}>
           <div
             className={styles.exitSession}
-            // onClick={async () => await stopTaskMutation.mutateAsync()}
             onClick={() => {
               dispatch(setRecon(false));
               router.push("/dashboard");
@@ -169,16 +140,22 @@ const Sidebar = ({ sessionId }) => {
             <AiOutlineDoubleLeft />
             Exit Workspace
           </div>
-          <Dropdown
-            overlayClassName={styles.processDropdown}
-            menu={{ items }}
-            trigger={["click"]}
-            disabled={status !== "running"}
-          >
-            <PrimaryButton style={{ width: "100%" }}>
-              <PlusOutlined /> New Process
-            </PrimaryButton>
-          </Dropdown>
+          <div className={styles.newProcessGroup}>
+            <div
+              className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
+              onClick={isDisabled ? undefined : createTerminalSession}
+            >
+              <Image src={terminal} width={14} height={14} alt="" />
+              Terminal
+            </div>
+            <div
+              className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
+              onClick={isDisabled ? undefined : handleCreateNetcatSession}
+            >
+              <Image src={netcat} width={14} height={14} alt="" />
+              Netcat
+            </div>
+          </div>
           <div className={styles.sessionOptions}>
             {sessions
               .filter((s) => s.is_main && s.type === "session")

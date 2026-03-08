@@ -464,21 +464,13 @@ export const logout = async (req: Request, res: Response) => {
 
     const userdata = await UserModel.findOne({ _id: user.userId });
 
-    // Assuming SESS_NAME is a constant set in your environment/config file
-    const SESS_NAME = await getSecrets("SESS_NAME");
-
-    // Check if userdata exists and track user logout
-    if (userdata) {
-    }
-
     // Destroy the session and clear the cookie
     req.session.destroy((err) => {
       if (err) {
-        // Handle session destruction error
         console.error("Session destruction error:", err);
         return res.status(500).json({ message: "Error logging out!" });
       }
-      res.clearCookie(SESS_NAME);
+      res.clearCookie("sid");
       // Moved the success response here to ensure it's called after session is destroyed
       res.status(200).json({ message: "Logged out successfully!" });
     });

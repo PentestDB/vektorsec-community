@@ -154,77 +154,46 @@ const LandingPage = () => {
                   context to give directed results. From analysing web apps to
                   root shells, it&apos;s got you covered.
                 </p>
-                <p className={styles.cc}>no credit card required</p>
                 <div className={styles.viewOptions}>
-                  {/* <PrimaryButton
-                    pinkFilled
-                    className={styles.ctaBtn}
-                    onClick={() => router.push(`/login`)}
-                  >
-                    Get Started
-                  </PrimaryButton> */}
                   <PrimaryButton
-                    purpleFilled
+                    white
                     style={{
-                      borderRadius: "4rem",
+                      borderRadius: "2rem",
                       display: "flex",
                       alignItems: "center",
-                      gap: "0.3rem",
-                      fontWeight: "bold",
-                      transform: "scale(1.2)",
+                      gap: "0.4rem",
+                      fontWeight: "600",
+                      padding: "0 2rem",
+                      height: "2.75rem",
+                      fontSize: "0.95rem",
                     }}
                     onClick={() => router.push(`/login`)}
                   >
-                    Try Copilot For Free <FiArrowRight />
+                    Get Started <FiArrowRight />
+                  </PrimaryButton>
+                  <PrimaryButton
+                    style={{
+                      borderRadius: "2rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      fontWeight: "500",
+                      padding: "0 2rem",
+                      height: "2.75rem",
+                      fontSize: "0.95rem",
+                      borderColor: "rgba(255,255,255,0.2)",
+                    }}
+                    onClick={() =>
+                      window.open(
+                        "https://copilot-docs.bugbase.ai",
+                        "_blank"
+                      )
+                    }
+                  >
+                    Documentation
                   </PrimaryButton>
                 </div>
-
-                <a
-                  style={{
-                    marginTop: "1.4rem",
-                  }}
-                  href="https://www.producthunt.com/posts/pentest-copilot-by-bugbase?utm_source=badge-top-post-badge&utm_medium=badge&utm_souce=badge-pentest&#0045;copilot&#0045;by&#0045;bugbase"
-                  target="_blank"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=404977&theme=light&period=daily"
-                    alt="Pentest&#0032;Copilot&#0032;by&#0032;BugBase - Your&#0032;ultimate&#0032;AI&#0045;powered&#0032;ethical&#0032;hacking&#0032;assistant | Product Hunt"
-                    style={{
-                      width: "250px",
-                      height: "54px",
-                    }}
-                    width="250"
-                    height="54"
-                  />
-                </a>
-
-                {/* <a
-                  style={{
-                    marginTop: "1.4rem",
-                  }}
-                  href="https://www.producthunt.com/posts/pentest-copilot-by-bugbase?utm_source=badge-featured&utm_medium=badge&utm_souce=badge-pentest&#0045;copilot&#0045;by&#0045;bugbase"
-                  target="_blank"
-                >
-                  <img
-                    src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=404977&theme=light"
-                    alt="Pentest&#0032;Copilot&#0032;by&#0032;BugBase - Your&#0032;ultimate&#0032;ethical&#0032;hacking&#0032;assistant | Product Hunt"
-                    style={{
-                      width: "250px",
-                      height: "54px",
-                    }}
-                    width="250"
-                    height="54"
-                  />
-                </a> */}
-
-                {/* <a href="#hacker-love" rel="noopener noreferrer">
-                  <Image
-                    src={bottomArrow}
-                    alt="scroll-down"
-                    className={styles.arrow}
-                  />
-                </a> */}
+                <p className={styles.cc}>no credit card required</p>
               </div>
             </div>
           </div>

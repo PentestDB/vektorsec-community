@@ -1,5 +1,25 @@
 @import "../_variables";
 
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .wholeWrap {
   background: var(--navbar-bg);
   position: relative;
@@ -26,9 +46,10 @@
 
       .orbitContainer {
         position: relative;
-        height: calc(100vh - 108px);
+        height: calc(100vh - 64px);
         background: url("../../assets/green-dots.svg") repeat-x center center
           fixed;
+        opacity: 0.7;
 
         .fadeBottom {
           left: 0;
@@ -50,10 +71,10 @@
           transform: translate(-50%, -50%);
           background: none;
           border-radius: 50%;
-          border: 0.5px solid rgba(#fff, 0.6);
+          border: 0.5px solid rgba(#fff, 0.06);
           background: var(--navbar-bg);
-          box-shadow: 0px 0px 6px 0.5px #c3c3c380,
-            0px 0px 6px 0.5px #c3c3c380 inset;
+          box-shadow: 0px 0px 4px 0.5px rgba(#c3c3c3, 0.15),
+            0px 0px 4px 0.5px rgba(#c3c3c3, 0.15) inset;
         }
 
         .orbit1 {
@@ -201,28 +222,28 @@
       .planet {
         position: absolute;
         transform: translate(-50%, -50%);
-        width: 4rem;
-        height: 4rem;
+        width: 3rem;
+        height: 3rem;
         border-radius: 50%;
 
         @include responsive(tablet1) {
-          width: 3em;
-          height: 3em;
+          width: 2.5em;
+          height: 2.5em;
         }
 
         .planetRing {
-          width: 3rem;
-          height: 3rem;
+          width: 2.5rem;
+          height: 2.5rem;
           border-radius: 50%;
-          border: 0.8px solid #fff;
+          border: 0.5px solid rgba(#fff, 0.4);
           position: absolute;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
 
           @include responsive(tablet1) {
-            width: 2.2em;
-            height: 2.2em;
+            width: 2em;
+            height: 2em;
           }
 
           .planetIcon {
@@ -231,10 +252,10 @@
             left: 50%;
             transform: translate(-50%, -50%);
             color: #fff;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
 
             @include responsive(tablet1) {
-              font-size: 1.2rem;
+              font-size: 1rem;
             }
           }
         }
@@ -244,7 +265,7 @@
         background: #d74d00;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 20px 4px #d74d00aa;
+        box-shadow: 0px 0px 16px 3px rgba(#d74d00, 0.4);
       }
 
       .planet2 {
@@ -252,33 +273,33 @@
         top: 50%;
         right: 0;
         transform: translate(50%, -50%);
-        box-shadow: 0px 0px 20px 4px #b9d700aa;
+        box-shadow: 0px 0px 16px 3px rgba(#b9d700, 0.4);
       }
       .planet3 {
         background: #da08ec;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 20px 4px #da08ecaa;
+        box-shadow: 0px 0px 16px 3px rgba(#da08ec, 0.4);
       }
       .planet4 {
         background: #089aec;
         top: 50%;
         right: 0;
         transform: translate(50%, -50%);
-        box-shadow: 0px 0px 20px 4px #089aecaa;
+        box-shadow: 0px 0px 16px 3px rgba(#089aec, 0.4);
       }
       .planet6 {
         background: #d7c100;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 20px 4px #d7c100aa;
+        box-shadow: 0px 0px 16px 3px rgba(#d7c100, 0.4);
       }
 
       .planet5 {
         background: #00d7a3;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 20px 4px #00d7a3aa;
+        box-shadow: 0px 0px 16px 3px rgba(#00d7a3, 0.4);
       }
 
       .fadeforeground {
@@ -289,9 +310,9 @@
         height: 120vh;
         background: linear-gradient(
           180deg,
-          #0b0b12 0%,
-          rgba(11, 11, 18, 0.05) 50%,
-          #0b0b12 100%
+          #000000 0%,
+          rgba(0, 0, 0, 0.05) 50%,
+          #000000 100%
         );
         z-index: 1;
       }
@@ -320,33 +341,40 @@
           }
 
           h1 {
-            font-size: 6rem;
-            font-weight: 500;
-            background: linear-gradient(90deg, #ca00aa -2.59%, #05c3ff 105.63%);
+            font-size: 5rem;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            background: linear-gradient(
+              135deg,
+              #ffffff 0%,
+              #ffffff 40%,
+              var(--primary-purple) 100%
+            );
             background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
             margin-bottom: 1rem;
+            animation: fadeInUp 0.8s ease forwards;
 
             @media only screen and (min-width: 1600px) {
-              font-size: 5.5rem;
+              font-size: 5rem;
             }
 
             @include responsive(tablet3) {
-              font-size: 4rem;
+              font-size: 3.5rem;
             }
 
             @include responsive(tablet2) {
-              font-size: 4.2rem;
+              font-size: 3rem;
             }
 
             @include responsive(tablet1) {
-              font-size: 3rem;
+              font-size: 2.5rem;
             }
 
             @include responsive(mobile4) {
-              font-size: 3rem;
+              font-size: 2.5rem;
             }
 
             @media only screen and (max-width: 360px) {
@@ -356,47 +384,54 @@
 
           p {
             text-align: center;
-            color: var(--primary-text);
-            font-size: 1.3rem;
-            font-weight: 300;
-            line-height: 1.6;
+            color: var(--secondary-text);
+            font-size: 1.125rem;
+            font-weight: 400;
+            line-height: 1.7;
             margin-bottom: 2rem;
-            max-width: 40rem;
+            max-width: 36rem;
             padding: 0 1.5rem;
+            letter-spacing: -0.01em;
+            animation: fadeInUp 0.8s ease 0.15s both;
 
             @include responsive(tablet3) {
-              font-size: 1.1rem;
+              font-size: 1rem;
             }
           }
 
           .tagline {
-            color: #cacaca;
+            color: var(--secondary-text);
             text-align: center;
-            font-size: 1.1rem;
+            font-size: 0.875rem;
             font-weight: 500;
-            margin-bottom: 0.3rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            animation: fadeInUp 0.8s ease 0.05s both;
 
             @include responsive(tablet2) {
-              font-size: 1rem;
+              font-size: 0.8rem;
             }
           }
 
           .cc {
-            color: #cacacad2;
+            color: rgba(#fff, 0.35);
             text-align: center;
-            font-size: 1rem;
-            font-weight: 500;
-            margin-top: 1.4rem;
+            font-size: 0.8rem;
+            font-weight: 400;
+            margin-top: 1.2rem;
             margin-bottom: 1rem;
+            animation: fadeInUp 0.8s ease 0.35s both;
 
             @include responsive(tablet2) {
-              font-size: 1rem;
+              font-size: 0.8rem;
             }
           }
 
           .viewOptions {
             display: flex;
             gap: 1rem;
+            animation: fadeInUp 0.8s ease 0.25s both;
 
             .ctaBtn {
               min-width: 10.5rem;
@@ -435,7 +470,6 @@
             color: #fff;
           }
 
-          // change scrollbar css
           &::-webkit-scrollbar {
             width: 0.1rem;
           }
@@ -461,7 +495,7 @@
             align-items: center;
             justify-content: center;
             gap: 3px;
-            height: 2.8rem;
+            height: 2.4rem;
             border-radius: 6px;
             color: #fff;
             border: none;
@@ -491,24 +525,24 @@
                 width: 30rem;
                 max-width: 70vw;
                 font-size: 1rem;
-                border-radius: 4rem;
+                border-radius: 2rem;
                 color: #fff;
-                background-color: rgba(#fff, 0.1);
-                border: 0.5px solid #fff;
+                background-color: rgba(#fff, 0.06);
+                border: 0.5px solid rgba(#fff, 0.15);
                 display: flex;
                 align-items: center;
               }
               :global(.ant-input::placeholder) {
-                color: rgba(#fff, 0.5);
+                color: rgba(#fff, 0.4);
               }
             }
 
             .joinButton {
-              border-radius: 4rem;
-              height: 2.8rem;
+              border-radius: 2rem;
+              height: 2.4rem;
               padding: 0 2rem;
               font-size: 1rem;
-              border: 0.5px solid #fff;
+              border: 0.5px solid rgba(#fff, 0.15);
               cursor: pointer;
               display: flex;
               align-items: center;
@@ -612,14 +646,14 @@
         background-color: var(--navbar-bg);
 
         .featureIcon {
-          width: 5rem;
-          height: 5rem;
+          width: 4rem;
+          height: 4rem;
           display: flex;
           z-index: 10;
           border-radius: 50%;
           align-items: center;
           justify-content: center;
-          background-color: var(--primary-purple);
+          background-color: var(--filled-purple);
         }
 
         .featureContent {
@@ -630,6 +664,7 @@
           h1 {
             color: var(--primary-text);
             font-size: nth($fontSize, 5);
+            font-weight: 600;
           }
           p {
             color: var(--secondary-text);
@@ -686,27 +721,28 @@
             padding: 0 1rem;
             .slideNum {
               color: var(--primary-purple);
-              font-size: 6rem;
+              font-size: 5rem;
               font-weight: 700;
               margin-bottom: 1rem;
             }
 
             h1 {
               color: var(--primary-text);
-              font-size: 2rem;
+              font-size: 1.75rem;
               font-weight: 700;
               margin-bottom: 1rem;
+              letter-spacing: -0.02em;
             }
 
             p {
               color: var(--secondary-text);
-              font-size: 1.2rem;
-              font-weight: 600;
+              font-size: 1rem;
+              font-weight: 500;
             }
 
             @include responsive(tablet4) {
               .slideNum {
-                font-size: 5rem;
+                font-size: 4rem;
               }
 
               h1 {
@@ -714,7 +750,7 @@
               }
 
               p {
-                font-size: 1rem;
+                font-size: 0.9rem;
               }
             }
           }
@@ -737,7 +773,7 @@
           .stepNumber {
             color: var(--primary-purple);
             text-align: center;
-            font-size: 5rem;
+            font-size: 4rem;
             font-weight: 700;
           }
 
@@ -778,22 +814,23 @@
       h1 {
         color: var(--primary-text);
         text-align: center;
-        font-size: 4rem;
+        font-size: 3rem;
         font-weight: 700;
-        margin-bottom: 0.5rem; // make this a common style h1 and p
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.03em;
 
         @include responsive(tablet4) {
           padding: 0 1rem;
-          font-size: 3rem;
+          font-size: 2.5rem;
         }
       }
 
       p {
         text-align: center;
-        color: var(--primary-grey-600);
+        color: var(--secondary-text);
         font-size: nth($fontSize, 4);
         max-width: 40rem;
-        font-weight: 600;
+        font-weight: 500;
 
         @include responsive(tablet4) {
           padding: 0 1rem;
@@ -821,8 +858,6 @@
       background-size: 100%;
       background-repeat: repeat;
 
-      // -webkit-background-clip: border-box;
-      // -webkit-text-fill-color: transparent;
       animation: rainbow-text-simple-animation-rev 0.75s ease forwards;
 
       &:hover {
@@ -860,10 +895,10 @@
     width: 28rem;
     height: 28rem;
     border-radius: 50%;
-    background: rgba(#a100f2, 0.2);
+    background: rgba(#a100f2, 0.1);
     top: 16rem;
     left: -5rem;
-    filter: blur(100px);
+    filter: blur(120px);
     z-index: 10;
 
     @include responsive(tablet2) {
@@ -884,7 +919,7 @@
     left: -3rem;
     height: 35rem;
     width: 15rem;
-    filter: blur(90px);
+    filter: blur(110px);
   }
 
   .purpleBlurCircle4 {
@@ -941,16 +976,15 @@
 
 .line {
   height: 20rem;
-  width: 0.06rem;
   width: 1px;
   position: relative;
 
   background: linear-gradient(
     to bottom,
     transparent,
-    var(--filled-pink) 10%,
+    var(--filled-purple-50) 10%,
     var(--primary-purple) 50%,
-    var(--filled-pink) 90%,
+    var(--filled-purple-50) 90%,
     transparent
   );
   animation: gradientAnimation 3s ease-in-out infinite;
@@ -965,10 +999,10 @@
 @keyframes gradientAnimation {
   0%,
   100% {
-    background-size: 100% 120%; /* Initial and final state */
+    background-size: 100% 120%;
   }
   50% {
-    background-size: 100% 100%; /* Expanded state */
+    background-size: 100% 100%;
   }
 }
 

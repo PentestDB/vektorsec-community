@@ -11,6 +11,7 @@ import {
   finalizeTodoAndGetNewCommand,
   addNextloopHistoryStep,
   extractRelevantContextUsingGPT3,
+  agenticContinue,
 } from "../services/session.services";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import UserModel from "../models/User/User.model";
@@ -20,7 +21,6 @@ import getSecrets from "../utils/getSecrets";
 import axios from "axios";
 import { load } from "cheerio";
 import { HistoryData } from "../services/copilot.services";
-import { chatCompletion } from "../utils/openai/config";
 import { requireActiveSession } from "../services/session.helpers";
 
 export const initiateCopilotSession = async (req: Request, res: Response) => {
@@ -106,8 +106,8 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
 
     if (
       lastLoopStep &&
-      lastLoopStep.status !== "not-started" &&
-      lastLoopStep.stepType === "command"
+      lastLoopStep.stepType === "command" &&
+      !["not-started", "pending"].includes(lastLoopStep.status)
     ) {
       console.log("[generateCopilotCommand] Command is being processed");
       return res.status(200).json({
@@ -154,7 +154,7 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
           $push: {
             loops: {
               startTimestamp: new Date(),
-              loop: session.loopStepsPerformed + 1, // Assuming you've already incremented this in memory
+              loop: session.loopStepsPerformed + 1,
             },
           },
         }
@@ -165,7 +165,23 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
         sessionId: sessionId,
         message: "Generating Command",
       });
-    } else {
+    } else if (lastLoopStep && lastLoopStep.stepType === "init") {
+      console.log("[generateCopilotCommand] At init step, adding command step");
+
+      await changeLastHistoryStepStatus({
+        sessionId: sessionId,
+        lastStepType: "init",
+        status: "completed",
+      });
+
+      await addNextloopHistoryStep({
+        sessionId,
+        type: "command",
+        data: {},
+      });
+    }
+
+    {
       console.log("[generateCopilotCommand] Will generate command now");
 
       await changeLastHistoryStepStatus({
@@ -270,6 +286,7 @@ export const finalizeCopilotCommand = async (req: Request, res: Response) => {
         tool_response: response.tool_response ?? null,
         type: response.type,
         command: response.command ?? null,
+        commandId: response.commandId ?? null,
       });
     }
 
@@ -957,6 +974,35 @@ export const followGoogleTarget = async (req: Request, res: Response) => {
     console.log(error);
     return res.status(400).json({
       message: "Error Occured while following google target",
+    });
+  }
+};
+
+export const agenticContinueHandler = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId, additionalContext } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ message: "Invalid session id" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const result = await agenticContinue({ sessionId, additionalContext });
+
+    if (!result?.success) {
+      return res.status(400).json({
+        message: "Error in agentic continue",
+      });
+    }
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.log("[agenticContinueHandler] Error:", error);
+    return res.status(400).json({
+      message: error.message ?? "Error in agentic continue",
     });
   }
 };

@@ -1,11 +1,10 @@
-import { chatCompletion, chatCompletion3 } from "../utils/openai/config";
+import { invoke_llm } from "../utils/llm/providers";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import { HistoryData } from "../types/copilot.types";
 
 async function trackTokenUsage(
   sessionId: string,
-  response: any,
-  model: "large" | "small"
+  response: { content: string | null; usage: any }
 ) {
   if (!sessionId || !response?.usage || !response?.content || !response?.usage?.total_tokens) {
     return;
@@ -14,95 +13,46 @@ async function trackTokenUsage(
   const sessionData = await SessionsModel.findOne({ sessionId });
   if (!sessionData) return;
 
-  if (model === "large") {
-    sessionData.tokenHistory.push({
-      content: response.content,
-      usage: response.usage,
-    });
-    sessionData.totalTokens += response.usage.total_tokens;
-  } else {
-    sessionData.tokenHistory3.push({
-      content: response.content,
-      usage: response.usage,
-    });
-    sessionData.totalTokens3 += response.usage.total_tokens;
-  }
+  sessionData.tokenHistory.push({
+    content: response.content,
+    usage: response.usage,
+  });
+  sessionData.totalTokens += response.usage.total_tokens;
 
   await sessionData.save();
 }
 
-export async function ask_gpt4_model(
+export async function invoke_llm_with_retry(
   history: HistoryData[],
   sessionId: string,
-  tries = 0
+  opts: { format?: "json" | "text"; temperature?: number; maxRetries?: number } = {}
 ): Promise<{ success: boolean; content?: string }> {
-  if (tries > 1) {
-    throw new Error("Error Generating Completion - GPT4");
-  }
+  const { format = "json", temperature, maxRetries = 2 } = opts;
+  let tries = 0;
 
-  const history_to_send = history.map((item) => ({
-    role: item.role,
-    content: item.content,
-  }));
+  while (true) {
+    try {
+      const response = await invoke_llm({
+        messages: history.map((h) => ({ role: h.role, content: h.content })),
+        format,
+        temperature,
+      });
 
-  try {
-    const response = await chatCompletion({
-      history: history_to_send,
-      model: "gpt-4",
-    });
+      if (response.content === null) {
+        throw new Error("Empty response from LLM");
+      }
 
-    if (response === null || response?.content === null) {
-      throw new Error("Empty Response, retrying...");
+      await trackTokenUsage(sessionId, response);
+
+      return { success: true, content: response.content };
+    } catch (e) {
+      tries++;
+      console.log(e);
+      if (tries > maxRetries) {
+        throw new Error("Error generating LLM completion after retries");
+      }
+      console.log(`[llm] Retrying (${tries}/${maxRetries})...`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-
-    await trackTokenUsage(sessionId, response, "large");
-
-    return {
-      success: true,
-      content: response?.content,
-    };
-  } catch (e) {
-    console.log(e);
-    console.log("Retrying GPT-4");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    return await ask_gpt4_model(history, sessionId, tries + 1);
-  }
-}
-
-export async function ask_gpt3_model(
-  history: HistoryData[],
-  sessionId: string,
-  tries = 0
-): Promise<{ success: boolean; content?: string }> {
-  if (tries > 2) {
-    throw new Error("Error Generating Completion - GPT3");
-  }
-
-  const history_to_send = history.map((item) => ({
-    role: item.role,
-    content: item.content,
-  }));
-
-  try {
-    const response = await chatCompletion3({
-      history: history_to_send,
-      model: "gpt-3.5-turbo",
-    });
-
-    if (response === null || response?.content === null) {
-      throw new Error("Empty Response, retrying...");
-    }
-
-    await trackTokenUsage(sessionId, response, "small");
-
-    return {
-      success: true,
-      content: response?.content,
-    };
-  } catch (e) {
-    console.log(e);
-    console.log("Retrying GPT-3");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    return await ask_gpt3_model(history, sessionId, tries + 1);
   }
 }

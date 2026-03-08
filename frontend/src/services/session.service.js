@@ -101,3 +101,8 @@ export const followGoogleTarget = async (body) => {
   const res = await apiClient.post(`/session/follow-target`, body);
   return res.data;
 };
+
+export const agenticContinue = async (body) => {
+  const res = await apiClient.post(`/session/agentic-continue`, body);
+  return res.data;
+};

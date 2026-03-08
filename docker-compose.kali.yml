@@ -22,7 +22,8 @@ services:
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
-    env_file: ./backend/.env
+      - data:/srv/data
+      - ./config.toml:/srv/data/config.toml:ro
     depends_on:
       - redis
       - mongodb
@@ -33,7 +34,6 @@ services:
       args:
         NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
         NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
-        NEXT_PUBLIC_GTM_ID: ${NEXT_PUBLIC_GTM_ID:-}
     ports:
       - "3000:3000"
     env_file:
@@ -60,6 +60,8 @@ volumes:
   mongodb-data:
     driver: local
   redis-data:
+    driver: local
+  data:
     driver: local
   kali-data:
     driver: local

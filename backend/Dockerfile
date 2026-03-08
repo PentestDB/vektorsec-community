@@ -13,6 +13,8 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY . .
 
+RUN mkdir -p /srv/data
+
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 RUN pnpm run build

@@ -11,6 +11,7 @@ import {
   finalizeSummary,
   analyzeAllSubprocess,
   finalizeTodoAndResetHistory,
+  agenticContinue,
 } from "@/services/session.service";
 import {
   completeSubprocess,
@@ -241,10 +242,30 @@ const SessionMainPage = ({ session_id }) => {
     },
   });
 
+  const agenticContinueMutation = useMutation(agenticContinue, {
+    onSuccess: async (data) => {
+      console.log("[agenticContinue] completed:", data);
+      await refreshSessionData();
+    },
+    onError: (err) => {
+      console.log("[agenticContinue] error:", err);
+      notification.error({
+        message: "Agentic loop error",
+        description: err?.response?.data?.message ?? "Something went wrong",
+      });
+    },
+  });
+
   const storeCommandMutation = useMutation(storeCommandOutput, {
     onSuccess: async (data) => {
       setStoringOutput(false);
       await queryClient.invalidateQueries(["get-session-data", session_id]);
+      await queryClient.invalidateQueries([
+        "get-session-loop-history",
+        session_id,
+      ]);
+
+      agenticContinueMutation.mutate({ sessionId: session_id });
     },
   });
 
@@ -253,6 +274,7 @@ const SessionMainPage = ({ session_id }) => {
     {
       onSuccess: async (data) => {
         await refreshSessionData();
+        agenticContinueMutation.mutate({ sessionId: session_id });
       },
     }
   );
@@ -358,19 +380,23 @@ const SessionMainPage = ({ session_id }) => {
       await refreshSessionData();
       if (data.type === "command") {
         setStoringOutput(true);
-        console.log("[DEBUG] terminalSocket at command emit:", terminalSocket, session_id);
         if (!terminalSocket) {
           message.error("Terminal connection is not ready. Please wait and try again.");
           setStoringOutput(false);
           return;
         }
-        terminalSocket.emit(
-          `terminal-input-${session_id}`,
-          `run_command:bugbase:::${data.command}`
-        );
+        terminalSocket.emit(`exec_command-${session_id}`, {
+          command: data.command,
+          commandId: data.commandId ?? activeCommands?.[0]?._id,
+        });
         return;
       } else {
         await queryClient.invalidateQueries(["get-session-data", session_id]);
+        await queryClient.invalidateQueries([
+          "get-session-loop-history",
+          session_id,
+        ]);
+        agenticContinueMutation.mutate({ sessionId: session_id });
         return;
       }
     },

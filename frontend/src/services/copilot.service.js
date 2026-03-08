@@ -112,7 +112,7 @@ export const startNetcat = async (body) => {
   return res.data;
 };
 
-// OpenVPN
+// OpenVPN — legacy (kept for backward compat)
 export const uploadOpenVPN = async (data) => {
   const res = await apiClient.post(`/copilot/upload-openvpn`, data, {
     headers: {
@@ -139,6 +139,44 @@ export const disconnectOpenVPN = async (body) => {
 
 export const checkVPNStatus = async (body) => {
   const res = await apiClient.post(`/copilot/check-openvpn-status`, body);
+  return res.data;
+};
+
+// VPN — multi-profile endpoints
+export const uploadVPNProfile = async (data) => {
+  const res = await apiClient.post(`/copilot/vpn/profiles/upload`, data, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+};
+
+export const listVPNProfiles = async () => {
+  const res = await apiClient.get(`/copilot/vpn/profiles`);
+  return res.data;
+};
+
+export const deleteVPNProfile = async (body) => {
+  const res = await apiClient.post(`/copilot/vpn/profiles/delete`, body);
+  return res.data;
+};
+
+export const connectVPNProfile = async (body) => {
+  const res = await apiClient.post(`/copilot/vpn/connect`, body);
+  return res.data;
+};
+
+export const disconnectVPNConnection = async (body) => {
+  const res = await apiClient.post(`/copilot/vpn/disconnect`, body);
+  return res.data;
+};
+
+export const disconnectAllVPNConnections = async (body) => {
+  const res = await apiClient.post(`/copilot/vpn/disconnect-all`, body);
+  return res.data;
+};
+
+export const getVPNStatus = async (body) => {
+  const res = await apiClient.post(`/copilot/vpn/status`, body);
   return res.data;
 };
 

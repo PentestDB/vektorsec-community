@@ -24,6 +24,10 @@ const SettingsLayout = ({ children }) => {
         return "Usage History";
       case "/settings/storage":
         return "Storage";
+      case "/settings/models":
+        return "Models";
+      case "/settings/ssh":
+        return "SSH / Exploit Box";
       case "/settings/billing/choose-plan":
         return "Choose plan";
       default:
