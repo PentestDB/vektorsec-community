@@ -15,6 +15,7 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
   const toolOutputRafRef = useRef(null);
   const thinkingBufferRef = useRef(null);
   const thinkingRafRef = useRef(null);
+  const slashStreamRef = useRef(null);
 
   const flushToolOutputBuffer = useCallback(() => {
     const buffer = toolOutputBufferRef.current;
@@ -314,17 +315,45 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           if (data.action === "reset_state") {
             setAgentState("idle");
           }
+          const id = data.id || `slash_result_${Date.now()}`;
+          if (data.streaming) {
+            slashStreamRef.current = { id, content: data.content || "" };
+          }
           setMessages((prev) => [
             ...prev,
             {
-              id: `slash_result_${Date.now()}`,
+              id,
               role: "slash_command_result",
               command: data.command,
               content: data.content,
               success: data.success,
+              streaming: !!data.streaming,
               timestamp: new Date(),
             },
           ]);
+        })
+        .onEvent("slash_command_stream", (data) => {
+          const ref = slashStreamRef.current;
+          if (ref && ref.id === data.id) {
+            ref.content += data.content;
+            const snapshot = ref.content;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === data.id ? { ...m, content: snapshot } : m,
+              ),
+            );
+          }
+        })
+        .onEvent("slash_command_done", (data) => {
+          const finalContent = slashStreamRef.current?.content || data.content;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === data.id
+                ? { ...m, content: finalContent, streaming: false }
+                : m,
+            ),
+          );
+          slashStreamRef.current = null;
         })
         .onEvent("summarizing", (data) => {
           setMessages((prev) => [

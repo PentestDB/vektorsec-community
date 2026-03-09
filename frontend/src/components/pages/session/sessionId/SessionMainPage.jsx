@@ -74,12 +74,13 @@ const SessionMainPage = ({ session_id }) => {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}>
       <div
         id="session-split-container"
         style={{
           display: "flex",
           flex: 1,
+          minHeight: 0,
           overflow: "hidden",
           position: "relative",
         }}
@@ -88,6 +89,7 @@ const SessionMainPage = ({ session_id }) => {
         <div style={{
           flex: 1,
           minWidth: 0,
+          minHeight: 0,
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -114,6 +116,7 @@ const SessionMainPage = ({ session_id }) => {
         <div style={{
           width: `${shellPanelWidth}%`,
           minWidth: 250,
+          minHeight: 0,
           overflow: "hidden",
           flexShrink: 0,
           display: "flex",

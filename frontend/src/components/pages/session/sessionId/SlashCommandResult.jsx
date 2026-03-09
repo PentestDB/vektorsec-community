@@ -1,4 +1,3 @@
-import React from "react";
 import styles from "@/styles/components/Chat.module.scss";
 
 function renderMarkdown(text) {
@@ -36,7 +35,7 @@ function renderMarkdown(text) {
   });
 }
 
-const SlashCommandResult = React.memo(function SlashCommandResult({ message }) {
+export default function SlashCommandResult({ message }) {
   const { command, content, success } = message;
 
   return (
@@ -50,6 +49,4 @@ const SlashCommandResult = React.memo(function SlashCommandResult({ message }) {
       </div>
     </div>
   );
-});
-
-export default SlashCommandResult;
+}

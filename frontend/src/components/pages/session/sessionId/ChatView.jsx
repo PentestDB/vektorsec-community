@@ -20,6 +20,7 @@ import {
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const shouldStickToBottomRef = useRef(true);
 
   const {
     messages,
@@ -38,6 +39,19 @@ export default function ChatView({ sessionId }) {
     sessionId,
     onComplete: () => {},
   });
+
+  const scrollToBottom = useCallback((behavior = "auto") => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const updateStickToBottom = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    shouldStickToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  }, []);
 
   const { isLoading: historyLoading } = useQuery(
     ["agent-history", sessionId],
@@ -59,8 +73,9 @@ export default function ChatView({ sessionId }) {
         if (data?.pendingManualExecution) {
           setPendingManualExecution(data.pendingManualExecution);
         }
+        shouldStickToBottomRef.current = true;
         setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+          scrollToBottom();
         }, 50);
       },
       onError: (err) => {
@@ -75,13 +90,10 @@ export default function ChatView({ sessionId }) {
   );
 
   useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-    if (isNearBottom) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (shouldStickToBottomRef.current) {
+      scrollToBottom();
     }
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   const handleSend = useCallback(
     (message) => {
@@ -141,7 +153,11 @@ export default function ChatView({ sessionId }) {
 
   return (
     <div className={styles.chatContainer}>
-      <div className={styles.messagesArea} ref={messagesContainerRef}>
+      <div
+        className={styles.messagesArea}
+        ref={messagesContainerRef}
+        onScroll={updateStickToBottom}
+      >
         {isEmpty && (
           <div className={styles.emptyState}>
             <Image

@@ -979,8 +979,9 @@ export const repairVNC = async (req: Request, res: Response) => {
     // Install missing packages
     if ((fix === "all" || fix === "vnc_server") && (vncMissing || websockifyMissing)) {
       log.push("Installing missing VNC/noVNC packages...");
+      console.log("[VNC Repair] Installing packages (vncMissing=%s, websockifyMissing=%s)", vncMissing, websockifyMissing);
       try {
-        await execSSHCommand(
+        const installOut = await execSSHCommand(
           "export DEBIAN_FRONTEND=noninteractive && " +
           "sudo apt-get update -qq 2>&1 && " +
           "sudo apt-get install -y -qq " +
@@ -988,11 +989,13 @@ export const repairVNC = async (req: Request, res: Response) => {
           "novnc python3-websockify " +
           "xterm xfonts-base x11-xserver-utils dbus-x11 2>&1 || true"
         );
+        console.log("[VNC Repair] Package install output:", installOut.trim().slice(-500));
         log.push("Package installation completed");
 
         let found = parseVncPath(await execSSHCommand(VNC_SEARCH_CMD));
         if (!found) {
           log.push("tigervnc not found, trying tightvncserver fallback...");
+          console.log("[VNC Repair] tigervnc not found, trying tightvncserver...");
           await execSSHCommand(
             "export DEBIAN_FRONTEND=noninteractive && " +
             "sudo apt-get install -y -qq tightvncserver 2>&1 || true"
@@ -1003,11 +1006,14 @@ export const repairVNC = async (req: Request, res: Response) => {
           vncBin = found;
           vncMissing = false;
           log.push(`VNC binary now available: ${vncBin}`);
+          console.log(`[VNC Repair] VNC binary now available: ${vncBin}`);
         } else {
           log.push("WARNING: VNC binary still not found after install");
+          console.warn("[VNC Repair] WARNING: VNC binary still not found after install");
         }
       } catch (e: any) {
         log.push(`Package install failed: ${e.message}`);
+        console.error("[VNC Repair] Package install failed:", e.message);
       }
     }
 
@@ -1021,11 +1027,13 @@ export const repairVNC = async (req: Request, res: Response) => {
       );
       const found = parseVncPath(raw);
       if (found) vncPasswdBin = found;
+      console.log(`[VNC Repair] vncpasswd binary: ${vncPasswdBin}`);
     } catch { /* use default */ }
 
     if (fix === "all" || fix === "vnc_server") {
       const isXvncDirect = vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
       const isX11vnc = vncBin.endsWith("x11vnc");
+      console.log(`[VNC Repair] VNC type: isXvncDirect=${isXvncDirect}, isX11vnc=${isX11vnc}, binary=${vncBin}`);
 
       try {
         await execSSHCommand(
@@ -1034,8 +1042,10 @@ export const repairVNC = async (req: Request, res: Response) => {
           `chmod +x ~/.vnc/xstartup`
         );
         log.push(`Configured xstartup with DISPLAY=${VNC_DISPLAY}`);
+        console.log(`[VNC Repair] Configured xstartup with DISPLAY=${VNC_DISPLAY}`);
       } catch (e: any) {
         log.push(`xstartup config failed: ${e.message}`);
+        console.error("[VNC Repair] xstartup config failed:", e.message);
       }
 
       try {
@@ -1046,8 +1056,10 @@ export const repairVNC = async (req: Request, res: Response) => {
           "for display in {1..99}; do vncserver -kill \":$display\" 2>/dev/null || true; done"
         );
         log.push("Killed all existing VNC/Xvfb processes");
+        console.log("[VNC Repair] Killed all existing VNC/Xvfb processes");
       } catch (e: any) {
         log.push(`Kill VNC failed: ${e.message}`);
+        console.error("[VNC Repair] Kill VNC failed:", e.message);
       }
 
       if (savedPassword && !isX11vnc) {
@@ -1057,13 +1069,16 @@ export const repairVNC = async (req: Request, res: Response) => {
             `echo '${escaped}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
           );
           log.push("Set VNC password");
+          console.log("[VNC Repair] Set VNC password");
         } catch (e: any) {
           log.push(`Set password failed: ${e.message}`);
+          console.error("[VNC Repair] Set password failed:", e.message);
         }
       }
 
       try {
         if (isXvncDirect) {
+          console.log(`[VNC Repair] Starting Xvnc directly: ${vncBin} ${VNC_DISPLAY} rfbport=${VNC_RFBPORT}`);
           await execSSHCommand(
             `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
             `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
@@ -1072,29 +1087,54 @@ export const repairVNC = async (req: Request, res: Response) => {
           await new Promise((r) => setTimeout(r, 1500));
           await execSSHCommand(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
           log.push(`Started Xvnc directly on ${VNC_DISPLAY}`);
+          console.log(`[VNC Repair] Started Xvnc directly on ${VNC_DISPLAY}`);
         } else if (isX11vnc) {
+          console.log(`[VNC Repair] Starting x11vnc flow: Xvfb ${VNC_DISPLAY} + x11vnc rfbport=${VNC_RFBPORT}`);
           await execSSHCommand(
             "command -v Xvfb >/dev/null 2>&1 || " +
             "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
           );
           await execSSHCommand(`Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`);
           await new Promise((r) => setTimeout(r, 2000));
+
+          // Verify Xvfb started
+          const xvfbCheck = await execSSHCommand(
+            `ps aux 2>/dev/null | grep 'Xvfb.*${VNC_DISPLAY}' | grep -v grep || true`
+          );
+          console.log("[VNC Repair] Xvfb process check:", xvfbCheck.trim() || "(not found)");
+
           await execSSHCommand(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
           const escaped = (savedPassword || "").replace(/'/g, "'\\''");
           await execSSHCommand(
             `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escaped}' -forever -shared -noxdamage > /dev/null 2>&1 &`
           );
           await new Promise((r) => setTimeout(r, 1500));
-          log.push(`Started x11vnc with Xvfb on ${VNC_DISPLAY}`);
+
+          // Verify x11vnc started and port is listening
+          const portCheck = await execSSHCommand(
+            `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || echo NOTLISTENING`
+          );
+          console.log(`[VNC Repair] Port ${VNC_RFBPORT} check after x11vnc start:`, portCheck.trim());
+          if (portCheck.includes("NOTLISTENING")) {
+            log.push(`WARNING: x11vnc started but port ${VNC_RFBPORT} not listening`);
+            console.warn(`[VNC Repair] x11vnc started but port ${VNC_RFBPORT} not listening`);
+          } else {
+            log.push(`Started x11vnc with Xvfb on ${VNC_DISPLAY}`);
+            console.log(`[VNC Repair] Started x11vnc with Xvfb on ${VNC_DISPLAY}`);
+          }
         } else {
+          console.log(`[VNC Repair] Starting via vncserver wrapper: ${vncBin} ${VNC_DISPLAY}`);
           await execSSHCommand(`${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`);
           log.push(`Started VNC server on ${VNC_DISPLAY}`);
+          console.log(`[VNC Repair] Started VNC server on ${VNC_DISPLAY}`);
         }
         await execSSHCommand(
           `grep -q "export DISPLAY=${VNC_DISPLAY}" ~/.bashrc 2>/dev/null || echo "export DISPLAY=${VNC_DISPLAY}" >> ~/.bashrc`
         );
+        console.log(`[VNC Repair] Ensured DISPLAY=${VNC_DISPLAY} in ~/.bashrc`);
       } catch (e: any) {
         log.push(`Start VNC failed: ${e.message}`);
+        console.error("[VNC Repair] Start VNC failed:", e.message);
       }
     }
 
@@ -1102,8 +1142,10 @@ export const repairVNC = async (req: Request, res: Response) => {
       try {
         await execSSHCommand(`pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`);
         log.push("Killed existing websockify");
+        console.log("[VNC Repair] Killed existing websockify");
       } catch (e: any) {
         log.push(`Kill websockify failed: ${e.message}`);
+        console.error("[VNC Repair] Kill websockify failed:", e.message);
       }
 
       try {
@@ -1112,17 +1154,21 @@ export const repairVNC = async (req: Request, res: Response) => {
         );
         await new Promise((resolve) => setTimeout(resolve, 1500));
         log.push(`Started websockify on port ${WEBSOCKIFY_PORT}`);
+        console.log(`[VNC Repair] Started websockify ${WEBSOCKIFY_PORT} → localhost:${VNC_RFBPORT}`);
       } catch (e: any) {
         log.push(`Start websockify failed: ${e.message}`);
+        console.error("[VNC Repair] Start websockify failed:", e.message);
       }
     }
 
+    console.log("[VNC Repair] Repair steps done. Running post-repair diagnostics...");
     const checks = await runDiagnostics();
     const allPassed = checks.every((c) => c.status === "pass");
+    console.log(`[VNC Repair] Post-repair all passed: ${allPassed}. Log:`, log);
 
     return res.status(200).json({ checks, allPassed, repairLog: log });
   } catch (error: any) {
-    console.error("VNC repair error:", error);
+    console.error("[VNC Repair] Top-level error:", error);
     return res.status(400).json({
       message: error?.message || "Repair failed. Ensure SSH is configured.",
     });

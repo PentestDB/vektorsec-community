@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel, { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { SSEWriter } from "./agent.service";
-import { invoke_llm } from "../utils/llm/providers";
+import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "./session.lifecycle";
 
 export interface SlashCommandDef {
@@ -115,6 +115,75 @@ type CommandHandler = (ctx: {
   sse: SSEWriter;
 }) => Promise<void>;
 
+const CHARS_PER_TOKEN_ESTIMATE = 3.5;
+const SUMMARIZE_PROMPT_OVERHEAD_TOKENS = 500;
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
+}
+
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  "gpt-4o": 128_000,
+  "gpt-4o-mini": 128_000,
+  "gpt-4-turbo": 128_000,
+  "gpt-4": 8_192,
+  "gpt-3.5-turbo": 16_385,
+  "claude-sonnet-4-20250514": 200_000,
+  "claude-3-5-sonnet-20241022": 200_000,
+  "claude-3-opus-20240229": 200_000,
+  "claude-3-haiku-20240307": 200_000,
+};
+const DEFAULT_CONTEXT_LIMIT = 128_000;
+
+async function getMaxInputTokens(): Promise<number> {
+  const config = await getProvider();
+  const limit = Object.entries(MODEL_CONTEXT_LIMITS).find(([k]) =>
+    config.model.includes(k),
+  )?.[1] ?? DEFAULT_CONTEXT_LIMIT;
+  return Math.floor(limit * 0.6) - SUMMARIZE_PROMPT_OVERHEAD_TOKENS;
+}
+
+function formatMessageForSummary(m: any): string {
+  if (m.role === "assistant" && m.toolCalls?.length) {
+    const toolDesc = m.toolCalls
+      .map((tc: any) => `[Tool: ${tc.name}](${tc.arguments})`)
+      .join(", ");
+    return `Assistant: ${m.content ?? ""} ${toolDesc}`;
+  }
+  if (m.role === "tool") {
+    return `Tool Result (${m.toolName ?? "unknown"}): ${m.content?.slice(0, 500) ?? ""}`;
+  }
+  return `${m.role}: ${m.content ?? ""}`;
+}
+
+/**
+ * Builds conversation text for the summarize prompt, keeping the latest
+ * messages when the full history would exceed the model's input token budget.
+ */
+async function buildConversationTextForSummarize(messages: any[]): Promise<string> {
+  const maxTokens = await getMaxInputTokens();
+
+  const formatted = messages.map(formatMessageForSummary);
+
+  const fullText = formatted.join("\n\n");
+  if (estimateTokens(fullText) <= maxTokens) {
+    return fullText;
+  }
+
+  const kept: string[] = [];
+  let tokenBudget = maxTokens;
+
+  for (let i = formatted.length - 1; i >= 0; i--) {
+    const entry = formatted[i];
+    const entryTokens = estimateTokens(entry) + 2;
+    if (tokenBudget - entryTokens < 0) break;
+    kept.unshift(entry);
+    tokenBudget -= entryTokens;
+  }
+
+  return kept.join("\n\n");
+}
+
 const commandHandlers: Record<string, CommandHandler> = {
   help: async ({ sse }) => {
     const lines = SLASH_COMMANDS.map(
@@ -209,24 +278,22 @@ const commandHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    const conversationText = nonSystemMessages
-      .map((m: any) => {
-        if (m.role === "assistant" && m.toolCalls?.length) {
-          const toolDesc = m.toolCalls
-            .map((tc: any) => `[Tool: ${tc.name}](${tc.arguments})`)
-            .join(", ");
-          return `Assistant: ${m.content ?? ""} ${toolDesc}`;
-        }
-        if (m.role === "tool") {
-          return `Tool Result (${m.toolName ?? "unknown"}): ${m.content?.slice(0, 500) ?? ""}`;
-        }
-        return `${m.role}: ${m.content ?? ""}`;
-      })
-      .join("\n\n");
+    const conversationText = await buildConversationTextForSummarize(nonSystemMessages);
 
+    const resultId = `slash_result_${Date.now()}`;
     sse.write("slash_command_ack", { command: "summarize", message: "Generating summary..." });
 
-    const result = await invoke_llm({
+    sse.write("slash_command_result", {
+      command: "summarize",
+      success: true,
+      content: "",
+      streaming: true,
+      id: resultId,
+    });
+
+    let accumulated = "";
+
+    const result = await invoke_llm_streaming({
       messages: [
         {
           role: "system",
@@ -237,12 +304,22 @@ const commandHandlers: Record<string, CommandHandler> = {
       temperature: 0.3,
       tags: ["slash-command", "summarize"],
       generationName: "slash-summarize",
+      onDelta(delta) {
+        if (delta.type === "text" && delta.content) {
+          accumulated += delta.content;
+          sse.write("slash_command_stream", {
+            command: "summarize",
+            id: resultId,
+            content: delta.content,
+          });
+        }
+      },
     });
 
-    sse.write("slash_command_result", {
+    sse.write("slash_command_done", {
       command: "summarize",
-      success: true,
-      content: result.content ?? "Failed to generate summary.",
+      id: resultId,
+      content: accumulated || result.content || "Failed to generate summary.",
     });
     sse.write("done", { message: "Slash command completed" });
     sse.end();

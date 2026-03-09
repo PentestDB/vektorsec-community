@@ -153,6 +153,37 @@ const initializeApp = async () => {
       res.status(200).send("OK");
     });
 
+    app.get("/api/test/google-search", async (_req, res) => {
+      try {
+        const apiKey = await getSecrets("GOOGLE-API-KEY");
+        const cx = await getSecrets("CUSTOM-SEARCH-ENGINE-ID");
+
+        if (!apiKey || !cx) {
+          const missing = [!apiKey && "GOOGLE-API-KEY", !cx && "CUSTOM-SEARCH-ENGINE-ID"].filter(Boolean);
+          console.error("[Google Search Test] Missing env vars:", missing.join(", "));
+          return res.status(500).json({ success: false, error: `Missing configuration: ${missing.join(", ")}` });
+        }
+
+        const { google: googleapis } = require("googleapis");
+        const customSearch = googleapis.customsearch("v1");
+        const result = await customSearch.cse.list({ auth: apiKey, cx, q: "test", num: 1 });
+
+        const items = result.data.items ?? [];
+        console.log("[Google Search Test] Success -", items.length, "result(s) returned");
+        return res.status(200).json({ success: true, resultCount: items.length, items });
+      } catch (err: any) {
+        console.error("[Google Search Test] Error:", err.message);
+        if (err?.response?.data) {
+          console.error("[Google Search Test] API response:", JSON.stringify(err.response.data, null, 2));
+        }
+        return res.status(500).json({
+          success: false,
+          error: err.message,
+          details: err?.response?.data || null,
+        });
+      }
+    });
+
     // Routes
     app.use("/api/auth", authRoutes);
     app.use("/api/task", taskRoutes);
