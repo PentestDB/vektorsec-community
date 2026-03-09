@@ -5,6 +5,7 @@ import {
   detectCapabilities,
   disconnectAnthropicOAuth,
   exchangeAnthropicOAuth,
+  getAvailableModels,
   getCapabilities,
   getModelConfig,
   getSSHConfig,
@@ -45,6 +46,7 @@ router.post("/save-user-information", [verifySess], saveUserInformation);
 router.get("/get-model-config", [verifySess], getModelConfig);
 router.post("/update-model-config", [verifySess], updateModelConfig);
 router.post("/delete-model-config", [verifySess], deleteModelConfig);
+router.get("/available-models", [verifySess], getAvailableModels);
 
 router.post("/anthropic-oauth/initiate", [verifySess], initiateAnthropicOAuth);
 router.post("/anthropic-oauth/exchange", [verifySess], exchangeAnthropicOAuth);

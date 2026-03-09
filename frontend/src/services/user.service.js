@@ -59,6 +59,11 @@ export const deleteModelConfig = async (body) => {
   return res.data;
 };
 
+export const getAvailableModels = async () => {
+  const res = await apiClient.get("/user/available-models");
+  return res.data;
+};
+
 export const initiateAnthropicOAuth = async (body) => {
   const res = await apiClient.post("/user/anthropic-oauth/initiate", body);
   return res.data;

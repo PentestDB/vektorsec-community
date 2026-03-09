@@ -43,6 +43,10 @@
   gap: 1rem;
   color: var(--secondary-text, #888);
 
+  .emptyStateLogo {
+    flex-shrink: 0;
+  }
+
   h2 {
     font-size: 1.5rem;
     font-weight: 600;

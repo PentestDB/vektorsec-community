@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useQuery } from "react-query";
 import { Button, notification } from "antd";
+import Image from "next/image";
 import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
+import copilotLogoHead from "@/assets/copilot-logo.svg";
 import ChatInput from "./ChatInput";
 import SlashCommandResult from "./SlashCommandResult";
 import ManualExecutionBlock from "./ManualExecutionBlock";
@@ -142,6 +144,13 @@ export default function ChatView({ sessionId }) {
       <div className={styles.messagesArea} ref={messagesContainerRef}>
         {isEmpty && (
           <div className={styles.emptyState}>
+            <Image
+              src={copilotLogoHead}
+              alt=""
+              width={76}
+              height={80}
+              className={styles.emptyStateLogo}
+            />
             <h2>Pentest Copilot</h2>
             <p>
               Describe your target and goals below. The agent will autonomously

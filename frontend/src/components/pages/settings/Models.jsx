@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Form,
   Input,
@@ -34,43 +34,88 @@ import {
   getModelConfig,
   updateModelConfig,
   deleteModelConfig,
+  getAvailableModels,
   initiateAnthropicOAuth,
   exchangeAnthropicOAuth,
   disconnectAnthropicOAuth,
 } from "@/services/user.service";
 
-const PROVIDERS = [
-  {
-    value: "openai",
+const PROVIDER_META = {
+  openai: {
     label: "OpenAI",
-    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini", "o3-mini"],
     placeholder: "sk-...",
     hint: "Uses the OpenAI API directly. Best for GPT-4o and o-series models.",
     keyURL: "https://platform.openai.com/api-keys",
     keyLabel: "Get OpenAI API Key",
     supportsOAuth: false,
   },
-  {
-    value: "anthropic",
+  anthropic: {
     label: "Anthropic (Claude)",
-    models: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
     placeholder: "sk-ant-...",
     hint: "Uses Anthropic's API via their OpenAI-compatible endpoint.",
     keyURL: "https://console.anthropic.com/settings/keys",
     keyLabel: "Get Claude API Key",
     supportsOAuth: true,
   },
-  {
-    value: "openai-compatible",
-    label: "OpenAI-Compatible",
-    models: [],
-    placeholder: "API key",
-    hint: "Any provider with an OpenAI-compatible API — Groq, Together, Ollama, vLLM, LiteLLM, OpenRouter.",
-    keyURL: null,
-    keyLabel: null,
+  google: {
+    label: "Google",
+    placeholder: "AI...",
+    hint: "Google AI (Gemini) models.",
+    keyURL: "https://aistudio.google.com/apikey",
+    keyLabel: "Get Google AI API Key",
     supportsOAuth: false,
   },
+  mistralai: {
+    label: "Mistral AI",
+    placeholder: "API key",
+    hint: "Mistral AI models.",
+    keyURL: "https://console.mistral.ai/api-keys",
+    keyLabel: "Get Mistral API Key",
+    supportsOAuth: false,
+  },
+};
+
+const FALLBACK_PROVIDERS = [
+  { value: "openai", label: "OpenAI", models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1", "o3-mini"] },
+  { value: "anthropic", label: "Anthropic (Claude)", models: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"] },
 ];
+
+const OPENAI_COMPATIBLE_ENTRY = {
+  value: "openai-compatible",
+  label: "OpenAI-Compatible",
+  models: [],
+  placeholder: "API key",
+  hint: "Any provider with an OpenAI-compatible API — Groq, Together, Ollama, vLLM, LiteLLM, OpenRouter, or any other custom endpoint.",
+  keyURL: null,
+  keyLabel: null,
+  supportsOAuth: false,
+};
+
+function buildProviders(catalog) {
+  if (!catalog?.providers?.length) {
+    return [
+      ...FALLBACK_PROVIDERS.map((fb) => ({ ...fb, ...(PROVIDER_META[fb.value] || {}), supportsOAuth: PROVIDER_META[fb.value]?.supportsOAuth ?? false })),
+      OPENAI_COMPATIBLE_ENTRY,
+    ];
+  }
+
+  const providers = catalog.providers.map((cp) => {
+    const meta = PROVIDER_META[cp.id] || {};
+    return {
+      value: cp.id,
+      label: meta.label || cp.name,
+      models: cp.models.map((m) => m.modelId),
+      placeholder: meta.placeholder || "API key",
+      hint: meta.hint || null,
+      keyURL: meta.keyURL || null,
+      keyLabel: meta.keyLabel || null,
+      supportsOAuth: meta.supportsOAuth ?? false,
+    };
+  });
+
+  providers.push(OPENAI_COMPATIBLE_ENTRY);
+  return providers;
+}
 
 const OAuthCodeModal = ({ open, onCancel, onSubmit, loading }) => {
   const [code, setCode] = useState("");
@@ -119,12 +164,18 @@ const ModelsPage = () => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("model-config", getModelConfig);
+  const { data: catalog } = useQuery("available-models", getAvailableModels, {
+    staleTime: 6 * 60 * 60 * 1000,
+    cacheTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
   const provider = Form.useWatch("provider", form);
   const [authMethod, setAuthMethod] = useState(data?.authMethod === "oauth" ? "oauth" : "api_key");
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [oauthState, setOauthState] = useState(null);
 
-  const providerDef = PROVIDERS.find((p) => p.value === provider);
+  const providers = useMemo(() => buildProviders(catalog), [catalog]);
+  const providerDef = providers.find((p) => p.value === provider);
   const isAnthropicOAuth = provider === "anthropic" && authMethod === "oauth";
   const isOAuthConnected = data?.oauthConnected && data?.authMethod === "oauth";
 
@@ -247,7 +298,7 @@ const ModelsPage = () => {
                 style={{ width: "100%" }}
                 allowClear
                 placeholder="Select or type a model"
-                options={PROVIDERS.find((p) => p.value === "anthropic").models.map((m) => ({ value: m, label: m }))}
+                options={(providers.find((p) => p.value === "anthropic")?.models || []).map((m) => ({ value: m, label: m }))}
                 popupMatchSelectWidth={false}
                 filterOption={(input, option) => option.value.toLowerCase().includes(input.toLowerCase())}
                 onChange={(model) => {
@@ -276,8 +327,10 @@ const ModelsPage = () => {
             <Col span={12}>
               <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
                 <Select
-                  options={PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
+                  showSearch
+                  options={providers.map((p) => ({ value: p.value, label: p.label }))}
                   popupMatchSelectWidth={false}
+                  filterOption={(input, option) => option.label.toLowerCase().includes(input.toLowerCase())}
                   onChange={() => {
                     form.setFieldValue("model", undefined);
                     form.setFieldValue("apiKey", "");
@@ -412,11 +465,11 @@ const ModelsPage = () => {
       <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
 
       <div className={styles.notesSection}>
-        <strong>Supported Providers</strong>
+        <strong>Available Providers</strong>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-          {["OpenAI", "Anthropic", "Groq", "Together AI", "OpenRouter", "Ollama", "vLLM", "LiteLLM"].map((p) => (
+          {providers.map((p) => (
             <Tag
-              key={p}
+              key={p.value}
               style={{
                 background: "var(--surface-hover)",
                 border: "1px solid var(--border-color-100)",
@@ -424,7 +477,7 @@ const ModelsPage = () => {
                 fontSize: "0.65rem",
               }}
             >
-              {p}
+              {p.label}{p.models.length > 0 ? ` (${p.models.length})` : ""}
             </Tag>
           ))}
         </div>

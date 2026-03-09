@@ -3,6 +3,7 @@ import crypto from "crypto";
 import axios from "axios";
 import moment from "moment";
 import { VNC_DISPLAY, VNC_RFBPORT, WEBSOCKIFY_PORT } from "../config/constants";
+import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
 
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
@@ -1222,5 +1223,15 @@ export const saveUserInformation = async (req: Request, res: Response) => {
   } catch (error) {
     console.log(error);
     return res.status(400).json({ message: "Error! failed to save details" });
+  }
+};
+
+export const getAvailableModels = async (_req: Request, res: Response) => {
+  try {
+    const providers = await fetchModelsCatalog();
+    return res.status(200).json({ providers });
+  } catch (error: any) {
+    console.error("[user] Failed to fetch available models:", error.message);
+    return res.status(500).json({ message: "Failed to fetch available models" });
   }
 };
