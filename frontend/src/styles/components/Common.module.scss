@@ -196,6 +196,7 @@
   position: sticky;
   top: 0;
   height: 4rem;
+  flex-shrink: 0;
   background-color: var(--primary-bg);
   display: flex;
   justify-content: space-between;
@@ -204,11 +205,25 @@
   z-index: 10;
   border-bottom: 1px solid var(--border-subtle);
 
+  .sessionIdGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .sessionName {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-text);
+    letter-spacing: -0.01em;
+  }
+
   .sessionId {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: var(--primary-purple);
     font-family: "JetBrains Mono", monospace;
+    opacity: 0.8;
   }
 
   .options {
@@ -259,6 +274,38 @@
     .username {
       font-weight: 400;
       font-size: 0.85rem;
+    }
+
+    .headerIconBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-subtle);
+      background: transparent;
+      color: var(--secondary-text);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+
+      &:hover {
+        color: var(--primary-text);
+        background: var(--surface-hover);
+        border-color: var(--border-default);
+      }
+    }
+
+    .headerLogoutBtn {
+      color: var(--danger);
+      border-color: transparent;
+
+      &:hover {
+        color: var(--danger);
+        background: rgba(255, 62, 62, 0.1);
+        border-color: rgba(255, 62, 62, 0.2);
+      }
     }
 
     .connectVPNbtn {

@@ -5,7 +5,6 @@ import { resetSessions } from "@/store/user.slice";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { AuthContextProvider } from "@/components/common/auth/AuthContext";
-import TerminalComponent from "@/components/common/TerminalComponent";
 import { useBeforeunload } from "react-beforeunload";
 import { resetToInitialState } from "@/store/socket.slice";
 import RefreshAlert from "@/components/common/RefreshAlert";
@@ -16,9 +15,7 @@ const SessionLayout = ({ children }) => {
   const dispatch = useDispatch();
   const pathname = usePathname();
   const { session_id } = useParams();
-  const { sessions, status, readyToConnect } = useSelector(
-    (state) => state.user
-  );
+  const { sessions } = useSelector((state) => state.user);
   const { getAllSockets, clearAllSockets } = useSocketContext();
 
   useBeforeunload(
@@ -34,7 +31,6 @@ const SessionLayout = ({ children }) => {
   useEffect(() => {
     if (sessions.length && !validSession) {
       dispatch(resetSessions());
-
       router.replace("/dashboard");
     }
 
@@ -49,10 +45,6 @@ const SessionLayout = ({ children }) => {
     <AuthContextProvider>
       <RefreshAlert />
       {children}
-      <TerminalComponent
-        show={status === "running" && !pathname.includes("/gui")}
-        readyToConnect={readyToConnect}
-      />
     </AuthContextProvider>
   );
 };

@@ -79,257 +79,163 @@ const SSHPage = () => {
 
   return (
     <div className={styles.settingsContainer}>
-      <div style={{ maxWidth: 620 }}>
-        <p
-          style={{
-            color: "var(--secondary-text)",
-            fontSize: "0.78rem",
-            margin: "0 0 1.5rem 0",
-            lineHeight: 1.6,
-          }}
-        >
-          Configure SSH connection details for your exploit box. The copilot
-          uses this to execute commands remotely during pentesting sessions.
-        </p>
-
-        <div
-          style={{
-            background: "var(--secondary-bg)",
-            border: "1px solid var(--border-color-100)",
-            borderRadius: 8,
-            padding: "1.25rem 1.5rem",
-            marginBottom: "1.5rem",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "1rem",
-            }}
+      <div className={styles.statusRow}>
+        {configured ? (
+          <Tag icon={<CheckCircleFilled />} color="success">Configured</Tag>
+        ) : (
+          <Tag icon={<WarningOutlined />} color="warning">Not Configured</Tag>
+        )}
+        {configured && (
+          <Button
+            type="default"
+            size="small"
+            icon={<TbTerminal2 />}
+            onClick={() => setTestModalOpen(true)}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  color: "var(--primary-text)",
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                }}
-              >
-                Exploit Box Connection
-              </span>
-              {configured && (
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<TbTerminal2 />}
-                  onClick={() => setTestModalOpen(true)}
-                  style={{ fontSize: "0.75rem" }}
-                >
-                  Test connectivity
-                </Button>
-              )}
-              {configured ? (
-                <Tag
-                  icon={<CheckCircleFilled />}
-                  color="success"
-                  style={{ fontSize: "0.65rem", margin: 0 }}
-                >
-                  Configured
-                </Tag>
-              ) : (
-                <Tag
-                  icon={<WarningOutlined />}
-                  color="warning"
-                  style={{ fontSize: "0.65rem", margin: 0 }}
-                >
-                  Not Configured
-                </Tag>
-              )}
-            </div>
-          </div>
+            Test connectivity
+          </Button>
+        )}
+      </div>
 
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={onFinish}
-            initialValues={{
-              host: data?.host || "",
-              port: parseInt(data?.port, 10) || 22,
-              username: data?.username || "",
-              authMethod: data?.authMethod || "password",
-            }}
-          >
-            <Row gutter={16}>
-              <Col span={16}>
-                <Form.Item
-                  label="Host"
-                  name="host"
-                  rules={[{ required: true, message: "SSH host is required" }]}
-                >
-                  <Input placeholder="e.g. 192.168.1.100 or kali.local" />
-                </Form.Item>
-              </Col>
-              <Col span={8}>
-                <Form.Item
-                  label="Port"
-                  name="port"
-                  rules={[{ required: true, message: "Port required" }]}
-                >
-                  <InputNumber
-                    min={1}
-                    max={65535}
-                    style={{ width: "100%" }}
-                    placeholder="22"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={onFinish}
+        initialValues={{
+          host: data?.host || "",
+          port: parseInt(data?.port, 10) || 22,
+          username: data?.username || "",
+          authMethod: data?.authMethod || "password",
+        }}
+      >
+        <Row gutter={16}>
+          <Col span={16}>
             <Form.Item
-              label="Username"
-              name="username"
-              rules={[{ required: true, message: "Username is required" }]}
+              label="Host"
+              name="host"
+              rules={[{ required: true, message: "SSH host is required" }]}
             >
-              <Input placeholder="e.g. root" />
+              <Input placeholder="e.g. 192.168.1.100 or kali.local" />
             </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item
+              label="Port"
+              name="port"
+              rules={[{ required: true, message: "Port required" }]}
+            >
+              <InputNumber
+                min={1}
+                max={65535}
+                style={{ width: "100%" }}
+                placeholder="22"
+              />
+            </Form.Item>
+          </Col>
+        </Row>
 
-            <Divider
-              style={{
-                borderColor: "var(--border-color-100)",
-                margin: "0.75rem 0 1rem",
-              }}
-            />
+        <Form.Item
+          label="Username"
+          name="username"
+          rules={[{ required: true, message: "Username is required" }]}
+        >
+          <Input placeholder="e.g. root" />
+        </Form.Item>
 
+        <Divider style={{ borderColor: "var(--border-color-100)", margin: "0.5rem 0 1rem" }} />
+
+        <Form.Item
+          label={
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              Authentication Method
+              <Tooltip title="Password is simpler; private key is more secure and recommended for production.">
+                <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
+              </Tooltip>
+            </span>
+          }
+          name="authMethod"
+        >
+          <Radio.Group
+            onChange={(e) => setAuthMethod(e.target.value)}
+            style={{ display: "flex", gap: 16 }}
+          >
+            <Radio value="password">
+              <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>Password</span>
+            </Radio>
+            <Radio value="key">
+              <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>Private Key</span>
+            </Radio>
+          </Radio.Group>
+        </Form.Item>
+
+        {authMethod === "password" ? (
+          <Form.Item
+            label="Password"
+            name="password"
+            extra={
+              data?.password ? (
+                <span className={styles.fieldHint}>
+                  A password is already set. Leave blank to keep it unchanged.
+                </span>
+              ) : null
+            }
+          >
+            <Input.Password placeholder={data?.password ? "••••••••" : "Enter SSH password"} />
+          </Form.Item>
+        ) : (
+          <>
             <Form.Item
               label={
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Authentication Method
-                  <Tooltip title="Password is simpler; private key is more secure and recommended for production.">
-                    <InfoCircleOutlined
-                      style={{
-                        color: "var(--secondary-text)",
-                        fontSize: "0.7rem",
-                      }}
-                    />
+                  Private Key Path
+                  <Tooltip title="Absolute path to the private key file on the server filesystem (e.g. /root/.ssh/id_rsa).">
+                    <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
                   </Tooltip>
                 </span>
               }
-              name="authMethod"
+              name="privateKeyPath"
+              extra={
+                data?.hasPrivateKey ? (
+                  <span className={styles.fieldHint}>
+                    A private key path is already configured. Leave blank to keep it unchanged.
+                  </span>
+                ) : null
+              }
             >
-              <Radio.Group
-                onChange={(e) => setAuthMethod(e.target.value)}
-                style={{ display: "flex", gap: 16 }}
-              >
-                <Radio value="password">
-                  <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>
-                    Password
-                  </span>
-                </Radio>
-                <Radio value="key">
-                  <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>
-                    Private Key
-                  </span>
-                </Radio>
-              </Radio.Group>
+              <Input placeholder="e.g. /root/.ssh/id_rsa" />
             </Form.Item>
+            <Form.Item label="Passphrase (optional)" name="passphrase">
+              <Input.Password placeholder="Leave empty if key has no passphrase" />
+            </Form.Item>
+          </>
+        )}
 
-            {authMethod === "password" ? (
-              <Form.Item
-                label="Password"
-                name="password"
-                extra={
-                  data?.password ? (
-                    <span style={{ fontSize: "0.65rem", color: "var(--secondary-text)" }}>
-                      A password is already set. Leave blank to keep it unchanged.
-                    </span>
-                  ) : null
-                }
-              >
-                <Input.Password
-                  placeholder={data?.password ? "••••••••" : "Enter SSH password"}
-                />
-              </Form.Item>
-            ) : (
-              <>
-                <Form.Item
-                  label={
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      Private Key Path
-                      <Tooltip title="Absolute path to the private key file on the server filesystem (e.g. /root/.ssh/id_rsa). For Docker, mount the key into the container.">
-                        <InfoCircleOutlined
-                          style={{
-                            color: "var(--secondary-text)",
-                            fontSize: "0.7rem",
-                          }}
-                        />
-                      </Tooltip>
-                    </span>
-                  }
-                  name="privateKeyPath"
-                  extra={
-                    data?.hasPrivateKey ? (
-                      <span style={{ fontSize: "0.65rem", color: "var(--secondary-text)" }}>
-                        A private key path is already configured. Leave blank to keep it unchanged.
-                      </span>
-                    ) : null
-                  }
-                >
-                  <Input placeholder="e.g. /root/.ssh/id_rsa" />
-                </Form.Item>
-                <Form.Item label="Passphrase (optional)" name="passphrase">
-                  <Input.Password placeholder="Leave empty if key has no passphrase" />
-                </Form.Item>
-              </>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <PrimaryButton
-                htmlType="submit"
-                loading={saving}
-                purpleFilled
-                style={{ height: "2rem", fontSize: "0.75rem" }}
-              >
-                Save SSH Configuration
-              </PrimaryButton>
-            </div>
-          </Form>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <PrimaryButton
+            htmlType="submit"
+            loading={saving}
+            purpleFilled
+            style={{ height: "2rem", fontSize: "0.75rem" }}
+          >
+            Save Configuration
+          </PrimaryButton>
         </div>
+      </Form>
 
-        <Divider
-          style={{
-            borderColor: "var(--border-color-100)",
-            margin: "1.5rem 0 1rem",
-          }}
-        />
+      <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
 
-        <div
-          style={{
-            color: "var(--secondary-text)",
-            fontSize: "0.7rem",
-            lineHeight: 1.7,
-          }}
-        >
-          <strong style={{ color: "var(--primary-text)", fontWeight: 500 }}>
-            Notes
-          </strong>
-          <ul style={{ paddingLeft: 18, marginTop: 6 }}>
-            <li>
-              In <strong>Docker mode</strong>, the Kali container is
-              automatically accessible. The default host is the container name
-              (e.g. <code>kali</code>) with port <code>4242</code>.
-            </li>
-            <li>
-              In <strong>Developer mode</strong>, point this to your local
-              exploit box or VM (typically <code>localhost</code>).
-            </li>
-            <li>
-              Private key authentication is recommended for production
-              deployments.
-            </li>
-          </ul>
-        </div>
+      <div className={styles.notesSection}>
+        <ul>
+          <li>
+            In <strong>Docker mode</strong>, the default host is the container name
+            (e.g. <code>kali</code>) with port <code>4242</code>.
+          </li>
+          <li>
+            In <strong>Developer mode</strong>, point this to your local
+            exploit box or VM (typically <code>localhost</code>).
+          </li>
+          <li>Private key authentication is recommended for production.</li>
+        </ul>
       </div>
 
       <SSHTestTerminalModal

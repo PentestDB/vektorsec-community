@@ -26,7 +26,6 @@ DYNAMIC_ENV=""  # set by resolve_env_path
 DYNAMIC_ENV_TMPL="$SCRIPT_DIR/backend/.env.template"
 FRONTEND_ENV="$SCRIPT_DIR/frontend/.env"
 FRONTEND_TMPL="$SCRIPT_DIR/frontend/.env.template"
-RUN_CONF="$SCRIPT_DIR/.run.conf"
 SSH_KEYS_DIR="$SCRIPT_DIR/ssh-keys"
 COMPOSE_OVERRIDE="$SCRIPT_DIR/docker-compose.override.yml"
 
@@ -271,7 +270,54 @@ configure_dev_mode_choice() {
     else
         DEPLOY_MODE="dev"
     fi
-    save_run_conf
+}
+
+set_normal_mode() {
+    DEV_MODE=false
+    COMPOSE_FILE="docker-compose.yml"
+    DEPLOY_MODE="core"
+}
+
+select_mode_for_configuration() {
+    section "Choose Configuration Target"
+    echo
+    echo -e "   ${BOLD}1)${NC} ${GREEN}Normal mode settings${NC}"
+    echo -e "      ${DIM}Use this if Pentest Copilot runs fully through Docker.${NC}"
+    echo
+    echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode settings${NC}"
+    echo -e "      ${DIM}Use this if you run the frontend and backend manually.${NC}"
+    echo
+    prompt_input "Choose [1/2]:"
+    read -r mode_choice
+
+    case "$mode_choice" in
+        2) configure_dev_mode_choice ;;
+        *) set_normal_mode ;;
+    esac
+}
+
+select_mode_for_operations() {
+    section "Choose Which Environment To Manage"
+    echo
+    echo -e "   ${BOLD}1)${NC} ${GREEN}Normal mode${NC}"
+    echo -e "      ${DIM}Manage containers started by the standard Docker setup.${NC}"
+    echo
+    echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode${NC}"
+    echo -e "      ${DIM}Manage support containers used while developing locally.${NC}"
+    echo
+    prompt_input "Choose [1/2]:"
+    read -r mode_choice
+
+    case "$mode_choice" in
+        2)
+            DEV_MODE=true
+            COMPOSE_FILE="docker-compose.dev.yml"
+            DEPLOY_MODE="dev"
+            ;;
+        *)
+            set_normal_mode
+            ;;
+    esac
 }
 
 select_launch_mode() {
@@ -293,10 +339,7 @@ select_launch_mode() {
             configure_dev_mode_choice
             ;;
         *)
-            DEV_MODE=false
-            COMPOSE_FILE="docker-compose.yml"
-            DEPLOY_MODE="core"
-            save_run_conf
+            set_normal_mode
             info "Selected normal mode"
             ;;
     esac
@@ -305,8 +348,9 @@ select_launch_mode() {
 configure_static_full() {
     section "Full Static Configuration (Developer Mode)"
     ensure_config_defaults
+    ensure_frontend_env
 
-    local cur val frontend_url default_mongo default_redis generated_secret
+    local cur val frontend_url default_mongo default_redis generated_secret frontend_backend_uri frontend_deployment
 
     section "Server Settings"
     cur=$(get_toml_var "$CONFIG_TOML" "base_url_frontend")
@@ -329,17 +373,30 @@ configure_static_full() {
     read -r val
     [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "deployment" "$val"
 
-    cur=$(get_toml_var "$CONFIG_TOML" "backend_uri")
-    prompt_input "Backend URI [${cur:-http://localhost:8080}]:"
+    frontend_backend_uri=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
+    prompt_input "Backend URL for the frontend [${frontend_backend_uri:-http://localhost:8080}]:"
     read -r val
-    [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "backend_uri" "$val"
+    if [[ -n "$val" ]]; then
+        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "$val"
+    elif [[ -z "$frontend_backend_uri" ]]; then
+        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "http://localhost:8080"
+    fi
+
+    frontend_deployment=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT")
+    prompt_input "Frontend deployment mode [${frontend_deployment:-LOCAL}]:"
+    read -r val
+    if [[ -n "$val" ]]; then
+        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "$val"
+    elif [[ -z "$frontend_deployment" ]]; then
+        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "LOCAL"
+    fi
 
     cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
-    prompt_input "CORS origins [${cur:-$frontend_url}]:"
+    prompt_input "CORS origins [${frontend_url}]:"
     read -r val
     if [[ -n "$val" ]]; then
         set_toml_var "$CONFIG_TOML" "cors_origins" "$val"
-    elif [[ -z "$cur" ]]; then
+    else
         set_toml_var "$CONFIG_TOML" "cors_origins" "$frontend_url"
     fi
 
@@ -529,7 +586,7 @@ configure_langfuse() {
 }
 
 configure_exploit_box() {
-    section "Exploit Box (SSH)"
+    section "Exploit Box Connection"
     ensure_env_defaults
 
     if [[ "$DEPLOY_MODE" == "kali" ]]; then
@@ -561,8 +618,8 @@ configure_exploit_box() {
     fi
 
     echo
-    echo -e "   ${BOLD}1)${NC} Configure SSH to external exploit box"
-    echo -e "   ${BOLD}2)${NC} Skip (no exploit box)"
+    echo -e "   ${BOLD}1)${NC} Use your own machine or another server as the exploit box"
+    echo -e "   ${BOLD}2)${NC} Skip for now"
     prompt_input "Choose [1/2]:"
     read -r ssh_choice
 
@@ -584,9 +641,9 @@ configure_exploit_box() {
 
 configure_external_ssh() {
     echo
-    prompt_input "SSH Host:"
+    prompt_input "Exploit box host [localhost]:"
     read -r ssh_host
-    [[ -z "$ssh_host" ]] && { err "SSH host required"; exit 1; }
+    ssh_host="${ssh_host:-localhost}"
     prompt_input "SSH Port [22]:"
     read -r ssh_port
     ssh_port="${ssh_port:-22}"
@@ -668,32 +725,12 @@ provision_data_volume() {
     fi
 }
 
-# ── Save / load deploy preference ─────────────────────────
-save_run_conf() {
-    cat > "$RUN_CONF" <<EOF
-DEPLOY_MODE=${DEPLOY_MODE}
-COMPOSE_FILE=${COMPOSE_FILE}
-DEV_MODE=${DEV_MODE}
-EOF
-}
-
-load_run_conf() {
-    if [[ -f "$RUN_CONF" ]]; then
-        source "$RUN_CONF"
-        return 0
-    fi
-    return 1
-}
-
 # ── Launch (Docker mode) ──────────────────────────────────
 launch() {
     local build_flag="${1:-}"
 
     if [[ -z "${COMPOSE_FILE:-}" ]]; then
-        if ! load_run_conf; then
-            COMPOSE_FILE="docker-compose.yml"
-            DEPLOY_MODE="core"
-        fi
+        set_normal_mode
     fi
 
     if [[ "${DEV_MODE:-false}" == true ]]; then
@@ -720,7 +757,7 @@ launch() {
     echo
     local frontend_url backend_url
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
-    backend_url=$(get_toml_var "$CONFIG_TOML" "backend_uri" 2>/dev/null)
+    backend_url=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
     frontend_url="${frontend_url:-http://localhost:3000}"
     backend_url="${backend_url:-http://localhost:8080}"
     echo -e "   ${GREEN}Frontend${NC}   ${frontend_url}"
@@ -779,7 +816,7 @@ launch_dev() {
     echo
     local frontend_url backend_url
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
-    backend_url=$(get_toml_var "$CONFIG_TOML" "backend_uri" 2>/dev/null)
+    backend_url=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
     echo -e "   ${CYAN}Endpoints:${NC} Frontend ${frontend_url:-http://localhost:3000} | Backend ${backend_url:-http://localhost:8080}"
     echo
 }
@@ -812,13 +849,7 @@ cmd_start() {
 cmd_config() {
     check_prerequisites
     detect_wsl
-    load_run_conf 2>/dev/null || true
-
-    if [[ -z "${COMPOSE_FILE:-}" ]]; then
-        COMPOSE_FILE="docker-compose.yml"
-        DEPLOY_MODE="core"
-        save_run_conf
-    fi
+    select_mode_for_configuration
 
     resolve_env_path
     ensure_config_defaults
@@ -885,7 +916,7 @@ cmd_dev() {
 
 cmd_stop() {
     check_prerequisites
-    load_run_conf 2>/dev/null || true
+    select_mode_for_operations
     section "Stopping Pentest Copilot"
     compose down
     info "All containers stopped"
@@ -893,13 +924,13 @@ cmd_stop() {
 
 cmd_logs() {
     check_prerequisites
-    load_run_conf 2>/dev/null || true
+    select_mode_for_operations
     compose logs -f "${@}"
 }
 
 cmd_status() {
     check_prerequisites
-    load_run_conf 2>/dev/null || true
+    select_mode_for_operations
     compose ps
 }
 
@@ -913,6 +944,7 @@ cmd_help() {
     echo "  - Normal mode: guided setup, best for most users"
     echo "  - Developer mode: advanced setup, run frontend/backend manually"
     echo "  - Both modes ask for required AI/model, Langfuse, and exploit box settings"
+    echo "  - No hidden mode is saved between runs"
     echo
     echo "Files: config.toml (static) | backend/.env (dynamic, editable via Settings)"
     echo

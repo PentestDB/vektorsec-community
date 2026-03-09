@@ -1,164 +1,146 @@
 @import "../_variables";
 
-/* CLIcomponent.module.scss */
+.terminalPanel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color-100);
 
-.fixedOverlay {
-  position: fixed;
-  height: 100vh;
-  width: 83.5%;
-  top: 0;
-  left: 16.5%;
-  pointer-events: none;
-  z-index: 12;
+  :global(div:first-child .xterm-screen) {
+    background-color: var(--cli-bg);
+    width: 100% !important;
+  }
+  :global(div:first-child .xterm-screen .xterm-rows) {
+    height: 100%;
+  }
+  :global(div:first-child .xterm-screen .xterm-rows *) {
+    font-family: "Menlo for powerline", "Menlo", monospace !important;
+  }
 
-  .terminalHeader {
-    .terminalWrapper {
-      width: 100%;
-      height: 100vh;
-      position: relative;
-      transition: all 0.3s ease-in-out;
+  .terminalContainer, .terminalContainer * {
+    font-family: 'Menlo', 'Consolas', 'Liberation Mono', 'Courier New', monospace !important;
+    letter-spacing: normal !important;
+    font-variant-ligatures: none !important;
+    white-space: pre !important;
+    word-break: normal !important;
+  }
 
-      :global(div:first-child .xterm-screen) {
-        background-color: var(--cli-bg);
-        width: 100% !important;
-      }
-      :global(div:first-child .xterm-screen .xterm-rows) {
-        height: 100%;
-      }
-      :global(div:first-child .xterm-screen .xterm-rows *) {
-        font-family: "Menlo for powerline", "Menlo", monospace !important;
-      }
+  .terminalContainer {
+    width: 100% !important;
+    padding: 8px;
+    padding-left: 1rem;
+    cursor: text;
+    color: var(--primary-color);
+    background-color: var(--cli-bg);
+    position: relative;
+  }
 
-      .terminalContainer, .terminalContainer * {
-        font-family: 'Menlo', 'Consolas', 'Liberation Mono', 'Courier New', monospace !important;
-        letter-spacing: normal !important;
-        font-variant-ligatures: none !important;
-        white-space: pre !important;
-        word-break: normal !important;
-        // overflow-x: auto;
-      }
+  .resizeHandle {
+    top: -6px;
+    left: 0;
+    right: 0;
+    gap: 0.75rem;
+    display: flex;
+    font-weight: 600;
+    cursor: ns-resize;
+    position: absolute;
+    align-items: center;
+    padding: 0.3rem 1rem;
+    height: 12px;
+    z-index: 10;
+    color: var(--secondary-text);
+    background-color: transparent;
 
-      .terminalContainer {
-        bottom: 0;
-        width: 100%;
-        position: absolute;
-        padding: 8px;
-        // padding-top: 3rem;
-        padding-left: 1rem;
-        cursor: text;
-        pointer-events: all;
-        color: var(--primary-color);
-        background-color: var(--cli-bg);
-        border-right: 1px solid var(--border-color-100);
-      }
-
-      .resizeHandle {
-        top: 0;
-        left: 0;
-        right: 0;
-        gap: 0.75rem;
-        display: flex;
-        font-weight: 600;
-        cursor: ns-resize;
-        position: absolute;
-        align-items: center;
-        padding: 0.3rem 1rem;
-        height: 8px;
-        color: var(--secondary-text);
-        background-color: var(--cli-bg);
-        border-top: 1px solid var(--border-color-100);
-
-        &:hover {
-          border-top: 4px solid var(--secondary-text-500);
-        }
-
-        .dragIcon {
-          top: 6px;
-          left: 50%;
-          transform: translateX(-50%);
-          position: absolute;
-          background-color: var(--secondary-text);
-          width: 3rem;
-          border-radius: 4px;
-          height: 2px !important;
-        }
-      }
-
-      .terminalTabs {
-        :global(.ant-tabs-nav::before) {
-          border: none;
-        }
-        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab) {
-          padding: 0.3rem 0;
-        }
-        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab .ant-tabs-tab-btn) {
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: var(--secondary-text);
-        }
-        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab-active .ant-tabs-tab-btn) {
-          color: var(--primary-purple);
-        }
-        :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-ink-bar) {
-          background-color: var(--primary-purple);
-        }
-      }
-
-      .copilotTerminalContainer {
-        overflow: auto;
-      }
+    &::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--border-color-100);
     }
 
-    .loadBox {
-      color: var(--lime-green);
-      padding: 1rem 0;
-
-      .loadIcon {
-        color: var(--lime-green);
-        font-size: 12px;
-      }
+    &:hover::after,
+    &.resizeActive::after {
+      height: 3px;
+      background: var(--secondary-text-500);
     }
 
-    .sshErrorContainer {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem 1rem;
-      gap: 0.75rem;
-      background-color: var(--cli-bg);
-      pointer-events: all;
-    }
-
-    .sshErrorMessage {
-      color: #ff4444;
-      font-family: "Menlo", "Consolas", monospace;
-      font-size: 13px;
-      text-align: center;
-      line-height: 1.5;
-    }
-
-    .sshReconnectBtn {
-      padding: 6px 20px;
-      background: transparent;
-      color: #e0e0e0;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+    .dragIcon {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      position: absolute;
+      background-color: var(--secondary-text);
+      width: 3rem;
       border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      font-family: "Menlo", "Consolas", monospace;
-      pointer-events: all;
-      transition: background 0.2s, border-color 0.2s;
-
-      &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.4);
-      }
+      height: 2px !important;
     }
+  }
 
-    .terminalWrapperHide {
-      @extend .terminalWrapper;
-      transform: translateY(110vh);
+  .terminalTabs {
+    :global(.ant-tabs-nav::before) {
+      border: none;
     }
+    :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab) {
+      padding: 0.3rem 0;
+    }
+    :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab .ant-tabs-tab-btn) {
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--secondary-text);
+      font-size: 0.72rem;
+    }
+    :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-nav-list .ant-tabs-tab-active .ant-tabs-tab-btn) {
+      color: var(--primary-purple);
+    }
+    :global(.ant-tabs-nav .ant-tabs-nav-wrap .ant-tabs-ink-bar) {
+      background-color: var(--primary-purple);
+    }
+  }
+}
+
+.loadBox {
+  color: var(--lime-green);
+  padding: 1rem 0;
+  font-size: 0.8rem;
+
+  .loadIcon {
+    color: var(--lime-green);
+    font-size: 12px;
+  }
+}
+
+.sshErrorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  gap: 0.75rem;
+  background-color: var(--cli-bg);
+}
+
+.sshErrorMessage {
+  color: #ff4444;
+  font-family: "Menlo", "Consolas", monospace;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.sshReconnectBtn {
+  padding: 6px 20px;
+  background: transparent;
+  color: #e0e0e0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: "Menlo", "Consolas", monospace;
+  transition: background 0.2s, border-color 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
   }
 }

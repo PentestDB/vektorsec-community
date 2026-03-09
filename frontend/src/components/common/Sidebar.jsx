@@ -1,4 +1,4 @@
-import { Col, Tooltip, message, notification } from "antd";
+import { message, notification } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
@@ -16,7 +16,9 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "react-query";
 import { initiateNetcatSession } from "@/services/copilot.service";
 import { updateSessions } from "@/store/user.slice";
+import { updateActiveTerminal } from "@/store/socket.slice";
 import { FiMonitor } from "react-icons/fi";
+import { TbPlus } from "react-icons/tb";
 import { v4 as uuidv4 } from "uuid";
 import { useState } from "react";
 import ToDoModal from "../pages/session/sessionId/ToDoModal";
@@ -34,8 +36,8 @@ const Sidebar = ({ sessionId }) => {
 
   const handleClickTab = (id) => {
     dispatch(updateCurrentSession(id));
+    dispatch(updateActiveTerminal(id));
 
-    // redirect to which ever tab is selected
     const selectedSession = sessions.filter((s) => s.id === id);
     if (selectedSession.length > 0) {
       const session = selectedSession[0];
@@ -79,7 +81,6 @@ const Sidebar = ({ sessionId }) => {
         dispatch(updateSessions(updatedSess));
       }
 
-      // open a netcat sidebar tab
       router.push(`/session/${sessionId}/netcat/${netcatId}`);
     },
     onError: (error) => {
@@ -127,204 +128,170 @@ const Sidebar = ({ sessionId }) => {
   const isDisabled = status !== "running";
 
   return (
-    <Col span={4}>
-      <div className={styles.sidebar}>
-        <div className={styles.createNew}>
+    <div className={styles.sidebar}>
+      <div className={styles.createNew}>
+        <div
+          className={styles.exitSession}
+          onClick={() => {
+            dispatch(setRecon(false));
+            router.push("/dashboard");
+          }}
+        >
+          <AiOutlineDoubleLeft />
+          Exit Workspace
+        </div>
+
+        <div className={styles.newProcessGroup}>
           <div
-            className={styles.exitSession}
-            onClick={() => {
-              dispatch(setRecon(false));
-              router.push("/dashboard");
-            }}
+            className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
+            onClick={isDisabled ? undefined : createTerminalSession}
           >
-            <AiOutlineDoubleLeft />
-            Exit Workspace
+            <TbPlus style={{ fontSize: 11 }} />
+            Terminal
           </div>
-          <div className={styles.newProcessGroup}>
-            <div
-              className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
-              onClick={isDisabled ? undefined : createTerminalSession}
-            >
-              <Image src={terminal} width={14} height={14} alt="" />
-              Terminal
-            </div>
-            <div
-              className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
-              onClick={isDisabled ? undefined : handleCreateNetcatSession}
-            >
-              <Image src={netcat} width={14} height={14} alt="" />
-              Netcat
-            </div>
-          </div>
-          <div className={styles.sessionOptions}>
-            {sessions
-              .filter((s) => s.is_main && s.type === "session")
-              .map((sess) => (
-                <div
-                  key={sess.id}
-                  onClick={() => handleClickTab(sess.id)}
-                  className={sess?.is_active ? styles.activeTab : styles.tab}
-                >
-                  <Image src={quad} width={16} height={16} alt="" />
-                  Main Workspace
-                </div>
-              ))}
-
-            {/* sub sessions */}
-            {sessions
-              .filter((s) => !s.is_main && s.type === "session")
-              .map((sess, i) => (
-                <div
-                  key={sess.id}
-                  onClick={() => handleClickTab(sess.id)}
-                  className={sess?.is_active ? styles.activeTab : styles.tab}
-                >
-                  <Image src={rect} width={16} height={16} alt="" />
-                  Sub Workspace {i + 1}
-                </div>
-              ))}
-
-            {/* netcat sessions */}
-            {sessions
-              .filter((s) => s.type === "netcat")
-              .map((sess, i) => (
-                <div
-                  key={sess.id}
-                  onClick={() => handleClickTab(sess.id)}
-                  className={sess?.is_active ? styles.activeTab : styles.tab}
-                  style={
-                    status === "running" && readyToConnect
-                      ? {}
-                      : { opacity: 0.5, cursor: "not-allowed" }
-                  }
-                >
-                  <Image src={netcat} width={16} height={16} alt="" />
-                  Netcat {i + 1}
-                </div>
-              ))}
-
-            {/* terminal sessions */}
-            {sessions
-              .filter((s) => s.type === "terminal" && !s.temporary)
-              .map((sess, i) => (
-                <div
-                  key={sess.id}
-                  onClick={() => handleClickTab(sess.id)}
-                  className={sess?.is_active ? styles.activeTab : styles.tab}
-                  style={
-                    status === "running" && readyToConnect
-                      ? {}
-                      : { opacity: 0.5, cursor: "not-allowed" }
-                  }
-                >
-                  <Image src={terminal} width={16} height={16} alt="" />
-                  Terminal Workspace {i + 1}
-                </div>
-              ))}
-
-            {/* vpn session */}
-            {sessions
-              .filter((s) => s.type === "vpn")
-              .map((sess) => (
-                <Tooltip
-                  key={sess.id}
-                  title="VPN"
-                  placement="right"
-                  color="#000"
-                >
-                  <div
-                    key={sess.id}
-                    onClick={() =>
-                      status === "running" ? handleClickTab(sess.id) : null
-                    }
-                    className={sess?.is_active ? styles.activeTab : styles.tab}
-                    style={
-                      status === "running" && readyToConnect
-                        ? {}
-                        : { opacity: 0.5, cursor: "not-allowed" }
-                    }
-                  >
-                    <Image src={vpn} width={16} height={16} alt="" />
-                    VPN
-                  </div>
-                </Tooltip>
-              ))}
-
-            {/* gui session */}
-            {sessions
-              .filter((s) => s.type === "gui")
-              .map((sess) => (
-                <Tooltip
-                  key={sess.id}
-                  title="GUI"
-                  placement="right"
-                  color="#000"
-                >
-                  <div
-                    key={sess.id}
-                    onClick={() =>
-                      status === "running" ? handleClickTab(sess.id) : null
-                    }
-                    className={sess?.is_active ? styles.activeTab : styles.tab}
-                    style={
-                      status === "running" && readyToConnect
-                        ? {}
-                        : { opacity: 0.5, cursor: "not-allowed" }
-                    }
-                  >
-                    <FiMonitor />
-                    GUI
-                  </div>
-                </Tooltip>
-              ))}
-
-            {/* <div className={styles.tab}>
-              <Image src={terminal} width={16} height={16} alt="" />
-              Command Line
-            </div> */}
+          <div
+            className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
+            onClick={isDisabled ? undefined : handleCreateNetcatSession}
+          >
+            <TbPlus style={{ fontSize: 11 }} />
+            Listener
           </div>
         </div>
 
-        <div className={styles.additionalOptions}>
-          <div className={styles.supportStep}>
-            <div className={styles.options} onClick={() => setShowTodo(true)}>
-              <Image src={todo} width={16} height={16} alt="i" />
-              Todo List
-            </div>
-            {/* <div className={styles.options}>
-              <Image src={findstep} width={16} height={16} alt="i" />
-              Find the step
-            </div> */}
-          </div>
-          <div className={styles.helpOptions}>
-            <div
-              className={styles.options}
-              onClick={() => {
-                window.open("https://copilot-docs.bugbase.ai/", "_blank");
-              }}
-            >
-              <Image src={docs} width={16} height={16} alt="i" />
-              Documentation
-            </div>
-            <div
-              className={styles.options}
-              onClick={() => {
-                window.open("https://forms.gle/7nB4HbRVRMCYHqmy6", "_blank");
-              }}
-            >
-              <Image src={help} width={16} height={16} alt="i" />
-              Share Feedback
-            </div>
-          </div>
-        </div>
+        <div className={styles.sessionOptions}>
+          {sessions
+            .filter((s) => s.is_main && s.type === "session")
+            .map((sess) => (
+              <div
+                key={sess.id}
+                onClick={() => handleClickTab(sess.id)}
+                className={sess?.is_active ? styles.activeTab : styles.tab}
+              >
+                <Image src={quad} width={14} height={14} alt="" />
+                Main Workspace
+              </div>
+            ))}
 
-        <ToDoModal
-          show={showTodo}
-          setShow={setShowTodo}
-          session_id={sessionId}
-        />
+          {sessions
+            .filter((s) => !s.is_main && s.type === "session")
+            .map((sess, i) => (
+              <div
+                key={sess.id}
+                onClick={() => handleClickTab(sess.id)}
+                className={sess?.is_active ? styles.activeTab : styles.tab}
+              >
+                <Image src={rect} width={14} height={14} alt="" />
+                Sub Workspace {i + 1}
+              </div>
+            ))}
+
+          {sessions
+            .filter((s) => s.type === "netcat")
+            .map((sess, i) => (
+              <div
+                key={sess.id}
+                onClick={() => handleClickTab(sess.id)}
+                className={sess?.is_active ? styles.activeTab : styles.tab}
+                style={
+                  status === "running" && readyToConnect
+                    ? {}
+                    : { opacity: 0.5, cursor: "not-allowed" }
+                }
+              >
+                <Image src={netcat} width={14} height={14} alt="" />
+                Netcat {i + 1}
+              </div>
+            ))}
+
+          {sessions
+            .filter((s) => s.type === "terminal" && !s.temporary)
+            .map((sess, i) => (
+              <div
+                key={sess.id}
+                onClick={() => handleClickTab(sess.id)}
+                className={sess?.is_active ? styles.activeTab : styles.tab}
+                style={
+                  status === "running" && readyToConnect
+                    ? {}
+                    : { opacity: 0.5, cursor: "not-allowed" }
+                }
+              >
+                <Image src={terminal} width={14} height={14} alt="" />
+                Terminal {i + 1}
+              </div>
+            ))}
+
+          {sessions
+            .filter((s) => s.type === "vpn")
+            .map((sess) => (
+              <div
+                key={sess.id}
+                onClick={() =>
+                  status === "running" ? handleClickTab(sess.id) : null
+                }
+                className={sess?.is_active ? styles.activeTab : styles.tab}
+                style={
+                  status === "running" && readyToConnect
+                    ? {}
+                    : { opacity: 0.5, cursor: "not-allowed" }
+                }
+              >
+                <Image src={vpn} width={14} height={14} alt="" />
+                VPN
+              </div>
+            ))}
+
+          {sessions
+            .filter((s) => s.type === "gui")
+            .map((sess) => (
+              <div
+                key={sess.id}
+                onClick={() =>
+                  status === "running" ? handleClickTab(sess.id) : null
+                }
+                className={sess?.is_active ? styles.activeTab : styles.tab}
+                style={
+                  status === "running" && readyToConnect
+                    ? {}
+                    : { opacity: 0.5, cursor: "not-allowed" }
+                }
+              >
+                <FiMonitor />
+                GUI
+              </div>
+            ))}
+        </div>
       </div>
-    </Col>
+
+      <div className={styles.additionalOptions}>
+        <div className={styles.supportStep}>
+          <div className={styles.options} onClick={() => setShowTodo(true)}>
+            <Image src={todo} width={14} height={14} alt="" />
+            Todo List
+          </div>
+          <div
+            className={styles.options}
+            onClick={() => window.open("https://copilot-docs.bugbase.ai/", "_blank")}
+          >
+            <Image src={docs} width={14} height={14} alt="" />
+            Documentation
+          </div>
+          <div
+            className={styles.options}
+            onClick={() => window.open("https://forms.gle/7nB4HbRVRMCYHqmy6", "_blank")}
+          >
+            <Image src={help} width={14} height={14} alt="" />
+            Share Feedback
+          </div>
+        </div>
+      </div>
+
+      <ToDoModal
+        show={showTodo}
+        setShow={setShowTodo}
+        session_id={sessionId}
+      />
+    </div>
   );
 };
 

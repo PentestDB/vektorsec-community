@@ -1,5 +1,32 @@
 @import "../_variables";
 
+.sessionPage {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sessionMainArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.exploitBoxAlert {
+  flex-shrink: 0;
+  border-radius: 0 !important;
+  background-color: rgba(#e1ae47, 0.15) !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(#faad14, 0.3) !important;
+
+  b,
+  div {
+    color: #fff;
+  }
+}
+
 .sessionHeaderContainer {
   padding: 1.25rem 2rem;
   color: var(--primary-text);
@@ -70,15 +97,12 @@
 }
 
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-
   background: var(--primary-bg);
-  min-height: 100vh;
+  height: 100vh;
   border-right: 1px solid var(--border-subtle);
 
-  width: 16.5%;
+  width: 220px;
+  min-width: 220px;
   padding: 0.75rem;
 
   display: flex;
@@ -106,6 +130,34 @@
     .exitSessionSettings {
       @extend .exitSession;
       color: var(--secondary-text-500);
+    }
+
+    .sessionInfo {
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 0.75rem;
+
+      .sessionInfoName {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--primary-text);
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sessionInfoId {
+        font-size: 0.65rem;
+        font-weight: 500;
+        color: var(--primary-purple);
+        font-family: "JetBrains Mono", monospace;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     }
 
     .newProcessGroup {
@@ -175,6 +227,15 @@
       border-top: 1px solid var(--border-subtle);
       padding-top: 0.75rem;
       padding-bottom: 0;
+
+      .logoutOption {
+        color: var(--danger);
+
+        &:hover {
+          color: var(--danger);
+          background: rgba(255, 62, 62, 0.08);
+        }
+      }
     }
   }
 

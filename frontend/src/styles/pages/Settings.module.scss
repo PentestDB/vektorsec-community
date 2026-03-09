@@ -1,8 +1,9 @@
 @import "../_variables";
 
 .settingsContainer {
-  padding: 0rem 2rem;
-  padding-bottom: 5rem;
+  padding: 1.5rem;
+  padding-bottom: 3rem;
+  max-width: 640px;
 
   :global(.ant-form-item-label > label) {
     color: var(--secondary-text) !important;
@@ -156,7 +157,7 @@
   }
 
   .settingSectionHeader {
-    margin: 5rem 0 3rem 0;
+    margin: 1.5rem 0 1rem 0;
 
     .heading {
       color: var(--primary-text);
@@ -232,7 +233,7 @@
           height: 2.5rem;
           border: 0.5px solid var(--border-color-100);
           border-radius: 4px;
-          width: 30rem;
+          width: 100%;
 
           &::placeholder {
             color: var(--secondary-text-500);
@@ -316,6 +317,94 @@
         }
       }
     }
+  }
+}
+
+.fieldGroup {
+  margin-bottom: 1.25rem;
+
+  .fieldLabel {
+    display: block;
+    color: var(--secondary-text);
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+
+  .fieldValue {
+    color: var(--primary-text);
+    font-size: 0.85rem;
+  }
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.infoBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color-100);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  color: var(--secondary-text);
+  font-size: 0.75rem;
+  line-height: 1.5;
+
+  :global(.anticon) {
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+}
+
+.notesSection {
+  color: var(--secondary-text);
+  font-size: 0.72rem;
+  line-height: 1.7;
+
+  strong {
+    color: var(--primary-text);
+    font-weight: 500;
+  }
+
+  ul {
+    padding-left: 18px;
+    margin-top: 4px;
+    margin-bottom: 0;
+  }
+
+  code {
+    font-size: 0.7rem;
+    color: var(--primary-purple);
+    background: rgba(127, 86, 217, 0.08);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+}
+
+.fieldHint {
+  font-size: 0.65rem;
+  color: var(--secondary-text);
+}
+
+.externalLink {
+  color: var(--secondary-text);
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: var(--primary-text);
   }
 }
 
