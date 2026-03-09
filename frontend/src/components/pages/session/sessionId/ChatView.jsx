@@ -6,11 +6,11 @@ import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import ManualExecutionBlock from "./ManualExecutionBlock";
 import ConsentBanner from "./ConsentBanner";
+import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import {
   getSessionHistory,
   pauseAgent,
-  connectAgentStream,
 } from "@/services/agent.service";
 
 export default function ChatView({ sessionId }) {
@@ -25,6 +25,7 @@ export default function ChatView({ sessionId }) {
     setPendingConsent,
     pendingManualExecution,
     setPendingManualExecution,
+    subagents,
     startStream,
     abort,
     loadHistory,
@@ -39,9 +40,10 @@ export default function ChatView({ sessionId }) {
     {
       enabled: !!sessionId,
       refetchOnWindowFocus: false,
+      retry: 2,
       onSuccess: (data) => {
         if (data?.messages) {
-          loadHistory(data.messages);
+          loadHistory(data.messages, data.subagents);
         }
         if (data?.agentState) {
           setAgentState(data.agentState);
@@ -52,6 +54,17 @@ export default function ChatView({ sessionId }) {
         if (data?.pendingManualExecution) {
           setPendingManualExecution(data.pendingManualExecution);
         }
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+        }, 50);
+      },
+      onError: (err) => {
+        notification.error({
+          message: "Failed to load session history",
+          description: err?.response?.data?.message ?? err?.message ?? "Something went wrong",
+          duration: 6,
+          placement: "bottomRight",
+        });
       },
     },
   );
@@ -121,9 +134,12 @@ export default function ChatView({ sessionId }) {
           </div>
         )}
 
-        {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} allMessages={messages} />
-        ))}
+        {messages.map((msg) => {
+          if (msg.role === "subagent") {
+            return <SubagentBlock key={msg.id} message={msg} />;
+          }
+          return <ChatMessage key={msg.id} message={msg} allMessages={messages} />;
+        })}
 
         {pendingConsent && agentState === "waiting_consent" && (
           <ConsentBanner

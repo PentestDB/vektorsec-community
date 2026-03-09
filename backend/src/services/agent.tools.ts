@@ -1,18 +1,12 @@
-import { Client as SSHClient } from "ssh2";
-import { buildSSHConfig } from "../utils/sshConfig";
 import { toolRegistry } from "../tools/registry";
 import { ExecutionContext, ToolResult } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
+import { ShellManager } from "./shell.manager";
+import { SubagentManager } from "./subagent.manager";
+import { SSEWriter } from "./agent.service";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
-
-export class SSHUnavailableError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SSHUnavailableError";
-  }
-}
 
 export interface ToolExecutionCallbacks {
   onToolStart: (toolCallId: string, toolName: string, args: Record<string, any>) => void;
@@ -20,7 +14,6 @@ export interface ToolExecutionCallbacks {
   onToolDone: (toolCallId: string, result: ToolResult) => void;
   onToolError: (toolCallId: string, error: string) => void;
   onConsentRequired: (toolCallId: string, toolName: string, args: Record<string, any>) => void;
-  onManualExecutionRequired: (toolCallId: string, toolName: string, command: string) => void;
 }
 
 export interface ToolExecutionResult {
@@ -28,103 +21,11 @@ export interface ToolExecutionResult {
   toolName: string;
   result: ToolResult;
   needsConsent: boolean;
-  needsManualExecution: boolean;
-  manualCommand?: string;
-}
-
-function runSSHCommand(
-  command: string,
-  timeoutMs: number = 300_000,
-  onChunk?: (chunk: string) => void,
-  abortSignal?: AbortSignal,
-): Promise<{ output: string; exitCode: number }> {
-  const sshConfig = buildSSHConfig();
-
-  return new Promise((resolve, reject) => {
-    let output = "";
-    let exitCode = 0;
-    const ssh = new SSHClient();
-    let timer: NodeJS.Timeout | null = null;
-    let execStream: any = null;
-    let resolved = false;
-
-    const finish = (out: string, code: number) => {
-      if (resolved) return;
-      resolved = true;
-      if (timer) clearTimeout(timer);
-      ssh.end();
-      resolve({ output: out, exitCode: code });
-    };
-
-    const onAbort = () => {
-      if (resolved) return;
-      if (execStream) {
-        execStream.destroy();
-      }
-      finish(output + "\n[ABORTED: command terminated by user]", 130);
-    };
-
-    if (abortSignal?.aborted) {
-      finish("", 130);
-      return;
-    }
-    abortSignal?.addEventListener("abort", onAbort);
-
-    ssh
-      .on("ready", () => {
-        ssh.exec(command, (err: Error | undefined, stream: any) => {
-          if (err) {
-            abortSignal?.removeEventListener("abort", onAbort);
-            finish(`SSH exec error: ${err.message}`, 1);
-            return;
-          }
-          execStream = stream;
-
-          if (timeoutMs > 0) {
-            timer = setTimeout(() => {
-              stream.destroy();
-              abortSignal?.removeEventListener("abort", onAbort);
-              finish(
-                output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`,
-                124,
-              );
-            }, timeoutMs);
-          }
-
-          stream.on("data", (data: Buffer) => {
-            const text = data.toString();
-            output += text;
-            onChunk?.(text);
-          });
-
-          stream.stderr.on("data", (data: Buffer) => {
-            const text = data.toString();
-            output += text;
-            onChunk?.(text);
-          });
-
-          stream.on("close", (code: number | null) => {
-            abortSignal?.removeEventListener("abort", onAbort);
-            exitCode = code ?? 0;
-            finish(output, exitCode);
-          });
-        });
-      })
-      .on("error", (err: Error) => {
-        if (resolved) return;
-        resolved = true;
-        abortSignal?.removeEventListener("abort", onAbort);
-        if (timer) clearTimeout(timer);
-        reject(new SSHUnavailableError(`SSH connection error: ${err.message}`));
-      })
-      .connect(sshConfig);
-  });
 }
 
 function truncateOutput(output: string): string {
   const cleaned = output.replace(ANSI_REGEX, "").trim();
   if (cleaned.length <= MAX_OUTPUT_CHARS) return cleaned;
-
   const half = Math.floor(MAX_OUTPUT_CHARS / 2);
   return (
     cleaned.slice(0, half) +
@@ -133,15 +34,42 @@ function truncateOutput(output: string): string {
   );
 }
 
-function buildExecutionContext(
-  sessionId: string,
-  onChunk?: (chunk: string) => void,
-  abortSignal?: AbortSignal,
-): ExecutionContext {
+export function buildExecutionContext(params: {
+  sessionId: string;
+  agentId: string;
+  shellManager: ShellManager;
+  subagentManager?: SubagentManager;
+  sse?: SSEWriter;
+  userId?: string;
+  onChunk?: (chunk: string) => void;
+  abortSignal?: AbortSignal;
+}): ExecutionContext {
+  const { sessionId, agentId, shellManager, subagentManager, sse, userId, onChunk, abortSignal } = params;
+
   return {
     sessionId,
+    agentId,
     runCommand: (command: string, timeoutMs?: number) =>
-      runSSHCommand(command, timeoutMs, onChunk, abortSignal),
+      shellManager.execInShell(command, timeoutMs, onChunk, abortSignal),
+    spawnShell: (label: string, type?: "pty" | "exec") =>
+      shellManager.spawnShell({ label, type, createdBy: agentId === "main" ? "agent" : "subagent", subagentId: agentId !== "main" ? agentId : undefined }),
+    writeToShell: (shellId: string, data: string) =>
+      shellManager.writeToShell(shellId, data),
+    readShellOutput: (shellId: string, fromOffset?: number) =>
+      Promise.resolve(shellManager.readOutput(shellId, fromOffset)),
+    closeShell: (shellId: string) =>
+      shellManager.closeShell(shellId),
+    listShells: () =>
+      shellManager.getShellList(),
+    spawnSubagent: subagentManager && sse && userId
+      ? (task: string) =>
+          subagentManager.spawn({
+            parentId: agentId,
+            task,
+            sse,
+            userId,
+          })
+      : undefined,
     onOutput: onChunk,
   };
 }
@@ -150,7 +78,7 @@ export async function executeToolCall(
   sessionId: string,
   toolCall: ToolCallData,
   callbacks: ToolExecutionCallbacks,
-  abortSignal?: AbortSignal,
+  ctx: ExecutionContext,
   requireConsentForAllTools?: boolean,
 ): Promise<ToolExecutionResult> {
   const toolDef = toolRegistry.get(toolCall.name);
@@ -163,7 +91,6 @@ export async function executeToolCall(
       toolName: toolCall.name,
       result: { output: error, exitCode: 1 },
       needsConsent: false,
-      needsManualExecution: false,
     };
   }
 
@@ -178,7 +105,6 @@ export async function executeToolCall(
       toolName: toolCall.name,
       result: { output: error, exitCode: 1 },
       needsConsent: false,
-      needsManualExecution: false,
     };
   }
 
@@ -189,29 +115,18 @@ export async function executeToolCall(
       toolName: toolCall.name,
       result: { output: "", exitCode: 0 },
       needsConsent: true,
-      needsManualExecution: false,
     };
   }
 
   callbacks.onToolStart(toolCall.id, toolCall.name, args);
 
-  if (abortSignal?.aborted) {
-    callbacks.onToolError(toolCall.id, "Command aborted by user");
-    return {
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      result: { output: "Aborted by user", exitCode: 130 },
-      needsConsent: false,
-      needsManualExecution: false,
-    };
-  }
-
   try {
-    const ctx = buildExecutionContext(sessionId, (chunk) => {
-      callbacks.onToolOutput(toolCall.id, chunk);
-    }, abortSignal);
+    const toolCtx: ExecutionContext = {
+      ...ctx,
+      onOutput: (chunk) => callbacks.onToolOutput(toolCall.id, chunk),
+    };
 
-    const result = await toolDef.execute(args, ctx);
+    const result = await toolDef.execute(args, toolCtx);
     result.output = truncateOutput(result.output);
 
     callbacks.onToolDone(toolCall.id, result);
@@ -220,25 +135,8 @@ export async function executeToolCall(
       toolName: toolCall.name,
       result,
       needsConsent: false,
-      needsManualExecution: false,
     };
   } catch (err: any) {
-    if (err instanceof SSHUnavailableError) {
-      const commandTools = ["run_bash", "run_python_script", "run_install_tool", "msfvenom_payload", "netcat_listener"];
-      if (commandTools.includes(toolCall.name)) {
-        const command = args.command ?? args.script ?? JSON.stringify(args);
-        callbacks.onManualExecutionRequired(toolCall.id, toolCall.name, command);
-        return {
-          toolCallId: toolCall.id,
-          toolName: toolCall.name,
-          result: { output: "", exitCode: 0 },
-          needsConsent: false,
-          needsManualExecution: true,
-          manualCommand: command,
-        };
-      }
-    }
-
     const error = `Tool execution error: ${err.message ?? err}`;
     callbacks.onToolError(toolCall.id, error);
     return {
@@ -246,7 +144,6 @@ export async function executeToolCall(
       toolName: toolCall.name,
       result: { output: error, exitCode: 1 },
       needsConsent: false,
-      needsManualExecution: false,
     };
   }
 }
@@ -255,12 +152,12 @@ export async function executeToolCalls(
   sessionId: string,
   toolCalls: ToolCallData[],
   callbacks: ToolExecutionCallbacks,
-  abortSignal?: AbortSignal,
+  ctx: ExecutionContext,
   requireConsentForAllTools?: boolean,
 ): Promise<ToolExecutionResult[]> {
   const results = await Promise.all(
     toolCalls.map((tc) =>
-      executeToolCall(sessionId, tc, callbacks, abortSignal, requireConsentForAllTools),
+      executeToolCall(sessionId, tc, callbacks, ctx, requireConsentForAllTools),
     ),
   );
   return results;
@@ -272,7 +169,7 @@ export async function executeConsentedTool(
   toolName: string,
   args: Record<string, any>,
   callbacks: ToolExecutionCallbacks,
-  abortSignal?: AbortSignal,
+  ctx: ExecutionContext,
 ): Promise<ToolResult> {
   const toolDef = toolRegistry.get(toolName);
   if (!toolDef) {
@@ -282,11 +179,12 @@ export async function executeConsentedTool(
   callbacks.onToolStart(toolCallId, toolName, args);
 
   try {
-    const ctx = buildExecutionContext(sessionId, (chunk) => {
-      callbacks.onToolOutput(toolCallId, chunk);
-    }, abortSignal);
+    const toolCtx: ExecutionContext = {
+      ...ctx,
+      onOutput: (chunk) => callbacks.onToolOutput(toolCallId, chunk),
+    };
 
-    const result = await toolDef.execute(args, ctx);
+    const result = await toolDef.execute(args, toolCtx);
     result.output = truncateOutput(result.output);
 
     callbacks.onToolDone(toolCallId, result);

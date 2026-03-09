@@ -7,10 +7,17 @@ import SessionsModel, {
 } from "../models/Sessions/Sessions.model";
 import { invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
 import { toolRegistry } from "../tools/registry";
-import { executeToolCalls, executeConsentedTool, ToolExecutionCallbacks } from "./agent.tools";
+import {
+  executeToolCalls,
+  executeConsentedTool,
+  buildExecutionContext,
+  ToolExecutionCallbacks,
+} from "./agent.tools";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { buildSystemPrompt, AgentPromptConfig } from "../utils/copilot/prompts";
 import UserModel from "../models/User/User.model";
+import { sessionLifecycle } from "./session.lifecycle";
+import { SubagentManager } from "./subagent.manager";
 
 const MAX_ITERATIONS = 25;
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
@@ -130,6 +137,32 @@ async function trackTokens(
   );
 }
 
+// ─── Build shell status context (injected after summarization) ──────
+
+import { ShellManager, ShellInfo } from "./shell.manager";
+
+function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number): AgentMessageDoc | null {
+  const shells = shellManager.getShellList();
+  const active = shells.filter((s) => s.status === "active");
+  if (active.length === 0 && shells.length === 0) return null;
+
+  const lines = shells.map((s) => {
+    const status = s.status === "active" ? "ACTIVE" : "CLOSED";
+    return `  - ${s.shellId} | label: "${s.label}" | type: ${s.type} | status: ${status} | created by: ${s.createdBy}`;
+  });
+
+  const content = `[Shell Status - ${active.length} active, ${shells.length - active.length} closed]\n${lines.join("\n")}\n\nUse these shell_id values with write_to_shell and read_shell. Use run_bash (without shell_id) for new one-off commands.`;
+
+  return {
+    id: `shell_status_${Date.now()}`,
+    role: "system",
+    content,
+    timestamp: new Date(),
+    turnIndex,
+    isSummary: false,
+  };
+}
+
 // ─── Build system message for a session ──────────────────────────────
 
 async function buildSystemMessage(
@@ -156,10 +189,11 @@ async function buildSystemMessage(
 
 export async function runAgentLoop(params: {
   sessionId: string;
+  userId: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, sse } = params;
+  const { sessionId, userId, sse } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -174,10 +208,32 @@ export async function runAgentLoop(params: {
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
 
+  const shellManager = await sessionLifecycle.getShellManager(sessionId);
+  if (!shellManager.isConnected) {
+    try {
+      await shellManager.connect();
+    } catch (err: any) {
+      console.warn(`[agent] SSH connection failed: ${err.message}. Running without shell support.`);
+    }
+  }
+
+  const subagentManager = new SubagentManager(sessionId, shellManager);
+  const spawnedSubagentIds: string[] = [];
+
   let messages = [...session.messages];
   const turnIndex = session.turnIndex;
   let iteration = 0;
   const newMessages: AgentMessageDoc[] = [];
+
+  const executionCtx = buildExecutionContext({
+    sessionId,
+    agentId: "main",
+    shellManager,
+    subagentManager,
+    sse,
+    userId,
+    abortSignal: params.abortSignal,
+  });
 
   try {
     while (iteration < MAX_ITERATIONS) {
@@ -195,6 +251,28 @@ export async function runAgentLoop(params: {
         break;
       }
 
+      // Collect completed subagent results and inject into messages
+      if (spawnedSubagentIds.length > 0) {
+        const completedIds = spawnedSubagentIds.filter((id) => !subagentManager.isRunning(id));
+        if (completedIds.length > 0) {
+          const results = await subagentManager.waitFor(completedIds);
+          for (const r of results) {
+            const resultMsg: AgentMessageDoc = {
+              id: uuidv4(),
+              role: "user",
+              content: `[Subagent ${r.subagentId} completed (${r.status})]\n\n${r.result}`,
+              timestamp: new Date(),
+              turnIndex,
+            };
+            messages.push(resultMsg);
+            newMessages.push(resultMsg);
+          }
+          for (const id of completedIds) {
+            spawnedSubagentIds.splice(spawnedSubagentIds.indexOf(id), 1);
+          }
+        }
+      }
+
       if (await shouldSummarize(messages)) {
         sse.write("summarizing", { message: "Context approaching limit, summarizing..." });
 
@@ -206,6 +284,12 @@ export async function runAgentLoop(params: {
 
         if (summaryMessage) {
           sse.write("summary_done", { summary: summaryMessage.content });
+        }
+
+        const shellStatusMsg = buildShellStatusMessage(shellManager, turnIndex);
+        if (shellStatusMsg) {
+          messages.push(shellStatusMsg);
+          newMessages.push(shellStatusMsg);
         }
       }
 
@@ -277,7 +361,7 @@ export async function runAgentLoop(params: {
 
       if (result.finishReason === "length") {
         sse.write("summarizing", { message: "Hit token limit, summarizing..." });
-        const { summaryMessage, preservedMessages } = await summarizeMessages(messages);
+        const { preservedMessages } = await summarizeMessages(messages);
         messages = preservedMessages;
         await replaceMessages(sessionId, messages);
         newMessages.length = 0;
@@ -288,7 +372,6 @@ export async function runAgentLoop(params: {
         break;
       }
 
-      // Execute tool calls
       const callbacks: ToolExecutionCallbacks = {
         onToolStart(id, name, args) {
           sse.write("tool_start", { id, name, args });
@@ -305,18 +388,25 @@ export async function runAgentLoop(params: {
         onConsentRequired(id, name, args) {
           sse.write("consent_required", { id, name, args });
         },
-        onManualExecutionRequired(id, name, command) {
-          sse.write("manual_execution_required", { id, name, command });
-        },
       };
 
       const toolResults = await executeToolCalls(
         sessionId,
         assistantToolCalls,
         callbacks,
-        params.abortSignal,
+        executionCtx,
         requireConsentForAllTools,
       );
+
+      // Track spawned subagents
+      for (const tr of toolResults) {
+        if (tr.toolName === "spawn_subagent" && tr.result.output.includes("subagent_id:")) {
+          const match = tr.result.output.match(/subagent_id:\s*(\S+)/);
+          if (match) {
+            spawnedSubagentIds.push(match[1]);
+          }
+        }
+      }
 
       const needsConsent = toolResults.find((r) => r.needsConsent);
       if (needsConsent) {
@@ -340,26 +430,6 @@ export async function runAgentLoop(params: {
         return;
       }
 
-      const needsManual = toolResults.find((r) => r.needsManualExecution);
-      if (needsManual) {
-        await appendMessages(sessionId, newMessages);
-        await SessionsModel.updateOne(
-          { sessionId },
-          {
-            $set: {
-              agentState: "waiting_manual_execution",
-              pendingManualExecution: {
-                toolCallId: needsManual.toolCallId,
-                toolName: needsManual.toolName,
-                command: needsManual.manualCommand ?? "",
-              },
-            },
-          },
-        );
-        sse.end();
-        return;
-      }
-
       for (const tr of toolResults) {
         const toolMsg: AgentMessageDoc = {
           id: uuidv4(),
@@ -374,10 +444,27 @@ export async function runAgentLoop(params: {
         newMessages.push(toolMsg);
       }
 
-      // Check if the ask_user tool was called — pause and wait for user input
       const askedUser = toolResults.find((r) => r.toolName === "ask_user");
       if (askedUser) {
         break;
+      }
+
+      // If subagents are running and the agent has no more tool calls to make,
+      // wait for them to complete before the next iteration
+      if (spawnedSubagentIds.length > 0 && assistantToolCalls.every((tc) => tc.name === "spawn_subagent")) {
+        const results = await subagentManager.waitFor([...spawnedSubagentIds]);
+        for (const r of results) {
+          const resultMsg: AgentMessageDoc = {
+            id: uuidv4(),
+            role: "user",
+            content: `[Subagent ${r.subagentId} completed (${r.status})]\n\n${r.result}`,
+            timestamp: new Date(),
+            turnIndex,
+          };
+          messages.push(resultMsg);
+          newMessages.push(resultMsg);
+        }
+        spawnedSubagentIds.length = 0;
       }
     }
 
@@ -385,9 +472,26 @@ export async function runAgentLoop(params: {
       sse.write("error", { message: `Agent reached maximum iteration limit (${MAX_ITERATIONS})` });
     }
 
+    // Wait for remaining subagents before ending
+    if (spawnedSubagentIds.length > 0) {
+      sse.write("thinking", { content: "\n\nWaiting for subagents to complete..." });
+      const results = await subagentManager.waitFor(spawnedSubagentIds);
+      for (const r of results) {
+        const resultMsg: AgentMessageDoc = {
+          id: uuidv4(),
+          role: "user",
+          content: `[Subagent ${r.subagentId} completed (${r.status})]\n\n${r.result}`,
+          timestamp: new Date(),
+          turnIndex: session.turnIndex,
+        };
+        newMessages.push(resultMsg);
+      }
+    }
+
     await appendMessages(sessionId, newMessages);
 
     if (params.abortSignal?.aborted) {
+      await subagentManager.cancelAll();
       await setAgentState(sessionId, "paused");
       sse.write("paused", { message: "Agent paused by user" });
     } else {
@@ -399,6 +503,7 @@ export async function runAgentLoop(params: {
     console.error("[agent] Loop error:", err);
     await appendMessages(sessionId, newMessages);
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
+    await subagentManager.cancelAll();
     await setAgentState(sessionId, isAbort ? "paused" : "idle");
     if (isAbort) {
       sse.write("paused", { message: "Agent paused by user" });
@@ -445,18 +550,19 @@ export async function initAndRun(params: {
 
   sse.write("user_message_ack", { id: userMsg.id });
 
-  await runAgentLoop({ sessionId, sse, abortSignal });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal });
 }
 
 // ─── Handle consent response and resume ──────────────────────────────
 
 export async function handleConsent(params: {
   sessionId: string;
+  userId: string;
   approved: boolean;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, approved, sse, abortSignal } = params;
+  const { sessionId, userId, approved, sse, abortSignal } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session || !session.pendingConsent) {
@@ -482,9 +588,21 @@ export async function handleConsent(params: {
     };
     await appendMessages(sessionId, [denialMsg]);
     await setAgentState(sessionId, "idle");
-    await runAgentLoop({ sessionId, sse, abortSignal });
+    await runAgentLoop({ sessionId, userId, sse, abortSignal });
     return;
   }
+
+  const shellManager = await sessionLifecycle.getShellManager(sessionId);
+  if (!shellManager.isConnected) {
+    try { await shellManager.connect(); } catch { /* handled below */ }
+  }
+
+  const ctx = buildExecutionContext({
+    sessionId,
+    agentId: "main",
+    shellManager,
+    abortSignal,
+  });
 
   const callbacks: ToolExecutionCallbacks = {
     onToolStart(id, name, args) { sse.write("tool_start", { id, name, args }); },
@@ -492,10 +610,9 @@ export async function handleConsent(params: {
     onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode }); },
     onToolError(id, error) { sse.write("tool_error", { id, error }); },
     onConsentRequired() {},
-    onManualExecutionRequired() {},
   };
 
-  const result = await executeConsentedTool(sessionId, toolCallId, toolName, toolArgs, callbacks, abortSignal);
+  const result = await executeConsentedTool(sessionId, toolCallId, toolName, toolArgs, callbacks, ctx);
 
   const toolMsg: AgentMessageDoc = {
     id: uuidv4(),
@@ -508,18 +625,19 @@ export async function handleConsent(params: {
   };
   await appendMessages(sessionId, [toolMsg]);
 
-  await runAgentLoop({ sessionId, sse, abortSignal });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal });
 }
 
 // ─── Handle manual execution output submission ───────────────────────
 
 export async function handleManualOutput(params: {
   sessionId: string;
+  userId: string;
   output: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, output, sse, abortSignal } = params;
+  const { sessionId, userId, output, sse, abortSignal } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session || !session.pendingManualExecution) {
@@ -546,5 +664,5 @@ export async function handleManualOutput(params: {
 
   sse.write("tool_done", { id: toolCallId, exitCode: 0, outputLength: output.length });
 
-  await runAgentLoop({ sessionId, sse, abortSignal });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal });
 }

@@ -1,38 +1,25 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
 import express from "express";
-// import cors
 import os from "os";
 import cors from "cors";
-
-// import cookie-parser
 import cookieParser from "cookie-parser";
 import session from "express-session";
-import socketSession from "express-socket.io-session";
-
-import { authRoutes } from "./routes/auth.routes";
-
 import { createClient, RedisClientType } from "redis";
 import mongoose from "mongoose";
-
-import { Server } from "socket.io";
 import { createServer } from "http";
-// import mongoSanitize
 const mongoSanitize = require("express-mongo-sanitize");
 import multer from "multer";
 import RedisStore from "connect-redis";
+import { authRoutes } from "./routes/auth.routes";
 import { taskRoutes } from "./routes/task.routes";
-import UserModel from "./models/User/User.model";
-import { copilotRoutes } from "./routes/copilot.routes";
-import { netcatRoutes } from "./routes/netcat.routes";
+import { userRoutes } from "./routes/user.routes";
+import { agentRoutes } from "./routes/agent.routes";
+import { shellRoutes } from "./routes/shell.routes";
 import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
-import { buildSSHConfig } from "./utils/sshConfig";
-import { sessionRoutes } from "./routes/session.routes";
-import { userRoutes } from "./routes/user.routes";
-import { agentRoutes } from "./routes/agent.routes";
-import { Client as SSHClient } from "ssh2";
+import { setupShellWebSocket } from "./services/shell.socket";
+import { sessionLifecycle } from "./services/session.lifecycle";
 
 declare module "express-session" {
   export interface SessionData {
@@ -49,7 +36,6 @@ const initializeApp = async () => {
 
     const DEPLOYMENT = await getSecrets("DEPLOYMENT");
     const MONGO_URI = await getSecrets("MONGO_URI");
-
     const REDIS_URL = await getSecrets("REDIS_URL");
     redisClient = createClient({ url: REDIS_URL });
 
@@ -132,7 +118,6 @@ const initializeApp = async () => {
     });
 
     app.use(cookieParser());
-
     app.use(mongoSanitize());
 
     // @ts-ignore
@@ -146,246 +131,53 @@ const initializeApp = async () => {
       proxy: true,
       store: redisStore,
       cookie: {
-        sameSite: true,
+        sameSite: true as const,
         secure: DEPLOYMENT === "LOCAL" ? false : true,
         maxAge: 1000 * 60 * 60 * 12,
       },
     };
 
-    app.use(session(sessionConfig));
+    const sessionMiddleware = session(sessionConfig);
+    app.use(sessionMiddleware);
 
     const httpServer = createServer(app);
 
+    // WebSocket for shell streaming (replaces Socket.IO terminal handling)
+    setupShellWebSocket(httpServer, sessionMiddleware);
 
-    const sshConfig = buildSSHConfig();
-
-
-    // backend-frontend socket
-    const socketServer = new Server(httpServer, {
-      cors: {
-        origin: localWhitelist,
-        credentials: true,
-        methods: ["GET", "POST"],
-      },
-    });
-
-    socketServer.on("connection", (socket) => {
-      console.log("Connected to socket server");
-    });
-
-    socketServer.use(socketSession(session(sessionConfig), { autoSave: true }) as any);
-
-    // write a socketServer middleware to check if the user is authenticated
-    socketServer.use(async (socket, next) => {
-      try {
-        const socketHandshake: any = socket.handshake;
-        const userId = socketHandshake?.session?.user.userId;
-
-        if (!userId) {
-          return next(new Error("Unauthorized"));
-        }
-
-        const user = await UserModel.findById(userId);
-
-        if (!user) {
-          return next(new Error("Unauthorized"));
-        }
-
-        (socket as any).userId = user._id;
-
-        return next();
-      } catch (err) {
-        return next(new Error("Unauthorized"));
-      }
-    });
-
-    socketServer.on("connection", async (frontendSocket) => {
-      try {
-        const userId = (frontendSocket as any).userId;
-        if (!userId) return;
-
-        const user = await UserModel.findById(userId);
-        if (!user) return;
-
-        const terminalId = frontendSocket.handshake.query.terminalId as string;
-        if (!terminalId) return;
-
-        console.log(`[terminal:${terminalId}] Socket connected`);
-        const conn = new SSHClient();
-
-        conn
-          .on("ready", () => {
-            console.log(`[terminal:${terminalId}] SSH ready`);
-            frontendSocket.emit(`ssh-ready-${terminalId}`, {});
-
-            conn.shell((err, shellStream) => {
-              if (err) {
-                console.error(`[terminal:${terminalId}] Shell error:`, err);
-                return;
-              }
-
-              shellStream.on("data", (data: Buffer) => {
-                socketServer.emit(`terminal-data-${terminalId}`, data.toString());
-              });
-
-              shellStream.on("close", () => {
-                console.log(`[terminal:${terminalId}] Shell closed`);
-                frontendSocket.disconnect();
-                conn.end();
-              });
-
-              frontendSocket.on(`terminal-input-${terminalId}`, (data: string) => {
-                shellStream.write(data);
-              });
-
-              frontendSocket.on(`exec_command-${terminalId}`, (payload: { command: string; commandId: string }) => {
-                const { command, commandId } = payload;
-                console.log(`[exec:${commandId}] Running: ${command.substring(0, 120)}`);
-
-                const ansiRegex = /\x1B\[[0-?]*[-\[\]#-~]/g;
-                let outputBuf = "";
-
-                conn.exec(command, (execErr, execStream) => {
-                  if (execErr) {
-                    console.error(`[exec:${commandId}] exec error:`, execErr);
-                    const payload = {
-                      status: "error",
-                      message: execErr.message,
-                      tool_response: `Error: ${execErr.message}`,
-                      commandId,
-                      type: "output",
-                    };
-                    frontendSocket.emit(`command_executed-${terminalId}`, {
-                      ...payload,
-                    });
-                    socketServer.emit(`command_result-${commandId}`, payload);
-                    return;
-                  }
-
-                  execStream.on("data", (chunk: Buffer) => {
-                    const text = chunk.toString();
-                    outputBuf += text;
-                    socketServer.emit(`terminal-data-${terminalId}`, text);
-                  });
-
-                  execStream.stderr.on("data", (chunk: Buffer) => {
-                    const text = chunk.toString();
-                    outputBuf += text;
-                    socketServer.emit(`terminal-data-${terminalId}`, text);
-                  });
-
-                  execStream.on("close", (code: number) => {
-                    const cleanOutput = outputBuf.replace(ansiRegex, "").trim();
-                    console.log(`[exec:${commandId}] Completed (exit ${code}), output length: ${cleanOutput.length}`);
-
-                    const payload = {
-                      status: code === 0 ? "success" : "error",
-                      message: "Command Executed",
-                      tool_response: cleanOutput || (command.includes(">") ? "Output stored in file" : "(no output)"),
-                      commandId,
-                      exitCode: code,
-                      type: "output",
-                    };
-
-                    frontendSocket.emit(`command_executed-${terminalId}`, {
-                      ...payload,
-                    });
-                    socketServer.emit(`command_result-${commandId}`, payload);
-                  });
-                });
-              });
-
-              frontendSocket.on("disconnect", () => {
-                console.log(`[terminal:${terminalId}] Frontend disconnected`);
-                shellStream.end();
-                conn.end();
-              });
-            });
-          })
-          .on("error", (err: any) => {
-            console.error(`[terminal:${terminalId}] SSH error:`, err);
-            frontendSocket.emit(`ssh-error-${terminalId}`, {
-              message: err.message || "SSH connection failed",
-              code: err.code,
-              address: err.address,
-              port: err.port,
-            });
-          })
-          .connect(sshConfig);
-      } catch (err) {
-        console.error("[terminal] Socket setup error:", err);
-      }
-    });
-
-    socketServer.on("disconnect", () => {
-      console.log("Disconnected from socket server");
-
-      socketServer.close();
-    });
-
-    app.get("/", (req, res) => {
+    app.get("/", (_req, res) => {
       res.send("Hello World!");
     });
 
-    app.get("/api/healthcheck", (req, res) => {
+    app.get("/api/healthcheck", (_req, res) => {
       res.status(200).send("OK");
     });
 
-    // Auth routes
+    // Routes
     app.use("/api/auth", authRoutes);
-
-
-    // Task routes
     app.use("/api/task", taskRoutes);
-
-    // Copilot routes
-    app.use("/api/copilot", copilotRoutes);
-
-    // Netcat routes
-    app.use("/api/copilot", netcatRoutes);
-
-    // VPN routes
+    app.use("/api/user", userRoutes);
+    app.use("/api/agent", agentRoutes);
+    app.use("/api/shell", shellRoutes);
     app.use("/api/copilot", vpnRoutes);
-
-    // VNC routes
     app.use("/api/copilot", vncRoutes);
 
-    // User routes
-    app.use("/api/user", userRoutes);
-
-    // Session routes (legacy)
-    app.use("/api/session", sessionRoutes);
-
-    // Agent routes (new agentic loop)
-    app.use("/api/agent", agentRoutes);
-
-
-    // Add a generalized error handling middleware function for all other errors
     app.use(function (err: any, req: any, res: any, next: any) {
       console.log("Error occurred but handled - ", err);
-      console.log("Error occurred but handled - ", err?.code);
 
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({ message: "File size limit exceeded" });
         }
-
         if (err.code === "LIMIT_UNEXPECTED_FILE") {
-          return res
-            .status(400)
-            .json({ message: "Unexpected File type or Number of File(s)" });
+          return res.status(400).json({ message: "Unexpected File type or Number of File(s)" });
         }
-
-        return res
-          .status(400)
-          .json({ message: "Error occurred uploading file" });
+        return res.status(400).json({ message: "Error occurred uploading file" });
       }
       return res.status(400).json({
         message: "Something went wrong, please try again later",
       });
     });
-
-    const retryInterval = 60 * 1000; // Time interval between retries in milliseconds
 
     httpServer.listen(port, async () => {
       try {
@@ -404,48 +196,22 @@ const initializeApp = async () => {
       console.log(`Express is listening at http://localhost:${port}`);
     });
 
-    // Handle SIGTERM for graceful shutdown
-    process.on("SIGTERM", () => {
+    process.on("SIGTERM", async () => {
       console.log("SIGTERM received. Shutting down gracefully...");
 
-      // Log current memory usage
+      await sessionLifecycle.destroyAll();
+
       const memoryUsage = process.memoryUsage();
       console.log("Memory Usage:", {
-        rss: memoryUsage.rss, // Resident Set Size
+        rss: memoryUsage.rss,
         heapTotal: memoryUsage.heapTotal,
         heapUsed: memoryUsage.heapUsed,
         external: memoryUsage.external,
       });
 
-      // Log current CPU usage
-      const cpuUsage = process.cpuUsage();
-      console.log("CPU Usage:", cpuUsage);
-
-      // Log system information
-      console.log("System Information:", {
-        freeMemory: os.freemem(),
-        totalMemory: os.totalmem(),
-        loadAvg: os.loadavg(),
-        uptime: os.uptime(),
-      });
-
-      // Log open connections (example for an Express server)
-      httpServer.getConnections((err, count) => {
-        if (err) {
-          console.error("Error retrieving open connections:", err);
-        } else {
-          console.log(`Open connections: ${count}`);
-        }
-      });
-
-      // Close HTTP server gracefully
       httpServer.close(() => {
         console.log("HTTP server closed.");
-
-        // Perform additional cleanup, like closing database connections
-        // mongoose.connection.close(...)
-
-        process.exit(0); // Exit the process once everything is cleaned up
+        process.exit(0);
       });
     });
   } catch (error) {

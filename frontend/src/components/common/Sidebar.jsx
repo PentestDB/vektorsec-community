@@ -1,10 +1,8 @@
-import { message, notification, Dropdown } from "antd";
+import { message, Modal } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
 import vpn from "@/assets/sidebar/vpn.svg";
-import terminal from "@/assets/sidebar/terminal.svg";
-import netcat from "@/assets/sidebar/netcat.svg";
 import todo from "@/assets/sidebar/todo.svg";
 import quad from "@/assets/sidebar/quad.svg";
 import docs from "@/assets/sidebar/docs.svg";
@@ -12,20 +10,19 @@ import help from "@/assets/sidebar/help.svg";
 import rect from "@/assets/sidebar/rect.svg";
 import { useDispatch, useSelector } from "react-redux";
 import { setRecon, updateCurrentSession } from "@/store/user.slice";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { initiateNetcatSession } from "@/services/copilot.service";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
+import { clearContext } from "@/services/agent.service";
 import { updateSessions } from "@/store/user.slice";
-import { updateActiveTerminal } from "@/store/socket.slice";
 import { FiMonitor } from "react-icons/fi";
-import { TbPlus, TbChevronDown, TbCheck } from "react-icons/tb";
-import { v4 as uuidv4 } from "uuid";
+import { MdOutlineDeleteSweep } from "react-icons/md";
 import { useState } from "react";
 import ToDoModal from "../pages/session/sessionId/ToDoModal";
 
 const Sidebar = ({ sessionId }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
 
@@ -36,7 +33,6 @@ const Sidebar = ({ sessionId }) => {
 
   const updateCapabilitiesMutation = useMutation(updateCapabilities, {
     onSuccess: () => {
-      message.success("Tool execution mode updated");
       queryClient.invalidateQueries("capabilities");
     },
     onError: () => {
@@ -44,123 +40,49 @@ const Sidebar = ({ sessionId }) => {
     },
   });
 
-  const toolExecutionMenu = {
-    items: [
-      {
-        key: "auto",
-        label: "Auto run",
-        icon: !requireConsent ? <TbCheck size={14} /> : null,
-      },
-      {
-        key: "consent",
-        label: "Ask for consent before every tool call",
-        icon: requireConsent ? <TbCheck size={14} /> : null,
-      },
-    ].map((item) => ({
-      ...item,
-      onClick: () =>
-        updateCapabilitiesMutation.mutate({
-          requireConsentForAllTools: item.key === "consent",
-        }),
-    })),
+  const handleToggleConsent = () => {
+    updateCapabilitiesMutation.mutate({
+      requireConsentForAllTools: !requireConsent,
+    });
   };
 
-  const { sessions, status, readyToConnect } = useSelector(
-    (state) => state.user
-  );
+  const { sessions } = useSelector((state) => state.user);
 
   const handleClickTab = (id) => {
     dispatch(updateCurrentSession(id));
-    dispatch(updateActiveTerminal(id));
-
     const selectedSession = sessions.filter((s) => s.id === id);
     if (selectedSession.length > 0) {
-      const session = selectedSession[0];
-      if (session.type === "netcat") {
-        router.push(`/session/${sessionId}/netcat/${id}`);
-      } else if (session.type === "terminal") {
-        router.push(`/session/${sessionId}/terminal/${id}`);
-      } else {
-        router.push(`/session/${id}`);
-      }
+      router.push(`/session/${id}`);
     }
   };
 
-  const initiateNetcatListenerMutation = useMutation(initiateNetcatSession, {
-    onSuccess: async (data) => {
-      message.success(data?.message ?? "Netcat initiated successfully!");
-      const netcatId = data.netcatId;
-
-      await queryClient.invalidateQueries(["get-session-data", sessionId]);
-      await queryClient.invalidateQueries([
-        "get-session-loop-history",
-        sessionId,
-      ]);
-
-      let updatedSess = [...sessions];
-
-      const exists = updatedSess.find((session) => session.id === netcatId);
-
-      updatedSess = updatedSess.map((s) => {
-        return { ...s, is_active: false };
-      });
-
-      if (!exists) {
-        updatedSess.push({
-          id: netcatId,
-          is_main: false,
-          is_active: true,
-          type: "netcat",
-        });
-
-        dispatch(updateSessions(updatedSess));
-      }
-
-      router.push(`/session/${sessionId}/netcat/${netcatId}`);
-    },
-    onError: (error) => {
-      console.log(error);
-      notification.error({
-        message: "Error",
-        description:
-          error?.response?.data?.message ?? "Failed to initiate netcat!",
-      });
-    },
-  });
-
-  const handleCreateNetcatSession = async () => {
-    await initiateNetcatListenerMutation.mutateAsync({
-      session_id: sessionId,
-      access: "direct",
-    });
-  };
-
-  const createTerminalSession = async () => {
-    const terminalId = uuidv4();
-
+  const navigateToVPN = () => {
+    const vpnId = `${sessionId}/vpn`;
     let updatedSess = [...sessions];
-
-    const exists = updatedSess.find((session) => session.id === terminalId);
-
-    updatedSess = updatedSess.map((s) => {
-      return { ...s, is_active: false };
-    });
-
+    const exists = updatedSess.find((s) => s.id === vpnId);
     if (!exists) {
-      updatedSess.push({
-        id: terminalId,
-        is_main: false,
-        is_active: false,
-        type: "terminal",
-      });
-
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: vpnId, is_main: false, is_active: true, type: "vpn" });
       dispatch(updateSessions(updatedSess));
     }
-
-    router.push(`/session/${sessionId}/terminal/${terminalId}`);
+    router.push(`/session/${sessionId}/vpn`);
   };
 
-  const isDisabled = status !== "running";
+  const navigateToGUI = () => {
+    const guiId = `${sessionId}/gui`;
+    let updatedSess = [...sessions];
+    const exists = updatedSess.find((s) => s.id === guiId);
+    if (!exists) {
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: guiId, is_main: false, is_active: true, type: "gui" });
+      dispatch(updateSessions(updatedSess));
+    }
+    router.push(`/session/${sessionId}/gui`);
+  };
+
+  const isOnWorkspace = pathname === `/session/${sessionId}`;
+  const isOnVPN = pathname?.includes("/vpn");
+  const isOnGUI = pathname?.includes("/gui");
 
   return (
     <div className={styles.sidebar}>
@@ -176,33 +98,47 @@ const Sidebar = ({ sessionId }) => {
           Exit Workspace
         </div>
 
-        <Dropdown
-          menu={toolExecutionMenu}
-          trigger={["click"]}
-          placement="bottomLeft"
+        <div
+          onClick={handleToggleConsent}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0.45rem 0.75rem",
+            marginBottom: "0.5rem",
+            fontSize: "0.72rem",
+            fontWeight: 500,
+            color: "var(--secondary-text)",
+            background: "var(--secondary-bg)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 6,
+            cursor: "pointer",
+            userSelect: "none",
+            transition: "all 0.15s",
+          }}
         >
-          <div className={styles.toolExecutionDropdown}>
-            <span className={styles.toolExecutionLabel}>
-              {requireConsent ? "Ask consent" : "Auto run"}
-            </span>
-            <TbChevronDown className={styles.toolExecutionChevron} />
-          </div>
-        </Dropdown>
-
-        <div className={styles.newProcessGroup}>
-          <div
-            className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
-            onClick={isDisabled ? undefined : createTerminalSession}
-          >
-            <TbPlus style={{ fontSize: 11 }} />
-            Terminal
-          </div>
-          <div
-            className={`${styles.newProcessBtn} ${isDisabled ? styles.newProcessBtnDisabled : ""}`}
-            onClick={isDisabled ? undefined : handleCreateNetcatSession}
-          >
-            <TbPlus style={{ fontSize: 11 }} />
-            Listener
+          <span style={{ whiteSpace: "nowrap" }}>
+            {requireConsent ? "Ask consent" : "Auto run"}
+          </span>
+          <div style={{
+            width: 28,
+            height: 14,
+            borderRadius: 7,
+            backgroundColor: requireConsent ? "#d29922" : "#7ee787",
+            position: "relative",
+            transition: "background-color 0.2s",
+            flexShrink: 0,
+          }}>
+            <div style={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              backgroundColor: "#fff",
+              position: "absolute",
+              top: 2,
+              left: requireConsent ? 16 : 2,
+              transition: "left 0.2s",
+            }} />
           </div>
         </div>
 
@@ -233,86 +169,59 @@ const Sidebar = ({ sessionId }) => {
               </div>
             ))}
 
-          {sessions
-            .filter((s) => s.type === "netcat")
-            .map((sess, i) => (
-              <div
-                key={sess.id}
-                onClick={() => handleClickTab(sess.id)}
-                className={sess?.is_active ? styles.activeTab : styles.tab}
-                style={
-                  status === "running" && readyToConnect
-                    ? {}
-                    : { opacity: 0.5, cursor: "not-allowed" }
-                }
-              >
-                <Image src={netcat} width={14} height={14} alt="" />
-                Netcat {i + 1}
-              </div>
-            ))}
+          <div
+            onClick={() => router.push(`/session/${sessionId}`)}
+            className={isOnWorkspace ? styles.activeTab : styles.tab}
+          >
+            <Image src={quad} width={14} height={14} alt="" />
+            Workspace
+          </div>
 
-          {sessions
-            .filter((s) => s.type === "terminal" && !s.temporary)
-            .map((sess, i) => (
-              <div
-                key={sess.id}
-                onClick={() => handleClickTab(sess.id)}
-                className={sess?.is_active ? styles.activeTab : styles.tab}
-                style={
-                  status === "running" && readyToConnect
-                    ? {}
-                    : { opacity: 0.5, cursor: "not-allowed" }
-                }
-              >
-                <Image src={terminal} width={14} height={14} alt="" />
-                Terminal {i + 1}
-              </div>
-            ))}
+          <div
+            onClick={navigateToVPN}
+            className={isOnVPN ? styles.activeTab : styles.tab}
+          >
+            <Image src={vpn} width={14} height={14} alt="" />
+            VPN
+          </div>
 
-          {sessions
-            .filter((s) => s.type === "vpn")
-            .map((sess) => (
-              <div
-                key={sess.id}
-                onClick={() =>
-                  status === "running" ? handleClickTab(sess.id) : null
-                }
-                className={sess?.is_active ? styles.activeTab : styles.tab}
-                style={
-                  status === "running" && readyToConnect
-                    ? {}
-                    : { opacity: 0.5, cursor: "not-allowed" }
-                }
-              >
-                <Image src={vpn} width={14} height={14} alt="" />
-                VPN
-              </div>
-            ))}
-
-          {sessions
-            .filter((s) => s.type === "gui")
-            .map((sess) => (
-              <div
-                key={sess.id}
-                onClick={() =>
-                  status === "running" ? handleClickTab(sess.id) : null
-                }
-                className={sess?.is_active ? styles.activeTab : styles.tab}
-                style={
-                  status === "running" && readyToConnect
-                    ? {}
-                    : { opacity: 0.5, cursor: "not-allowed" }
-                }
-              >
-                <FiMonitor />
-                GUI
-              </div>
-            ))}
+          <div
+            onClick={navigateToGUI}
+            className={isOnGUI ? styles.activeTab : styles.tab}
+          >
+            <FiMonitor />
+            GUI
+          </div>
         </div>
       </div>
 
       <div className={styles.additionalOptions}>
         <div className={styles.supportStep}>
+          <div
+            className={styles.options}
+            onClick={() => {
+              Modal.confirm({
+                title: "Clear context?",
+                content: "This will erase all conversation history for this session. The system prompt and shells will be preserved.",
+                okText: "Clear",
+                okType: "danger",
+                cancelText: "Cancel",
+                centered: true,
+                async onOk() {
+                  try {
+                    await clearContext({ sessionId });
+                    message.success("Context cleared");
+                    window.location.reload();
+                  } catch {
+                    message.error("Failed to clear context");
+                  }
+                },
+              });
+            }}
+          >
+            <MdOutlineDeleteSweep size={15} />
+            Clear Context
+          </div>
           <div className={styles.options} onClick={() => setShowTodo(true)}>
             <Image src={todo} width={14} height={14} alt="" />
             Todo List
@@ -339,6 +248,7 @@ const Sidebar = ({ sessionId }) => {
         setShow={setShowTodo}
         session_id={sessionId}
       />
+
     </div>
   );
 };

@@ -6,7 +6,6 @@ import { Inter } from "next/font/google";
 import QueryClientContext from "@/components/common/auth/QueryClient";
 import StoreProvider from "@/components/common/auth/StoreProvider";
 import IntercommMessenger from "@/components/common/IntercommMessenger";
-import { SocketProvider } from "@/context/SocketContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata =
@@ -56,14 +55,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <SocketProvider>
-          <StoreProvider>
-            <QueryClientContext>
-              <IntercommMessenger />
-              {children}
-            </QueryClientContext>
-          </StoreProvider>
-        </SocketProvider>
+        <StoreProvider>
+          <QueryClientContext>
+            <IntercommMessenger />
+            {children}
+          </QueryClientContext>
+        </StoreProvider>
       </body>
     </html>
   );

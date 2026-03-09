@@ -11,6 +11,7 @@ import {
   getSessionInfo,
   deleteSession,
   getUserSessions,
+  clearContext,
 } from "../controllers/agent.controller";
 
 const router = express.Router();
@@ -26,5 +27,6 @@ router.post("/pause", [verifySess], pauseAgent);
 router.post("/resume", [verifySess], resumeAgent);
 router.post("/consent", [verifySess], respondToConsent);
 router.post("/manual-output", [verifySess], submitManualOutput);
+router.post("/clear-context", [verifySess], clearContext);
 
 export { router as agentRoutes };

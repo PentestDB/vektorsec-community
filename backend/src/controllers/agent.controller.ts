@@ -137,7 +137,7 @@ export const resumeAgent = async (req: Request, res: Response) => {
     if (message) {
       await initAndRun({ sessionId, userId, userMessage: message, sse, abortSignal: abortCtrl.signal });
     } else {
-      await runAgentLoop({ sessionId, sse, abortSignal: abortCtrl.signal });
+      await runAgentLoop({ sessionId, userId, sse, abortSignal: abortCtrl.signal });
     }
   } catch (err: any) {
     console.error("[agent] resumeAgent error:", err);
@@ -171,7 +171,7 @@ export const respondToConsent = async (req: Request, res: Response) => {
       setPaused(sessionId, true).catch(() => {});
     });
 
-    await handleConsent({ sessionId, approved, sse, abortSignal: abortCtrl.signal });
+    await handleConsent({ sessionId, userId, approved, sse, abortSignal: abortCtrl.signal });
   } catch (err: any) {
     console.error("[agent] respondToConsent error:", err);
     if (!res.headersSent) {
@@ -204,7 +204,7 @@ export const submitManualOutput = async (req: Request, res: Response) => {
       setPaused(sessionId, true).catch(() => {});
     });
 
-    await handleManualOutput({ sessionId, output, sse, abortSignal: abortCtrl.signal });
+    await handleManualOutput({ sessionId, userId, output, sse, abortSignal: abortCtrl.signal });
   } catch (err: any) {
     console.error("[agent] submitManualOutput error:", err);
     if (!res.headersSent) {
@@ -231,6 +231,18 @@ export const getHistory = async (req: Request, res: Response) => {
       turnIndex: session.turnIndex,
       pendingConsent: session.pendingConsent ?? null,
       pendingManualExecution: session.pendingManualExecution ?? null,
+      shells: session.shells ?? [],
+      subagents: (session.subagents ?? []).map((s) => ({
+        subagentId: s.subagentId,
+        parentId: s.parentId,
+        task: s.task,
+        status: s.status,
+        result: s.result,
+        shells: s.shells,
+        createdAt: s.createdAt,
+        completedAt: s.completedAt,
+      })),
+      connectionState: session.connectionState ?? { sshConnected: false },
     });
   } catch (err: any) {
     console.error("[agent] getHistory error:", err);
@@ -284,6 +296,36 @@ export const deleteSession = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[agent] deleteSession error:", err);
     return res.status(400).json({ message: "Failed to delete session" });
+  }
+};
+
+export const clearContext = async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+
+    const session = await SessionsModel.findOne({ sessionId });
+    if (!session) return res.status(404).json({ message: "Session not found" });
+
+    const systemMsg = session.messages?.find((m: any) => m.role === "system" && !m.isSummary);
+
+    await SessionsModel.updateOne(
+      { sessionId },
+      {
+        $set: {
+          messages: systemMsg ? [systemMsg] : [],
+          subagents: [],
+          agentState: "idle",
+          pendingConsent: null,
+          pendingManualExecution: null,
+        },
+      },
+    );
+
+    return res.status(200).json({ message: "Context cleared" });
+  } catch (err: any) {
+    console.error("[agent] clearContext error:", err);
+    return res.status(400).json({ message: "Failed to clear context" });
   }
 };
 

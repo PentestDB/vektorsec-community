@@ -30,6 +30,11 @@ export const pauseAgent = async ({ sessionId }) => {
   return res.data;
 };
 
+export const clearContext = async ({ sessionId }) => {
+  const res = await apiClient.post("/agent/clear-context", { sessionId });
+  return res.data;
+};
+
 export const respondToConsent = async ({ sessionId, approved }) => {
   const res = await apiClient.post("/agent/consent", { sessionId, approved });
   return res.data;
@@ -37,6 +42,43 @@ export const respondToConsent = async ({ sessionId, approved }) => {
 
 export const submitManualOutput = async ({ sessionId, output }) => {
   const res = await apiClient.post("/agent/manual-output", { sessionId, output });
+  return res.data;
+};
+
+// Shell API
+export const getShellList = async (sessionId) => {
+  const res = await apiClient.get(`/shell/${sessionId}/list`);
+  return res.data;
+};
+
+export const getShellBuffer = async (sessionId, shellId, fromOffset) => {
+  const params = fromOffset ? { fromOffset } : {};
+  const res = await apiClient.get(`/shell/${sessionId}/${shellId}/buffer`, { params });
+  return res.data;
+};
+
+export const spawnShellApi = async (sessionId, label) => {
+  const res = await apiClient.post(`/shell/${sessionId}/spawn`, { label });
+  return res.data;
+};
+
+export const closeShellApi = async (sessionId, shellId) => {
+  const res = await apiClient.delete(`/shell/${sessionId}/${shellId}`);
+  return res.data;
+};
+
+export const getConnectionStatus = async (sessionId) => {
+  const res = await apiClient.get(`/shell/${sessionId}/connection`);
+  return res.data;
+};
+
+export const reconnectSSH = async (sessionId) => {
+  const res = await apiClient.post(`/shell/${sessionId}/reconnect`);
+  return res.data;
+};
+
+export const getSubagents = async (sessionId) => {
+  const res = await apiClient.get(`/shell/${sessionId}/subagents`);
   return res.data;
 };
 
@@ -111,11 +153,21 @@ export function connectAgentStream({ sessionId, message, endpoint = "message" })
 
     xhr.onloadend = () => {
       processBuffer();
+      if (xhr.status >= 400) {
+        let errorMsg = `Server error (${xhr.status})`;
+        try {
+          const parsed = JSON.parse(xhr.responseText);
+          if (parsed?.message) errorMsg = parsed.message;
+        } catch {
+          // not JSON
+        }
+        emit("error", { message: errorMsg });
+      }
       emit("_stream_end", {});
     };
 
     xhr.onerror = () => {
-      emit("error", { message: "Connection failed" });
+      emit("error", { message: "Connection failed — check your network" });
       emit("_stream_end", {});
     };
 

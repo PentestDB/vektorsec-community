@@ -15,6 +15,10 @@ ssh-keys/
 /kali-data/
 /kali_data/
 
+# ── Dependencies ──
+**/node_modules/
+.pnpm-store/
+
 # ── Editor / OS ──
 **/.DS_Store
 **/.vscode

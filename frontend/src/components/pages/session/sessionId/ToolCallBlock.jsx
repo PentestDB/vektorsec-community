@@ -9,9 +9,13 @@ const TOOL_LABELS = {
   run_python_script: "Python Script",
   run_install_tool: "Install Tool",
   google_search: "Google Search",
-  msfvenom_payload: "MSFVenom",
-  netcat_listener: "Netcat Listener",
   ask_user: "Question",
+  spawn_shell: "Spawn Shell",
+  write_to_shell: "Write to Shell",
+  read_shell: "Read Shell",
+  list_shells: "List Shells",
+  close_shell: "Close Shell",
+  spawn_subagent: "Spawn Subagent",
 };
 
 function parseArgs(args) {
@@ -28,6 +32,11 @@ function formatArgsPreview(toolName, parsed) {
   if (toolName === "google_search") return parsed.query ?? "";
   if (toolName === "run_install_tool") return parsed.command ?? "";
   if (toolName === "ask_user") return parsed.question ?? "";
+  if (toolName === "spawn_shell") return parsed.label ?? "";
+  if (toolName === "write_to_shell") return `[${parsed.shell_id}] ${(parsed.input ?? "").slice(0, 60)}`;
+  if (toolName === "read_shell") return `[${parsed.shell_id}]`;
+  if (toolName === "close_shell") return `[${parsed.shell_id}]`;
+  if (toolName === "spawn_subagent") return (parsed.task ?? "").slice(0, 80);
   return JSON.stringify(parsed);
 }
 

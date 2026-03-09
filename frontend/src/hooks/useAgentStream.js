@@ -2,11 +2,12 @@ import { useCallback, useRef, useState } from "react";
 import { connectAgentStream } from "@/services/agent.service";
 import { v4 as uuidv4 } from "uuid";
 
-export default function useAgentStream({ sessionId, onComplete }) {
+export default function useAgentStream({ sessionId, onComplete, onShellSpawned }) {
   const [messages, setMessages] = useState([]);
   const [agentState, setAgentState] = useState("idle");
   const [pendingConsent, setPendingConsent] = useState(null);
   const [pendingManualExecution, setPendingManualExecution] = useState(null);
+  const [subagents, setSubagents] = useState([]);
   const controllerRef = useRef(null);
   const streamingAssistantRef = useRef(null);
   const toolCallAccRef = useRef({});
@@ -73,7 +74,23 @@ export default function useAgentStream({ sessionId, onComplete }) {
     async ({ message, endpoint = "message" }) => {
       setAgentState("running");
 
-      const stream = await connectAgentStream({ sessionId, message, endpoint });
+      let stream;
+      try {
+        stream = await connectAgentStream({ sessionId, message, endpoint });
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error_${Date.now()}`,
+            role: "system",
+            content: `Failed to connect to agent: ${err?.message ?? "Unknown error"}`,
+            isError: true,
+            timestamp: new Date(),
+          },
+        ]);
+        setAgentState("idle");
+        return;
+      }
       controllerRef.current = stream;
 
       stream
@@ -196,6 +213,88 @@ export default function useAgentStream({ sessionId, onComplete }) {
           });
           setAgentState("waiting_manual_execution");
         })
+        // Subagent events
+        .onEvent("subagent_spawned", (data) => {
+          setSubagents((prev) => [
+            ...prev,
+            {
+              subagentId: data.subagentId,
+              task: data.task,
+              parentId: data.parentId,
+              status: "running",
+              thinkingContent: "",
+              toolCalls: [],
+              createdAt: new Date(),
+            },
+          ]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `subagent_${data.subagentId}`,
+              role: "subagent",
+              subagentId: data.subagentId,
+              task: data.task,
+              status: "running",
+              content: "",
+              timestamp: new Date(),
+            },
+          ]);
+        })
+        .onEvent("subagent_progress", (data) => {
+          setSubagents((prev) =>
+            prev.map((s) => {
+              if (s.subagentId !== data.subagentId) return s;
+              if (data.type === "thinking") {
+                return { ...s, thinkingContent: s.thinkingContent + data.content };
+              }
+              if (data.type === "tool_start" || data.type === "tool_done" || data.type === "tool_call_start") {
+                return { ...s, toolCalls: [...s.toolCalls, { type: data.type, content: data.content }] };
+              }
+              return s;
+            }),
+          );
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== `subagent_${data.subagentId}`) return m;
+              if (data.type === "thinking") {
+                return { ...m, content: m.content + data.content };
+              }
+              return m;
+            }),
+          );
+        })
+        .onEvent("subagent_completed", (data) => {
+          setSubagents((prev) =>
+            prev.map((s) =>
+              s.subagentId === data.subagentId
+                ? { ...s, status: "completed", result: data.result }
+                : s,
+            ),
+          );
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === `subagent_${data.subagentId}`
+                ? { ...m, status: "completed", result: data.result }
+                : m,
+            ),
+          );
+        })
+        .onEvent("subagent_failed", (data) => {
+          setSubagents((prev) =>
+            prev.map((s) =>
+              s.subagentId === data.subagentId
+                ? { ...s, status: "failed", error: data.error }
+                : s,
+            ),
+          );
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === `subagent_${data.subagentId}`
+                ? { ...m, status: "failed", error: data.error }
+                : m,
+            ),
+          );
+        })
         .onEvent("summarizing", (data) => {
           setMessages((prev) => [
             ...prev,
@@ -233,9 +332,12 @@ export default function useAgentStream({ sessionId, onComplete }) {
         })
         .onEvent("_stream_end", () => {
           flushAssistant();
-          if (agentState === "running") {
-            setAgentState("idle");
-          }
+          setAgentState((prev) => {
+            if (prev === "running") {
+              return "idle";
+            }
+            return prev;
+          });
           controllerRef.current = null;
         });
     },
@@ -248,13 +350,16 @@ export default function useAgentStream({ sessionId, onComplete }) {
     setAgentState("idle");
   }, [flushAssistant]);
 
-  const loadHistory = useCallback((historyMessages) => {
+  const loadHistory = useCallback((historyMessages, historySubagents) => {
     setMessages(
       historyMessages.map((m) => ({
         ...m,
         streaming: false,
       })),
     );
+    if (historySubagents) {
+      setSubagents(historySubagents);
+    }
   }, []);
 
   return {
@@ -266,6 +371,8 @@ export default function useAgentStream({ sessionId, onComplete }) {
     setPendingConsent,
     pendingManualExecution,
     setPendingManualExecution,
+    subagents,
+    setSubagents,
     startStream,
     abort,
     loadHistory,

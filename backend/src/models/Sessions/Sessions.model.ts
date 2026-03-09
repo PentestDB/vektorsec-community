@@ -36,6 +36,41 @@ export interface PendingManualExecutionDoc {
 
 export type AgentState = "idle" | "running" | "paused" | "waiting_consent" | "waiting_manual_execution";
 
+export type ShellType = "pty" | "exec";
+export type ShellStatus = "active" | "closed";
+export type ShellCreator = "user" | "agent" | "subagent";
+
+export interface ShellDoc {
+  shellId: string;
+  label: string;
+  type: ShellType;
+  status: ShellStatus;
+  createdBy: ShellCreator;
+  subagentId?: string;
+  createdAt: Date;
+  closedAt?: Date;
+}
+
+export type SubagentStatus = "running" | "completed" | "failed" | "cancelled";
+
+export interface SubagentDoc {
+  subagentId: string;
+  parentId: string;
+  task: string;
+  status: SubagentStatus;
+  result?: string;
+  messages: AgentMessageDoc[];
+  shells: string[];
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export interface ConnectionStateDoc {
+  sshConnected: boolean;
+  lastConnectedAt?: Date;
+  lastError?: string;
+}
+
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
@@ -56,6 +91,9 @@ export interface SessionDoc extends mongoose.Document {
     totalTokens: number;
     timestamp: Date;
   }>;
+  shells: ShellDoc[];
+  subagents: SubagentDoc[];
+  connectionState: ConnectionStateDoc;
 }
 
 const ToolCallSchema = new Schema(
@@ -78,6 +116,50 @@ const AgentMessageSchema = new Schema(
     timestamp: { type: Date, default: Date.now },
     turnIndex: { type: Number, default: 0 },
     isSummary: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
+const ShellSchema = new Schema(
+  {
+    shellId: { type: String, required: true },
+    label: { type: String, required: true },
+    type: { type: String, required: true, enum: ["pty", "exec"] },
+    status: { type: String, default: "active", enum: ["active", "closed"] },
+    createdBy: { type: String, required: true, enum: ["user", "agent", "subagent"] },
+    subagentId: { type: String },
+    createdAt: { type: Date, default: Date.now },
+    closedAt: { type: Date },
+  },
+  { _id: false },
+);
+
+const SubagentMessageSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    role: { type: String, required: true, enum: ["system", "user", "assistant", "tool"] },
+    content: { type: String, default: null },
+    toolCalls: { type: [ToolCallSchema], default: undefined },
+    toolCallId: { type: String },
+    toolName: { type: String },
+    timestamp: { type: Date, default: Date.now },
+    turnIndex: { type: Number, default: 0 },
+    isSummary: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
+const SubagentSchema = new Schema(
+  {
+    subagentId: { type: String, required: true },
+    parentId: { type: String, required: true },
+    task: { type: String, required: true },
+    status: { type: String, default: "running", enum: ["running", "completed", "failed", "cancelled"] },
+    result: { type: String },
+    messages: { type: [SubagentMessageSchema], default: [] },
+    shells: { type: [String], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    completedAt: { type: Date },
   },
   { _id: false },
 );
@@ -125,6 +207,17 @@ const SessionSchema = new Schema({
     ],
     default: [],
   },
+  shells: { type: [ShellSchema], default: [] },
+  subagents: { type: [SubagentSchema], default: [] },
+  connectionState: {
+    type: {
+      sshConnected: { type: Boolean, default: false },
+      lastConnectedAt: { type: Date },
+      lastError: { type: String },
+    },
+    default: { sshConnected: false },
+  },
 });
 
+export { AgentMessageSchema };
 export default mongoose.model<SessionDoc>("Session", SessionSchema);

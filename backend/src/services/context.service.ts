@@ -65,6 +65,8 @@ Include in your summary:
 - Current attack surface understanding
 - What has been attempted and the results
 - Promising attack vectors not yet explored
+- Active persistent shells and their purposes (shell IDs, labels, what is running in them)
+- Any subagents that were spawned and their status/results
 
 Be comprehensive. This summary replaces the full conversation history.`;
 

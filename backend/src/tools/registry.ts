@@ -5,9 +5,13 @@ import runBash from "./handlers/run-bash";
 import runPythonScript from "./handlers/run-python-script";
 import runInstallTool from "./handlers/run-install-tool";
 import googleSearch from "./handlers/google-search";
-import msfvenomPayload from "./handlers/msfvenom-payload";
-import netcatListener from "./handlers/netcat-listener";
 import askUser from "./handlers/generic-response";
+import spawnShell from "./handlers/spawn-shell";
+import writeToShell from "./handlers/write-to-shell";
+import readShell from "./handlers/read-shell";
+import listShells from "./handlers/list-shells";
+import closeShell from "./handlers/close-shell";
+import spawnSubagent from "./handlers/spawn-subagent";
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -32,8 +36,12 @@ class ToolRegistry {
     return Array.from(this.tools.keys());
   }
 
-  toOpenAISchemas(): OpenAI.Chat.ChatCompletionTool[] {
-    return this.getAll().map(toolToOpenAISchema);
+  toOpenAISchemas(opts?: { excludeSubagent?: boolean }): OpenAI.Chat.ChatCompletionTool[] {
+    let tools = this.getAll();
+    if (opts?.excludeSubagent) {
+      tools = tools.filter((t) => t.name !== "spawn_subagent");
+    }
+    return tools.map(toolToOpenAISchema);
   }
 
   requiresConsent(name: string): boolean {
@@ -51,6 +59,10 @@ toolRegistry.register(runBash);
 toolRegistry.register(runPythonScript);
 toolRegistry.register(runInstallTool);
 toolRegistry.register(googleSearch);
-toolRegistry.register(msfvenomPayload);
-toolRegistry.register(netcatListener);
 toolRegistry.register(askUser);
+toolRegistry.register(spawnShell);
+toolRegistry.register(writeToShell);
+toolRegistry.register(readShell);
+toolRegistry.register(listShells);
+toolRegistry.register(closeShell);
+toolRegistry.register(spawnSubagent);
