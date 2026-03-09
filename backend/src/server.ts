@@ -16,6 +16,7 @@ import { agentRoutes } from "./routes/agent.routes";
 import { shellRoutes } from "./routes/shell.routes";
 import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
+import { burpRoutes } from "./routes/burp.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
 import { setupShellWebSocket } from "./services/shell.socket";
@@ -192,6 +193,7 @@ const initializeApp = async () => {
     app.use("/api/shell", shellRoutes);
     app.use("/api/copilot", vpnRoutes);
     app.use("/api/copilot", vncRoutes);
+    app.use("/api/burp", burpRoutes);
 
     app.use(function (err: any, req: any, res: any, next: any) {
       console.log("Error occurred but handled - ", err);

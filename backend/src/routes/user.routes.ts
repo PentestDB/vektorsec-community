@@ -24,6 +24,8 @@ import {
   autoSetupVNC,
   diagnoseVNC,
   repairVNC,
+  getBurpConfig,
+  updateBurpConfig,
 } from "../controllers/user.controller";
 import { uploadImageMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -65,5 +67,8 @@ router.post("/reset-vnc-config", [verifySess], resetVNCConfig);
 router.post("/auto-setup-vnc", [verifySess], autoSetupVNC);
 router.post("/diagnose-vnc", [verifySess], diagnoseVNC);
 router.post("/repair-vnc", [verifySess], repairVNC);
+
+router.get("/get-burp-config", [verifySess], getBurpConfig);
+router.post("/update-burp-config", [verifySess], updateBurpConfig);
 
 export { router as userRoutes };

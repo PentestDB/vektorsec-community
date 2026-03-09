@@ -3,6 +3,7 @@ import {
   getCapabilityByName,
   getActiveBucketIds,
 } from "../../capabilities/registry";
+import { readEnvFile } from "../envWriter";
 
 export interface AgentPromptConfig {
   sessionId: string;
@@ -44,6 +45,30 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
   - Also: /usr/share/wordlists/seclists/, /usr/share/wordlists/metasploit/, /usr/share/wordlists/wfuzz/`
     : "";
 
+  const env = readEnvFile();
+  const burpConfigured = !!env.BURP_RPC_HOST;
+
+  const burpSection = burpConfigured
+    ? `\n<burp_integration>
+You have access to Burp Suite via the send_to_burp tool. This sends HTTP requests through Burp's HTTP engine (which handles TLS, HTTP/2 negotiation, cookies, etc.) and returns the full raw response.
+
+When the user sends you an HTTP request to pentest:
+1. Analyze the request: identify the endpoint type, parameters, authentication, and data format.
+2. Identify vulnerability categories to test (e.g., SQL Injection, XSS, IDOR, Authentication Bypass, Command Injection, Path Traversal, SSRF, Mass Assignment, etc.).
+3. Present a brief summary of your analysis and proposed testing plan to the user.
+4. After user confirmation, systematically test each category using send_to_burp with crafted payloads.
+5. For each test, analyze the response carefully — look for error messages, status code changes, timing differences, reflected input, data leaks, or behavioral anomalies that indicate a vulnerability.
+6. Iterate: if you find a promising vector, deepen your testing with more specific payloads.
+7. Report findings with severity, evidence, and reproduction steps.
+
+Request formatting rules:
+- Provide the complete raw HTTP request (request line + headers + body).
+- The tool auto-normalizes \\r\\n line endings and recalculates Content-Length.
+- Preserve all original headers (Host, Cookie, Authorization, etc.) unless intentionally testing without them.
+- When modifying the body, the Content-Length is recalculated automatically.
+</burp_integration>\n`
+    : "";
+
   const now = new Date();
   const date = config.currentDate ?? now.toISOString().split("T")[0];
   const day = config.currentDay ?? now.toLocaleDateString("en-US", { weekday: "long" });
@@ -79,7 +104,7 @@ ${installSection}
 - Attack box: Kali Linux with root access${wordlistSection}
 </environment>
 
-<guidelines>
+${burpSection}<guidelines>
 - Start with reconnaissance unless the user provides recon data.
 - Save tool output to files for later reference (use -oN, -o, > redirection, etc.).
 - For long-running scans, use appropriate timeouts and scope limitations.

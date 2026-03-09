@@ -12,6 +12,7 @@ import readShell from "./handlers/read-shell";
 import listShells from "./handlers/list-shells";
 import closeShell from "./handlers/close-shell";
 import spawnSubagent from "./handlers/spawn-subagent";
+import sendToBurp from "./handlers/send-to-burp";
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -66,3 +67,4 @@ toolRegistry.register(readShell);
 toolRegistry.register(listShells);
 toolRegistry.register(closeShell);
 toolRegistry.register(spawnSubagent);
+toolRegistry.register(sendToBurp);

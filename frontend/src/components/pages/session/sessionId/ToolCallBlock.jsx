@@ -16,6 +16,7 @@ const TOOL_LABELS = {
   list_shells: "List Shells",
   close_shell: "Close Shell",
   spawn_subagent: "Spawn Subagent",
+  send_to_burp: "Burp Request",
 };
 
 function parseArgs(args) {
@@ -37,6 +38,13 @@ function formatArgsPreview(toolName, parsed) {
   if (toolName === "read_shell") return `[${parsed.shell_id}]`;
   if (toolName === "close_shell") return `[${parsed.shell_id}]`;
   if (toolName === "spawn_subagent") return (parsed.task ?? "").slice(0, 80);
+  if (toolName === "send_to_burp") {
+    const req = parsed.raw_request ?? "";
+    const firstLine = req.split(/\r?\n/)[0] || "";
+    const method = firstLine.split(" ")[0] || "";
+    const path = firstLine.split(" ")[1] || "";
+    return `${method} ${parsed.host ?? ""}${path ? `:${parsed.port ?? 443}${path}` : ""}`;
+  }
   return JSON.stringify(parsed);
 }
 
@@ -49,6 +57,9 @@ function getCodePreview(toolName, parsed) {
   }
   if (toolName === "run_python_script") {
     return { code: parsed.script ?? "", language: "python" };
+  }
+  if (toolName === "send_to_burp") {
+    return { code: parsed.raw_request ?? "", language: "http" };
   }
   return null;
 }

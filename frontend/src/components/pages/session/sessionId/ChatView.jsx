@@ -149,6 +149,18 @@ export default function ChatView({ sessionId }) {
     [setPendingManualExecution, setAgentState, startStream],
   );
 
+  // Check for pending Burp requests on mount / navigation
+  const burpPendingProcessed = useRef(false);
+  useEffect(() => {
+    if (historyLoading || burpPendingProcessed.current) return;
+    const pending = sessionStorage.getItem("burp-to-workspace");
+    if (pending) {
+      sessionStorage.removeItem("burp-to-workspace");
+      burpPendingProcessed.current = true;
+      setTimeout(() => handleSend(pending), 300);
+    }
+  }, [historyLoading, handleSend]);
+
   const isEmpty = messages.length === 0 && !historyLoading;
 
   return (

@@ -59,6 +59,9 @@ importers:
       bcrypt:
         specifier: ^5.1.1
         version: 5.1.1
+      burp-rpc:
+        specifier: ^1.0.1
+        version: 1.0.1
       cheerio:
         specifier: ^1.0.0-rc.12
         version: 1.2.0
@@ -1030,6 +1033,10 @@ packages:
   buildcheck@0.0.7:
     resolution: {integrity: sha512-lHblz4ahamxpTmnsk+MNTRWsjYKv965MwOrSJyeD588rR3Jcu7swE+0wN5F+PbL5cjgu/9ObkhfzEPuofEMwLA==}
     engines: {node: '>=10.0.0'}
+
+  burp-rpc@1.0.1:
+    resolution: {integrity: sha512-IXzyEDtGPkq5boQN1TeHr9lnvgd+arvDJYtssIgBOKCrjgEfy47RK01uMWJC+dn5xwQd87W7ILKQygZOQa+nBA==}
+    engines: {node: '>=18'}
 
   busboy@1.6.0:
     resolution: {integrity: sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==}
@@ -4125,6 +4132,11 @@ snapshots:
 
   buildcheck@0.0.7:
     optional: true
+
+  burp-rpc@1.0.1:
+    dependencies:
+      '@grpc/grpc-js': 1.14.3
+      '@grpc/proto-loader': 0.7.15
 
   busboy@1.6.0:
     dependencies:

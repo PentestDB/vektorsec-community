@@ -392,3 +392,42 @@ button {
     background: var(--black-bg);
   }
 }
+
+.ant-message {
+  .ant-message-notice-content {
+    background: var(--black-bg) !important;
+    border: 1px solid var(--border-color-100);
+    border-radius: 6px;
+    color: var(--primary-text);
+    font-size: 0.78rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    padding: 0.5rem 0.85rem;
+
+    .ant-message-custom-content {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .anticon-check-circle {
+      color: var(--bugbase-green) !important;
+    }
+
+    .anticon-close-circle {
+      color: var(--danger) !important;
+    }
+
+    .anticon-exclamation-circle {
+      color: var(--orange) !important;
+    }
+
+    .anticon-info-circle {
+      color: #79c0ff !important;
+    }
+  }
+}
+
+.ant-modal-mask {
+  background: rgba(0, 0, 0, 0.65) !important;
+  backdrop-filter: blur(4px);
+}

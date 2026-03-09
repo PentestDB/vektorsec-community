@@ -1,4 +1,4 @@
-import { message, Modal } from "antd";
+import { App } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
@@ -16,11 +16,13 @@ import { clearContext } from "@/services/agent.service";
 import { updateSessions } from "@/store/user.slice";
 import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
+import { TbRadar } from "react-icons/tb";
 const Sidebar = ({ sessionId }) => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
+  const { modal, message } = App.useApp();
 
   const { data: capabilitiesData } = useQuery("capabilities", getCapabilities);
   const requireConsent = capabilitiesData?.requireConsentForAllTools ?? false;
@@ -74,9 +76,22 @@ const Sidebar = ({ sessionId }) => {
     router.push(`/session/${sessionId}/gui`);
   };
 
+  const navigateToBurp = () => {
+    const burpId = `${sessionId}/burp`;
+    let updatedSess = [...sessions];
+    const exists = updatedSess.find((s) => s.id === burpId);
+    if (!exists) {
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: burpId, is_main: false, is_active: true, type: "burp" });
+      dispatch(updateSessions(updatedSess));
+    }
+    router.push(`/session/${sessionId}/burp`);
+  };
+
   const isOnWorkspace = pathname === `/session/${sessionId}`;
   const isOnVPN = pathname?.includes("/vpn");
   const isOnGUI = pathname?.includes("/gui");
+  const isOnBurp = pathname?.includes("/burp");
 
   return (
     <div className={styles.sidebar}>
@@ -186,6 +201,14 @@ const Sidebar = ({ sessionId }) => {
             <FiMonitor />
             GUI
           </div>
+
+          <div
+            onClick={navigateToBurp}
+            className={isOnBurp ? styles.activeTab : styles.tab}
+          >
+            <TbRadar />
+            Burp
+          </div>
         </div>
       </div>
 
@@ -194,7 +217,7 @@ const Sidebar = ({ sessionId }) => {
           <div
             className={styles.options}
             onClick={() => {
-              Modal.confirm({
+              modal.confirm({
                 title: "Clear context?",
                 content: "This will erase all conversation history for this session. The system prompt and shells will be preserved.",
                 okText: "Clear",

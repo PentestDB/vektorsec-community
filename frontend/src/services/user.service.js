@@ -119,3 +119,13 @@ export const repairVNC = async (body) => {
   return res.data;
 };
 
+export const getBurpConfig = async () => {
+  const res = await apiClient.get("/user/get-burp-config");
+  return res.data;
+};
+
+export const updateBurpConfig = async (body) => {
+  const res = await apiClient.post("/user/update-burp-config", body);
+  return res.data;
+};
+

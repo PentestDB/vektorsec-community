@@ -1281,3 +1281,37 @@ export const getAvailableModels = async (_req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to fetch available models" });
   }
 };
+
+export const getBurpConfig = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    return res.status(200).json({
+      host: env.BURP_RPC_HOST || "",
+      port: env.BURP_RPC_PORT || "50051",
+      configured: !!env.BURP_RPC_HOST,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get Burp config" });
+  }
+};
+
+export const updateBurpConfig = async (req: Request, res: Response) => {
+  try {
+    const { host, port } = req.body;
+
+    if (!host) {
+      return res.status(400).json({ message: "Host is required" });
+    }
+
+    updateEnvVars({
+      BURP_RPC_HOST: host,
+      BURP_RPC_PORT: String(port || 50051),
+    });
+
+    return res.status(200).json({ message: "Burp configuration updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update Burp config" });
+  }
+};

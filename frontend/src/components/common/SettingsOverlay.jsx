@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbRadar } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
 import SSHPage from "@/components/pages/settings/SSH";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
+import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 
 const TABS = [
   {
@@ -42,6 +43,13 @@ const TABS = [
     description: "Set up a remote desktop on your exploit box for graphical tools.",
     icon: TbDeviceDesktop,
     component: GUISettingsPage,
+  },
+  {
+    key: "burp",
+    label: "Burp Suite",
+    description: "Connect to a Burp Suite instance via the Burp RPC extension.",
+    icon: TbRadar,
+    component: BurpSettingsPage,
   },
 ];
 

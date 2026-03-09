@@ -414,6 +414,24 @@ export async function runAgentLoop(params: {
 
       const needsConsent = toolResults.find((r) => r.needsConsent);
       if (needsConsent) {
+        // Append tool result messages for all non-consent tool calls that
+        // already completed, so the assistant message's tool_calls all have
+        // matching tool responses when the loop resumes after consent.
+        for (const tr of toolResults) {
+          if (tr.needsConsent) continue;
+          const toolMsg: AgentMessageDoc = {
+            id: uuidv4(),
+            role: "tool",
+            content: tr.result.output,
+            toolCallId: tr.toolCallId,
+            toolName: tr.toolName,
+            timestamp: new Date(),
+            turnIndex,
+          };
+          messages.push(toolMsg);
+          newMessages.push(toolMsg);
+        }
+
         await appendMessages(sessionId, newMessages);
         await SessionsModel.updateOne(
           { sessionId },
