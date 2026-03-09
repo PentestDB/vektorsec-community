@@ -11,7 +11,6 @@ import {
   getSessionHistory,
   deleteCopilotSession,
   getTodoListSession,
-  getUserInfo,
   updateTodoListSession,
 } from "../controllers/copilot.controller";
 
@@ -34,8 +33,6 @@ router.post("/complete-subprocess", [verifySess], completeCopilotSubprocess);
 router.post("/delete-session", [verifySess], deleteCopilotSession);
 
 router.post("/get-session-todo-list", [verifySess], getTodoListSession);
-
-router.get("/get-user-details", [verifySess], getUserInfo);
 
 router.post("/update-todo-list", [verifySess], updateTodoListSession);
 

@@ -16,8 +16,8 @@ export function readEnvFile(): Record<string, string> {
     if (eqIdx === -1) continue;
 
     const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim();
-    vars[key] = val;
+    const raw = trimmed.slice(eqIdx + 1).trim();
+    vars[key] = raw.replace(/^(['"])(.*)\1$/, "$2");
   }
 
   return vars;

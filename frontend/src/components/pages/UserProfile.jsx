@@ -1,4 +1,4 @@
-import { Avatar, Form, Input, Row, message } from "antd";
+import { App, Avatar, Form, Input, Row } from "antd";
 import styles from "@/styles/pages/Billings.module.scss";
 import PrimaryButton from "../common/PrimaryButton";
 import { useSelector } from "react-redux";
@@ -9,11 +9,11 @@ const UserProfile = () => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const { user } = useSelector((state) => state.user);
+  const { message } = App.useApp();
 
   const updateProfileMutation = useMutation(updateUserProfile, {
     onSuccess: (data) => {
-      queryClient.invalidateQueries(["fetch-user-details"]);
-
+      queryClient.invalidateQueries(["check-session"]);
       message.success(data?.message ?? "User profile updated successfully!");
     },
     onError: (error) => {
@@ -24,17 +24,15 @@ const UserProfile = () => {
     },
   });
 
-  useQuery("fetch-kyc-status", checkKYCStatus);
-
-  const submitForm = async (values) => {
-    await updateProfileMutation.mutateAsync(values);
+  const submitForm = (values) => {
+    updateProfileMutation.mutate(values);
   };
 
   return (
     <div className={`${styles.billingsContainer} ${styles.profileContainer}`}>
       <div className={styles.header}>
         <h1>Profile</h1>
-        <p>Manage your personal information and KYC details</p>
+        <p>Manage your personal information</p>
       </div>
       <Row className={styles.profileCardWrapper}>
         <Avatar

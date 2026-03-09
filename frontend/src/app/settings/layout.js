@@ -20,18 +20,10 @@ const SettingsLayout = ({ children }) => {
         return "Tools";
       case "/settings/capabilities":
         return "Capabilities";
-      case "/settings/billing":
-        return "Billing";
-      case "/settings/usage":
-        return "Usage History";
-      case "/settings/storage":
-        return "Storage";
       case "/settings/models":
         return "Models";
       case "/settings/ssh":
         return "SSH / Exploit Box";
-      case "/settings/billing/choose-plan":
-        return "Choose plan";
       default:
         router.push("/settings");
         return "My Account";
@@ -66,11 +58,6 @@ const SettingsLayout = ({ children }) => {
               {getPageTitle() === "Capabilities" && (
                 <p className={styles.sessionDescription}>
                   Manage CLI tools and Python packages available on your exploit box.
-                </p>
-              )}
-              {getPageTitle() === "Choose plan" && (
-                <p className={styles.sessionDescription}>
-                  Select plan that help&apos;s you grow
                 </p>
               )}
             </Col>

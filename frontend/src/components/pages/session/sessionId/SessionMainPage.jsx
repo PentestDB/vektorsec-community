@@ -31,7 +31,7 @@ import { useRouter } from "next/navigation";
 import Loader from "@/components/common/loader/Loader";
 // import { DownCircleFilled } from "@ant-design/icons";
 import StepPage4 from "./Step4";
-import { checkUserAccess } from "@/services/user.service";
+
 import { useSocketContext } from "@/context/SocketContext";
 import { updateActiveTerminal } from "@/store/socket.slice";
 import { v4 as uuidv4 } from "uuid";
@@ -270,10 +270,7 @@ const SessionMainPage = ({ session_id }) => {
       console.log(err);
       notification.error({
         message: "Failed to initiate pentest copilot",
-        description:
-          err?.response?.data?.err === "no-gold"
-            ? "You dont have enough gold!"
-            : err?.response?.data?.message ?? "Something went wrong",
+        description: err?.response?.data?.message ?? "Something went wrong",
       });
     },
   });
@@ -287,10 +284,7 @@ const SessionMainPage = ({ session_id }) => {
       console.log(err);
       notification.error({
         message: "Failed to generate copilot command",
-        description:
-          err?.response?.data?.err === "no-gold"
-            ? "You dont have enough gold!"
-            : err?.response?.data?.message ?? "Something went wrong",
+        description: err?.response?.data?.message ?? "Something went wrong",
       });
     },
   });
@@ -552,7 +546,6 @@ const SessionMainPage = ({ session_id }) => {
     await finalizeOutputAndGetSummaryMutation.mutateAsync({
       sessionId: session_id,
     });
-    await queryClient.invalidateQueries(["fetch-user-gold"]);
   };
 
   const finalizeSummaryFunc = async (values) => {

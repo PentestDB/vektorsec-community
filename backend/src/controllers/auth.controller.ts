@@ -520,7 +520,6 @@ export const checkUserSession = async (req: Request, res: Response) => {
           firstLogin: u.firstLogin,
           profilePicture: u.profilePicture,
           uid: u._id,
-          plan: u.billing.plan,
           access: earlyAccess ? true : false,
         },
       });
@@ -627,7 +626,6 @@ export const loginUser = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         profilePicture: user.profilePicture,
-        plan: user.billing.plan,
       },
     });
 

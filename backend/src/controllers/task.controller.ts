@@ -86,10 +86,6 @@ export const startupNewTask = async (req: Request, res: Response) => {
     console.log(err);
     return res.status(400).json({
       message: "Failed to start exploit box, please try again later",
-      err:
-        err.message === "Error: User does not have enough gold"
-          ? "no-gold"
-          : "",
     });
   }
 };

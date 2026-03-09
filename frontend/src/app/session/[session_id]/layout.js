@@ -138,17 +138,13 @@ const SessionLayout = ({ children, params }) => {
     onSuccess: (data) => {
       setLoading(true);
       setServiceId(data.serviceId);
-      queryClient.invalidateQueries(["fetch-user-gold"]);
       dispatch(updateDisclaimer(true));
     },
     onError: (err) => {
       console.log(err);
       notification.error({
         message: "Failed to start exploit box",
-        description:
-          err?.response?.data?.err === "no-gold"
-            ? "You dont have enough gold!"
-            : err?.response?.data?.message ?? "Something went wrong",
+        description: err?.response?.data?.message ?? "Something went wrong",
       });
     },
   });

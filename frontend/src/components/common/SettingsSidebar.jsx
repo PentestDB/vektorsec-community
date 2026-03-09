@@ -1,15 +1,9 @@
-
-
 import { Col } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import { RiAccountCircleLine } from "react-icons/ri";
-import { PiChartDonutBold } from "react-icons/pi";
-import { MdPayment } from "react-icons/md";
-import { TiCloudStorageOutline } from "react-icons/ti";
 import { TbTools, TbBrain, TbTerminal2 } from "react-icons/tb";
 import { usePathname, useRouter } from "next/navigation";
-
 
 const settingItems = [
     {
@@ -17,12 +11,6 @@ const settingItems = [
         title: "My Account",
         path: "/settings",
         icon: <RiAccountCircleLine className={styles.sidebarIcon} />
-    },
-    {
-        title: "Storage",
-        name: "Storage",
-        path: "/settings/storage",
-        icon: <TiCloudStorageOutline className={styles.sidebarIcon} />
     },
     {
         title: "Capabilities",

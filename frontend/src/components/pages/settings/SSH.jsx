@@ -240,7 +240,7 @@ const SSHPage = () => {
                 label="Password"
                 name="password"
                 extra={
-                  data?.hasPassword ? (
+                  data?.password ? (
                     <span style={{ fontSize: "0.65rem", color: "var(--secondary-text)" }}>
                       A password is already set. Leave blank to keep it unchanged.
                     </span>
@@ -248,7 +248,7 @@ const SSHPage = () => {
                 }
               >
                 <Input.Password
-                  placeholder={data?.hasPassword ? "••••••••" : "Enter SSH password"}
+                  placeholder={data?.password ? "••••••••" : "Enter SSH password"}
                 />
               </Form.Item>
             ) : (

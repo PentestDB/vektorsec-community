@@ -20,17 +20,3 @@ export const stopTask = async (body) => {
   return res.data;
 };
 
-export const createEBSvolume = async () => {
-  const res = await apiClient.post(`/task/create-personal-volume`);
-  return res.data;
-};
-
-export const getVolumeStatus = async () => {
-  const res = await apiClient.get(`/task/get-volume-status`);
-  return res.data;
-};
-
-export const formatVolume = async () => {
-  const res = await apiClient.get(`/task/format-personal-volume`);
-  return res.data;
-};

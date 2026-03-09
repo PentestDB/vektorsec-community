@@ -65,11 +65,6 @@ export const completeSubprocess = async ({ session_id }) => {
   return res.data;
 };
 
-export const getUserInfo = async () => {
-  const res = await apiClient.get(`/copilot/get-user-details`);
-  return res.data;
-};
-
 export const downloadFiles = async ({ session_id }) => {
   const response = await apiClient.post(
     `/copilot/download`,

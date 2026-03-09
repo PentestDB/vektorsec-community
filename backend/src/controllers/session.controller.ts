@@ -241,10 +241,6 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
     await rollbackProcessingStepIfNeeded(req.body?.sessionId);
     return res.status(400).json({
       message: "Failed to initiate Copilot",
-      err:
-        err.message === "Error: User does not have enough gold"
-          ? "no-gold"
-          : "",
     });
   }
 };
