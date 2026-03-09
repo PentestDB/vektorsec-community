@@ -378,7 +378,8 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
 
     const { content: gptRes, success, meta } = await invoke_llm_with_retry(
       sessionHistory,
-      sessionId
+      sessionId,
+      { userId: userId?.toString(), tags: ["copilot", "next-step"], generationName: "copilot-next-step" }
     );
 
     if (!success) {
@@ -854,7 +855,8 @@ export const finalizeOutputAndGetSummary = async (sessionId: string) => {
 
   let { content: context, success, meta } = await invoke_llm_with_retry(
     contextualHistory,
-    sessionId
+    sessionId,
+    { userId: sessionData.uid?.toString(), tags: ["copilot", "context"], generationName: "copilot-context" }
   ) as { content: any; success: boolean; meta?: any };
 
   if (!success) {
@@ -1048,7 +1050,8 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
 
     const { success, content: todoResponse, meta } = await invoke_llm_with_retry(
       todoHistory,
-      sessionId
+      sessionId,
+      { userId: dbSession.uid?.toString(), tags: ["copilot", "todo"], generationName: "copilot-todo" }
     );
 
     if (!success) {
@@ -1354,7 +1357,11 @@ export const analyzeSubprocessData = async (
     content: global_summary,
     success,
     meta,
-  } = await invoke_llm_with_retry(new_history, sessionId);
+  } = await invoke_llm_with_retry(new_history, sessionId, {
+    userId: sessionData.uid?.toString(),
+    tags: ["copilot", "summary"],
+    generationName: "copilot-summary",
+  });
 
   if (!success) {
     throw new Error("Error generating GPT4 summary");
@@ -1457,7 +1464,10 @@ export const extractRelevantContextUsingGPT3 = async (
       },
     ];
 
-    const { content: gptRes, success } = await invoke_llm_with_retry(history, "");
+    const { content: gptRes, success } = await invoke_llm_with_retry(history, "", {
+      tags: ["copilot", "contextualize"],
+      generationName: "copilot-contextualize",
+    });
 
     console.log(gptRes);
     if (!success) {

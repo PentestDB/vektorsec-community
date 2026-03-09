@@ -23,6 +23,12 @@ const TOML_KEY_MAP: Record<string, Record<string, string>> = {
     backend_uri: "NEXT_PUBLIC_BACKEND_URI",
     deployment: "NEXT_PUBLIC_DEPLOYMENT",
   },
+  tracing: {
+    enabled: "LANGFUSE_ENABLED",
+    public_key: "LANGFUSE_PUBLIC_KEY",
+    secret_key: "LANGFUSE_SECRET_KEY",
+    base_url: "LANGFUSE_BASE_URL",
+  },
 };
 
 function resolveDataDir(): string {

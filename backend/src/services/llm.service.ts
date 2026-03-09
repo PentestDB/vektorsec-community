@@ -34,9 +34,16 @@ async function trackTokenUsage(
 export async function invoke_llm_with_retry(
   history: HistoryData[],
   sessionId: string,
-  opts: { format?: "json" | "text"; temperature?: number; maxRetries?: number } = {}
+  opts: {
+    format?: "json" | "text";
+    temperature?: number;
+    maxRetries?: number;
+    userId?: string;
+    tags?: string[];
+    generationName?: string;
+  } = {}
 ): Promise<{ success: boolean; content?: string; meta?: LlmInvocationMeta }> {
-  const { format = "json", temperature, maxRetries = 2 } = opts;
+  const { format = "json", temperature, maxRetries = 2, userId, tags, generationName } = opts;
   let tries = 0;
 
   while (true) {
@@ -45,6 +52,10 @@ export async function invoke_llm_with_retry(
         messages: history.map((h) => ({ role: h.role, content: h.content })),
         format,
         temperature,
+        sessionId: sessionId || undefined,
+        userId,
+        tags: tags ?? ["copilot"],
+        generationName,
       });
 
       if (response.content === null) {

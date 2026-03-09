@@ -1,7 +1,9 @@
 import OpenAI from "openai";
 import axios from "axios";
+import { observeOpenAI } from "@langfuse/openai";
 import getSecrets from "../getSecrets";
 import { readEnvFile, updateEnvVars } from "../envWriter";
+import { isTracingEnabled } from "../tracing";
 
 export type ProviderType = "openai" | "anthropic" | "openai-compatible";
 
@@ -148,6 +150,14 @@ export interface InvokeOptions {
   messages: Array<{ role: string; content: string }>;
   format?: "json" | "text";
   temperature?: number;
+  /** Langfuse: session ID for tracing */
+  sessionId?: string;
+  /** Langfuse: user ID for tracing */
+  userId?: string;
+  /** Langfuse: tags for filtering traces (e.g. "copilot", "task", "metasploit") */
+  tags?: string[];
+  /** Langfuse: generation name for identification */
+  generationName?: string;
 }
 
 export interface InvokeResult {
@@ -172,7 +182,15 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
   const totalChars = opts.messages.reduce((n, m) => n + m.content.length, 0);
 
   const start = Date.now();
-  const client = buildClient(config);
+  const rawClient = buildClient(config);
+  const client = isTracingEnabled()
+    ? observeOpenAI(rawClient, {
+        sessionId: opts.sessionId,
+        userId: opts.userId,
+        tags: opts.tags,
+        generationName: opts.generationName,
+      })
+    : rawClient;
 
   const runCompletion = async (temperature: number) => {
     const completionConfig: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {

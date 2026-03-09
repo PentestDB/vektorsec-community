@@ -118,6 +118,9 @@ ${ifconfigOutput}
     const gptResponse = await invoke_llm({
       messages,
       format: "json",
+      sessionId: session_id,
+      tags: ["metasploit", "rag"],
+      generationName: "metasploit-rag",
     });
 
     console.log("GPT RES", gptResponse?.content);

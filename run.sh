@@ -330,7 +330,9 @@ configure_static() {
     read -r val
     if [[ -n "$val" ]]; then
         set_toml_var "$CONFIG_TOML" "base_url_frontend" "$val"
+        cur="$val"
     fi
+    local frontend_url="${cur:-$default_url}"
 
     cur=$(get_toml_var "$CONFIG_TOML" "deployment")
     prompt_input "Deployment mode [${cur:-LOCAL}]:"
@@ -341,12 +343,13 @@ configure_static() {
 
     cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
     echo
-    echo -e "   ${DIM}The frontend URL above is always allowed. Add extra origins here${NC}"
-    echo -e "   ${DIM}(comma-separated, e.g. http://myapp.local:3000,http://other:8080)${NC}"
-    prompt_input "Additional CORS origins [${cur:-none}]:"
+    echo -e "   ${DIM}CORS origins (comma-separated). Default: frontend URL. Add extra origins if needed.${NC}"
+    prompt_input "CORS origins [${cur:-$frontend_url}]:"
     read -r val
     if [[ -n "$val" ]]; then
         set_toml_var "$CONFIG_TOML" "cors_origins" "$val"
+    elif [[ -z "$cur" ]]; then
+        set_toml_var "$CONFIG_TOML" "cors_origins" "$frontend_url"
     fi
 
     # ── Database ──
@@ -393,6 +396,40 @@ configure_static() {
         set_toml_var "$CONFIG_TOML" "redis_url" "$val"
     elif [[ -z "$cur" ]]; then
         set_toml_var "$CONFIG_TOML" "redis_url" "$default_redis"
+    fi
+
+    # ── Tracing (Langfuse) ──
+    section "Tracing (Langfuse)"
+    if ! grep -q "^\[tracing\]" "$CONFIG_TOML" 2>/dev/null; then
+        echo "" >> "$CONFIG_TOML"
+        echo "[tracing]" >> "$CONFIG_TOML"
+        echo "enabled = \"false\"" >> "$CONFIG_TOML"
+        echo "public_key = \"\"" >> "$CONFIG_TOML"
+        echo "secret_key = \"\"" >> "$CONFIG_TOML"
+        echo "base_url = \"https://cloud.langfuse.com\"" >> "$CONFIG_TOML"
+    fi
+    echo
+    echo -e "   ${DIM}Langfuse provides LLM observability: traces, token usage, costs.${NC}"
+    echo -e "   ${DIM}Get keys at https://cloud.langfuse.com${NC}"
+    echo
+    if confirm "Enable Langfuse tracing?" "n"; then
+        set_toml_var "$CONFIG_TOML" "enabled" "true"
+        cur=$(get_toml_var "$CONFIG_TOML" "public_key")
+        prompt_input "Langfuse Public Key (pk-lf-...) [${cur:-not set}]:"
+        read -r val
+        [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "public_key" "$val"
+        cur=$(get_toml_var "$CONFIG_TOML" "secret_key")
+        prompt_input "Langfuse Secret Key (sk-lf-...) [${cur:-not set}]:"
+        read -rs val; echo
+        [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "secret_key" "$val"
+        cur=$(get_toml_var "$CONFIG_TOML" "base_url")
+        prompt_input "Langfuse Base URL [${cur:-https://cloud.langfuse.com}]:"
+        read -r val
+        [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "base_url" "$val"
+        info "Langfuse tracing enabled"
+    else
+        set_toml_var "$CONFIG_TOML" "enabled" "false"
+        info "Langfuse tracing disabled"
     fi
 
     # ── Session ──
@@ -883,6 +920,11 @@ launch_dev() {
 
     check_pnpm
 
+    info "Installing dependencies (backend + frontend)..."
+    (cd "$SCRIPT_DIR/backend" && pnpm install)
+    (cd "$SCRIPT_DIR/frontend" && pnpm install)
+    info "Dependencies installed"
+
     local dev_services="mongodb redis"
     if [[ "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
         dev_services="mongodb redis kali"
@@ -912,10 +954,10 @@ launch_dev() {
     echo
     section "Start Frontend & Backend Manually"
     echo
-    echo -e "   ${CYAN}Backend:${NC}"
+    echo -e "   ${CYAN}Backend${NC} (run in ${BOLD}two separate terminals${NC}):"
     echo -e "     ${DIM}cd backend${NC}"
-    echo -e "     ${DIM}pnpm run build   ${NC}${DIM}# compile TypeScript (first time / after changes)${NC}"
-    echo -e "     ${DIM}pnpm run dev     ${NC}${DIM}# start with nodemon (watches dist/)${NC}"
+    echo -e "     ${DIM}pnpm run watch${NC}   ${DIM}# Terminal 1: compile TypeScript on changes${NC}"
+    echo -e "     ${DIM}pnpm run dev${NC}     ${DIM}# Terminal 2: start with nodemon${NC}"
     echo
     echo -e "   ${CYAN}Frontend:${NC}"
     echo -e "     ${DIM}cd frontend${NC}"

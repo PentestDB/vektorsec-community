@@ -20,3 +20,9 @@ lifetime = 1000
 [frontend]
 backend_uri = "http://localhost:8080"
 deployment = "LOCAL"
+
+[tracing]
+enabled = false
+public_key = ""
+secret_key = ""
+base_url = "https://cloud.langfuse.com"

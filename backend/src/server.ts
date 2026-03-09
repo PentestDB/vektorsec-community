@@ -27,6 +27,7 @@ import { netcatRoutes } from "./routes/netcat.routes";
 import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
 import getSecrets from "./utils/getSecrets";
+import { initTracing } from "./utils/tracing";
 import { buildSSHConfig } from "./utils/sshConfig";
 import { sessionRoutes } from "./routes/session.routes";
 import { userRoutes } from "./routes/user.routes";
@@ -43,6 +44,8 @@ let redisClient: RedisClientType;
 
 const initializeApp = async () => {
   try {
+    initTracing();
+
     const DEPLOYMENT = await getSecrets("DEPLOYMENT");
     const MONGO_URI = await getSecrets("MONGO_URI");
 

@@ -12,6 +12,10 @@ const OPTIONAL_KEYS = new Set([
   "ANTHROPIC_OAUTH_REFRESH_TOKEN",
   "ANTHROPIC_OAUTH_EXPIRES_AT",
   "CORS_ORIGINS",
+  "LANGFUSE_ENABLED",
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+  "LANGFUSE_BASE_URL",
 ]);
 
 const getSecrets = async (key: string) => {
