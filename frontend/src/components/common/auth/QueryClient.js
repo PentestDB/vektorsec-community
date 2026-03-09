@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "react-query";
+import { App } from "antd";
+import NavigationProgress from "@/components/common/NavigationProgress";
 
 const QueryClientContext = ({ children }) => {
-  // React Query
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            // disabling caching and background reloading during testing
             refetchIntervalInBackground: false,
             refetchOnWindowFocus: false,
             cacheTime: 0,
@@ -21,7 +21,12 @@ const QueryClientContext = ({ children }) => {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <App component={false}>
+        <NavigationProgress />
+        {children}
+      </App>
+    </QueryClientProvider>
   );
 };
 

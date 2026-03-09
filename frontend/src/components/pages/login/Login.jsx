@@ -1,7 +1,7 @@
-import { Button, Col, Form, Input, message, Row } from "antd";
+import { App, Button, Col, Form, Input, Row } from "antd";
 
 import styles from "@/styles/pages/Login.module.scss";
-import {  useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import session from "@/assets/onboarding/session-placeholder.svg";
 import Image from "next/image";
 import { useMutation, useQueryClient } from "react-query";
@@ -13,9 +13,9 @@ import { useDispatch } from "react-redux";
 
 const LoginPage = () => {
   const router = useRouter();
-const dispatch = useDispatch();
-const queryClient = useQueryClient();
-
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  const { message } = App.useApp();
 
   const loginMutation = useMutation(login, {
     onError: (error) => {
@@ -29,16 +29,15 @@ const queryClient = useQueryClient();
       localStorage.removeItem("antiCSRF");
       dispatch(loginUser(data.user));
       await queryClient.invalidateQueries("check-session");
-
       router.push("/dashboard");
     },
   });
 
-  const handleLogin = async (values) => {
-  await loginMutation.mutateAsync({
-    email: values.email,
-    password: values.password,
-  });
+  const handleLogin = (values) => {
+    loginMutation.mutate({
+      email: values.email,
+      password: values.password,
+    });
   };
 
 
@@ -113,6 +112,7 @@ const queryClient = useQueryClient();
               <Button
               htmlType="submit"
               className={styles.loginButtonBugbase}
+              loading={loginMutation.isLoading}
             >
               Login
             </Button>

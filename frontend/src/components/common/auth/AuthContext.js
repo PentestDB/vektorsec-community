@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { Spin, notification } from "antd";
+import { App, Spin } from "antd";
 import styles from "@/app/page.module.scss";
 import { checkSession } from "@/services/auth.service";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -16,6 +16,7 @@ export const AuthContextProvider = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { notification } = App.useApp();
 
   const referral = searchParams.get("referral");
 

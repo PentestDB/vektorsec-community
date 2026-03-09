@@ -1,4 +1,4 @@
-import { Col, Form, Input, Row, Select, message } from "antd";
+import { App, Col, Form, Input, Row, Select } from "antd";
 import styles from "@/styles/pages/Login.module.scss";
 import CopilotLogo from "@/components/common/CopilotLogo";
 import PrimaryButton from "@/components/common/PrimaryButton";
@@ -18,6 +18,7 @@ const OnboardingPage = () => {
   const router = useRouter();
   const [onboard, setOnboard] = useState(false);
   const dispatch = useDispatch();
+  const { message } = App.useApp();
   const referral = localStorage.getItem("referral");
 
   useEffect(() => {
@@ -39,8 +40,8 @@ const OnboardingPage = () => {
     },
   });
 
-  const onFormSubmit = async (values) => {
-    await saveUserInfoMutation.mutateAsync(values);
+  const onFormSubmit = (values) => {
+    saveUserInfoMutation.mutate(values);
   };
 
   const logoutMutation = useMutation(logoutUser, {
@@ -64,8 +65,8 @@ const OnboardingPage = () => {
             <div className={styles.header}>
               <div
                 className={styles.exitSession}
-                onClick={async () => {
-                  await logoutMutation.mutateAsync();
+                onClick={() => {
+                  logoutMutation.mutate();
                 }}
               >
                 <AiOutlineDoubleLeft />

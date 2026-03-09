@@ -1,4 +1,4 @@
-import { Button, Checkbox, Col, Form, Input, message, Row } from "antd";
+import { App, Button, Checkbox, Col, Form, Input, Row } from "antd";
 
 import styles from "@/styles/pages/Login.module.scss";
 import { useRouter } from "next/navigation";
@@ -12,12 +12,13 @@ import Link from "next/link";
 
 const RegisterPage = () => {
   const router = useRouter();
+  const { message } = App.useApp();
 
   const registerMutation = useMutation(register, {
     onError: (error) => {
       message.error(
         error?.response?.data?.message ??
-        "Failed to register. Please try again later."
+          "Failed to register. Please try again later."
       );
     },
     onSuccess: (data) => {
@@ -26,11 +27,11 @@ const RegisterPage = () => {
     },
   });
 
-  const handleRegister = async (values) => {
-    await registerMutation.mutateAsync({
+  const handleRegister = (values) => {
+    registerMutation.mutate({
       name: values.name,
       email: values.email,
-      password: values.password
+      password: values.password,
     });
   };
 
@@ -137,6 +138,7 @@ const RegisterPage = () => {
                 <Button
                   className={styles.loginButtonBugbase}
                   htmlType="submit"
+                  loading={registerMutation.isLoading}
                 >
                   Register
                 </Button>
