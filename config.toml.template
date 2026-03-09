@@ -6,7 +6,7 @@
 port = 8080
 deployment = "LOCAL"                          # LOCAL or PROD
 base_url_frontend = "http://localhost:3000"
-# cors_origins = "http://extra-origin:3000,http://other:8080"
+cors_origins = "http://localhost:3000"
 
 [database]
 mongo_uri = "mongodb://mongodb:27017/pentestcopilot"
