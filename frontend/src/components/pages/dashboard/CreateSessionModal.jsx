@@ -4,7 +4,7 @@ import { Form, Input, message, Row } from "antd";
 import styles from "@/styles/pages/Dashboard.module.scss";
 import { useRouter } from "next/navigation";
 import { useMutation } from "react-query";
-import { createNewSession } from "@/services/copilot.service";
+import { createSession as createNewSession } from "@/services/agent.service";
 
 const CreateSessionModal = ({ show, setShow, close }) => {
   const router = useRouter();
@@ -13,7 +13,7 @@ const CreateSessionModal = ({ show, setShow, close }) => {
   const createSessionMutation = useMutation(createNewSession, {
     onSuccess: (data) => {
       message.success(data?.message ?? "Workspace created successfully!");
-      router.push(`/session/${data.session_id}`);
+      router.push(`/session/${data.sessionId}`);
     },
     onError: (error) => {
       message.error(

@@ -1,198 +1,129 @@
 import mongoose from "mongoose";
-import {
-  HistoryData,
-  SingleCommandData,
-} from "../../services/copilot.services";
 const Schema = mongoose.Schema;
 
-export interface loopHistoryDoc {
+// ─── Message types (mirrors OpenAI chat completion message format) ────
+
+export interface AgentToolCallData {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface AgentMessageDoc {
   _id?: mongoose.Types.ObjectId;
-  stepType: "init" | "command" | "output" | "summary" | "todo";
-  status: "not-started" | "processing" | "pending" | "completed";
-  data: {
-    content?: string;
-    choice?: string;
-    tool?: string;
-    additionalContext?: string;
-    fileAnalysis?: string;
-    siteContext?: string;
-    llm?: {
-      provider: string;
-      model: string;
-      prompt_tokens: number;
-      completion_tokens: number;
-      total_tokens: number;
-      elapsed_ms: number;
-    };
-  };
-  loop: number;
-  action?: "like" | "dislike";
+  id: string;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  toolCalls?: AgentToolCallData[];
+  toolCallId?: string;
+  toolName?: string;
+  timestamp: Date;
+  turnIndex: number;
+  isSummary?: boolean;
 }
 
-export interface StoreCommandData extends SingleCommandData {
-  boxId?: string;
+export interface PendingConsentDoc {
+  toolCallId: string;
+  toolName: string;
+  arguments: Record<string, any>;
 }
 
-export interface TokenHistoryData {
-  content: string;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+export interface PendingManualExecutionDoc {
+  toolCallId: string;
+  toolName: string;
+  command: string;
 }
+
+export type AgentState = "idle" | "running" | "paused" | "waiting_consent" | "waiting_manual_execution";
 
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
-  mainSessionId?: string;
   name: string;
   description: string;
   boxId?: mongoose.Types.ObjectId;
-  createdAt: string;
+  createdAt: Date;
   status: "active" | "archived";
-  type: "main" | "sub";
-  loopHistory: loopHistoryDoc[];
-  archiveHistoryId: mongoose.Types.ObjectId;
-  loopStepsPerformed: number;
-  history: HistoryData[];
-  tokenHistory: TokenHistoryData[];
-  tokenHistory3: TokenHistoryData[];
+  agentState: AgentState;
+  messages: AgentMessageDoc[];
+  pendingConsent?: PendingConsentDoc;
+  pendingManualExecution?: PendingManualExecutionDoc;
+  turnIndex: number;
   totalTokens: number;
-  totalTokens3: number;
-  storeCommands: StoreCommandData[];
-  loops: {
-    startTimestamp: Date;
-    endTimestamp?: Date;
-    loop: number;
-  }[];
-  redoContext: string | null;
+  tokenHistory: Array<{
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    timestamp: Date;
+  }>;
 }
+
+const ToolCallSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    arguments: { type: String, required: true },
+  },
+  { _id: false },
+);
+
+const AgentMessageSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    role: { type: String, required: true, enum: ["system", "user", "assistant", "tool"] },
+    content: { type: String, default: null },
+    toolCalls: { type: [ToolCallSchema], default: undefined },
+    toolCallId: { type: String },
+    toolName: { type: String },
+    timestamp: { type: Date, default: Date.now },
+    turnIndex: { type: Number, default: 0 },
+    isSummary: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
 
 const SessionSchema = new Schema({
   uid: { type: mongoose.Types.ObjectId, required: true },
-  sessionId: { type: String, required: true },
-  mainSessionId: { type: String },
+  sessionId: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   description: { type: String, default: "" },
   boxId: { type: mongoose.Types.ObjectId },
   createdAt: { type: Date, default: Date.now },
   status: { type: String, default: "active", enum: ["active", "archived"] },
-  type: { type: String, required: true, enum: ["main", "sub"] },
-  loopHistory: [
-    {
-      stepType: {
-        type: String,
-        enum: ["init", "command", "output", "summary", "todo"],
-        required: true,
-      },
-      status: {
-        type: String,
-        enum: ["not-started", "processing", "pending", "completed"],
-        default: "not-started",
-      },
-      data: {
-        content: {
-          type: String,
-        },
-        choice: {
-          type: String,
-          enum: ["yes", "no", "edit", "provide_output", "provide_guidance"],
-        },
-        tool: {
-          type: String,
-        },
-        additionalContext: {
-          type: String,
-        },
-        fileAnalysis: {
-          type: String,
-        },
-        siteContext: {
-          type: String,
-        },
-        llm: {
-          provider: { type: String },
-          model: { type: String },
-          prompt_tokens: { type: Number },
-          completion_tokens: { type: Number },
-          total_tokens: { type: Number },
-          elapsed_ms: { type: Number },
-        },
-      },
-      loop: {
-        type: Number,
-        default: 0,
-      },
-      action: {
-        type: String,
-        enum: ["like", "dislike"],
-      },
+  agentState: {
+    type: String,
+    default: "idle",
+    enum: ["idle", "running", "paused", "waiting_consent", "waiting_manual_execution"],
+  },
+  messages: { type: [AgentMessageSchema], default: [] },
+  pendingConsent: {
+    type: {
+      toolCallId: { type: String, required: true },
+      toolName: { type: String, required: true },
+      arguments: { type: Schema.Types.Mixed, required: true },
     },
-  ],
-  archiveHistoryId: { type: mongoose.Types.ObjectId, required: true },
-  loopStepsPerformed: { type: Number, required: true, default: 0 },
-  storeCommands: {
-    type: [
-      {
-        tool_name: { type: String, required: true },
-        args: { type: Object, required: true },
-        file_name: { type: [String], required: false },
-        active: { type: Boolean, required: true, default: false },
-        boxId: { type: mongoose.Types.ObjectId },
-        loop: { type: Number, required: true, default: 0 },
-      },
-    ],
+    default: undefined,
   },
-
-  history: {
-    type: [
-      {
-        role: { type: String, required: true },
-        content: { type: String, required: true },
-        isContextual: { type: Boolean },
-        loopStep: { type: Number },
-      },
-    ],
+  pendingManualExecution: {
+    type: {
+      toolCallId: { type: String, required: true },
+      toolName: { type: String, required: true },
+      command: { type: String, required: true },
+    },
+    default: undefined,
   },
-
-  loops: {
-    type: [
-      {
-        startTimestamp: { type: Date, required: true },
-        endTimestamp: { type: Date },
-        loop: { type: Number, required: true },
-      },
-    ],
-  },
+  turnIndex: { type: Number, default: 0 },
+  totalTokens: { type: Number, default: 0 },
   tokenHistory: {
     type: [
       {
-        content: { type: String, required: true },
-        usage: {
-          prompt_tokens: { type: Number, required: true },
-          completion_tokens: { type: Number, required: true },
-          total_tokens: { type: Number, required: true },
-        },
+        promptTokens: { type: Number },
+        completionTokens: { type: Number },
+        totalTokens: { type: Number },
+        timestamp: { type: Date, default: Date.now },
       },
     ],
-  },
-  tokenHistory3: {
-    type: [
-      {
-        content: { type: String, required: true },
-        usage: {
-          prompt_tokens: { type: Number, required: true },
-          completion_tokens: { type: Number, required: true },
-          total_tokens: { type: Number, required: true },
-        },
-      },
-    ],
-  },
-  totalTokens: { type: Number, required: true, default: 0 },
-  totalTokens3: { type: Number, required: true, default: 0 },
-  redoContext: {
-    type: String,
+    default: [],
   },
 });
 

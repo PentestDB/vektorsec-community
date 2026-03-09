@@ -11,7 +11,20 @@ import {
   updateNetcatSession,
 } from "../utils/redis/store";
 import { v4 as uuidv4 } from "uuid";
-import { netcatOperations } from "../tools/handlers/netcat-listener";
+import { execSSHCommand } from "../services/ssh.service";
+
+const netcatOperations = {
+  async start(params: { ip: string; port: any; netcat_id: any }) {
+    const output = await execSSHCommand(`nohup nc -nlvp ${params.port} > /tmp/nc_${params.netcat_id}.log 2>&1 &`);
+    return { running_port: params.port, output };
+  },
+  async sendInput(params: { ip: string; netcat_id: any; input: string }) {
+    return execSSHCommand(`echo "${params.input}" >> /tmp/nc_input_${params.netcat_id}`);
+  },
+  async stop(params: { ip: string; netcat_id: any }) {
+    return execSSHCommand(`kill $(lsof -t -i:${params.netcat_id}) 2>/dev/null || true`);
+  },
+};
 import { requireActiveSession } from "../services/session.helpers";
 import { getUserContainerIp } from "../services/task.helpers";
 import { initNetcatSession } from "../services/session.services";
@@ -32,11 +45,9 @@ export const initiateNetcat = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, session_id, res);
     if (!session) return;
 
-    const mainSessionId =
-      session.type === "sub" ? session.mainSessionId : session_id;
+    const mainSessionId = session_id;
 
-    const mainSession = await requireActiveSession(userId, mainSessionId, res);
-    if (!mainSession) return;
+    const mainSession = session;
 
     // const hasExploitBox = await checkIfUserHasRunningExploitBox(
     //   user._id,

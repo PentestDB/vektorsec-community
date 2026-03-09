@@ -1,51 +1,54 @@
-import { google } from "googleapis";
-import getSecrets from "../../utils/getSecrets";
 import { ToolDefinition } from "../types";
+import getSecrets from "../../utils/getSecrets";
 
-export const googleSearchTool: ToolDefinition = {
-  name: "google",
-  description: "Google Search",
-  args: {
-    query: {
-      type: "string",
-      required: true,
-      description: "The search query",
+const { google } = require("googleapis");
+
+const googleSearch: ToolDefinition = {
+  name: "google_search",
+  description:
+    "Search Google for information relevant to the penetration test. " +
+    "Use this to look up CVEs, exploit databases, service version vulnerabilities, etc.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "The search query",
+      },
     },
+    required: ["query"],
   },
-  async execute({ args, choice }) {
+  timeoutMs: 30_000,
+  async execute(args, _ctx) {
+    const query = args.query;
+    if (!query) return { output: "Error: no query provided", exitCode: 1 };
+
     try {
-      if (["yes", "edit"].includes(choice)) {
-        const apiKey = await getSecrets("GOOGLE-API-KEY");
-        const customSearchEngineId = await getSecrets("CUSTOM-SEARCH-ENGINE-ID");
+      const apiKey = await getSecrets("GOOGLE-API-KEY");
+      const cx = await getSecrets("CUSTOM-SEARCH-ENGINE-ID");
 
-        const service = google.customsearch("v1");
-        const result = await service.cse.list({
-          auth: apiKey,
-          cx: customSearchEngineId,
-          q: args.query,
-          num: 5,
-        });
-
-        const searchResults: any = result.data.items || [];
-
-        const detailedResults = searchResults.map((item: any) => ({
-          title: item.title,
-          snippet: item.snippet,
-          url: item.link,
-        }));
-
-        return JSON.stringify(detailedResults) ?? "No Google search results found.";
+      if (!apiKey || !cx) {
+        return { output: "Google Search API is not configured (missing API key or CX).", exitCode: 1 };
       }
-      return args.output ?? "No Google search results found.";
-    } catch (error: any) {
-      if (error.response?.data?.error) {
-        const errorDetails = error.response.data.error;
-        if (errorDetails.code === 403 && errorDetails.message.includes("invalid API key")) {
-          return "Error: The provided Google API key is invalid or missing.";
-        }
-        return `Error: ${error}`;
+
+      const customSearch = google.customsearch("v1");
+      const res = await customSearch.cse.list({ auth: apiKey, cx, q: query, num: 5 });
+
+      const items = res.data.items ?? [];
+      const results = items.map((item: any) => ({
+        title: item.title,
+        snippet: item.snippet,
+        url: item.link,
+      }));
+
+      return { output: JSON.stringify(results, null, 2), exitCode: 0 };
+    } catch (err: any) {
+      if (err?.response?.status === 403) {
+        return { output: "Google API error: invalid API key or quota exceeded", exitCode: 1 };
       }
-      return `Error: ${error}`;
+      return { output: `Google search error: ${err.message}`, exitCode: 1 };
     }
   },
 };
+
+export default googleSearch;

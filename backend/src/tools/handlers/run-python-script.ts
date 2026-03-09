@@ -1,29 +1,43 @@
 import { ToolDefinition } from "../types";
 
-export const runPythonScriptTool: ToolDefinition = {
+const runPythonScript: ToolDefinition = {
   name: "run_python_script",
   description:
-    "Write and execute a Python script for complex pentesting tasks such as custom exploits, data parsing, brute-force logic, protocol interactions, or automation that would be cumbersome in bash",
-  args: {
-    script: {
-      type: "string",
-      required: true,
-      description: "The full Python script content to execute",
+    "Write and execute a Python 3 script on the attack box. Use this for custom exploits, " +
+    "data parsing, protocol interactions, brute-force logic, or any task requiring Python libraries " +
+    "like requests, socket, struct, pwntools, etc. The script is written to /tmp and executed.",
+  parameters: {
+    type: "object",
+    properties: {
+      script: {
+        type: "string",
+        description: "Full Python script content",
+      },
+      file_name: {
+        type: "string",
+        description: "Filename for the script (e.g. exploit.py)",
+      },
     },
-    file_name: {
-      type: "string",
-      required: true,
-      description:
-        "Filename for the script (e.g. exploit.py). Saved to /tmp/ before execution",
-    },
+    required: ["script", "file_name"],
   },
-  outputFileField: "file_name",
-  async execute({ commandId, args, choice }) {
-    if (["yes", "edit"].includes(choice)) {
-      const scriptPath = `/tmp/${args.file_name}`;
-      const escapedScript = args.script.replace(/'/g, "'\\''");
-      return `printf '%s' '${escapedScript}' > ${scriptPath} && python3 ${scriptPath}`;
+  timeoutMs: 300_000,
+  async execute(args, ctx) {
+    const { script, file_name } = args;
+    if (!script || !file_name) {
+      return { output: "Error: script and file_name are required", exitCode: 1 };
     }
-    return args.output ?? "";
+
+    const escapedScript = script.replace(/'/g, "'\\''");
+    const writeCmd = `cat > /tmp/${file_name} << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`;
+    await ctx.runCommand(writeCmd, 10_000);
+
+    const { output, exitCode } = await ctx.runCommand(
+      `cd /tmp && python3 ${file_name}`,
+      this.timeoutMs,
+    );
+
+    return { output, exitCode, files: [file_name] };
   },
 };
+
+export default runPythonScript;

@@ -1,72 +1,56 @@
-import { ToolDefinition, ToolExecutionContext } from "./types";
-import { runBashTool } from "./handlers/run-bash";
-import { googleSearchTool } from "./handlers/google-search";
-import { genericResponseTool } from "./handlers/generic-response";
-import { netcatListenerTool } from "./handlers/netcat-listener";
-import { msfvenomPayloadTool } from "./handlers/msfvenom-payload";
-import { runPythonScriptTool } from "./handlers/run-python-script";
-import { runInstallToolTool } from "./handlers/run-install-tool";
+import OpenAI from "openai";
+import { ToolDefinition, toolToOpenAISchema } from "./types";
 
-const tools: ToolDefinition[] = [
-  googleSearchTool,
-  runBashTool,
-  runPythonScriptTool,
-  runInstallToolTool,
-  genericResponseTool,
-  netcatListenerTool,
-  msfvenomPayloadTool,
-];
+import runBash from "./handlers/run-bash";
+import runPythonScript from "./handlers/run-python-script";
+import runInstallTool from "./handlers/run-install-tool";
+import googleSearch from "./handlers/google-search";
+import msfvenomPayload from "./handlers/msfvenom-payload";
+import netcatListener from "./handlers/netcat-listener";
+import askUser from "./handlers/generic-response";
 
 class ToolRegistry {
-  private tools: Map<string, ToolDefinition>;
+  private tools: Map<string, ToolDefinition> = new Map();
 
-  constructor(toolList: ToolDefinition[]) {
-    this.tools = new Map();
-    for (const tool of toolList) {
-      this.tools.set(tool.name, tool);
-    }
+  register(tool: ToolDefinition) {
+    this.tools.set(tool.name, tool);
   }
 
   get(name: string): ToolDefinition | undefined {
     return this.tools.get(name);
   }
 
-  getAll(): ToolDefinition[] {
-    return Array.from(this.tools.values());
-  }
-
   has(name: string): boolean {
     return this.tools.has(name);
+  }
+
+  getAll(): ToolDefinition[] {
+    return Array.from(this.tools.values());
   }
 
   getToolNames(): string[] {
     return Array.from(this.tools.keys());
   }
 
-  async execute(name: string, ctx: ToolExecutionContext): Promise<string> {
-    const tool = this.tools.get(name);
-    if (!tool) {
-      throw new Error(`Unknown tool: ${name}`);
-    }
-    return tool.execute(ctx);
+  toOpenAISchemas(): OpenAI.Chat.ChatCompletionTool[] {
+    return this.getAll().map(toolToOpenAISchema);
   }
 
-  generatePromptList(): string {
-    return this.getAll()
-      .map((tool, index) => {
-        const argsSchema = Object.entries(tool.args)
-          .map(([key, def]) => `"${key}": "<${key}>"`)
-          .join(", ");
+  requiresConsent(name: string): boolean {
+    return this.tools.get(name)?.requiresConsent ?? false;
+  }
 
-        const fileField = tool.outputFileField
-          ? `, file_name: ["file_name"] (${tool.name === "msfvenom_payload" ? "Required" : "Optional"})`
-          : "";
-
-        return `${index + 1}. ${tool.name}: ${tool.description}, args: {${argsSchema}}${fileField}`;
-      })
-      .join("\n");
+  getTimeout(name: string): number {
+    return this.tools.get(name)?.timeoutMs ?? 300_000;
   }
 }
 
-export const toolRegistry = new ToolRegistry(tools);
-export { ToolDefinition, ToolExecutionContext } from "./types";
+export const toolRegistry = new ToolRegistry();
+
+toolRegistry.register(runBash);
+toolRegistry.register(runPythonScript);
+toolRegistry.register(runInstallTool);
+toolRegistry.register(googleSearch);
+toolRegistry.register(msfvenomPayload);
+toolRegistry.register(netcatListener);
+toolRegistry.register(askUser);

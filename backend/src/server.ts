@@ -31,6 +31,7 @@ import { initTracing } from "./utils/tracing";
 import { buildSSHConfig } from "./utils/sshConfig";
 import { sessionRoutes } from "./routes/session.routes";
 import { userRoutes } from "./routes/user.routes";
+import { agentRoutes } from "./routes/agent.routes";
 import { Client as SSHClient } from "ssh2";
 
 declare module "express-session" {
@@ -352,8 +353,11 @@ const initializeApp = async () => {
     // User routes
     app.use("/api/user", userRoutes);
 
-    // Session routes
+    // Session routes (legacy)
     app.use("/api/session", sessionRoutes);
+
+    // Agent routes (new agentic loop)
+    app.use("/api/agent", agentRoutes);
 
 
     // Add a generalized error handling middleware function for all other errors

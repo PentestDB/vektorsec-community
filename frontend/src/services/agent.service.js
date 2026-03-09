@@ -1,0 +1,126 @@
+import { apiClient, apiBaseURL } from "@/utils/axios.config";
+
+export const createSession = async ({ name, description }) => {
+  const res = await apiClient.post("/agent/create-session", { name, description });
+  return res.data;
+};
+
+export const getUserSessions = async () => {
+  const res = await apiClient.post("/agent/sessions");
+  return res.data;
+};
+
+export const getSessionInfo = async (sessionId) => {
+  const res = await apiClient.get(`/agent/session/${sessionId}`);
+  return res.data;
+};
+
+export const getSessionHistory = async (sessionId) => {
+  const res = await apiClient.get(`/agent/session/${sessionId}/history`);
+  return res.data;
+};
+
+export const deleteSession = async ({ sessionId }) => {
+  const res = await apiClient.post("/agent/delete-session", { sessionId });
+  return res.data;
+};
+
+export const pauseAgent = async ({ sessionId }) => {
+  const res = await apiClient.post("/agent/pause", { sessionId });
+  return res.data;
+};
+
+export const respondToConsent = async ({ sessionId, approved }) => {
+  const res = await apiClient.post("/agent/consent", { sessionId, approved });
+  return res.data;
+};
+
+export const submitManualOutput = async ({ sessionId, output }) => {
+  const res = await apiClient.post("/agent/manual-output", { sessionId, output });
+  return res.data;
+};
+
+export function connectAgentStream({ sessionId, message, endpoint = "message" }) {
+  return new Promise((resolve) => {
+    const url = `${apiBaseURL}/agent/${endpoint}`;
+
+    let bodyObj;
+    if (endpoint === "consent" || endpoint === "manual-output") {
+      try {
+        bodyObj = { sessionId, ...JSON.parse(message) };
+      } catch {
+        bodyObj = { sessionId, message };
+      }
+    } else {
+      bodyObj = { sessionId, message };
+    }
+    const body = JSON.stringify(bodyObj);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.withCredentials = true;
+
+    let buffer = "";
+    let lastProcessedIndex = 0;
+    const handlers = {};
+
+    const controller = {
+      onEvent(event, handler) {
+        if (!handlers[event]) handlers[event] = [];
+        handlers[event].push(handler);
+        return controller;
+      },
+      abort() {
+        xhr.abort();
+      },
+    };
+
+    function emit(event, data) {
+      const fns = handlers[event] || [];
+      fns.forEach((fn) => fn(data));
+      const anyFns = handlers["*"] || [];
+      anyFns.forEach((fn) => fn(event, data));
+    }
+
+    function processBuffer() {
+      const text = xhr.responseText.substring(lastProcessedIndex);
+      lastProcessedIndex = xhr.responseText.length;
+      buffer += text;
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      let currentEvent = null;
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          currentEvent = line.substring(7).trim();
+        } else if (line.startsWith("data: ") && currentEvent) {
+          try {
+            const data = JSON.parse(line.substring(6));
+            emit(currentEvent, data);
+          } catch {
+            emit(currentEvent, { raw: line.substring(6) });
+          }
+          currentEvent = null;
+        }
+      }
+    }
+
+    xhr.onprogress = processBuffer;
+
+    xhr.onloadend = () => {
+      processBuffer();
+      emit("_stream_end", {});
+    };
+
+    xhr.onerror = () => {
+      emit("error", { message: "Connection failed" });
+      emit("_stream_end", {});
+    };
+
+    xhr.send(body);
+
+    resolve(controller);
+  });
+}

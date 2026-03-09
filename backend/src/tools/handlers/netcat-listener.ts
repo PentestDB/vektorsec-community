@@ -1,57 +1,32 @@
-import axios from "axios";
 import { ToolDefinition } from "../types";
 
-export const netcatListenerTool: ToolDefinition = {
+const netcatListener: ToolDefinition = {
   name: "netcat_listener",
-  description: "Open a netcat listener on a port for a possible reverse shell connection",
-  args: {
-    lport: {
-      type: "string",
-      required: true,
-      description: "The local port to listen on",
+  description:
+    "Start a netcat listener on a specified port on the attack box. " +
+    "Useful for catching reverse shells or receiving data.",
+  parameters: {
+    type: "object",
+    properties: {
+      port: { type: "string", description: "Port number to listen on" },
     },
+    required: ["port"],
   },
-  async execute({ args }) {
-    return args.output ?? "";
-  },
-};
+  timeoutMs: 10_000,
+  async execute(args, ctx) {
+    const port = args.port;
+    if (!port) return { output: "Error: port is required", exitCode: 1 };
 
-export const netcatOperations = {
-  async start({ netcat_id, port, ip }: { netcat_id: string; port: string; ip: string }) {
-    const response = await axios.post(`http://${ip}:5000/api/start_netcat`, {
-      netcat_id,
-      port,
-    });
+    const { output, exitCode } = await ctx.runCommand(
+      `nohup nc -nlvp ${port} > /tmp/nc_${port}.log 2>&1 &`,
+      this.timeoutMs,
+    );
 
-    if (response.status !== 200) {
-      throw new Error("Error starting netcat listener");
-    }
-
-    return response.data;
-  },
-
-  async sendInput({ netcat_id, input, ip }: { netcat_id: string; input: string; ip: string }) {
-    const response = await axios.post(`http://${ip}:5000/api/send_netcat_input`, {
-      netcat_id,
-      input,
-    });
-
-    if (response.status !== 200) {
-      throw new Error("Error sending netcat input");
-    }
-
-    return response.data;
-  },
-
-  async stop({ netcat_id, ip }: { netcat_id: string; ip: string }) {
-    const response = await axios.post(`http://${ip}:5000/api/stop_netcat`, {
-      netcat_id,
-    });
-
-    if (response.status !== 200) {
-      throw new Error("Error stopping netcat listener");
-    }
-
-    return response.data;
+    return {
+      output: output || `Netcat listener started on port ${port} (background). Output logging to /tmp/nc_${port}.log`,
+      exitCode,
+    };
   },
 };
+
+export default netcatListener;

@@ -9,7 +9,7 @@ import { useSelector } from "react-redux";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useState } from "react";
 import CreateSessionModal from "./CreateSessionModal";
-import { deleteSession, getUserSessions } from "@/services/copilot.service";
+import { deleteSession, getUserSessions } from "@/services/agent.service";
 import moment from "moment";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FiPlay, FiTrash } from "react-icons/fi";

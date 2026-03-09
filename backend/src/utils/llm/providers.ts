@@ -144,29 +144,51 @@ export function clearProviderCache(): void {
   cacheTimestamp = 0;
 }
 
-// ─── invoke_llm — the single inference entry point ───────────────────
+// ─── Shared types ────────────────────────────────────────────────────
+
+export interface ToolCallData {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export type FinishReason = "stop" | "tool_calls" | "length" | "content_filter" | "error";
 
 export interface InvokeOptions {
-  messages: Array<{ role: string; content: string }>;
+  messages: Array<OpenAI.Chat.ChatCompletionMessageParam>;
+  tools?: OpenAI.Chat.ChatCompletionTool[];
   format?: "json" | "text";
   temperature?: number;
-  /** Langfuse: session ID for tracing */
   sessionId?: string;
-  /** Langfuse: user ID for tracing */
   userId?: string;
-  /** Langfuse: tags for filtering traces (e.g. "copilot", "task", "metasploit") */
   tags?: string[];
-  /** Langfuse: generation name for identification */
   generationName?: string;
 }
 
 export interface InvokeResult {
   content: string | null;
+  toolCalls: ToolCallData[];
+  finishReason: FinishReason;
   usage: OpenAI.Completions.CompletionUsage | undefined;
   model: string;
   provider: ProviderType;
   elapsedMs: number;
 }
+
+// ─── Streaming types ─────────────────────────────────────────────────
+
+export interface StreamDelta {
+  type: "text" | "tool_call_start" | "tool_call_delta" | "tool_call_done";
+  content?: string;
+  toolCall?: Partial<ToolCallData> & { index?: number };
+}
+
+export interface StreamingInvokeOptions extends InvokeOptions {
+  onDelta: (delta: StreamDelta) => void;
+  abortSignal?: AbortSignal;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
 
 function maskSecret(s: string | undefined): string {
   if (!s) return "(empty)";
@@ -174,111 +196,368 @@ function maskSecret(s: string | undefined): string {
   return s.slice(0, 6) + "…" + s.slice(-4);
 }
 
-export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
-  const config = await getProvider();
+function normalizeFinishReason(raw: string | null | undefined): FinishReason {
+  if (raw === "stop" || raw === "end_turn") return "stop";
+  if (raw === "tool_calls" || raw === "tool_use") return "tool_calls";
+  if (raw === "length" || raw === "max_tokens") return "length";
+  if (raw === "content_filter") return "content_filter";
+  return "stop";
+}
 
+function extractToolCalls(message: OpenAI.Chat.ChatCompletionMessage): ToolCallData[] {
+  if (!message.tool_calls?.length) return [];
+  return message.tool_calls.map((tc) => ({
+    id: tc.id,
+    name: tc.function.name,
+    arguments: tc.function.arguments,
+  }));
+}
+
+function logRequest(config: ProviderConfig, opts: InvokeOptions, streaming: boolean) {
   const msgCount = opts.messages.length;
   const lastRole = opts.messages[msgCount - 1]?.role ?? "?";
-  const totalChars = opts.messages.reduce((n, m) => n + m.content.length, 0);
-
-  const start = Date.now();
-  const rawClient = buildClient(config);
-  const client = isTracingEnabled()
-    ? observeOpenAI(rawClient, {
-        sessionId: opts.sessionId,
-        userId: opts.userId,
-        tags: opts.tags,
-        generationName: opts.generationName,
-      })
-    : rawClient;
-
-  const runCompletion = async (temperature: number) => {
-    const completionConfig: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
-      model: config.model,
-      messages: opts.messages as OpenAI.Chat.ChatCompletionMessageParam[],
-      temperature,
-    };
-
-    if (opts.format === "json" && config.provider !== "anthropic") {
-      completionConfig.response_format = { type: "json_object" };
-    }
-
-    return client.chat.completions.create(completionConfig);
-  };
-
-  const requestedTemp = opts.temperature ?? 0.75;
+  const totalChars = opts.messages.reduce((n, m) => {
+    if (typeof m.content === "string") return n + m.content.length;
+    return n;
+  }, 0);
 
   console.log(
     `[inference] → provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
     ` key=${maskSecret(config.authMethod === "oauth" ? config.oauthAccessToken : config.apiKey)}` +
     ` baseURL=${config.baseURL ?? "(default)"}` +
-    ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars} fmt=${opts.format ?? "text"} temp=${requestedTemp}`
+    ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars}` +
+    ` tools=${opts.tools?.length ?? 0} stream=${streaming}` +
+    ` fmt=${opts.format ?? "text"}`
   );
+}
 
-  try {
-    let response = await runCompletion(requestedTemp);
+function logResponse(config: ProviderConfig, elapsed: number, result: InvokeResult) {
+  console.log(
+    `[inference] ← ${elapsed}ms provider=${config.provider} model=${result.model}` +
+    ` tokens=${result.usage?.prompt_tokens ?? "?"}→${result.usage?.completion_tokens ?? "?"}` +
+    ` (total ${result.usage?.total_tokens ?? "?"})` +
+    ` | finish=${result.finishReason} toolCalls=${result.toolCalls.length}` +
+    ` content=${result.content ? result.content.length + " chars" : "null"}`
+  );
+}
+
+function buildCompletionConfig(
+  config: ProviderConfig,
+  opts: InvokeOptions,
+  temperature: number,
+  stream: boolean,
+): any {
+  const params: any = {
+    model: config.model,
+    messages: opts.messages,
+    temperature,
+    stream,
+  };
+
+  if (stream) {
+    params.stream_options = { include_usage: true };
+  }
+
+  if (opts.tools?.length) {
+    params.tools = opts.tools;
+    params.tool_choice = "auto";
+  }
+
+  if (opts.format === "json" && !opts.tools?.length && config.provider !== "anthropic") {
+    params.response_format = { type: "json_object" };
+  }
+
+  return params;
+}
+
+function getClient(config: ProviderConfig, opts: InvokeOptions): OpenAI {
+  const rawClient = buildClient(config);
+  if (isTracingEnabled()) {
+    return observeOpenAI(rawClient, {
+      sessionId: opts.sessionId,
+      userId: opts.userId,
+      tags: opts.tags,
+      generationName: opts.generationName,
+    });
+  }
+  return rawClient;
+}
+
+// ─── invoke_llm — non-streaming (kept for summarization, simple calls) ───
+
+export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
+  const config = await getProvider();
+  const client = getClient(config, opts);
+  const requestedTemp = opts.temperature ?? 0.75;
+  const start = Date.now();
+
+  logRequest(config, opts, false);
+
+  const tryCompletion = async (temp: number): Promise<InvokeResult> => {
+    const params = buildCompletionConfig(config, opts, temp, false);
+    const response = await client.chat.completions.create(params) as OpenAI.Chat.ChatCompletion;
     const elapsed = Date.now() - start;
-    const content = response.choices[0]?.message?.content ?? null;
+    const message = response.choices[0]?.message;
 
-    console.log(
-      `[inference] ← ${elapsed}ms provider=${config.provider} model=${response.model ?? config.model}` +
-      ` tokens=${response.usage?.prompt_tokens ?? "?"}→${response.usage?.completion_tokens ?? "?"}` +
-      ` (total ${response.usage?.total_tokens ?? "?"})` +
-      ` | response ${content ? content.length + " chars" : "null"}`
-    );
-
-    return {
-      content,
+    const result: InvokeResult = {
+      content: message?.content ?? null,
+      toolCalls: message ? extractToolCalls(message) : [],
+      finishReason: normalizeFinishReason(response.choices[0]?.finish_reason),
       usage: response.usage,
-      model: config.model,
+      model: response.model ?? config.model,
       provider: config.provider,
       elapsedMs: elapsed,
     };
+
+    logResponse(config, elapsed, result);
+    return result;
+  };
+
+  try {
+    return await tryCompletion(requestedTemp);
   } catch (err: any) {
-    // If model doesn't support temperature (e.g. only allows temp=1), retry with default
     const isTempUnsupported =
       err?.code === "unsupported_value" &&
       err?.param === "temperature" &&
       requestedTemp !== 1;
 
     if (isTempUnsupported) {
-      console.warn(
-        `[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`
-      );
-      try {
-        const response = await runCompletion(1);
-        const elapsed = Date.now() - start;
-        const content = response.choices[0]?.message?.content ?? null;
-
-        console.log(
-          `[inference] ← ${elapsed}ms provider=${config.provider} model=${response.model ?? config.model}` +
-          ` tokens=${response.usage?.prompt_tokens ?? "?"}→${response.usage?.completion_tokens ?? "?"}` +
-          ` (total ${response.usage?.total_tokens ?? "?"})` +
-          ` | response ${content ? content.length + " chars" : "null"}`
-        );
-
-        return {
-          content,
-          usage: response.usage,
-          model: config.model,
-          provider: config.provider,
-          elapsedMs: elapsed,
-        };
-      } catch (retryErr: any) {
-        const elapsed = Date.now() - start;
-        console.error(
-          `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
-          ` | ${retryErr?.status ?? "?"} ${retryErr?.code ?? retryErr?.type ?? retryErr?.message ?? "unknown error"}`
-        );
-        throw retryErr;
-      }
+      console.warn(`[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`);
+      return await tryCompletion(1);
     }
 
     const elapsed = Date.now() - start;
     console.error(
-      `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
+      `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model}` +
       ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`
     );
     throw err;
   }
+}
+
+// ─── invoke_llm_streaming — streaming with tool calls ────────────────
+
+export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promise<InvokeResult> {
+  const config = await getProvider();
+  const client = getClient(config, opts);
+  const requestedTemp = opts.temperature ?? 0.75;
+  const start = Date.now();
+
+  logRequest(config, opts, true);
+
+  const runStream = async (temp: number): Promise<InvokeResult> => {
+    const params = buildCompletionConfig(config, opts, temp, true);
+
+    const stream = await client.chat.completions.create(params) as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+
+    let contentParts: string[] = [];
+    let toolCallAccumulators: Map<number, { id: string; name: string; argParts: string[] }> = new Map();
+    let finishReason: FinishReason = "stop";
+    let usage: OpenAI.Completions.CompletionUsage | undefined;
+    let model = config.model;
+
+    for await (const chunk of stream) {
+      if (opts.abortSignal?.aborted) {
+        finishReason = "stop";
+        break;
+      }
+
+      if (chunk.model) model = chunk.model;
+      if (chunk.usage) usage = chunk.usage as any;
+
+      const delta = chunk.choices?.[0]?.delta;
+      const chunkFinish = chunk.choices?.[0]?.finish_reason;
+
+      if (chunkFinish) {
+        finishReason = normalizeFinishReason(chunkFinish);
+      }
+
+      if (!delta) continue;
+
+      if (delta.content) {
+        contentParts.push(delta.content);
+        opts.onDelta({ type: "text", content: delta.content });
+      }
+
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+
+          if (!toolCallAccumulators.has(idx)) {
+            toolCallAccumulators.set(idx, {
+              id: tc.id ?? "",
+              name: tc.function?.name ?? "",
+              argParts: [],
+            });
+            opts.onDelta({
+              type: "tool_call_start",
+              toolCall: { index: idx, id: tc.id, name: tc.function?.name },
+            });
+          }
+
+          const acc = toolCallAccumulators.get(idx)!;
+          if (tc.id) acc.id = tc.id;
+          if (tc.function?.name) acc.name = tc.function.name;
+
+          if (tc.function?.arguments) {
+            acc.argParts.push(tc.function.arguments);
+            opts.onDelta({
+              type: "tool_call_delta",
+              toolCall: { index: idx },
+              content: tc.function.arguments,
+            });
+          }
+        }
+      }
+    }
+
+    const toolCalls: ToolCallData[] = [];
+    for (const [idx, acc] of toolCallAccumulators) {
+      const tc: ToolCallData = {
+        id: acc.id,
+        name: acc.name,
+        arguments: acc.argParts.join(""),
+      };
+      toolCalls.push(tc);
+      opts.onDelta({ type: "tool_call_done", toolCall: { index: idx, ...tc } });
+    }
+
+    if (toolCalls.length > 0 && finishReason === "stop") {
+      finishReason = "tool_calls";
+    }
+
+    const elapsed = Date.now() - start;
+    const result: InvokeResult = {
+      content: contentParts.join("") || null,
+      toolCalls,
+      finishReason,
+      usage,
+      model,
+      provider: config.provider,
+      elapsedMs: elapsed,
+    };
+
+    logResponse(config, elapsed, result);
+    return result;
+  };
+
+  try {
+    return await runStream(requestedTemp);
+  } catch (err: any) {
+    const isTempUnsupported =
+      err?.code === "unsupported_value" &&
+      err?.param === "temperature" &&
+      requestedTemp !== 1;
+
+    if (isTempUnsupported) {
+      console.warn(`[inference] Retrying stream with temperature=1`);
+      return await runStream(1);
+    }
+
+    // If tool calling is not supported, retry without tools using JSON fallback
+    const isToolsUnsupported =
+      opts.tools?.length &&
+      (err?.message?.includes("tool") || err?.code === "unsupported_parameter");
+
+    if (isToolsUnsupported) {
+      console.warn(`[inference] Provider does not support native tool calling, falling back to JSON-in-prompt`);
+      return await invoke_llm_json_fallback(opts, config, start);
+    }
+
+    const elapsed = Date.now() - start;
+    console.error(
+      `[inference] ✗ ${elapsed}ms stream provider=${config.provider} model=${config.model}` +
+      ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`
+    );
+    throw err;
+  }
+}
+
+// ─── JSON-in-prompt fallback for providers without native tool calling ───
+
+function buildToolDescriptionPrompt(tools: OpenAI.Chat.ChatCompletionTool[]): string {
+  const descriptions = tools.map((t) => {
+    const fn = t.function;
+    return `- **${fn.name}**: ${fn.description}\n  Parameters: ${JSON.stringify(fn.parameters)}`;
+  }).join("\n");
+
+  return `You have access to the following tools. To use a tool, respond with a JSON object containing "tool_calls" array. Each element should have "name" (tool name) and "arguments" (object with the tool parameters). If you don't need to use a tool, respond normally without the tool_calls field.
+
+Available tools:
+${descriptions}
+
+When using tools, respond ONLY with this JSON format:
+{"content": "your thinking/explanation", "tool_calls": [{"name": "tool_name", "arguments": {...}}]}
+
+When NOT using tools, respond with plain text.`;
+}
+
+async function invoke_llm_json_fallback(
+  opts: StreamingInvokeOptions,
+  config: ProviderConfig,
+  startTime: number,
+): Promise<InvokeResult> {
+  const client = getClient(config, opts);
+
+  const messages = [...opts.messages];
+  if (opts.tools?.length) {
+    const toolPrompt = buildToolDescriptionPrompt(opts.tools);
+    const sysIdx = messages.findIndex((m) => m.role === "system");
+    if (sysIdx >= 0 && typeof messages[sysIdx].content === "string") {
+      messages[sysIdx] = {
+        ...messages[sysIdx],
+        content: (messages[sysIdx] as any).content + "\n\n" + toolPrompt,
+      };
+    } else {
+      messages.unshift({ role: "system", content: toolPrompt });
+    }
+  }
+
+  const params: any = {
+    model: config.model,
+    messages,
+    temperature: opts.temperature ?? 0.75,
+  };
+
+  const response = await client.chat.completions.create(params) as OpenAI.Chat.ChatCompletion;
+  const elapsed = Date.now() - startTime;
+  const rawContent = response.choices[0]?.message?.content ?? "";
+
+  let content: string | null = rawContent;
+  let toolCalls: ToolCallData[] = [];
+  let finishReason: FinishReason = "stop";
+
+  try {
+    const parsed = JSON.parse(rawContent);
+    if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+      content = parsed.content || null;
+      toolCalls = parsed.tool_calls.map((tc: any, i: number) => ({
+        id: `fallback_${Date.now()}_${i}`,
+        name: tc.name,
+        arguments: JSON.stringify(tc.arguments ?? {}),
+      }));
+      finishReason = "tool_calls";
+    }
+  } catch {
+    // Not JSON, treat as plain text
+  }
+
+  if (content) opts.onDelta({ type: "text", content });
+  for (const tc of toolCalls) {
+    opts.onDelta({ type: "tool_call_start", toolCall: tc });
+    opts.onDelta({ type: "tool_call_done", toolCall: tc });
+  }
+
+  const result: InvokeResult = {
+    content,
+    toolCalls,
+    finishReason,
+    usage: response.usage,
+    model: response.model ?? config.model,
+    provider: config.provider,
+    elapsedMs: elapsed,
+  };
+
+  logResponse(config, elapsed, result);
+  return result;
 }

@@ -1,7 +1,10 @@
-import mongoose from "mongoose";
+/**
+ * Legacy copilot types — kept for backward compatibility with any remaining imports.
+ * The canonical types now live in models/Sessions/Sessions.model.ts.
+ */
 
 export interface HistoryData {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   isContextual?: boolean;
   loopStep?: number;
@@ -13,11 +16,8 @@ export interface ContextData {
 }
 
 export interface SingleCommandData {
-  _id?: mongoose.Types.ObjectId;
   tool_name: string;
-  args: {
-    [key: string]: string;
-  };
+  args: Record<string, string>;
   file_name?: string[];
   active: boolean;
   loop?: number;
@@ -42,8 +42,4 @@ export interface CopilotSessionData {
   isMainThread: number;
   todo: any;
   mainSessionId?: string;
-  scans?: any;
-  subprocess?: any;
-  netcat?: any;
-  previousContexts?: ContextData[];
 }
