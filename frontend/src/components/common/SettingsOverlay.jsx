@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2 } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
 import SSHPage from "@/components/pages/settings/SSH";
+import GUISettingsPage from "@/components/pages/settings/GUISettings";
 
 const TABS = [
   {
@@ -35,10 +36,23 @@ const TABS = [
     icon: TbTerminal2,
     component: SSHPage,
   },
+  {
+    key: "gui",
+    label: "GUI / VNC",
+    description: "Set up a remote desktop on your exploit box for graphical tools.",
+    icon: TbDeviceDesktop,
+    component: GUISettingsPage,
+  },
 ];
 
-const SettingsOverlay = ({ open, onClose }) => {
-  const [activeTab, setActiveTab] = useState("account");
+const SettingsOverlay = ({ open, onClose, initialTab }) => {
+  const [activeTab, setActiveTab] = useState(initialTab || "account");
+
+  useEffect(() => {
+    if (initialTab && open) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, open]);
 
   const handleEscape = useCallback(
     (e) => {

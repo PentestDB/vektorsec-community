@@ -6,8 +6,8 @@ import styles from "@/styles/components/Chat.module.scss";
 const CONSENT_CONFIG = {
   run_install_tool: {
     title: "Tool installation requires approval",
-    getCode: (args) => args?.command ?? "",
-    language: "bash",
+    getCode: (args) => args?.tool_name ? `Install: ${args.tool_name}` : "",
+    language: "text",
   },
   run_bash: {
     title: "Command execution requires approval",

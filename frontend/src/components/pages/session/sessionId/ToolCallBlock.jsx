@@ -30,7 +30,7 @@ function formatArgsPreview(toolName, parsed) {
   if (toolName === "run_bash") return parsed.command ?? "";
   if (toolName === "run_python_script") return parsed.file_name ?? "inline script";
   if (toolName === "google_search") return parsed.query ?? "";
-  if (toolName === "run_install_tool") return parsed.command ?? "";
+  if (toolName === "run_install_tool") return parsed.tool_name ?? "";
   if (toolName === "ask_user") return parsed.question ?? "";
   if (toolName === "spawn_shell") return parsed.label ?? "";
   if (toolName === "write_to_shell") return `[${parsed.shell_id}] ${(parsed.input ?? "").slice(0, 60)}`;
@@ -41,8 +41,11 @@ function formatArgsPreview(toolName, parsed) {
 }
 
 function getCodePreview(toolName, parsed) {
-  if (toolName === "run_bash" || toolName === "run_install_tool") {
+  if (toolName === "run_bash") {
     return { code: parsed.command ?? "", language: "bash" };
+  }
+  if (toolName === "run_install_tool") {
+    return null;
   }
   if (toolName === "run_python_script") {
     return { code: parsed.script ?? "", language: "python" };

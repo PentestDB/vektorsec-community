@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import styles from "@/styles/components/Common.module.scss";
 import { useRouter } from "next/navigation";
 import { App } from "antd";
@@ -19,6 +19,18 @@ const HeaderLinks = ({ sessionId, sessionName, logoVisible = true }) => {
   const { user } = useSelector((state) => state.user);
   const { message } = App.useApp();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState(null);
+
+  const handleOpenSettings = useCallback((e) => {
+    const tab = e.detail?.tab || null;
+    setSettingsInitialTab(tab);
+    setSettingsOpen(true);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("open-settings", handleOpenSettings);
+    return () => window.removeEventListener("open-settings", handleOpenSettings);
+  }, [handleOpenSettings]);
 
   const logoutMutation = useMutation(logoutUser, {
     onSuccess: (data) => {
@@ -77,7 +89,8 @@ const HeaderLinks = ({ sessionId, sessionName, logoVisible = true }) => {
       </div>
       <SettingsOverlay
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => { setSettingsOpen(false); setSettingsInitialTab(null); }}
+        initialTab={settingsInitialTab}
       />
     </>
   );

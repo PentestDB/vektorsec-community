@@ -424,6 +424,674 @@ export const disconnectAnthropicOAuth = async (_req: Request, res: Response) => 
   }
 };
 
+// ─── VNC / GUI Configuration (reads/writes .env) ─────────────────────
+
+const VNC_ENV_KEYS = {
+  mode: "VNC_MODE",
+  host: "VNC_HOST",
+  port: "VNC_PORT",
+  password: "VNC_PASSWORD",
+  setupDone: "VNC_SETUP_DONE",
+  baseUrl: "VNC_BASE_URL",
+};
+
+export const getVNCConfig = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    const mode = env[VNC_ENV_KEYS.mode] || "";
+    const host = env[VNC_ENV_KEYS.host] || "";
+    const port = env[VNC_ENV_KEYS.port] || "9020";
+    const password = env[VNC_ENV_KEYS.password] || "";
+    const setupDone = env[VNC_ENV_KEYS.setupDone] === "true";
+    const baseUrl = (env[VNC_ENV_KEYS.baseUrl] || "").trim();
+
+    const configured = !!(mode && (mode === "manual" ? (host && password) : setupDone));
+
+    return res.status(200).json({
+      mode,
+      host,
+      port,
+      password,
+      setupDone,
+      baseUrl,
+      configured,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get VNC config" });
+  }
+};
+
+export const updateVNCConfig = async (req: Request, res: Response) => {
+  try {
+    const { mode, host, port, password, baseUrl } = req.body;
+    const env = readEnvFile();
+
+    if (!mode || !["auto", "manual"].includes(mode)) {
+      return res.status(400).json({ message: "Mode must be 'auto' or 'manual'" });
+    }
+
+    if (mode === "manual") {
+      if (!host || !password) {
+        return res.status(400).json({ message: "Host and password are required for manual mode" });
+      }
+    }
+
+    const updates: Record<string, string> = {
+      [VNC_ENV_KEYS.mode]: mode,
+      [VNC_ENV_KEYS.host]: host ?? env[VNC_ENV_KEYS.host] ?? "",
+      [VNC_ENV_KEYS.port]: String(port ?? env[VNC_ENV_KEYS.port] ?? 9020),
+      [VNC_ENV_KEYS.password]: password !== undefined && password !== "" ? password : (env[VNC_ENV_KEYS.password] || ""),
+      [VNC_ENV_KEYS.setupDone]: mode === "manual" ? "true" : "false",
+      [VNC_ENV_KEYS.baseUrl]: typeof baseUrl === "string" ? baseUrl.trim() : "",
+    };
+
+    updateEnvVars(updates);
+
+    return res.status(200).json({ message: "VNC configuration saved" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update VNC config" });
+  }
+};
+
+export const resetVNCConfig = async (_req: Request, res: Response) => {
+  try {
+    updateEnvVars({
+      [VNC_ENV_KEYS.mode]: "",
+      [VNC_ENV_KEYS.host]: "",
+      [VNC_ENV_KEYS.port]: "",
+      [VNC_ENV_KEYS.password]: "",
+      [VNC_ENV_KEYS.setupDone]: "",
+      [VNC_ENV_KEYS.baseUrl]: "",
+    });
+
+    return res.status(200).json({ message: "VNC configuration reset" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to reset VNC config" });
+  }
+};
+
+export const autoSetupVNC = async (_req: Request, res: Response) => {
+  const { buildSSHConfig } = await import("../utils/sshConfig");
+  const ssh2 = await import("ssh2");
+  const { generateRandomPassword } = await import("../utils/fileUtils");
+
+  try {
+    const sshConfig = buildSSHConfig();
+    const sshClient = new ssh2.Client();
+
+    sshClient
+      .on("ready", async () => {
+        try {
+          const steps = [
+            { label: "Checking for VNC server", done: false },
+            { label: "Installing VNC & GUI packages", done: false },
+            { label: "Configuring VNC", done: false },
+            { label: "Starting VNC server", done: false },
+            { label: "Starting noVNC proxy", done: false },
+          ];
+
+          const execCmd = (cmd: string): Promise<string> => {
+            return new Promise((resolve, reject) => {
+              sshClient.exec(cmd, (err, stream) => {
+                if (err) return reject(err);
+                let out = "";
+                stream
+                  .on("close", () => resolve(out))
+                  .on("data", (d: Buffer) => { out += d.toString(); })
+                  .stderr.on("data", (d: Buffer) => { out += d.toString(); });
+              });
+            });
+          };
+
+          // Step 1: Check if VNC + websockify already installed
+          let vncBin = "";
+          const vncRaw = await execCmd(VNC_SEARCH_CMD);
+          vncBin = parseVncPath(vncRaw);
+
+          let wsInstalled = false;
+          try {
+            const wsRaw = await execCmd('command -v websockify 2>/dev/null');
+            wsInstalled = parseVncPath(wsRaw).length > 0;
+          } catch { /* not installed */ }
+
+          const alreadyInstalled = vncBin.length > 0 && wsInstalled;
+          steps[0].done = true;
+
+          // Step 2: Install packages if anything is missing
+          if (!alreadyInstalled) {
+            // Install Xvnc + lightweight GUI deps; try tigervnc first, fall back to tightvncserver
+            await execCmd(
+              "export DEBIAN_FRONTEND=noninteractive && " +
+              "sudo apt-get update -qq 2>&1 && " +
+              "sudo apt-get install -y -qq " +
+              "tigervnc-standalone-server tigervnc-common " +
+              "novnc python3-websockify " +
+              "xterm xfonts-base x11-xserver-utils " +
+              "dbus-x11 2>&1 || true"
+            );
+
+            // If tigervnc failed (no Xvnc), try tightvncserver as fallback
+            let recheck = await execCmd(VNC_SEARCH_CMD);
+            vncBin = parseVncPath(recheck);
+            if (!vncBin) {
+              await execCmd(
+                "export DEBIAN_FRONTEND=noninteractive && " +
+                "sudo apt-get install -y -qq tightvncserver 2>&1 || true"
+              );
+              recheck = await execCmd(VNC_SEARCH_CMD);
+              vncBin = parseVncPath(recheck);
+            }
+
+            if (!vncBin) {
+              const dpkgInfo = await execCmd("dpkg -l | grep -i vnc 2>/dev/null || true").catch(() => "");
+              const findInfo = await execCmd("find /usr -maxdepth 4 -type f \\( -name '*vnc*' -o -name '*Xvnc*' \\) 2>/dev/null | head -20").catch(() => "");
+              console.log("VNC binary not found after install. dpkg:", dpkgInfo, "find:", findInfo);
+              sshClient.end();
+              return res.status(400).json({
+                message: `VNC binary not found after package install. Installed VNC packages: ${dpkgInfo.trim().split("\n").filter(l => l.startsWith("ii")).map(l => l.split(/\s+/)[1]).join(", ") || "none"}. Found files: ${findInfo.trim().split("\n").slice(0, 5).join(", ") || "none"}`,
+              });
+            }
+          }
+          steps[1].done = true;
+
+          // Discover vncpasswd binary
+          let vncPasswdBin = "vncpasswd";
+          try {
+            const raw = await execCmd(
+              'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec"; ' +
+              'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
+              'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done'
+            );
+            const found = parseVncPath(raw);
+            if (found) vncPasswdBin = found;
+          } catch { /* use default */ }
+
+          const isXvncDirect = vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
+          const isX11vnc = vncBin.endsWith("x11vnc");
+
+          // Step 3: Configure VNC
+          const randomPassword = generateRandomPassword();
+          await execCmd(
+            `mkdir -p ~/.vnc && ` +
+            `echo '#!/bin/bash\\nexport DISPLAY=:1\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
+            `chmod +x ~/.vnc/xstartup`
+          );
+          // Kill all existing VNC/Xvfb processes for a clean start on :1
+          await execCmd(
+            "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
+            "pkill -f x11vnc 2>/dev/null || true; " +
+            "pkill -f 'Xvfb' 2>/dev/null || true; " +
+            `for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done`
+          );
+          const escapedPw = randomPassword.replace(/'/g, "'\\''");
+          if (!isX11vnc) {
+            await execCmd(
+              `echo '${escapedPw}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
+            );
+          }
+          steps[2].done = true;
+
+          // Step 4: Start VNC server with DISPLAY=:1
+          if (isXvncDirect) {
+            // Xvnc/Xtigervnc: run directly — it IS the X server
+            await execCmd(
+              `${vncBin} :1 -geometry 1280x800 -depth 24 -rfbport 5901 ` +
+              `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+              `-pn > /dev/null 2>&1 &`
+            );
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            // Launch the lightweight session on the new display
+            await execCmd("export DISPLAY=:1 && ~/.vnc/xstartup &");
+          } else if (isX11vnc) {
+            // x11vnc: needs a real X server (Xvfb) underneath
+            await execCmd(
+              "command -v Xvfb >/dev/null 2>&1 || " +
+              "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
+            );
+            await execCmd("Xvfb :1 -screen 0 1280x800x24 > /dev/null 2>&1 &");
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await execCmd("export DISPLAY=:1 && ~/.vnc/xstartup &");
+            await execCmd(
+              `x11vnc -display :1 -rfbport 5901 -passwd '${escapedPw}' ` +
+              `-forever -shared -noxdamage > /dev/null 2>&1 &`
+            );
+          } else {
+            // vncserver wrapper (tigervncserver / tightvncserver)
+            await execCmd(`${vncBin} -geometry 1280x800 -depth 24 :1`);
+          }
+          // Ensure DISPLAY=:1 is exported in the user's shell profile
+          await execCmd(
+            'grep -q "export DISPLAY=:1" ~/.bashrc 2>/dev/null || ' +
+            'echo "export DISPLAY=:1" >> ~/.bashrc'
+          );
+          steps[3].done = true;
+
+          // Step 5: Start noVNC proxy
+          await execCmd("pkill -f 'websockify.*9020' 2>/dev/null || true");
+          await execCmd(
+            "websockify --web /usr/share/novnc/ 9020 localhost:5901 > /dev/null 2>&1 &"
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          steps[4].done = true;
+
+          const vncHost = sshConfig.host || "localhost";
+          const vncPort = "9020";
+
+          updateEnvVars({
+            [VNC_ENV_KEYS.mode]: "auto",
+            [VNC_ENV_KEYS.host]: vncHost,
+            [VNC_ENV_KEYS.port]: vncPort,
+            [VNC_ENV_KEYS.password]: randomPassword,
+            [VNC_ENV_KEYS.setupDone]: "true",
+          });
+
+          sshClient.end();
+
+          return res.status(200).json({
+            message: "VNC setup completed successfully",
+            vncURL: `${vncHost}:${vncPort}`,
+            password: randomPassword,
+            steps,
+          });
+        } catch (error) {
+          sshClient.end();
+          console.log("VNC auto-setup error:", error);
+          return res.status(400).json({
+            message: "VNC setup failed during installation. Ensure the exploit box has internet access for package installation.",
+          });
+        }
+      })
+      .on("error", (err: Error) => {
+        console.log("SSH connection error during VNC setup:", err);
+        return res.status(400).json({
+          message: "Cannot connect to exploit box via SSH. Please configure SSH settings first.",
+        });
+      });
+
+    sshClient.connect(sshConfig);
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({
+      message: "VNC auto-setup failed. Ensure SSH/Exploit Box is configured.",
+    });
+  }
+};
+
+// ─── VNC Diagnostics & Repair ─────────────────────────────────────────
+
+interface DiagCheck {
+  id: string;
+  label: string;
+  status: "pass" | "fail" | "skip";
+  detail: string;
+}
+
+const VNC_SEARCH_CMD = [
+  'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/usr/libexec";',
+  // Prefer Xvnc/Xtigervnc (the actual binaries) over wrapper scripts
+  'for b in Xvnc Xtigervnc vncserver tigervncserver x11vnc; do',
+  '  p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && exit 0;',
+  'done;',
+  'for p in /usr/bin/Xvnc /usr/bin/Xtigervnc /usr/bin/vncserver /usr/bin/tigervncserver',
+  '  /usr/local/bin/Xvnc /usr/local/bin/vncserver /usr/libexec/vncserver /usr/sbin/vncserver',
+  '  /usr/bin/x11vnc /snap/bin/vncserver; do',
+  '  [ -x "$p" ] && echo "$p" && exit 0;',
+  'done;',
+  'dpkg -L tigervnc-standalone-server 2>/dev/null | grep -m1 -E "/(Xvnc|Xtigervnc|vncserver|tigervncserver)$";',
+  'find /usr -maxdepth 4 \\( -name "Xvnc" -o -name "Xtigervnc" -o -name "vncserver" -o -name "tigervncserver" -o -name "x11vnc" \\) -type f 2>/dev/null | head -1',
+].join(' ');
+
+function parseVncPath(raw: string): string {
+  for (const line of raw.trim().split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("/") && !trimmed.includes(" ")) return trimmed;
+  }
+  return "";
+}
+
+async function runDiagnostics(): Promise<DiagCheck[]> {
+  const { execSSHCommand } = await import("../services/ssh.service");
+
+  const checks: DiagCheck[] = [];
+
+  // 1. SSH connectivity
+  try {
+    const whoami = await execSSHCommand("whoami");
+    checks.push({
+      id: "ssh",
+      label: "SSH connectivity",
+      status: "pass",
+      detail: `Connected as ${whoami.trim()}`,
+    });
+  } catch (err: any) {
+    checks.push({
+      id: "ssh",
+      label: "SSH connectivity",
+      status: "fail",
+      detail: err?.message || "Cannot connect via SSH",
+    });
+    const skipRest = ["vnc_installed", "websockify_installed", "vnc_running", "websockify_running", "novnc_reachable"];
+    for (const id of skipRest) {
+      checks.push({ id, label: "", status: "skip", detail: "Skipped — SSH failed" });
+    }
+    return checks;
+  }
+
+  // 2. VNC server installed — check multiple binary names and common paths
+  let vncBinaryPath = "";
+  try {
+    const out = await execSSHCommand(VNC_SEARCH_CMD);
+    vncBinaryPath = parseVncPath(out);
+    const found = vncBinaryPath.length > 0;
+    checks.push({
+      id: "vnc_installed",
+      label: "VNC server installed",
+      status: found ? "pass" : "fail",
+      detail: found ? `Found: ${vncBinaryPath}` : "No VNC binary found (vncserver, Xvnc, Xtigervnc)",
+    });
+  } catch {
+    checks.push({ id: "vnc_installed", label: "VNC server installed", status: "fail", detail: "Check failed" });
+  }
+
+  // 3. Websockify installed
+  try {
+    const out = await execSSHCommand("which websockify 2>/dev/null && echo FOUND || echo MISSING");
+    const found = out.trim().endsWith("FOUND");
+    checks.push({
+      id: "websockify_installed",
+      label: "Websockify (noVNC proxy) installed",
+      status: found ? "pass" : "fail",
+      detail: found ? `websockify at ${out.split("\n")[0]?.trim()}` : "websockify not found in PATH",
+    });
+  } catch {
+    checks.push({ id: "websockify_installed", label: "Websockify installed", status: "fail", detail: "Check failed" });
+  }
+
+  // 4. VNC server running on DISPLAY=:1 (rfbport 5901)
+  try {
+    // Check for VNC serving on rfbport 5901 (display :1)
+    const psOut = await execSSHCommand(
+      "ps aux 2>/dev/null | grep -E '[X](vnc|tigervnc|vfb)|x11vnc' | grep -v grep || true"
+    );
+
+    // Specifically check if port 5901 is listening (the expected rfbport for :1)
+    const portCheck = await execSSHCommand(
+      "(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':5901' || true"
+    );
+    const port5901Listening = portCheck.trim().length > 0;
+
+    // Also check for display :1 in process args
+    const hasDisplay1 = psOut.includes(":1") || psOut.includes("display :1");
+    const hasAnyVnc = psOut.trim().length > 0;
+
+    const healthy = port5901Listening;
+    let detail = "";
+    if (port5901Listening) {
+      detail = "VNC listening on rfbport 5901 (DISPLAY=:1)";
+    } else if (hasAnyVnc) {
+      const match = psOut.match(/:(\d+)/);
+      const foundDisplay = match ? `:${match[1]}` : "unknown";
+      detail = `VNC running but on display ${foundDisplay}, not :1 (port 5901). Run repair to fix.`;
+    } else {
+      detail = "No VNC server process found";
+    }
+
+    checks.push({
+      id: "vnc_running",
+      label: "VNC on DISPLAY=:1 (port 5901)",
+      status: healthy ? "pass" : "fail",
+      detail,
+    });
+  } catch {
+    checks.push({ id: "vnc_running", label: "VNC on DISPLAY=:1", status: "fail", detail: "Check failed" });
+  }
+
+  // 5. Websockify running: port 9020 -> localhost:5901
+  try {
+    const out = await execSSHCommand("ps aux 2>/dev/null | grep 'websockify' | grep -v grep || true");
+    const lines = out.trim().split("\n").filter(l => l.trim().length > 0);
+    const correctProxy = lines.some(l => l.includes("9020") && l.includes("5901"));
+    const anyWs = lines.length > 0;
+
+    let status: "pass" | "fail" = correctProxy ? "pass" : "fail";
+    let detail = "";
+    if (correctProxy) {
+      detail = "websockify proxying 9020 → localhost:5901";
+    } else if (anyWs) {
+      detail = "websockify running but not proxying 9020 → 5901. Run repair to fix.";
+    } else {
+      detail = "No websockify process found";
+    }
+
+    checks.push({
+      id: "websockify_running",
+      label: "Websockify on port 9020 → 5901",
+      status,
+      detail,
+    });
+  } catch {
+    checks.push({ id: "websockify_running", label: "Websockify running", status: "fail", detail: "Check failed" });
+  }
+
+  // 6. noVNC reachable locally
+  try {
+    const out = await execSSHCommand('curl -s -o /dev/null -w "%{http_code}" http://localhost:9020/ 2>/dev/null || echo 000');
+    const code = out.trim();
+    const ok = code === "200" || code === "301" || code === "302";
+    checks.push({
+      id: "novnc_reachable",
+      label: "noVNC web UI reachable (localhost:9020)",
+      status: ok ? "pass" : "fail",
+      detail: ok ? `HTTP ${code}` : `HTTP ${code} — noVNC not responding on port 9020`,
+    });
+  } catch {
+    checks.push({ id: "novnc_reachable", label: "noVNC reachable", status: "fail", detail: "Check failed" });
+  }
+
+  return checks;
+}
+
+export const diagnoseVNC = async (_req: Request, res: Response) => {
+  try {
+    const checks = await runDiagnostics();
+    const allPassed = checks.every((c) => c.status === "pass");
+    return res.status(200).json({ checks, allPassed });
+  } catch (error: any) {
+    console.error("VNC diagnose error:", error);
+    return res.status(400).json({
+      message: error?.message || "Diagnostics failed. Ensure SSH is configured.",
+    });
+  }
+};
+
+export const repairVNC = async (req: Request, res: Response) => {
+  try {
+    const { execSSHCommand } = await import("../services/ssh.service");
+    const env = readEnvFile();
+    const savedPassword = env[VNC_ENV_KEYS.password] || "";
+    const fix = req.body?.fix || "all";
+
+    const log: string[] = [];
+
+    // Discover which VNC binary is actually available
+    let vncBin = "vncserver";
+    let vncMissing = false;
+    try {
+      const found = parseVncPath(await execSSHCommand(VNC_SEARCH_CMD));
+      if (found) {
+        vncBin = found;
+        log.push(`Using VNC binary: ${vncBin}`);
+      } else {
+        vncMissing = true;
+      }
+    } catch {
+      vncMissing = true;
+    }
+
+    // Check if websockify is missing too
+    let websockifyMissing = false;
+    try {
+      const wsOut = await execSSHCommand('command -v websockify 2>/dev/null');
+      if (!parseVncPath(wsOut)) websockifyMissing = true;
+    } catch {
+      websockifyMissing = true;
+    }
+
+    // Install missing packages
+    if ((fix === "all" || fix === "vnc_server") && (vncMissing || websockifyMissing)) {
+      log.push("Installing missing VNC/noVNC packages...");
+      try {
+        await execSSHCommand(
+          "export DEBIAN_FRONTEND=noninteractive && " +
+          "sudo apt-get update -qq 2>&1 && " +
+          "sudo apt-get install -y -qq " +
+          "tigervnc-standalone-server tigervnc-common " +
+          "novnc python3-websockify " +
+          "xterm xfonts-base x11-xserver-utils dbus-x11 2>&1 || true"
+        );
+        log.push("Package installation completed");
+
+        let found = parseVncPath(await execSSHCommand(VNC_SEARCH_CMD));
+        if (!found) {
+          log.push("tigervnc not found, trying tightvncserver fallback...");
+          await execSSHCommand(
+            "export DEBIAN_FRONTEND=noninteractive && " +
+            "sudo apt-get install -y -qq tightvncserver 2>&1 || true"
+          );
+          found = parseVncPath(await execSSHCommand(VNC_SEARCH_CMD));
+        }
+        if (found) {
+          vncBin = found;
+          vncMissing = false;
+          log.push(`VNC binary now available: ${vncBin}`);
+        } else {
+          log.push("WARNING: VNC binary still not found after install");
+        }
+      } catch (e: any) {
+        log.push(`Package install failed: ${e.message}`);
+      }
+    }
+
+    // Determine the right vncpasswd binary
+    let vncPasswdBin = "vncpasswd";
+    try {
+      const raw = await execSSHCommand(
+        'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec"; ' +
+        'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
+        'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done'
+      );
+      const found = parseVncPath(raw);
+      if (found) vncPasswdBin = found;
+    } catch { /* use default */ }
+
+    if (fix === "all" || fix === "vnc_server") {
+      const isXvncDirect = vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
+      const isX11vnc = vncBin.endsWith("x11vnc");
+
+      try {
+        await execSSHCommand(
+          `mkdir -p ~/.vnc && ` +
+          `echo '#!/bin/bash\\nexport DISPLAY=:1\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
+          `chmod +x ~/.vnc/xstartup`
+        );
+        log.push("Configured xstartup with DISPLAY=:1");
+      } catch (e: any) {
+        log.push(`xstartup config failed: ${e.message}`);
+      }
+
+      try {
+        await execSSHCommand(
+          "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
+          "pkill -f x11vnc 2>/dev/null || true; " +
+          "pkill -f 'Xvfb' 2>/dev/null || true; " +
+          "for display in {1..99}; do vncserver -kill \":$display\" 2>/dev/null || true; done"
+        );
+        log.push("Killed all existing VNC/Xvfb processes");
+      } catch (e: any) {
+        log.push(`Kill VNC failed: ${e.message}`);
+      }
+
+      if (savedPassword && !isX11vnc) {
+        try {
+          const escaped = savedPassword.replace(/'/g, "'\\''");
+          await execSSHCommand(
+            `echo '${escaped}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
+          );
+          log.push("Set VNC password");
+        } catch (e: any) {
+          log.push(`Set password failed: ${e.message}`);
+        }
+      }
+
+      try {
+        if (isXvncDirect) {
+          await execSSHCommand(
+            `${vncBin} :1 -geometry 1280x800 -depth 24 -rfbport 5901 ` +
+            `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+            `-pn > /dev/null 2>&1 &`
+          );
+          await new Promise((r) => setTimeout(r, 1500));
+          await execSSHCommand("export DISPLAY=:1 && ~/.vnc/xstartup &");
+          log.push("Started Xvnc directly on :1");
+        } else if (isX11vnc) {
+          await execSSHCommand(
+            "command -v Xvfb >/dev/null 2>&1 || " +
+            "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
+          );
+          await execSSHCommand("Xvfb :1 -screen 0 1280x800x24 > /dev/null 2>&1 &");
+          await new Promise((r) => setTimeout(r, 1000));
+          await execSSHCommand("export DISPLAY=:1 && ~/.vnc/xstartup &");
+          const escaped = (savedPassword || "").replace(/'/g, "'\\''");
+          await execSSHCommand(
+            `x11vnc -display :1 -rfbport 5901 -passwd '${escaped}' -forever -shared -noxdamage > /dev/null 2>&1 &`
+          );
+          log.push("Started x11vnc with Xvfb on :1");
+        } else {
+          await execSSHCommand(`${vncBin} -geometry 1280x800 -depth 24 :1`);
+          log.push("Started VNC server on :1");
+        }
+        await execSSHCommand(
+          'grep -q "export DISPLAY=:1" ~/.bashrc 2>/dev/null || echo "export DISPLAY=:1" >> ~/.bashrc'
+        );
+      } catch (e: any) {
+        log.push(`Start VNC failed: ${e.message}`);
+      }
+    }
+
+    if (fix === "all" || fix === "websockify") {
+      try {
+        await execSSHCommand("pkill -f 'websockify.*9020' 2>/dev/null || true");
+        log.push("Killed existing websockify");
+      } catch (e: any) {
+        log.push(`Kill websockify failed: ${e.message}`);
+      }
+
+      try {
+        await execSSHCommand(
+          "websockify --web /usr/share/novnc/ 9020 localhost:5901 > /dev/null 2>&1 &"
+        );
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        log.push("Started websockify on port 9020");
+      } catch (e: any) {
+        log.push(`Start websockify failed: ${e.message}`);
+      }
+    }
+
+    const checks = await runDiagnostics();
+    const allPassed = checks.every((c) => c.status === "pass");
+
+    return res.status(200).json({ checks, allPassed, repairLog: log });
+  } catch (error: any) {
+    console.error("VNC repair error:", error);
+    return res.status(400).json({
+      message: error?.message || "Repair failed. Ensure SSH is configured.",
+    });
+  }
+};
+
 // ─── SSH Configuration (reads/writes .env) ───────────────────────────
 
 export const getSSHConfig = async (_req: Request, res: Response) => {

@@ -1,28 +1,40 @@
 import { ToolDefinition } from "../types";
+import { getCapabilityByName } from "../../capabilities/registry";
 
 const runInstallTool: ToolDefinition = {
   name: "run_install_tool",
   description:
-    "Install a missing CLI tool or Python package on the attack box. " +
-    "Examples: 'apt install -y nikto', 'pip install pwntools'. " +
+    "Install a capability on the attack box by name. " +
+    "Pass the tool/package name exactly as listed in the capabilities section (e.g. 'nmap', 'pwntools', 'ghidra'). " +
+    "The system resolves the correct install command automatically. " +
     "This tool requires user consent before execution.",
   parameters: {
     type: "object",
     properties: {
-      command: {
+      tool_name: {
         type: "string",
-        description: "The install command (e.g. 'apt install -y nmap', 'pip install requests')",
+        description:
+          "The capability name to install, as listed in the system prompt " +
+          "(e.g. 'nmap', 'pwntools', 'sqlmap', 'ghidra')",
       },
     },
-    required: ["command"],
+    required: ["tool_name"],
   },
   requiresConsent: true,
   timeoutMs: 120_000,
   async execute(args, ctx) {
-    const command = args.command;
-    if (!command) return { output: "Error: no install command provided", exitCode: 1 };
+    const toolName = args.tool_name;
+    if (!toolName) return { output: "Error: no tool_name provided", exitCode: 1 };
 
-    const { output, exitCode } = await ctx.runCommand(command, this.timeoutMs);
+    const cap = getCapabilityByName(toolName);
+    if (!cap) {
+      return {
+        output: `Unknown capability: "${toolName}". Use the exact name from the capabilities list.`,
+        exitCode: 1,
+      };
+    }
+
+    const { output, exitCode } = await ctx.runCommand(cap.installCommand, this.timeoutMs);
     return { output, exitCode };
   },
 };

@@ -2,7 +2,7 @@ import { Col } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import { RiAccountCircleLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2 } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop } from "react-icons/tb";
 import { usePathname, useRouter } from "next/navigation";
 
 const settingItems = [
@@ -29,6 +29,12 @@ const settingItems = [
         name: "SSH",
         path: "/settings/ssh",
         icon: <TbTerminal2 className={styles.sidebarIcon} />
+    },
+    {
+        title: "GUI / VNC",
+        name: "GUI",
+        path: "/settings/gui",
+        icon: <TbDeviceDesktop className={styles.sidebarIcon} />
     }
 ];
 

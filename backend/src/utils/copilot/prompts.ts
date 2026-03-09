@@ -8,6 +8,9 @@ export interface AgentPromptConfig {
   sessionId: string;
   installedCapabilities?: string[];
   selectedCapabilities?: string[];
+  currentDate?: string;
+  currentDay?: string;
+  timezone?: string;
 }
 
 export function buildSystemPrompt(config: AgentPromptConfig): string {
@@ -17,15 +20,18 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
   const notInstalled = (config.selectedCapabilities ?? []).filter(
     (name) => !installed.includes(name),
   );
-  const installHints = notInstalled
+  const notInstalledNames = notInstalled
     .map((name) => {
       const cap = getCapabilityByName(name);
-      return cap ? `  - ${cap.name}: ${cap.installCommand}` : null;
+      return cap ? `  - ${cap.name}` : null;
     })
     .filter(Boolean);
 
-  const installSection = installHints.length
-    ? `\nThe following capabilities are selected but not yet installed. Use the run_install_tool (requires user consent) to install them if needed:\n${installHints.join("\n")}\n`
+  const installSection = notInstalledNames.length
+    ? `\nThe following capabilities are selected but not yet installed on the attack box. ` +
+      `Use run_install_tool with the tool name (e.g. run_install_tool({ tool_name: "nmap" })) to install them — ` +
+      `the system resolves the correct install command automatically. Requires user consent.\n` +
+      `${notInstalledNames.join("\n")}\n`
     : "";
 
   const activeBuckets = new Set(getActiveBucketIds(installed));
@@ -37,6 +43,12 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
   - Passwords: /usr/share/wordlists/rockyou.txt
   - Also: /usr/share/wordlists/seclists/, /usr/share/wordlists/metasploit/, /usr/share/wordlists/wfuzz/`
     : "";
+
+  const now = new Date();
+  const date = config.currentDate ?? now.toISOString().split("T")[0];
+  const day = config.currentDay ?? now.toLocaleDateString("en-US", { weekday: "long" });
+  const tz = config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const time = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
   return `<role>
 You are Pentest Copilot, an autonomous penetration testing agent specializing in identifying vulnerabilities and exploiting security weaknesses in computer systems and networks.
@@ -61,6 +73,8 @@ ${installSection}
 </capabilities>
 
 <environment>
+- Date: ${date} (${day})
+- Time: ${time} ${tz}
 - Session ID: ${config.sessionId} — use this in output file names (e.g., ${config.sessionId}-nmap.txt)
 - Attack box: Kali Linux with root access${wordlistSection}
 </environment>
@@ -72,6 +86,7 @@ ${installSection}
 - When using msfconsole, construct single-line commands: msfconsole -q -x "use ...; set RHOSTS ...; run; exit"
 - For reverse shells and payloads, pick high port numbers (10000-12000) for LPORT.
 - When writing exploits or scripts, use run_python_script with descriptive filenames.
+- To install a missing tool, call run_install_tool with the tool name — do NOT construct install commands yourself.
 </guidelines>
 
 <state_tracking>

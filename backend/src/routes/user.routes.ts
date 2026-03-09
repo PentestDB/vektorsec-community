@@ -17,6 +17,12 @@ import {
   updateToolsPreference,
   updateUserProfile,
   updateUserProfileImage,
+  getVNCConfig,
+  updateVNCConfig,
+  resetVNCConfig,
+  autoSetupVNC,
+  diagnoseVNC,
+  repairVNC,
 } from "../controllers/user.controller";
 import { uploadImageMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -50,5 +56,12 @@ router.post("/detect-capabilities", [verifySess], detectCapabilities);
 
 router.get("/get-ssh-config", [verifySess], getSSHConfig);
 router.post("/update-ssh-config", [verifySess], updateSSHConfig);
+
+router.get("/get-vnc-config", [verifySess], getVNCConfig);
+router.post("/update-vnc-config", [verifySess], updateVNCConfig);
+router.post("/reset-vnc-config", [verifySess], resetVNCConfig);
+router.post("/auto-setup-vnc", [verifySess], autoSetupVNC);
+router.post("/diagnose-vnc", [verifySess], diagnoseVNC);
+router.post("/repair-vnc", [verifySess], repairVNC);
 
 export { router as userRoutes };

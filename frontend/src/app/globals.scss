@@ -49,6 +49,16 @@ button {
   }
 }
 
+.gui-result-wrapper {
+  .ant-result-title {
+    color: var(--primary-text) !important;
+  }
+
+  .ant-result-subtitle {
+    color: var(--secondary-text) !important;
+  }
+}
+
 .imageOpacity {
   transition: opacity var(--transition-default);
   opacity: 0.3;
@@ -362,11 +372,11 @@ button {
   }
 
   .ant-popconfirm-title {
-    color: var(--primary-text);
+    color: var(--primary-text) !important;
   }
 
   .ant-popconfirm-description {
-    color: var(--secondary-text);
+    color: var(--secondary-text, #aaa) !important;
   }
 }
 

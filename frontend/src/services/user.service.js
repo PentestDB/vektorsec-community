@@ -84,3 +84,33 @@ export const updateSSHConfig = async (body) => {
   return res.data;
 };
 
+export const getVNCConfig = async () => {
+  const res = await apiClient.get("/user/get-vnc-config");
+  return res.data;
+};
+
+export const updateVNCConfig = async (body) => {
+  const res = await apiClient.post("/user/update-vnc-config", body);
+  return res.data;
+};
+
+export const resetVNCConfig = async (body) => {
+  const res = await apiClient.post("/user/reset-vnc-config", body);
+  return res.data;
+};
+
+export const autoSetupVNC = async () => {
+  const res = await apiClient.post("/user/auto-setup-vnc");
+  return res.data;
+};
+
+export const diagnoseVNC = async () => {
+  const res = await apiClient.post("/user/diagnose-vnc");
+  return res.data;
+};
+
+export const repairVNC = async (body) => {
+  const res = await apiClient.post("/user/repair-vnc", body);
+  return res.data;
+};
+

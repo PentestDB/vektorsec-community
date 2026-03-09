@@ -57,7 +57,7 @@ print_banner() {
 show_commands() {
     echo -e "   ${BOLD}Commands:${NC}"
     echo -e "     ${CYAN}start${NC}   Guided start: choose normal or developer mode"
-    echo -e "     ${CYAN}config${NC}  Update model keys, tracing, or exploit box settings"
+    echo -e "     ${CYAN}config${NC}  Update model keys, Google search, tracing, or exploit box settings"
     echo -e "     ${CYAN}dev${NC}     Start directly in developer mode"
     echo -e "     ${CYAN}stop${NC}    Stop all containers"
     echo -e "     ${CYAN}logs${NC}    Tail container logs"
@@ -265,11 +265,7 @@ ensure_frontend_env() {
 configure_dev_mode_choice() {
     DEV_MODE=true
     COMPOSE_FILE="docker-compose.dev.yml"
-    if confirm "Include Kali container?" "y"; then
-        DEPLOY_MODE="dev-kali"
-    else
-        DEPLOY_MODE="dev"
-    fi
+    DEPLOY_MODE="dev"
 }
 
 set_normal_mode() {
@@ -278,20 +274,30 @@ set_normal_mode() {
     DEPLOY_MODE="core"
 }
 
+set_normal_kali_mode() {
+    DEV_MODE=false
+    COMPOSE_FILE="docker-compose.kali.yml"
+    DEPLOY_MODE="kali"
+}
+
 select_mode_for_configuration() {
     section "Choose Configuration Target"
     echo
-    echo -e "   ${BOLD}1)${NC} ${GREEN}Normal mode settings${NC}"
-    echo -e "      ${DIM}Use this if Pentest Copilot runs fully through Docker.${NC}"
+    echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker settings${NC}"
+    echo -e "      ${DIM}Use this if Pentest Copilot runs through Docker without provisioning Kali.${NC}"
     echo
-    echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode settings${NC}"
+    echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali settings${NC}"
+    echo -e "      ${DIM}Use this if you provision the built-in Kali container in Docker.${NC}"
+    echo
+    echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode settings${NC}"
     echo -e "      ${DIM}Use this if you run the frontend and backend manually.${NC}"
     echo
-    prompt_input "Choose [1/2]:"
+    prompt_input "Choose [1/2/3]:"
     read -r mode_choice
 
     case "$mode_choice" in
-        2) configure_dev_mode_choice ;;
+        2) set_normal_kali_mode ;;
+        3) configure_dev_mode_choice ;;
         *) set_normal_mode ;;
     esac
 }
@@ -299,17 +305,23 @@ select_mode_for_configuration() {
 select_mode_for_operations() {
     section "Choose Which Environment To Manage"
     echo
-    echo -e "   ${BOLD}1)${NC} ${GREEN}Normal mode${NC}"
+    echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker mode${NC}"
     echo -e "      ${DIM}Manage containers started by the standard Docker setup.${NC}"
     echo
-    echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode${NC}"
+    echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali${NC}"
+    echo -e "      ${DIM}Manage the full Docker stack, including the provisioned Kali container.${NC}"
+    echo
+    echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode${NC}"
     echo -e "      ${DIM}Manage support containers used while developing locally.${NC}"
     echo
-    prompt_input "Choose [1/2]:"
+    prompt_input "Choose [1/2/3]:"
     read -r mode_choice
 
     case "$mode_choice" in
         2)
+            set_normal_kali_mode
+            ;;
+        3)
             DEV_MODE=true
             COMPOSE_FILE="docker-compose.dev.yml"
             DEPLOY_MODE="dev"
@@ -451,11 +463,12 @@ configure_static_full() {
 
 configure_required_startup() {
     configure_model_keys
+    configure_google_search
     configure_langfuse
     configure_exploit_box
 }
 
-# ── Config options (only these 3) ──────────────────────────
+# ── Config options ─────────────────────────────────────────
 configure_model_keys() {
     section "Model API Keys"
     ensure_env_defaults
@@ -495,6 +508,33 @@ configure_model_keys() {
     read -r val
     [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_BASE_PATH" "$val"
     info "Model API keys saved"
+}
+
+configure_google_search() {
+    section "Google Search"
+    ensure_env_defaults
+    local cur_key cur_cx key_status
+
+    echo
+    echo -e "   ${DIM}Required only if you want the Google search tool to work.${NC}"
+    echo -e "   ${DIM}You need both a Google API key and a Custom Search Engine ID.${NC}"
+
+    cur_key=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
+    if [[ -n "$cur_key" ]]; then
+        key_status="configured"
+    else
+        key_status="not set"
+    fi
+    prompt_input "Google API key [${key_status}]:"
+    read -rs val; echo
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "GOOGLE-API-KEY" "$val"
+
+    cur_cx=$(get_env "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID")
+    prompt_input "Custom Search Engine ID [${cur_cx:-not set}]:"
+    read -r val
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID" "$val"
+
+    info "Google search settings saved"
 }
 
 configure_claude_oauth() {
@@ -588,68 +628,119 @@ configure_langfuse() {
 configure_exploit_box() {
     section "Exploit Box Connection"
     ensure_env_defaults
-
-    if [[ "$DEPLOY_MODE" == "kali" ]]; then
-        info "Using built-in Kali container defaults"
-        set_env_var "$DYNAMIC_ENV" "SSH_HOST" "kali"
-        set_env_var "$DYNAMIC_ENV" "SSH_PORT" "22"
-        set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" "root"
-        set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD" ""
-        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY" ""
-        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
-        if confirm "Configure SSH to an external box instead?"; then
-            configure_external_ssh
-        fi
-        return
-    fi
-
-    if [[ "$DEPLOY_MODE" == "dev-kali" ]]; then
-        info "Using Kali container via localhost:4242"
-        set_env_var "$DYNAMIC_ENV" "SSH_HOST" "localhost"
-        set_env_var "$DYNAMIC_ENV" "SSH_PORT" "4242"
-        set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" "root"
-        set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD" ""
-        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY" ""
-        set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
-        if confirm "Configure SSH to an external box instead?"; then
-            configure_external_ssh
-        fi
-        return
-    fi
-
     echo
-    echo -e "   ${BOLD}1)${NC} Use your own machine or another server as the exploit box"
-    echo -e "   ${BOLD}2)${NC} Skip for now"
-    prompt_input "Choose [1/2]:"
+    echo -e "   ${BOLD}1)${NC} Local PC over SSH"
+    echo -e "   ${BOLD}2)${NC} Remote VM / server over SSH"
+    echo -e "   ${BOLD}3)${NC} Provision Docker Kali VM"
+    echo -e "   ${BOLD}4)${NC} Skip for now"
+    prompt_input "Choose [1/2/3/4]:"
     read -r ssh_choice
 
     case "$ssh_choice" in
         1)
-            configure_external_ssh
+            configure_local_ssh
+            ;;
+        2)
+            configure_remote_ssh
+            ;;
+        3)
+            configure_docker_kali
             ;;
         *)
-            set_env_var "$DYNAMIC_ENV" "SSH_HOST" ""
-            set_env_var "$DYNAMIC_ENV" "SSH_PORT" "22"
-            set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" ""
-            set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD" ""
-            set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY" ""
-            set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+            clear_exploit_box_config
             info "Skipped exploit box config"
             ;;
     esac
 }
 
+clear_exploit_box_config() {
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        DEPLOY_MODE="dev"
+    else
+        set_normal_mode
+    fi
+    set_env_var "$DYNAMIC_ENV" "SSH_HOST" ""
+    set_env_var "$DYNAMIC_ENV" "SSH_PORT" "22"
+    set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" ""
+    set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD" ""
+    set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY" ""
+    set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+}
+
+configure_local_ssh() {
+    local default_host default_user
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        DEPLOY_MODE="dev"
+        default_host="localhost"
+    else
+        set_normal_mode
+        default_host="host.docker.internal"
+    fi
+    default_user="$(id -un 2>/dev/null || whoami 2>/dev/null || echo "root")"
+    info "Configure SSH access to your local machine"
+    configure_external_ssh "$default_host" "22" "$default_user"
+}
+
+configure_remote_ssh() {
+    local cur_host cur_port cur_user
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        DEPLOY_MODE="dev"
+    else
+        set_normal_mode
+    fi
+    cur_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
+    cur_port=$(get_env "$DYNAMIC_ENV" "SSH_PORT")
+    cur_user=$(get_env "$DYNAMIC_ENV" "SSH_USERNAME")
+    case "$cur_host" in
+        ""|localhost|host.docker.internal|kali) cur_host="" ;;
+    esac
+    configure_external_ssh "${cur_host}" "${cur_port:-22}" "${cur_user:-root}"
+}
+
+configure_docker_kali() {
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        DEPLOY_MODE="dev-kali"
+        info "Provisioning Kali in Docker for developer mode"
+        set_env_var "$DYNAMIC_ENV" "SSH_HOST" "localhost"
+        set_env_var "$DYNAMIC_ENV" "SSH_PORT" "4242"
+    else
+        set_normal_kali_mode
+        info "Provisioning Kali in the full Docker stack"
+        set_env_var "$DYNAMIC_ENV" "SSH_HOST" "kali"
+        set_env_var "$DYNAMIC_ENV" "SSH_PORT" "22"
+    fi
+    set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" "root"
+    set_env_var "$DYNAMIC_ENV" "SSH_PASSWORD" ""
+    set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY" ""
+    set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
+    info "Exploit box configured"
+}
+
 configure_external_ssh() {
+    local default_host="${1:-}"
+    local default_port="${2:-22}"
+    local default_user="${3:-root}"
+    local ssh_host=""
+
     echo
-    prompt_input "Exploit box host [localhost]:"
-    read -r ssh_host
-    ssh_host="${ssh_host:-localhost}"
-    prompt_input "SSH Port [22]:"
+    if [[ -n "$default_host" ]]; then
+        prompt_input "Exploit box host [${default_host}]:"
+        read -r ssh_host
+        ssh_host="${ssh_host:-$default_host}"
+    else
+        while [[ -z "$ssh_host" ]]; do
+            prompt_input "Exploit box host:"
+            read -r ssh_host
+            [[ -z "$ssh_host" ]] && warn "Host is required"
+        done
+    fi
+
+    prompt_input "SSH Port [${default_port}]:"
     read -r ssh_port
-    ssh_port="${ssh_port:-22}"
-    prompt_input "SSH Username [root]:"
+    ssh_port="${ssh_port:-$default_port}"
+    prompt_input "SSH Username [${default_user}]:"
     read -r ssh_user
-    ssh_user="${ssh_user:-root}"
+    ssh_user="${ssh_user:-$default_user}"
     set_env_var "$DYNAMIC_ENV" "SSH_HOST" "$ssh_host"
     set_env_var "$DYNAMIC_ENV" "SSH_PORT" "$ssh_port"
     set_env_var "$DYNAMIC_ENV" "SSH_USERNAME" "$ssh_user"
@@ -700,14 +791,35 @@ compose() {
 }
 
 ensure_compose_override() {
+    local needs_key_mount=false
+    local needs_host_gateway=false
+    local ssh_host=""
+
     if [[ "$NEED_SSH_KEY_MOUNT" == true ]] || \
        { [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; }; then
-        cat > "$COMPOSE_OVERRIDE" <<'EOF'
-services:
-  backend:
-    volumes:
-      - ./ssh-keys:/ssh-keys:ro
-EOF
+        needs_key_mount=true
+    fi
+
+    if [[ -n "${DYNAMIC_ENV:-}" ]] && [[ -f "${DYNAMIC_ENV:-}" ]]; then
+        ssh_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
+    fi
+    if [[ "${DEV_MODE:-false}" != true ]] && [[ "$ssh_host" == "host.docker.internal" ]]; then
+        needs_host_gateway=true
+    fi
+
+    if [[ "$needs_key_mount" == true || "$needs_host_gateway" == true ]]; then
+        {
+            echo "services:"
+            echo "  backend:"
+            if [[ "$needs_key_mount" == true ]]; then
+                echo "    volumes:"
+                echo "      - ./ssh-keys:/ssh-keys:ro"
+            fi
+            if [[ "$needs_host_gateway" == true ]]; then
+                echo "    extra_hosts:"
+                echo "      - \"host.docker.internal:host-gateway\""
+            fi
+        } > "$COMPOSE_OVERRIDE"
     else
         rm -f "$COMPOSE_OVERRIDE"
     fi
@@ -859,19 +971,22 @@ cmd_config() {
     section "Configuration"
     echo
     echo -e "   ${BOLD}1)${NC} Model API keys"
-    echo -e "   ${BOLD}2)${NC} Langfuse tracing"
-    echo -e "   ${BOLD}3)${NC} Exploit box (SSH)"
-    echo -e "   ${BOLD}4)${NC} All of the above"
+    echo -e "   ${BOLD}2)${NC} Google search"
+    echo -e "   ${BOLD}3)${NC} Langfuse tracing"
+    echo -e "   ${BOLD}4)${NC} Exploit box"
+    echo -e "   ${BOLD}5)${NC} All of the above"
     echo
-    prompt_input "Choose [1/2/3/4]:"
+    prompt_input "Choose [1/2/3/4/5]:"
     read -r choice
 
     case "$choice" in
         1) configure_model_keys ;;
-        2) configure_langfuse ;;
-        3) configure_exploit_box ;;
-        4)
+        2) configure_google_search ;;
+        3) configure_langfuse ;;
+        4) configure_exploit_box ;;
+        5)
             configure_model_keys
+            configure_google_search
             configure_langfuse
             configure_exploit_box
             ;;
@@ -943,7 +1058,7 @@ cmd_help() {
     echo "  - \`$0\` / \`$0 start\`: always asks whether you want normal mode or developer mode"
     echo "  - Normal mode: guided setup, best for most users"
     echo "  - Developer mode: advanced setup, run frontend/backend manually"
-    echo "  - Both modes ask for required AI/model, Langfuse, and exploit box settings"
+    echo "  - Both modes ask for model, Google search, Langfuse, and exploit box settings"
     echo "  - No hidden mode is saved between runs"
     echo
     echo "Files: config.toml (static) | backend/.env (dynamic, editable via Settings)"

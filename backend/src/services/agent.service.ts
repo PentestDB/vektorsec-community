@@ -170,17 +170,21 @@ async function buildSystemMessage(
   userId: string,
 ): Promise<AgentMessageDoc> {
   const user = await UserModel.findById(userId);
+  const now = new Date();
   const promptConfig: AgentPromptConfig = {
     sessionId,
     installedCapabilities: user?.configs?.installedCapabilities ?? [],
     selectedCapabilities: user?.configs?.capabilities ?? [],
+    currentDate: now.toISOString().split("T")[0],
+    currentDay: now.toLocaleDateString("en-US", { weekday: "long" }),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 
   return {
     id: `sys_${sessionId}`,
     role: "system",
     content: buildSystemPrompt(promptConfig),
-    timestamp: new Date(),
+    timestamp: now,
     turnIndex: 0,
   };
 }

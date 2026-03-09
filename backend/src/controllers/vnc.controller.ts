@@ -1,122 +1,165 @@
 import { Response, Request } from "express";
 import ssh2 from "ssh2";
 import { executeCommand, generateRandomPassword } from "../utils/fileUtils";
+import { buildSSHConfig } from "../utils/sshConfig";
+import { readEnvFile, updateEnvVars } from "../utils/envWriter";
+
+const FIND_VNC_BIN = [
+  'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec";',
+  'for b in Xvnc Xtigervnc vncserver tigervncserver x11vnc; do',
+  '  p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && exit 0;',
+  'done;',
+  'for p in /usr/bin/Xvnc /usr/bin/Xtigervnc /usr/bin/vncserver /usr/bin/tigervncserver /usr/bin/x11vnc; do',
+  '  [ -x "$p" ] && echo "$p" && exit 0;',
+  'done;',
+  'echo ""',
+].join(' ');
+
+function pickVncPath(raw: string): string {
+  for (const line of raw.trim().split("\n")) {
+    const t = line.trim();
+    if (t.startsWith("/") && !t.includes(" ")) return t;
+  }
+  return "";
+}
 
 export const getVNCCredentials = async (req: Request, res: Response) => {
   try {
-    const user = res.locals.user;
-    const userId = res.locals.userId;
+    const env = readEnvFile();
+    const vncMode = env.VNC_MODE || "";
+    const savedHost = env.VNC_HOST || "";
+    const savedPort = env.VNC_PORT || "9020";
+    const savedPassword = env.VNC_PASSWORD || "";
+    const setupDone = env.VNC_SETUP_DONE === "true";
+    const baseUrlOverride = (env.VNC_BASE_URL || "").trim();
 
-    const serverConfig = {
-      host: "localhost",
-      port: 4242,
-      username: "root",
-      password: "",
-    };
+    const defaultVncURL = savedPort ? `${savedHost}:${savedPort}` : savedHost;
 
+    if (vncMode === "manual" && savedHost && savedPassword) {
+      return res.status(200).json({
+        vncURL: baseUrlOverride || defaultVncURL,
+        password: savedPassword,
+      });
+    }
 
-    const sshClient = new ssh2.Client();
+    if (vncMode === "auto" && setupDone && savedHost && savedPassword) {
+      const sshConfig = buildSSHConfig();
+      const sshClient = new ssh2.Client();
 
-    try {
-      console.log("Trying to execute VNC commands");
       sshClient
         .on("ready", async () => {
-          console.log("SSH connection ready");
-
-            try {
-
-              // 1) Ensure xstartup script starts Xfce (optional if you already have it set in Docker)
-              await executeCommand(
-                sshClient,
-                `mkdir -p ~/.vnc && echo '#!/bin/bash\nxrdb $HOME/.Xresources\nstartxfce4 &' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
-              );
-      
-              // 2) Kill any leftover VNC servers
-              await executeCommand(
-                sshClient,
-                `for display in {1..9}; do vncserver -kill ":$display" 2>/dev/null || true; done`
-              );
-      
-              // 3) Generate a random VNC password
-              const randomPassword = generateRandomPassword();
-      
-              // 4) Save password into ~/.vnc/passwd
-              await executeCommand(
-                sshClient,
-                `echo '${randomPassword}' | vncpasswd -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
-              );
-      
-              // 5) Start a new VNC server on display :1
-              await executeCommand(
-                sshClient,
-                "vncserver -geometry 1280x800 -depth 24 :1"
-              );
-      
-              // 6) Start noVNC on port 80 (inside container)
-              const proxyCommand = `websockify --web /usr/share/novnc/ \
-                9020 \
-                localhost:5901  \
-                > /dev/null 2>&1 &`;
-              await executeCommand(sshClient, proxyCommand);
-      
-              console.log("VNC + noVNC server started successfully");
-      
-              // Small delay to ensure noVNC is fully up
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-              // Return credentials to the client
-              // If your Docker is mapping container port 80 -> host port 8080, you might just use "localhost:8080"
-              // Or if you're using a domain, use that. For this local example, let's assume host: http://localhost:8080
-              const vncURL = "localhost:9020"; // Adjust if you mapped differently
-      
-              sshClient.end();
-      
-              return res.status(200).json({
-                vncURL,
-                password: randomPassword,
+          try {
+            const exec = (cmd: string) => executeCommand(sshClient, cmd);
+            const execWithOutput = (cmd: string): Promise<string> => {
+              return new Promise((resolve, reject) => {
+                sshClient.exec(cmd, (err, stream) => {
+                  if (err) return reject(err);
+                  let out = "";
+                  stream
+                    .on("close", () => resolve(out))
+                    .on("data", (d: Buffer) => { out += d.toString(); })
+                    .stderr.on("data", (d: Buffer) => { out += d.toString(); });
+                });
               });
+            };
 
-          } catch (error) {
-            console.log(error);
+            // Detect which VNC binary is available
+            const vncRaw = await execWithOutput(FIND_VNC_BIN);
+            const vncBin = pickVncPath(vncRaw) || "Xvnc";
+            const isXvncDirect = vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
+            const isX11vnc = vncBin.endsWith("x11vnc");
 
-            return res.status(400).json({
-              message: "Failed to get VNC credentials",
-            });
-          } finally {
-            // Close the SSH connection after executing commands
+            // Ensure xstartup exists with DISPLAY export
+            await exec(
+              `mkdir -p ~/.vnc && echo '#!/bin/bash\\nexport DISPLAY=:1\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
+            );
+
+            // Kill all existing VNC/Xvfb for a clean start on :1
+            await exec(
+              "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
+              "pkill -f x11vnc 2>/dev/null || true; " +
+              "pkill -f 'Xvfb' 2>/dev/null || true; " +
+              "for display in {1..99}; do vncserver -kill \":$display\" 2>/dev/null || true; done"
+            );
+
+            // Set password
+            const escapedPassword = savedPassword.replace(/'/g, "'\\''");
+            if (!isX11vnc) {
+              const vncPasswdBin = pickVncPath(
+                await execWithOutput(
+                  'command -v vncpasswd 2>/dev/null || command -v tigervncpasswd 2>/dev/null || echo vncpasswd'
+                )
+              ) || "vncpasswd";
+              await exec(
+                `echo '${escapedPassword}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
+              );
+            }
+
+            // Start VNC based on detected binary
+            if (isXvncDirect) {
+              await exec(
+                `${vncBin} :1 -geometry 1280x800 -depth 24 -rfbport 5901 ` +
+                `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+                `-pn > /dev/null 2>&1 &`
+              );
+              await new Promise((r) => setTimeout(r, 1500));
+              await exec("export DISPLAY=:1 && ~/.vnc/xstartup &");
+            } else if (isX11vnc) {
+              await exec(
+                "command -v Xvfb >/dev/null 2>&1 || (export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
+              );
+              await exec("Xvfb :1 -screen 0 1280x800x24 > /dev/null 2>&1 &");
+              await new Promise((r) => setTimeout(r, 1000));
+              await exec("export DISPLAY=:1 && ~/.vnc/xstartup &");
+              await exec(
+                `x11vnc -display :1 -rfbport 5901 -passwd '${escapedPassword}' -forever -shared -noxdamage > /dev/null 2>&1 &`
+              );
+            } else {
+              await exec(`${vncBin} -geometry 1280x800 -depth 24 :1`);
+            }
+
+            // Start websockify
+            await exec("pkill -f 'websockify.*9020' 2>/dev/null || true");
+            await exec(
+              "websockify --web /usr/share/novnc/ 9020 localhost:5901 > /dev/null 2>&1 &"
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
             sshClient.end();
+
+            const vncURL = baseUrlOverride || `${savedHost}:${savedPort}`;
+            return res.status(200).json({
+              vncURL,
+              password: savedPassword,
+            });
+          } catch (error: any) {
+            const msg = error?.message || String(error);
+            console.error("VNC start error:", msg);
+            sshClient.end();
+            return res.status(400).json({
+              message: `Failed to start VNC session: ${msg}`,
+            });
           }
         })
-
         .on("error", (err: any) => {
-          console.log("SSH connection error:", err);
-
+          const msg = err?.message || String(err);
+          console.error("SSH connection error during VNC:", msg);
           return res.status(400).json({
-            message: "Failed to get VNC credentials",
+            message: `Cannot connect to exploit box via SSH: ${msg}`,
           });
         });
-    } catch (err) {
-      console.log("VNC server not started", err);
 
-      return res.status(400).json({
-        message: "Failed to get VNC credentials",
-      });
+      sshClient.connect(sshConfig);
+      return;
     }
-
-    try {
-      sshClient.connect(serverConfig);
-    } catch (error) {
-      console.log("VNC server not started", error);
-
-      return res.status(400).json({
-        message: "Failed to get VNC credentials",
-      });
-    }
-  } catch (error) {
-    console.log(error);
 
     return res.status(400).json({
-      message: "Failed to get VNC credentials",
+      message: "VNC not configured. Please set up VNC from Settings > GUI.",
+      notConfigured: true,
     });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get VNC credentials" });
   }
 };
