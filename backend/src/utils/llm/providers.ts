@@ -196,6 +196,17 @@ function maskSecret(s: string | undefined): string {
   return s.slice(0, 6) + "…" + s.slice(-4);
 }
 
+const FIXED_TEMPERATURE_MODELS = new Set([
+  "gpt-5-nano",
+]);
+
+function clampTemperature(model: string, requested: number): number {
+  for (const m of FIXED_TEMPERATURE_MODELS) {
+    if (model.includes(m)) return 1;
+  }
+  return requested;
+}
+
 function normalizeFinishReason(raw: string | null | undefined): FinishReason {
   if (raw === "stop" || raw === "end_turn") return "stop";
   if (raw === "tool_calls" || raw === "tool_use") return "tool_calls";
@@ -288,7 +299,7 @@ function getClient(config: ProviderConfig, opts: InvokeOptions): OpenAI {
 export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
   const config = await getProvider();
   const client = getClient(config, opts);
-  const requestedTemp = opts.temperature ?? 0.75;
+  const requestedTemp = clampTemperature(config.model, opts.temperature ?? 0.75);
   const start = Date.now();
 
   logRequest(config, opts, false);
@@ -340,7 +351,7 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
 export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promise<InvokeResult> {
   const config = await getProvider();
   const client = getClient(config, opts);
-  const requestedTemp = opts.temperature ?? 0.75;
+  const requestedTemp = clampTemperature(config.model, opts.temperature ?? 0.75);
   const start = Date.now();
 
   logRequest(config, opts, true);

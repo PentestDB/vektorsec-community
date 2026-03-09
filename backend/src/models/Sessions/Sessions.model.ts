@@ -22,10 +22,17 @@ export interface AgentMessageDoc {
   isSummary?: boolean;
 }
 
+export interface PendingConsentToolCall {
+  toolCallId: string;
+  toolName: string;
+  arguments: Record<string, any>;
+}
+
 export interface PendingConsentDoc {
   toolCallId: string;
   toolName: string;
   arguments: Record<string, any>;
+  batch?: PendingConsentToolCall[];
 }
 
 export interface PendingManualExecutionDoc {
@@ -183,6 +190,16 @@ const SessionSchema = new Schema({
       toolCallId: { type: String, required: true },
       toolName: { type: String, required: true },
       arguments: { type: Schema.Types.Mixed, required: true },
+      batch: {
+        type: [
+          {
+            toolCallId: { type: String, required: true },
+            toolName: { type: String, required: true },
+            arguments: { type: Schema.Types.Mixed, required: true },
+          },
+        ],
+        default: undefined,
+      },
     },
     default: undefined,
   },

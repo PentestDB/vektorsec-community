@@ -175,11 +175,16 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
             flushToolOutputBuffer();
           }
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === `tool_${data.id}`
-                ? { ...m, streaming: false, exitCode: data.exitCode }
-                : m,
-            ),
+            prev.map((m) => {
+              if (m.id !== `tool_${data.id}`) return m;
+              const useServerOutput = data.output && (!m.content || m.content.length === 0);
+              return {
+                ...m,
+                content: useServerOutput ? data.output : m.content,
+                streaming: false,
+                exitCode: data.exitCode,
+              };
+            }),
           );
         })
         .onEvent("tool_error", (data) => {

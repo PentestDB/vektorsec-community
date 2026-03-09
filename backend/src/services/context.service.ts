@@ -10,6 +10,7 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-4-turbo-preview": 128_000,
   "gpt-4": 8_192,
   "gpt-3.5-turbo": 16_385,
+  "gpt-5-nano": 128_000,
   "claude-sonnet-4-20250514": 200_000,
   "claude-3-5-sonnet-20241022": 200_000,
   "claude-3-opus-20240229": 200_000,
@@ -139,12 +140,25 @@ export async function summarizeMessages(
 export function messagesToOpenAI(
   messages: AgentMessageDoc[],
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const toolResponseIds = new Set(
+    messages.filter((m) => m.role === "tool" && m.toolCallId).map((m) => m.toolCallId!),
+  );
+
   return messages.map((m) => {
     if (m.role === "assistant" && m.toolCalls?.length) {
+      const validToolCalls = m.toolCalls.filter((tc) => toolResponseIds.has(tc.id));
+
+      if (validToolCalls.length === 0) {
+        return {
+          role: "assistant" as const,
+          content: m.content ?? "",
+        };
+      }
+
       return {
         role: "assistant" as const,
         content: m.content,
-        tool_calls: m.toolCalls.map((tc) => ({
+        tool_calls: validToolCalls.map((tc) => ({
           id: tc.id,
           type: "function" as const,
           function: { name: tc.name, arguments: tc.arguments },

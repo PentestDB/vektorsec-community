@@ -384,7 +384,7 @@ export async function runAgentLoop(params: {
           sse.write("tool_output", { id, chunk });
         },
         onToolDone(id, result) {
-          sse.write("tool_done", { id, exitCode: result.exitCode, outputLength: result.output.length });
+          sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length });
         },
         onToolError(id, error) {
           sse.write("tool_error", { id, error });
@@ -412,11 +412,8 @@ export async function runAgentLoop(params: {
         }
       }
 
-      const needsConsent = toolResults.find((r) => r.needsConsent);
-      if (needsConsent) {
-        // Append tool result messages for all non-consent tool calls that
-        // already completed, so the assistant message's tool_calls all have
-        // matching tool responses when the loop resumes after consent.
+      const consentResults = toolResults.filter((r) => r.needsConsent);
+      if (consentResults.length > 0) {
         for (const tr of toolResults) {
           if (tr.needsConsent) continue;
           const toolMsg: AgentMessageDoc = {
@@ -432,6 +429,15 @@ export async function runAgentLoop(params: {
           newMessages.push(toolMsg);
         }
 
+        const firstConsent = consentResults[0];
+        const batch = consentResults.map((cr) => ({
+          toolCallId: cr.toolCallId,
+          toolName: cr.toolName,
+          arguments: JSON.parse(
+            assistantToolCalls.find((tc) => tc.id === cr.toolCallId)?.arguments ?? "{}",
+          ),
+        }));
+
         await appendMessages(sessionId, newMessages);
         await SessionsModel.updateOne(
           { sessionId },
@@ -439,11 +445,12 @@ export async function runAgentLoop(params: {
             $set: {
               agentState: "waiting_consent",
               pendingConsent: {
-                toolCallId: needsConsent.toolCallId,
-                toolName: needsConsent.toolName,
+                toolCallId: firstConsent.toolCallId,
+                toolName: firstConsent.toolName,
                 arguments: JSON.parse(
-                  assistantToolCalls.find((tc) => tc.id === needsConsent.toolCallId)?.arguments ?? "{}",
+                  assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
                 ),
+                batch: batch.length > 1 ? batch : undefined,
               },
             },
           },
@@ -593,22 +600,26 @@ export async function handleConsent(params: {
     return;
   }
 
-  const { toolCallId, toolName, arguments: toolArgs } = session.pendingConsent;
+  const { toolCallId, toolName, arguments: toolArgs, batch } = session.pendingConsent;
+
+  const allPending = batch && batch.length > 1
+    ? batch
+    : [{ toolCallId, toolName, arguments: toolArgs }];
 
   session.pendingConsent = undefined;
   await session.save();
 
   if (!approved) {
-    const denialMsg: AgentMessageDoc = {
+    const denialMessages: AgentMessageDoc[] = allPending.map((p) => ({
       id: uuidv4(),
-      role: "tool",
-      content: "User denied permission to install this tool.",
-      toolCallId,
-      toolName,
+      role: "tool" as const,
+      content: "User denied permission to run this tool.",
+      toolCallId: p.toolCallId,
+      toolName: p.toolName,
       timestamp: new Date(),
       turnIndex: session.turnIndex,
-    };
-    await appendMessages(sessionId, [denialMsg]);
+    }));
+    await appendMessages(sessionId, denialMessages);
     await setAgentState(sessionId, "idle");
     await runAgentLoop({ sessionId, userId, sse, abortSignal });
     return;
@@ -629,24 +640,33 @@ export async function handleConsent(params: {
   const callbacks: ToolExecutionCallbacks = {
     onToolStart(id, name, args) { sse.write("tool_start", { id, name, args }); },
     onToolOutput(id, chunk) { sse.write("tool_output", { id, chunk }); },
-    onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode }); },
+    onToolDone(id, result) { sse.write("tool_done", { id, exitCode: result.exitCode, output: result.output, outputLength: result.output.length }); },
     onToolError(id, error) { sse.write("tool_error", { id, error }); },
     onConsentRequired() {},
   };
 
-  const result = await executeConsentedTool(sessionId, toolCallId, toolName, toolArgs, callbacks, ctx);
+  const toolMessages: AgentMessageDoc[] = [];
+  for (const pending of allPending) {
+    const result = await executeConsentedTool(
+      sessionId,
+      pending.toolCallId,
+      pending.toolName,
+      pending.arguments,
+      callbacks,
+      ctx,
+    );
+    toolMessages.push({
+      id: uuidv4(),
+      role: "tool",
+      content: result.output,
+      toolCallId: pending.toolCallId,
+      toolName: pending.toolName,
+      timestamp: new Date(),
+      turnIndex: session.turnIndex,
+    });
+  }
 
-  const toolMsg: AgentMessageDoc = {
-    id: uuidv4(),
-    role: "tool",
-    content: result.output,
-    toolCallId,
-    toolName,
-    timestamp: new Date(),
-    turnIndex: session.turnIndex,
-  };
-  await appendMessages(sessionId, [toolMsg]);
-
+  await appendMessages(sessionId, toolMessages);
   await runAgentLoop({ sessionId, userId, sse, abortSignal });
 }
 
