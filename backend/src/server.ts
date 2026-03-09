@@ -244,13 +244,17 @@ const initializeApp = async () => {
                 conn.exec(command, (execErr, execStream) => {
                   if (execErr) {
                     console.error(`[exec:${commandId}] exec error:`, execErr);
-                    frontendSocket.emit(`command_executed-${terminalId}`, {
+                    const payload = {
                       status: "error",
                       message: execErr.message,
                       tool_response: `Error: ${execErr.message}`,
                       commandId,
                       type: "output",
+                    };
+                    frontendSocket.emit(`command_executed-${terminalId}`, {
+                      ...payload,
                     });
+                    socketServer.emit(`command_result-${commandId}`, payload);
                     return;
                   }
 
@@ -270,14 +274,19 @@ const initializeApp = async () => {
                     const cleanOutput = outputBuf.replace(ansiRegex, "").trim();
                     console.log(`[exec:${commandId}] Completed (exit ${code}), output length: ${cleanOutput.length}`);
 
-                    frontendSocket.emit(`command_executed-${terminalId}`, {
+                    const payload = {
                       status: code === 0 ? "success" : "error",
                       message: "Command Executed",
                       tool_response: cleanOutput || (command.includes(">") ? "Output stored in file" : "(no output)"),
                       commandId,
                       exitCode: code,
                       type: "output",
+                    };
+
+                    frontendSocket.emit(`command_executed-${terminalId}`, {
+                      ...payload,
                     });
+                    socketServer.emit(`command_result-${commandId}`, payload);
                   });
                 });
               });

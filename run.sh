@@ -97,19 +97,34 @@ confirm() {
     fi
 }
 
+# Escape value for .env: wrap in double quotes, escape \ and " inside
+escape_env_val() {
+    local val="$1"
+    printf '%s' "$val" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 set_env_var() {
     local file="$1" var="$2" val="$3"
     local tmp="${file}.tmp.$$"
+    local escaped
+    escaped=$(escape_env_val "$val")
     if grep -q "^${var}=" "$file" 2>/dev/null; then
         grep -v "^${var}=" "$file" > "$tmp"
         mv "$tmp" "$file"
     fi
-    echo "${var}=${val}" >> "$file"
+    echo "${var}=\"${escaped}\"" >> "$file"
 }
 
 get_env() {
     local file="$1" var="$2"
-    grep "^${var}=" "$file" 2>/dev/null | head -1 | cut -d'=' -f2- || true
+    local raw
+    raw=$(grep "^${var}=" "$file" 2>/dev/null | head -1 | cut -d'=' -f2- || true)
+    # Strip surrounding double quotes (from set_env_var) for display
+    if [[ "$raw" =~ ^\"(.*)\"$ ]]; then
+        echo "${BASH_REMATCH[1]}" | sed 's/\\"/"/g; s/\\\\/\\/g'
+    else
+        echo "$raw"
+    fi
 }
 
 set_toml_var() {
@@ -831,8 +846,13 @@ launch() {
 
     section "Pentest Copilot is Running"
     echo
-    echo -e "   ${GREEN}Frontend${NC}   http://localhost:3000"
-    echo -e "   ${GREEN}Backend${NC}    http://localhost:8080"
+    local frontend_url backend_url
+    frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
+    backend_url=$(get_toml_var "$CONFIG_TOML" "backend_uri" 2>/dev/null)
+    frontend_url="${frontend_url:-http://localhost:3000}"
+    backend_url="${backend_url:-http://localhost:8080}"
+    echo -e "   ${GREEN}Frontend${NC}   ${frontend_url}"
+    echo -e "   ${GREEN}Backend${NC}    ${backend_url}"
     echo -e "   ${GREEN}MongoDB${NC}    localhost:27017"
     echo -e "   ${GREEN}Redis${NC}      localhost:6379"
 
@@ -901,9 +921,14 @@ launch_dev() {
     echo -e "     ${DIM}cd frontend${NC}"
     echo -e "     ${DIM}pnpm run dev     ${NC}${DIM}# start Next.js dev server with Turbopack${NC}"
     echo
+    local frontend_url backend_url
+    frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
+    backend_url=$(get_toml_var "$CONFIG_TOML" "backend_uri" 2>/dev/null)
+    frontend_url="${frontend_url:-http://localhost:3000}"
+    backend_url="${backend_url:-http://localhost:8080}"
     echo -e "   ${CYAN}Endpoints when running:${NC}"
-    echo -e "     ${GREEN}Frontend${NC}   http://localhost:3000"
-    echo -e "     ${GREEN}Backend${NC}    http://localhost:8080"
+    echo -e "     ${GREEN}Frontend${NC}   ${frontend_url}"
+    echo -e "     ${GREEN}Backend${NC}    ${backend_url}"
     echo
     info "Useful commands:"
     echo -e "   ${DIM}$0 stop${NC}     Stop infrastructure containers"

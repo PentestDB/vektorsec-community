@@ -33,6 +33,8 @@ import Loader from "@/components/common/loader/Loader";
 import StepPage4 from "./Step4";
 import { checkUserAccess } from "@/services/user.service";
 import { useSocketContext } from "@/context/SocketContext";
+import { updateActiveTerminal } from "@/store/socket.slice";
+import { v4 as uuidv4 } from "uuid";
 
 const SessionMainPage = ({ session_id }) => {
   const queryClient = useQueryClient();
@@ -53,6 +55,54 @@ const SessionMainPage = ({ session_id }) => {
   const { getSocket } = useSocketContext();
   const terminalSocket = getSocket(session_id);
 
+  const handleCommandExecutionResult = async (data) => {
+    console.log("Command executed", data);
+    if (data.type === "output") {
+      await storeCommandMutation.mutateAsync({
+        session_id: session_id,
+        commandId: data.commandId,
+        output: data.tool_response,
+      });
+    }
+  };
+
+  const truncateCommandLabel = (command) => {
+    if (!command) return "Running Command";
+    const compact = command.replace(/\s+/g, " ").trim();
+    if (compact.length <= 28) return compact;
+    return `${compact.slice(0, 28)}...`;
+  };
+
+  const runCommandInTemporaryTerminal = async ({ command, commandId }) => {
+    if (!terminalSocket) {
+      message.error("Terminal connection is not ready. Please wait and try again.");
+      setStoringOutput(false);
+      return;
+    }
+
+    const tempTerminalId = uuidv4();
+    const nextSessions = sessions.map((session) => ({ ...session }));
+
+    nextSessions.push({
+      id: tempTerminalId,
+      is_main: false,
+      is_active: false,
+      type: "terminal",
+      temporary: true,
+      title: truncateCommandLabel(command),
+      commandToRun: command,
+      commandId,
+      sourceSessionId: session_id,
+    });
+
+    dispatch(updateSessions(nextSessions));
+    dispatch(updateActiveTerminal(tempTerminalId));
+
+    terminalSocket.once(`command_result-${commandId}`, async (data) => {
+      await handleCommandExecutionResult(data);
+    });
+  };
+
   useEffect(() => {
     if (terminalSocket) {
       dispatch(updateTerminalHeight(window.innerHeight / 3.5));
@@ -62,20 +112,23 @@ const SessionMainPage = ({ session_id }) => {
 
   useEffect(() => {
     if (terminalSocket && !storingOutput) {
-      terminalSocket.on(`command_executed-${session_id}`, async (data) => {
-        console.log("Command executed", data);
-        if (data.type === "output") {
-          await storeCommandMutation.mutateAsync({
-            session_id: session_id,
-            commandId: data.commandId,
-            output: data.tool_response,
-          });
-        }
-      });
-    }
+      const handleMainTerminalCommandExecuted = async (data) => {
+        await handleCommandExecutionResult(data);
+      };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [terminalSocket, session_id]);
+      terminalSocket.on(
+        `command_executed-${session_id}`,
+        handleMainTerminalCommandExecuted
+      );
+
+      return () => {
+        terminalSocket.off(
+          `command_executed-${session_id}`,
+          handleMainTerminalCommandExecuted
+        );
+      };
+    }
+  }, [storingOutput, terminalSocket, session_id]);
 
   const { data: sessionData } = useQuery(
     ["get-session-data", session_id],
@@ -380,12 +433,7 @@ const SessionMainPage = ({ session_id }) => {
       await refreshSessionData();
       if (data.type === "command") {
         setStoringOutput(true);
-        if (!terminalSocket) {
-          message.error("Terminal connection is not ready. Please wait and try again.");
-          setStoringOutput(false);
-          return;
-        }
-        terminalSocket.emit(`exec_command-${session_id}`, {
+        await runCommandInTemporaryTerminal({
           command: data.command,
           commandId: data.commandId ?? activeCommands?.[0]?._id,
         });
@@ -557,6 +605,7 @@ const SessionMainPage = ({ session_id }) => {
           <StepPage0
             initiatePentestFunction={initiatePentest}
             loading={initiatePentestMutation.isLoading || loading}
+            status={status}
             disabled={disabled}
             stepData={{
               ...data,

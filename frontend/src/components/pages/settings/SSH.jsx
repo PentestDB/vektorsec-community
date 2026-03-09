@@ -12,14 +12,17 @@ import {
   message,
   Divider,
   Tooltip,
+  Button,
 } from "antd";
 import {
   CheckCircleFilled,
   InfoCircleOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
+import { TbTerminal2 } from "react-icons/tb";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import SSHTestTerminalModal from "./SSHTestTerminalModal";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getSSHConfig, updateSSHConfig } from "@/services/user.service";
@@ -31,6 +34,7 @@ const SSHPage = () => {
   const [form] = Form.useForm();
   const [authMethod, setAuthMethod] = useState("password");
   const [saving, setSaving] = useState(false);
+  const [testModalOpen, setTestModalOpen] = useState(false);
 
   useEffect(() => {
     if (data) {
@@ -105,7 +109,7 @@ const SSHPage = () => {
               marginBottom: "1rem",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span
                 style={{
                   color: "var(--primary-text)",
@@ -115,6 +119,17 @@ const SSHPage = () => {
               >
                 Exploit Box Connection
               </span>
+              {configured && (
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<TbTerminal2 />}
+                  onClick={() => setTestModalOpen(true)}
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  Test connectivity
+                </Button>
+              )}
               {configured ? (
                 <Tag
                   icon={<CheckCircleFilled />}
@@ -316,6 +331,11 @@ const SSHPage = () => {
           </ul>
         </div>
       </div>
+
+      <SSHTestTerminalModal
+        open={testModalOpen}
+        onClose={() => setTestModalOpen(false)}
+      />
     </div>
   );
 };

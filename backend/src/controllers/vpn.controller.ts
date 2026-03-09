@@ -48,6 +48,24 @@ function sshExecPromise(ssh: SSHClient, command: string): Promise<{ stdout: stri
   });
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+  });
+}
+
 function sshConnectPromise(sshConfig: any): Promise<SSHClient> {
   return new Promise((resolve, reject) => {
     const ssh = new SSHClient();
@@ -60,34 +78,33 @@ function sshConnectPromise(sshConfig: any): Promise<SSHClient> {
 /**
  * Wraps a command with sudo if needed. Uses the SSH password for `sudo -S`
  * when the SSH user is not root.
+ * @param cmdOrPath - Command string to run via sh -c, or script path when isScriptPath is true
+ * @param isScriptPath - When true, cmdOrPath is a file path to execute directly (avoids quoting issues)
  */
-function sudoWrap(cmd: string, sshConfig: { username?: string; password?: string }): string {
-  if (sshConfig.username === "root") return cmd;
+function sudoWrap(
+  cmdOrPath: string,
+  sshConfig: { username?: string; password?: string },
+  isScriptPath = false
+): string {
+  const run = isScriptPath ? `bash ${shellEscape(cmdOrPath)}` : `sh -c ${shellEscape(cmdOrPath)}`;
+  if (sshConfig.username === "root") return run;
   if (sshConfig.password) {
-    return `echo ${shellEscape(sshConfig.password)} | sudo -S sh -c ${shellEscape(cmd)}`;
+    return `echo ${shellEscape(sshConfig.password)} | sudo -S ${run}`;
   }
-  return `sudo -n sh -c ${shellEscape(cmd)}`;
+  return `sudo -n ${run}`;
 }
 
 function shellEscape(s: string): string {
   return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
-function writeFileViaExec(ssh: SSHClient, localPath: string, remotePath: string): Promise<void> {
+function uploadFileViaSftp(ssh: SSHClient, localPath: string, remotePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const fileContent = fs.readFileSync(localPath, "utf-8");
-    const cmd = `cat > ${remotePath} << 'OVPN_EOF'\n${fileContent}\nOVPN_EOF`;
-
-    ssh.exec(cmd, (err, stream) => {
+    ssh.sftp((err, sftp) => {
       if (err) return reject(err);
-      let stderr = "";
-      stream.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
-      stream.on("close", (code: number) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Failed to write file (code ${code}): ${stderr}`));
-        }
+      sftp.fastPut(localPath, remotePath, (e) => {
+        if (e) return reject(e);
+        resolve();
       });
     });
   });
@@ -175,6 +192,7 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
     const { session_id, profile_name } = req.body;
+    console.log("[vpn/connect] 1 request received", { session_id, profile_name, userId });
 
     if (!session_id) {
       return res.status(400).json({ message: "Invalid session id" });
@@ -184,8 +202,10 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Profile name is required" });
     }
 
+    console.log("[vpn/connect] 2 fetching session...");
     const session = await requireActiveSession(userId, session_id, res);
     if (!session) return;
+    console.log("[vpn/connect] 3 session ok");
 
     const safeName = sanitizeProfileName(profile_name);
     const profiles = listLocalProfiles();
@@ -194,37 +214,93 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
     if (!profile) {
       return res.status(404).json({ message: "VPN profile not found" });
     }
+    console.log("[vpn/connect] 4 profile found", { path: profile.path });
 
+    console.log("[vpn/connect] 5 building ssh config...");
     const sshConfig = buildSSHConfig();
     let ssh: SSHClient | null = null;
 
     try {
-      ssh = await sshConnectPromise(sshConfig);
+      console.log("[vpn/connect] 6 connecting ssh...");
+      ssh = await withTimeout(
+        sshConnectPromise(sshConfig),
+        15000,
+        "SSH connect for VPN"
+      );
+      console.log("[vpn/connect] 7 ssh connected", { profile: safeName });
 
       const remotePath = `/tmp/vpn-${safeName}.ovpn`;
-      await writeFileViaExec(ssh, profile.path, remotePath);
+      console.log("[vpn/connect] 8 uploading profile to remote...");
+      await withTimeout(
+        uploadFileViaSftp(ssh, profile.path, remotePath),
+        30000,
+        "Upload profile to remote"
+      );
+      console.log("[vpn/connect] 9 profile uploaded to remote host", { remotePath });
 
       const logFile = `/tmp/openvpn-${safeName}.log`;
       const pidFile = `/tmp/openvpn-${safeName}.pid`;
-      const rawCmd = `openvpn --config ${remotePath} --daemon --log ${logFile} --writepid ${pidFile} && echo 'STARTED'`;
-      const startCmd = sudoWrap(rawCmd, sshConfig);
+      const scriptPath = `/tmp/vpn-start-${safeName}.sh`;
+      const scriptContent = [
+        "#!/bin/bash",
+        `rm -f ${pidFile}`,
+        `openvpn --config ${remotePath} --daemon --log ${logFile} --writepid ${pidFile}`,
+        "sleep 2",
+        `if [ -f ${pidFile} ] && kill -0 $(cat ${pidFile}) 2>/dev/null; then`,
+        "  echo STARTED",
+        "else",
+        "  echo FAILED",
+        `  [ -f ${logFile} ] && sed -n '1,120p' ${logFile}`,
+        "fi",
+      ].join("\n");
 
-      const { stdout, code } = await sshExecPromise(ssh, startCmd);
+      const localScriptPath = path.join(VPN_DIR, `vpn-start-${safeName}.sh`);
+      fs.writeFileSync(localScriptPath, scriptContent, "utf8");
+      try {
+        await withTimeout(
+          uploadFileViaSftp(ssh, localScriptPath, scriptPath),
+          10000,
+          "Upload start script"
+        );
+      } finally {
+        fs.unlinkSync(localScriptPath);
+      }
+
+      const startCmd = sudoWrap(scriptPath, sshConfig, true);
+
+      console.log("[vpn/connect] 10 starting openvpn...", { profile: safeName });
+      const { stdout, stderr, code } = await withTimeout(
+        sshExecPromise(ssh, startCmd),
+        25000,
+        "OpenVPN start"
+      );
+      console.log("[vpn/connect] 11 openvpn start completed", {
+        profile: safeName,
+        code,
+        stdout,
+        stderr,
+      });
 
       ssh.end();
       ssh = null;
 
-      if (code === 0) {
+      if (code === 0 && stdout.includes("STARTED")) {
+        console.log("[vpn/connect] 12 success, sending response");
         return res.status(200).json({
           message: `VPN "${safeName}" connected`,
           profile_name: safeName,
         });
       } else {
-        return res.status(400).json({ message: `Failed to start VPN "${safeName}"` });
+        return res.status(400).json({
+          message:
+            stderr?.trim() ||
+            stdout?.replace("FAILED", "").trim() ||
+            `Failed to start VPN "${safeName}"`,
+        });
       }
     } catch (err: any) {
       if (ssh) ssh.end();
-      console.log("VPN connect error:", err);
+      console.log("[vpn/connect] error:", err?.message ?? err);
       return res.status(400).json({ message: err.message ?? "Failed to connect VPN" });
     }
   } catch (err) {

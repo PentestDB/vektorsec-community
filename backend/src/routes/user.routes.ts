@@ -3,9 +3,11 @@ import { verifySess } from "../middlewares/VerifySession.middleware";
 import {
   checkAccess,
   deleteModelConfig,
+  detectCapabilities,
   disconnectAnthropicOAuth,
   exchangeAnthropicOAuth,
   generateAadharOTP,
+  getCapabilities,
   getModelConfig,
   getSSHConfig,
   getUserBillingDetails,
@@ -16,6 +18,7 @@ import {
   saveUserInformation,
   sendLinkBugBaseRequest,
   syncBugbaseKycDetails,
+  updateCapabilities,
   updateKycDetails,
   updateModelConfig,
   updateSSHConfig,
@@ -77,6 +80,10 @@ router.post("/delete-model-config", [verifySess], deleteModelConfig);
 router.post("/anthropic-oauth/initiate", [verifySess], initiateAnthropicOAuth);
 router.post("/anthropic-oauth/exchange", [verifySess], exchangeAnthropicOAuth);
 router.post("/anthropic-oauth/disconnect", [verifySess], disconnectAnthropicOAuth);
+
+router.get("/get-capabilities", [verifySess], getCapabilities);
+router.post("/update-capabilities", [verifySess], updateCapabilities);
+router.post("/detect-capabilities", [verifySess], detectCapabilities);
 
 router.get("/get-ssh-config", [verifySess], getSSHConfig);
 router.post("/update-ssh-config", [verifySess], updateSSHConfig);

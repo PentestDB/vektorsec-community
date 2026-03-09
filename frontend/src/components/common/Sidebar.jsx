@@ -205,7 +205,7 @@ const Sidebar = ({ sessionId }) => {
 
             {/* terminal sessions */}
             {sessions
-              .filter((s) => s.type === "terminal")
+              .filter((s) => s.type === "terminal" && !s.temporary)
               .map((sess, i) => (
                 <div
                   key={sess.id}

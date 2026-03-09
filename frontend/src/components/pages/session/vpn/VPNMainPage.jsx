@@ -20,6 +20,7 @@ const VPNMainPage = ({ sessionId }) => {
   const { status } = useSelector((state) => state.user);
   const vpnConnections = useSelector((state) => state.vpn.connections) ?? [];
   const [uploading, setUploading] = useState(false);
+  const [activeConnectProfile, setActiveConnectProfile] = useState(null);
 
   const { data: profilesData, isLoading: profilesLoading } = useQuery(
     ["vpn-profiles"],
@@ -57,10 +58,12 @@ const VPNMainPage = ({ sessionId }) => {
 
   const connectMutation = useMutation(connectVPNProfile, {
     onSuccess: (data) => {
+      setActiveConnectProfile(null);
       message.success(data?.message ?? "Connected");
       queryClient.invalidateQueries(["check-vpn-status", sessionId]);
     },
     onError: (err) => {
+      setActiveConnectProfile(null);
       message.error(err?.response?.data?.message ?? "Connection failed");
     },
   });
@@ -294,14 +297,18 @@ const VPNMainPage = ({ sessionId }) => {
                           <PrimaryButton
                             green
                             icon={<FiWifi />}
-                            loading={connectMutation.isLoading}
+                            loading={
+                              connectMutation.isLoading &&
+                              activeConnectProfile === profile.name
+                            }
                             disabled={!boxRunning}
-                            onClick={() =>
+                            onClick={() => {
+                              setActiveConnectProfile(profile.name);
                               connectMutation.mutate({
                                 session_id: sessionId,
                                 profile_name: profile.name,
-                              })
-                            }
+                              });
+                            }}
                           >
                             Connect
                           </PrimaryButton>

@@ -1,9 +1,14 @@
 "use client";
 
-import ToolsPage from "@/components/pages/settings/Tools";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const Tools = () => {
-  return <ToolsPage />;
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/settings/capabilities");
+  }, [router]);
+  return null;
 };
 
 export default Tools;

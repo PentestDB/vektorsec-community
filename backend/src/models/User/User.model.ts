@@ -100,6 +100,8 @@ export interface UserDoc extends mongoose.Document {
   ip: string;
   configs: {
     tools: string[];
+    capabilities: string[];
+    installedCapabilities: string[];
     volumeId: string;
     volumeCreatedAt: Date;
   };
@@ -259,6 +261,19 @@ const UserSchema = new Schema({
         },
       ],
       default: ["nmap", "feroxbuster", "subfinder", "hydra", "sqlmap"],
+    },
+    capabilities: {
+      type: [{ type: String }],
+      default: [
+        "python3", "gcc", "make", "git", "curl", "nc", "socat", "ssh",
+        "file", "strings", "xxd", "openssl", "jq", "tmux",
+        "requests", "pyyaml", "beautifulsoup4", "Pillow", "python-magic", "chepy",
+        "nmap", "feroxbuster", "subfinder", "hydra", "sqlmap",
+      ],
+    },
+    installedCapabilities: {
+      type: [{ type: String }],
+      default: [],
     },
     volumeId: { type: String },
     volumeCreatedAt: { type: Date },

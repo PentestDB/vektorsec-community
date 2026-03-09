@@ -30,6 +30,19 @@ function resolveDataDir(): string {
   return path.resolve(__dirname, "../..");
 }
 
+function resolveTomlPath(): string {
+  const dataDir = resolveDataDir();
+  const directPath = path.join(dataDir, "config.toml");
+  if (fs.existsSync(directPath)) return directPath;
+
+  // In dev mode config.toml lives at the project root (one above backend/)
+  const projectRoot = path.resolve(dataDir, "..");
+  const rootPath = path.join(projectRoot, "config.toml");
+  if (fs.existsSync(rootPath)) return rootPath;
+
+  return directPath;
+}
+
 let _loaded = false;
 
 export function getDataDir(): string {
@@ -44,7 +57,7 @@ export function loadConfig(): void {
   if (_loaded) return;
 
   const dataDir = resolveDataDir();
-  const tomlPath = path.join(dataDir, "config.toml");
+  const tomlPath = resolveTomlPath();
   const envPath = path.join(dataDir, ".env");
 
   if (fs.existsSync(tomlPath)) {

@@ -4,10 +4,14 @@ import { googleSearchTool } from "./handlers/google-search";
 import { genericResponseTool } from "./handlers/generic-response";
 import { netcatListenerTool } from "./handlers/netcat-listener";
 import { msfvenomPayloadTool } from "./handlers/msfvenom-payload";
+import { runPythonScriptTool } from "./handlers/run-python-script";
+import { runInstallToolTool } from "./handlers/run-install-tool";
 
 const tools: ToolDefinition[] = [
   googleSearchTool,
   runBashTool,
+  runPythonScriptTool,
+  runInstallToolTool,
   genericResponseTool,
   netcatListenerTool,
   msfvenomPayloadTool,

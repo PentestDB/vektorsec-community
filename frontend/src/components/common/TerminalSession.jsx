@@ -1,12 +1,14 @@
 import { LoadingOutlined } from "@ant-design/icons";
 import { Row, Spin, message } from "antd";
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import styles from "@/styles/components/CLIcomponent.module.scss";
 import { useDispatch, useSelector } from "react-redux";
 import { useSocketContext } from "@/context/SocketContext";
+import { closeSession } from "@/store/user.slice";
+import { updateActiveTerminal } from "@/store/socket.slice";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI;
 
@@ -27,9 +29,14 @@ const TerminalSession = ({
 
   const [terminalLoading, setTerminalLoading] = useState(true);
   const [sshError, setSSHError] = useState(null);
+  const autoRanRef = useRef(false);
 
   const { readyToConnect, status } = useSelector((state) => state.user);
-  const { setSocket } = useSocketContext();
+  const { setSocket, removeSocket } = useSocketContext();
+
+  useEffect(() => {
+    autoRanRef.current = false;
+  }, [session.id, session.commandToRun, session.commandId]);
 
   useEffect(() => {
     if (readyToConnect && status === "running") {
@@ -100,6 +107,7 @@ const TerminalSession = ({
       });
 
       return () => {
+        removeSocket(session.id);
         newTerminal.dispose();
         newSocket.disconnect();
       };
@@ -185,6 +193,57 @@ const TerminalSession = ({
       terminal.focus();
     }
   }, [terminal]);
+
+  useEffect(() => {
+    if (
+      !session.temporary ||
+      !socket ||
+      !terminal ||
+      terminalLoading ||
+      !readyToConnect ||
+      autoRanRef.current ||
+      !session.commandToRun ||
+      !session.commandId
+    ) {
+      return;
+    }
+
+    autoRanRef.current = true;
+    terminal.write(`\r\n$ ${session.commandToRun}\r\n\r\n`);
+    socket.emit(`exec_command-${session.id}`, {
+      command: session.commandToRun,
+      commandId: session.commandId,
+    });
+  }, [
+    session.commandId,
+    session.commandToRun,
+    session.id,
+    session.temporary,
+    socket,
+    terminal,
+    terminalLoading,
+    readyToConnect,
+  ]);
+
+  useEffect(() => {
+    if (!socket || !session.temporary) {
+      return;
+    }
+
+    const handleTempCommandComplete = () => {
+      setTimeout(() => {
+        removeSocket(session.id);
+        dispatch(closeSession(session.id));
+        dispatch(updateActiveTerminal(session.sourceSessionId ?? null));
+      }, 1200);
+    };
+
+    socket.on(`command_executed-${session.id}`, handleTempCommandComplete);
+
+    return () => {
+      socket.off(`command_executed-${session.id}`, handleTempCommandComplete);
+    };
+  }, [dispatch, removeSocket, session.id, session.sourceSessionId, session.temporary, socket]);
 
   return (
     <>

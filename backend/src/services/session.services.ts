@@ -213,10 +213,16 @@ export const initCopilotSession = async ({
     const sessionHistory = sessionData.history;
 
     if (sessionData.isMainThread) {
+      const capConfig = {
+        tools: user.configs.tools,
+        capabilities: user.configs.capabilities ?? [],
+        installedCapabilities: user.configs.installedCapabilities ?? [],
+      };
       const sysInit = await CopilotPrompts.generate_system_init(
         sessionId,
         user.configs.tools,
-        true
+        true,
+        capConfig
       );
 
       sessionHistory.push({
@@ -266,9 +272,16 @@ export const initCopilotSession = async ({
 
       await dbSession.save();
     } else {
+      const capConfigSub = {
+        tools: user.configs.tools,
+        capabilities: user.configs.capabilities ?? [],
+        installedCapabilities: user.configs.installedCapabilities ?? [],
+      };
       const sysInit = await CopilotPrompts.generate_system_init(
         sessionId,
-        user.configs.tools
+        user.configs.tools,
+        false,
+        capConfigSub
       );
 
       sessionHistory.push({
@@ -363,7 +376,7 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
       dbSession.redoContext = null;
     }
 
-    const { content: gptRes, success } = await invoke_llm_with_retry(
+    const { content: gptRes, success, meta } = await invoke_llm_with_retry(
       sessionHistory,
       sessionId
     );
@@ -440,6 +453,7 @@ export const generateCommand = async ({ sessionId }: { sessionId: string }) => {
       lastStepType: "command",
       newData: {
         content: taskCommandsResponse,
+        llm: meta,
       },
     });
 
@@ -528,7 +542,7 @@ export const finalizeCommandToRun = async ({ sessionId, command }: any) => {
     };
 
     if (choice === "edit") {
-      newData.additionalContext = JSON.stringify(command_args.command);
+      newData.additionalContext = JSON.stringify(command_args.command ?? command_args.script ?? command_args);
     } else if (["provide_output", "no", "provide_guidance"].includes(choice)) {
       newData.additionalContext = command_args.output;
     }
@@ -838,10 +852,10 @@ export const finalizeOutputAndGetSummary = async (sessionId: string) => {
     session.redoContext = null;
   }
 
-  let { content: context, success } = await invoke_llm_with_retry(
+  let { content: context, success, meta } = await invoke_llm_with_retry(
     contextualHistory,
     sessionId
-  ) as { content: any; success: boolean };
+  ) as { content: any; success: boolean; meta?: any };
 
   if (!success) {
     throw new Error("Error generating GPT4 summary");
@@ -870,6 +884,7 @@ export const finalizeOutputAndGetSummary = async (sessionId: string) => {
         loopSummary: context.summary,
         nextSteps: context.nextSteps,
       }),
+      llm: meta,
     },
   });
 
@@ -1031,7 +1046,7 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
       dbSession.redoContext = null;
     }
 
-    const { success, content: todoResponse } = await invoke_llm_with_retry(
+    const { success, content: todoResponse, meta } = await invoke_llm_with_retry(
       todoHistory,
       sessionId
     );
@@ -1061,6 +1076,7 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
       lastStepType: "todo",
       newData: {
         content: JSON.stringify(todoResponseFixed.todo),
+        llm: meta,
       },
     });
 
@@ -1089,9 +1105,16 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
       await archiveHistory.save();
     }
 
+    const capConfigFinal = {
+      tools: user.configs.tools,
+      capabilities: user.configs.capabilities ?? [],
+      installedCapabilities: user.configs.installedCapabilities ?? [],
+    };
     const sysInit = await CopilotPrompts.generate_system_init(
       sessionId,
-      user.configs.tools
+      user.configs.tools,
+      false,
+      capConfigFinal
     );
     // const nextStepsAndMaintainJson = await CopilotPrompts.contextual_next_steps(
     //   summaryPrompt
@@ -1123,7 +1146,8 @@ export const finalizeTodoAndGetNewCommand = async (sessionId: string) => {
       content: CopilotPrompts.tool_inventory_maintain_json(
         !!sessionData.isMainThread,
         user.configs.tools,
-        summaryPrompt
+        summaryPrompt,
+        capConfigFinal
       ),
       isContextual: false,
       loopStep: 0,
@@ -1294,9 +1318,16 @@ export const analyzeSubprocessData = async (
     contexts.push(subprocess_context);
   }
 
+  const capConfigAnalyze = {
+    tools: user.configs.tools,
+    capabilities: user.configs.capabilities ?? [],
+    installedCapabilities: user.configs.installedCapabilities ?? [],
+  };
   const sysInit = await CopilotPrompts.generate_system_init(
     sessionId,
-    user.configs.tools
+    user.configs.tools,
+    false,
+    capConfigAnalyze
   );
   const prompt_for_analysis: string =
     CopilotPrompts.prompt_for_analysis(contexts);
@@ -1322,6 +1353,7 @@ export const analyzeSubprocessData = async (
   const {
     content: global_summary,
     success,
+    meta,
   } = await invoke_llm_with_retry(new_history, sessionId);
 
   if (!success) {
@@ -1347,6 +1379,7 @@ export const analyzeSubprocessData = async (
     lastStepType: "output",
     newData: {
       content: assistant_prompt,
+      llm: meta,
     },
   });
 

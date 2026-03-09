@@ -1111,6 +1111,83 @@ export const getUserTools = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Capabilities ────────────────────────────────────────────────────
+
+import {
+  capabilityBuckets,
+  allCapabilities,
+  buildDetectionScript,
+  parseDetectionOutput,
+} from "../capabilities/registry";
+import { execSSHCommand } from "../services/ssh.service";
+
+export const getCapabilities = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    return res.status(200).json({
+      buckets: capabilityBuckets,
+      selectedCapabilities: user.configs.capabilities ?? [],
+      installedCapabilities: user.configs.installedCapabilities ?? [],
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get capabilities" });
+  }
+};
+
+export const updateCapabilities = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    const { capabilities } = req.body;
+
+    if (!capabilities || !Array.isArray(capabilities)) {
+      return res.status(400).json({ message: "Invalid data" });
+    }
+
+    user.configs.capabilities = capabilities;
+
+    const toolNames = capabilities.filter((name: string) => {
+      const cap = allCapabilities.find((c) => c.name === name);
+      return cap && cap.type === "binary";
+    });
+    user.configs.tools = toolNames;
+
+    await user.save();
+    return res.status(200).json({ message: "Capabilities updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update capabilities" });
+  }
+};
+
+export const detectCapabilities = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    const selected: string[] = user.configs.capabilities ?? allCapabilities.map((c) => c.name);
+
+    const script = buildDetectionScript(selected);
+    const output = await execSSHCommand(script);
+    const results = parseDetectionOutput(output);
+
+    const installed = Object.entries(results)
+      .filter(([, isInstalled]) => isInstalled)
+      .map(([name]) => name);
+
+    user.configs.installedCapabilities = installed;
+    await user.save();
+
+    return res.status(200).json({
+      installedCapabilities: installed,
+      detectionResults: results,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({
+      message: "Failed to detect capabilities. Ensure SSH/Exploit Box is connected.",
+    });
+  }
+};
+
 // ─── Server-level Model Configuration (reads/writes .env) ────────────
 
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";

@@ -23,6 +23,24 @@ import { load } from "cheerio";
 import { HistoryData } from "../services/copilot.services";
 import { requireActiveSession } from "../services/session.helpers";
 
+const rollbackProcessingStepIfNeeded = async (sessionId?: string) => {
+  if (!sessionId) return;
+
+  const session = await SessionsModel.findOne({ sessionId });
+  if (!session) return;
+
+  const lastStep = session.loopHistory[session.loopHistory.length - 1];
+  if (!lastStep) return;
+
+  if (lastStep.stepType !== "init" && lastStep.status === "processing") {
+    await changeLastHistoryStepStatus({
+      sessionId,
+      lastStepType: lastStep.stepType,
+      status: "pending",
+    });
+  }
+};
+
 export const initiateCopilotSession = async (req: Request, res: Response) => {
   try {
     const user = res.locals.user;
@@ -220,6 +238,7 @@ export const generateCopilotCommand = async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     console.log("[generateCopilotCommand] Exception:", err);
+    await rollbackProcessingStepIfNeeded(req.body?.sessionId);
     return res.status(400).json({
       message: "Failed to initiate Copilot",
       err:
@@ -437,6 +456,7 @@ export const generateLoopSummary = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
+    await rollbackProcessingStepIfNeeded(req.body?.sessionId);
     return res.status(400).json({
       message: "Error Occured while generating command",
     });
@@ -506,6 +526,7 @@ export const finalizeSummary = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
+    await rollbackProcessingStepIfNeeded(req.body?.sessionId);
     return res.status(400).json({
       message: "Error Occured while resetting history",
     });
@@ -1001,6 +1022,7 @@ export const agenticContinueHandler = async (req: Request, res: Response) => {
     return res.status(200).json(result);
   } catch (error: any) {
     console.log("[agenticContinueHandler] Error:", error);
+    await rollbackProcessingStepIfNeeded(req.body?.sessionId);
     return res.status(400).json({
       message: error.message ?? "Error in agentic continue",
     });

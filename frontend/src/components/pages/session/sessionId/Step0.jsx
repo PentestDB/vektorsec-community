@@ -7,6 +7,7 @@ const StepPage0 = ({
   disabled,
   stepData,
   loading,
+  status,
 }) => {
   return (
     <>
@@ -15,13 +16,17 @@ const StepPage0 = ({
         daring missions!{" "}
       </div>
 
-      <MessageBox
-        type="init"
-        initiatePentestFunction={initiatePentestFunction}
-        disabled={disabled}
-        stepData={stepData}
-        loading={loading}
-      />
+      {loading || ["pending", "processing"].includes(status) ? (
+        <Thinking type="command" stepData={stepData} />
+      ) : (
+        <MessageBox
+          type="init"
+          initiatePentestFunction={initiatePentestFunction}
+          disabled={disabled}
+          stepData={stepData}
+          loading={loading}
+        />
+      )}
     </>
   );
 };

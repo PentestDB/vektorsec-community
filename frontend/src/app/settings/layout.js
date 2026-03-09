@@ -18,6 +18,8 @@ const SettingsLayout = ({ children }) => {
         return "My Account";
       case "/settings/tools":
         return "Tools";
+      case "/settings/capabilities":
+        return "Capabilities";
       case "/settings/billing":
         return "Billing";
       case "/settings/usage":
@@ -59,6 +61,11 @@ const SettingsLayout = ({ children }) => {
               {getPageTitle() === "Tools" && (
                 <p className={styles.sessionDescription}>
                   Select tools you want to use in your exploit box.
+                </p>
+              )}
+              {getPageTitle() === "Capabilities" && (
+                <p className={styles.sessionDescription}>
+                  Manage CLI tools and Python packages available on your exploit box.
                 </p>
               )}
               {getPageTitle() === "Choose plan" && (

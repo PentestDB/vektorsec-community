@@ -25,9 +25,9 @@ const settingItems = [
         icon: <TiCloudStorageOutline className={styles.sidebarIcon} />
     },
     {
-        title: "Tools",
-        name: "Tools",
-        path: "/settings/tools",
+        title: "Capabilities",
+        name: "Capabilities",
+        path: "/settings/capabilities",
         icon: <TbTools className={styles.sidebarIcon} />
     },
     {

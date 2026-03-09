@@ -14,6 +14,10 @@ const CommandsTable = ({ data }) => {
     (item) => item.tool_name === "netcat_listener"
   );
 
+  const isPythonScript = data.some(
+    (item) => item.tool_name === "run_python_script"
+  );
+
   const defaultColumns = [
     {
       title: "Tool",
@@ -27,6 +31,8 @@ const CommandsTable = ({ data }) => {
       render: (args) => {
         if (args.command) {
           return args.command;
+        } else if (args.script) {
+          return <pre style={{ whiteSpace: "pre-wrap", margin: 0, maxHeight: 300, overflow: "auto" }}>{args.script}</pre>;
         } else if (args.query) {
           return args.query;
         } else if (args.response) {
@@ -35,6 +41,28 @@ const CommandsTable = ({ data }) => {
           return JSON.stringify(args);
         }
       },
+    },
+  ];
+
+  const pythonScriptColumns = [
+    {
+      title: "Tool",
+      dataIndex: "tool_name",
+      key: "tool_name",
+    },
+    {
+      title: "File Name",
+      dataIndex: ["args", "file_name"],
+      key: "file_name",
+      width: 160,
+    },
+    {
+      title: "Script",
+      dataIndex: ["args", "script"],
+      key: "script",
+      render: (script) => (
+        <pre style={{ whiteSpace: "pre-wrap", margin: 0, maxHeight: 300, overflow: "auto" }}>{script}</pre>
+      ),
     },
   ];
 
@@ -118,6 +146,8 @@ const CommandsTable = ({ data }) => {
         columns={
           isMsfvenomPayloadPresent && data.length === 1
             ? msfvenomColumns
+            : isPythonScript && data.length === 1
+            ? pythonScriptColumns
             : isGenericResponse && data.length === 1
             ? genericColumns
             : isNetcatListener && data.length === 1

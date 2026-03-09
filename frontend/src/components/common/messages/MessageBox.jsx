@@ -144,9 +144,46 @@ const MessageBox = ({
     }
   };
 
+  const formatTokenCount = (value) => {
+    if (typeof value !== "number") return "-";
+    return value.toLocaleString();
+  };
+
+  const formatElapsedMs = (value) => {
+    if (typeof value !== "number" || value <= 0) return "-";
+    if (value < 1000) return `${value}ms`;
+    return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}s`;
+  };
+
+  const renderLlmTrace = () => {
+    const llm = stepData?.llm;
+    if (!llm || ["init", "thinking"].includes(type)) return null;
+
+    return (
+      <div className={styles.llmTrace}>
+        <span className={styles.llmTracePrimary}>
+          {llm.model}
+          {llm.provider ? ` via ${llm.provider}` : ""}
+        </span>
+        <span className={styles.llmTraceItem}>
+          In {formatTokenCount(llm.prompt_tokens)}
+        </span>
+        <span className={styles.llmTraceItem}>
+          Out {formatTokenCount(llm.completion_tokens)}
+        </span>
+        <span className={styles.llmTraceItem}>
+          Total {formatTokenCount(llm.total_tokens)}
+        </span>
+        <span className={styles.llmTraceItem}>
+          Time {formatElapsedMs(llm.elapsed_ms)}
+        </span>
+      </div>
+    );
+  };
+
   const renderOptions = (tool_name) => {
     if (
-      ["run_bash", "searchsploit", "msf_listener", "python_server"].includes(
+      ["run_bash", "run_python_script", "run_install_tool", "searchsploit", "msf_listener", "python_server"].includes(
         tool_name
       )
     ) {
@@ -319,6 +356,10 @@ const MessageBox = ({
     switch (tool_name) {
       case "run_bash":
         return "Do you want to execute the command?";
+      case "run_python_script":
+        return "Do you want to execute this Python script?";
+      case "run_install_tool":
+        return "Do you want to install this tool?";
       case "google":
         return "Do you want to search this query?";
       case "generic_response":
@@ -341,6 +382,8 @@ const MessageBox = ({
   const returnCommandToRun = (args) => {
     if (args.command) {
       return args.command;
+    } else if (args.script) {
+      return args.script;
     } else if (args.query) {
       return args.query;
     } else if (args.response) {
@@ -537,6 +580,8 @@ const MessageBox = ({
           form={form}
           initialValues={getInitialValues()}
         >
+          {renderLlmTrace()}
+
           {type === "init" && (
             <>
               <Form.Item

@@ -2,6 +2,15 @@ import { invoke_llm } from "../utils/llm/providers";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import { HistoryData } from "../types/copilot.types";
 
+export interface LlmInvocationMeta {
+  provider: string;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  elapsed_ms: number;
+}
+
 async function trackTokenUsage(
   sessionId: string,
   response: { content: string | null; usage: any }
@@ -26,7 +35,7 @@ export async function invoke_llm_with_retry(
   history: HistoryData[],
   sessionId: string,
   opts: { format?: "json" | "text"; temperature?: number; maxRetries?: number } = {}
-): Promise<{ success: boolean; content?: string }> {
+): Promise<{ success: boolean; content?: string; meta?: LlmInvocationMeta }> {
   const { format = "json", temperature, maxRetries = 2 } = opts;
   let tries = 0;
 
@@ -44,7 +53,18 @@ export async function invoke_llm_with_retry(
 
       await trackTokenUsage(sessionId, response);
 
-      return { success: true, content: response.content };
+      return {
+        success: true,
+        content: response.content,
+        meta: {
+          provider: response.provider,
+          model: response.model,
+          prompt_tokens: response.usage?.prompt_tokens ?? 0,
+          completion_tokens: response.usage?.completion_tokens ?? 0,
+          total_tokens: response.usage?.total_tokens ?? 0,
+          elapsed_ms: response.elapsedMs ?? 0,
+        },
+      };
     } catch (e) {
       tries++;
       console.log(e);

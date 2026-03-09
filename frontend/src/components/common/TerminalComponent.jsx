@@ -34,6 +34,9 @@ const TerminalComponent = ({ show, readyToConnect }) => {
   const [showTerminal, setShowTerminal] = useState(true);
 
   const getTabName = (sess) => {
+    if (sess.title) {
+      return sess.title;
+    }
     if (sess.type === "session" && sess.is_main) {
       return "Main Session";
     } else if (sess.type === "session" && !sess.is_main) {
@@ -78,6 +81,15 @@ const TerminalComponent = ({ show, readyToConnect }) => {
 
   useEffect(() => {
     if (sessions.length > 0) {
+      const activeTempTerminal = sessions.find(
+        (session) => session.id === active_terminal && session.temporary
+      );
+
+      if (activeTempTerminal) {
+        setShowTerminal(true);
+        return;
+      }
+
       const activeKey = getActiveKey();
       const sessionId = pathname.split("/")[2];
       if (activeKey !== `${sessionId}/vpn`) {
@@ -88,7 +100,7 @@ const TerminalComponent = ({ show, readyToConnect }) => {
         setShowTerminal(false);
       }
     }
-  }, [sessions, pathname]);
+  }, [sessions, pathname, active_terminal]);
 
   return (
     <div className={styles.fixedOverlay}>

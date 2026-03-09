@@ -1,5 +1,15 @@
 import { getSessionTodoList } from "../redis/store";
 import { toolRegistry } from "../../tools/registry";
+import {
+  buildCapabilityPromptContext,
+  getCapabilityByName,
+} from "../../capabilities/registry";
+
+export interface UserCapabilityConfig {
+  tools: string[];
+  capabilities: string[];
+  installedCapabilities: string[];
+}
 
 // ─── Data Helpers ──────────────────────────────────────────────────
 
@@ -21,6 +31,7 @@ function commandResponseFormat(): string {
   const toolNames = toolRegistry.getToolNames().join(", ");
   return `IMPORTANT: "tool_name" MUST be exactly one of: ${toolNames}
 To run any pentest tool (nmap, feroxbuster, gobuster, sqlmap, etc.), use "tool_name": "run_bash" with the full command in the "command" arg.
+To write and execute custom Python scripts (e.g. custom exploits, data parsing, protocol interactions, brute-force logic, automation), use "tool_name": "run_python_script" with "script" (full script content) and "file_name" (e.g. exploit.py).
 
 ${JSON.stringify(
     {
@@ -35,6 +46,11 @@ ${JSON.stringify(
           tool_name: "run_bash",
           args: { command: "<full_shell_command>" },
           file_name: ["<output_file_name_if_any>"],
+        },
+        {
+          tool_name: "run_python_script",
+          args: { script: "<python_script_content>", file_name: "<script_filename.py>" },
+          file_name: ["<script_filename.py>"],
         },
       ],
     },
@@ -100,10 +116,36 @@ function outputGuidelinesSection(isMainThread: boolean): string {
 </output_guidelines>`;
 }
 
-function toolsAndResourcesSection(tools?: string[]): string {
+function capabilitiesSection(capConfig?: UserCapabilityConfig): string {
+  const installed = capConfig?.installedCapabilities ?? [];
+  const selected = capConfig?.capabilities ?? [];
+
+  const notInstalled = selected.filter((name) => !installed.includes(name));
+  const notInstalledWithCmd = notInstalled
+    .map((name) => {
+      const cap = getCapabilityByName(name);
+      return cap ? `  - ${cap.name}: ${cap.installCommand}` : null;
+    })
+    .filter(Boolean);
+
+  const capCtx = buildCapabilityPromptContext(installed);
+  const installNote =
+    notInstalledWithCmd.length > 0
+      ? `\nThe following selected capabilities are NOT yet installed. Use "run_install_tool" to install them if needed:\n${notInstalledWithCmd.join("\n")}\n`
+      : "";
+
+  return capCtx ? `<capabilities>\n${capCtx}${installNote}\n</capabilities>` : "";
+}
+
+function toolsAndResourcesSection(
+  tools?: string[],
+  capConfig?: UserCapabilityConfig
+): string {
   const pentestLine = tools?.length
     ? `Recommended pentest tools (run via run_bash): ${pentestToolsList(tools)}.\nAdditional CLI tools may be used with justification — always via run_bash.\n\n`
     : "";
+
+  const capSection = capabilitiesSection(capConfig);
 
   return `<tools>
 ${pentestLine}Exclusively use these tool_name values in your JSON response:
@@ -111,7 +153,19 @@ ${toolRegistry.generatePromptList()}
 
 NEVER use tool names like "nmap", "feroxbuster", "gobuster", "sqlmap" etc. as tool_name.
 Always use "run_bash" and put the full command in the "command" arg.
+
+When to use "run_python_script" instead of "run_bash":
+- Writing custom exploit scripts or proof-of-concept code
+- Complex data parsing, transformation, or extraction from command output
+- Custom brute-force or fuzzing logic
+- Protocol-level interactions (sockets, HTTP requests, binary protocols)
+- Multi-step automation that would be unwieldy as a one-liner bash command
+- Any task requiring libraries like requests, socket, struct, pwn, etc.
+
+Use "run_install_tool" to install a missing tool or Python package when a capability you need is not available on the system.
 </tools>
+
+${capSection}
 
 <resources>
 Wordlists at /usr/share/wordlists:
@@ -127,8 +181,11 @@ export const CopilotPrompts = {
   generate_system_init: async (
     session_id: string,
     tools: string[],
-    first_loop = false
+    first_loop = false,
+    capConfig?: UserCapabilityConfig
   ): Promise<string> => {
+    const capSection = capabilitiesSection(capConfig);
+
     return `<role>
 You are Pentest Copilot, a highly skilled autonomous penetration testing agent specializing in identifying vulnerabilities and security threats in computer systems and networks.
 Your decisions must always be made independently without seeking user assistance.
@@ -164,7 +221,19 @@ ${toolRegistry.generatePromptList()}
 
 NEVER use tool names like "nmap", "feroxbuster", "gobuster", "sqlmap" etc. as tool_name.
 Always use "run_bash" and put the full command in the "command" arg.
+
+Use "run_python_script" when you need to write custom Python scripts for tasks like:
+- Custom exploits or proof-of-concept code
+- Complex data parsing or transformation
+- Protocol-level interactions (sockets, HTTP, binary protocols)
+- Custom brute-force, fuzzing, or automation logic
+- Any multi-step logic that would be unwieldy as a bash one-liner
+Provide the full script in "script" and a filename in "file_name" (e.g. exploit.py).
+
+Use "run_install_tool" to install a missing tool or Python package when a capability you need is not available on the system.
 </tools>
+
+${capSection}
 
 <resources>
 Wordlists at /usr/share/wordlists: /dirb, /metasploit, /seclists, /wfuzz, /rockyou.txt, /sqlmap.txt, /john.lst, /nmap.lst, /amass.
@@ -342,7 +411,8 @@ ${todoResponseFormat()}
   tool_inventory_maintain_json(
     isMainThread: boolean,
     tools: string[],
-    summaryPrompt: string
+    summaryPrompt: string,
+    capConfig?: UserCapabilityConfig
   ): string {
     return `<context>
 ${summaryPrompt}
@@ -353,7 +423,7 @@ Analyze the context above and provide the next command to run, keeping in mind t
 Keep tasks clear, precise, and short due to token size limit.
 </instructions>
 
-${toolsAndResourcesSection(tools)}
+${toolsAndResourcesSection(tools, capConfig)}
 
 ${performanceSection()}
 

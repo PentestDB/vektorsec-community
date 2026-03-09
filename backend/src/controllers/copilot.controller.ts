@@ -276,10 +276,16 @@ export const createCopilotSubprocess = async (req: Request, res: Response) => {
 
       await subSession.save();
 
+      const capConfig = {
+        tools: user.configs.tools,
+        capabilities: user.configs.capabilities ?? [],
+        installedCapabilities: user.configs.installedCapabilities ?? [],
+      };
       const sysInit = await CopilotPrompts.generate_system_init(
         process.id,
         user.configs.tools,
-        true
+        true,
+        capConfig
       );
 
       let subsessionHistory: HistoryData[] = [];

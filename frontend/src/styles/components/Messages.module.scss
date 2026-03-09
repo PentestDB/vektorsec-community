@@ -132,6 +132,34 @@
       font-weight: 600;
     }
 
+    .llmTrace {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      padding: 0.625rem 0.75rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      background: var(--surface-hover);
+      color: var(--secondary-text);
+      font-size: 0.75rem;
+    }
+
+    .llmTracePrimary {
+      color: var(--primary-text);
+      font-weight: 500;
+      padding-right: 0.25rem;
+    }
+
+    .llmTraceItem {
+      padding: 0.2rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.02);
+      white-space: nowrap;
+    }
+
     .googleSearchCard {
       background: var(--surface-hover);
       border: 1px solid var(--border-subtle);

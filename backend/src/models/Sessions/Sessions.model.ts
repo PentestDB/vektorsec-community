@@ -16,6 +16,14 @@ export interface loopHistoryDoc {
     additionalContext?: string;
     fileAnalysis?: string;
     siteContext?: string;
+    llm?: {
+      provider: string;
+      model: string;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+      elapsed_ms: number;
+    };
   };
   loop: number;
   action?: "like" | "dislike";
@@ -102,6 +110,14 @@ const SessionSchema = new Schema({
         },
         siteContext: {
           type: String,
+        },
+        llm: {
+          provider: { type: String },
+          model: { type: String },
+          prompt_tokens: { type: Number },
+          completion_tokens: { type: Number },
+          total_tokens: { type: Number },
+          elapsed_ms: { type: Number },
         },
       },
       loop: {

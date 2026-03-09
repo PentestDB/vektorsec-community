@@ -155,6 +155,7 @@ export interface InvokeResult {
   usage: OpenAI.Completions.CompletionUsage | undefined;
   model: string;
   provider: ProviderType;
+  elapsedMs: number;
 }
 
 function maskSecret(s: string | undefined): string {
@@ -170,28 +171,34 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
   const lastRole = opts.messages[msgCount - 1]?.role ?? "?";
   const totalChars = opts.messages.reduce((n, m) => n + m.content.length, 0);
 
+  const start = Date.now();
+  const client = buildClient(config);
+
+  const runCompletion = async (temperature: number) => {
+    const completionConfig: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+      model: config.model,
+      messages: opts.messages as OpenAI.Chat.ChatCompletionMessageParam[],
+      temperature,
+    };
+
+    if (opts.format === "json" && config.provider !== "anthropic") {
+      completionConfig.response_format = { type: "json_object" };
+    }
+
+    return client.chat.completions.create(completionConfig);
+  };
+
+  const requestedTemp = opts.temperature ?? 0.75;
+
   console.log(
     `[inference] → provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
     ` key=${maskSecret(config.authMethod === "oauth" ? config.oauthAccessToken : config.apiKey)}` +
     ` baseURL=${config.baseURL ?? "(default)"}` +
-    ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars} fmt=${opts.format ?? "text"} temp=${opts.temperature ?? 0.75}`
+    ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars} fmt=${opts.format ?? "text"} temp=${requestedTemp}`
   );
 
-  const start = Date.now();
-  const client = buildClient(config);
-
-  const completionConfig: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
-    model: config.model,
-    messages: opts.messages as OpenAI.Chat.ChatCompletionMessageParam[],
-    temperature: opts.temperature ?? 0.75,
-  };
-
-  if (opts.format === "json" && config.provider !== "anthropic") {
-    completionConfig.response_format = { type: "json_object" };
-  }
-
   try {
-    const response = await client.chat.completions.create(completionConfig);
+    let response = await runCompletion(requestedTemp);
     const elapsed = Date.now() - start;
     const content = response.choices[0]?.message?.content ?? null;
 
@@ -207,8 +214,48 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
       usage: response.usage,
       model: config.model,
       provider: config.provider,
+      elapsedMs: elapsed,
     };
   } catch (err: any) {
+    // If model doesn't support temperature (e.g. only allows temp=1), retry with default
+    const isTempUnsupported =
+      err?.code === "unsupported_value" &&
+      err?.param === "temperature" &&
+      requestedTemp !== 1;
+
+    if (isTempUnsupported) {
+      console.warn(
+        `[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`
+      );
+      try {
+        const response = await runCompletion(1);
+        const elapsed = Date.now() - start;
+        const content = response.choices[0]?.message?.content ?? null;
+
+        console.log(
+          `[inference] ← ${elapsed}ms provider=${config.provider} model=${response.model ?? config.model}` +
+          ` tokens=${response.usage?.prompt_tokens ?? "?"}→${response.usage?.completion_tokens ?? "?"}` +
+          ` (total ${response.usage?.total_tokens ?? "?"})` +
+          ` | response ${content ? content.length + " chars" : "null"}`
+        );
+
+        return {
+          content,
+          usage: response.usage,
+          model: config.model,
+          provider: config.provider,
+          elapsedMs: elapsed,
+        };
+      } catch (retryErr: any) {
+        const elapsed = Date.now() - start;
+        console.error(
+          `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
+          ` | ${retryErr?.status ?? "?"} ${retryErr?.code ?? retryErr?.type ?? retryErr?.message ?? "unknown error"}`
+        );
+        throw retryErr;
+      }
+    }
+
     const elapsed = Date.now() - start;
     console.error(
       `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +

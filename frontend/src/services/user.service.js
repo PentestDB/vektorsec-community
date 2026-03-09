@@ -73,6 +73,21 @@ export const getUserTools = async () => {
   return res.data;
 };
 
+export const getCapabilities = async () => {
+  const res = await apiClient.get(`/user/get-capabilities`);
+  return res.data;
+};
+
+export const updateCapabilities = async (body) => {
+  const res = await apiClient.post(`/user/update-capabilities`, body);
+  return res.data;
+};
+
+export const detectCapabilities = async () => {
+  const res = await apiClient.post(`/user/detect-capabilities`);
+  return res.data;
+};
+
 export const getBillingData = async (body) => {
   const res = await apiClient.post("/user/get-billing-details", body);
   return res.data;
