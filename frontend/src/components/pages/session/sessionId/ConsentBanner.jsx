@@ -1,4 +1,5 @@
 import React from "react";
+import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
@@ -27,6 +28,13 @@ const DEFAULT_CONFIG = {
   language: "text",
 };
 
+function getConsentSummary(toolName) {
+  if (toolName === "run_bash") return "Review command";
+  if (toolName === "run_python_script") return "Review script";
+  if (toolName === "run_install_tool") return "Review install";
+  return "Review action";
+}
+
 const highlighterCustomStyle = {
   margin: 0,
   borderRadius: "6px",
@@ -39,11 +47,39 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
   const { toolName, args } = pendingConsent;
   const config = CONSENT_CONFIG[toolName] ?? DEFAULT_CONFIG;
   const code = config.getCode(args);
+  const summary = getConsentSummary(toolName);
 
   return (
     <div className={styles.consentBanner}>
       <div className={styles.consentInfo}>
-        <div className={styles.consentTitle}>{config.title}</div>
+        <div className={styles.consentHeader}>
+          <div className={styles.consentBadge}>
+            <ExclamationCircleOutlined />
+            <span>Approval</span>
+          </div>
+          <div className={styles.consentTitleGroup}>
+            <div className={styles.consentTitle}>{config.title}</div>
+            <div className={styles.consentSubtitle}>{summary}</div>
+          </div>
+          <div className={styles.consentActions}>
+            <button
+              className={styles.consentApproveBtn}
+              onClick={onApprove}
+              title="Approve"
+              aria-label="Approve"
+            >
+              <CheckOutlined />
+            </button>
+            <button
+              className={styles.consentDenyBtn}
+              onClick={onDeny}
+              title="Deny"
+              aria-label="Deny"
+            >
+              <CloseOutlined />
+            </button>
+          </div>
+        </div>
         {code && (
           <div className={styles.consentCodePreview}>
             <SyntaxHighlighter
@@ -56,14 +92,6 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
             </SyntaxHighlighter>
           </div>
         )}
-      </div>
-      <div className={styles.consentActions}>
-        <button className={styles.consentApproveBtn} onClick={onApprove}>
-          Approve
-        </button>
-        <button className={styles.consentDenyBtn} onClick={onDeny}>
-          Deny
-        </button>
       </div>
     </div>
   );
