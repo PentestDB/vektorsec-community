@@ -95,13 +95,16 @@ const TerminalComponent = ({ show, readyToConnect }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, pathname]);
 
+  const maxHeight = typeof window !== "undefined" ? Math.floor(window.innerHeight * 0.6) : 400;
+  const clampedHeight = Math.min(Math.max(terminal_height ?? 200, 80), maxHeight);
+
   if (!show || !showTerminal) return null;
 
   return (
     <div className={styles.terminalPanel}>
       <ResizableBox
         className={styles.terminalContainer}
-        height={terminal_height ?? 200}
+        height={clampedHeight}
         resizeHandles={["n"]}
         handle={
           <div className={`${styles.resizeHandle} ${resizeActive ? styles.resizeActive : ""}`}>
@@ -113,7 +116,7 @@ const TerminalComponent = ({ show, readyToConnect }) => {
           setResizeActive(false);
           setTerminalHeight(data.size.height);
         }}
-        maxConstraints={[Infinity, typeof window !== "undefined" ? window.innerHeight - 100 : 500]}
+        maxConstraints={[Infinity, maxHeight]}
         minConstraints={[Infinity, 80]}
       >
         <section>
@@ -121,7 +124,7 @@ const TerminalComponent = ({ show, readyToConnect }) => {
             activeKey={active_terminal}
             onChange={(key) => setActiveTerminal(key)}
             className={styles.terminalTabs}
-            style={{ height: `${terminal_height ?? 200}px` }}
+            style={{ height: `${clampedHeight}px` }}
             items={sessions
               .filter((session) => !["vpn", "gui"].includes(session.type))
               .map((session) => ({

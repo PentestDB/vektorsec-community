@@ -36,6 +36,7 @@ function runSSHCommand(
   command: string,
   timeoutMs: number = 300_000,
   onChunk?: (chunk: string) => void,
+  abortSignal?: AbortSignal,
 ): Promise<{ output: string; exitCode: number }> {
   const sshConfig = buildSSHConfig();
 
@@ -44,6 +45,7 @@ function runSSHCommand(
     let exitCode = 0;
     const ssh = new SSHClient();
     let timer: NodeJS.Timeout | null = null;
+    let execStream: any = null;
     let resolved = false;
 
     const finish = (out: string, code: number) => {
@@ -54,17 +56,34 @@ function runSSHCommand(
       resolve({ output: out, exitCode: code });
     };
 
+    const onAbort = () => {
+      if (resolved) return;
+      if (execStream) {
+        execStream.destroy();
+      }
+      finish(output + "\n[ABORTED: command terminated by user]", 130);
+    };
+
+    if (abortSignal?.aborted) {
+      finish("", 130);
+      return;
+    }
+    abortSignal?.addEventListener("abort", onAbort);
+
     ssh
       .on("ready", () => {
         ssh.exec(command, (err: Error | undefined, stream: any) => {
           if (err) {
+            abortSignal?.removeEventListener("abort", onAbort);
             finish(`SSH exec error: ${err.message}`, 1);
             return;
           }
+          execStream = stream;
 
           if (timeoutMs > 0) {
             timer = setTimeout(() => {
               stream.destroy();
+              abortSignal?.removeEventListener("abort", onAbort);
               finish(
                 output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`,
                 124,
@@ -85,6 +104,7 @@ function runSSHCommand(
           });
 
           stream.on("close", (code: number | null) => {
+            abortSignal?.removeEventListener("abort", onAbort);
             exitCode = code ?? 0;
             finish(output, exitCode);
           });
@@ -93,6 +113,7 @@ function runSSHCommand(
       .on("error", (err: Error) => {
         if (resolved) return;
         resolved = true;
+        abortSignal?.removeEventListener("abort", onAbort);
         if (timer) clearTimeout(timer);
         reject(new SSHUnavailableError(`SSH connection error: ${err.message}`));
       })
@@ -115,11 +136,12 @@ function truncateOutput(output: string): string {
 function buildExecutionContext(
   sessionId: string,
   onChunk?: (chunk: string) => void,
+  abortSignal?: AbortSignal,
 ): ExecutionContext {
   return {
     sessionId,
     runCommand: (command: string, timeoutMs?: number) =>
-      runSSHCommand(command, timeoutMs, onChunk),
+      runSSHCommand(command, timeoutMs, onChunk, abortSignal),
     onOutput: onChunk,
   };
 }
@@ -128,6 +150,8 @@ export async function executeToolCall(
   sessionId: string,
   toolCall: ToolCallData,
   callbacks: ToolExecutionCallbacks,
+  abortSignal?: AbortSignal,
+  requireConsentForAllTools?: boolean,
 ): Promise<ToolExecutionResult> {
   const toolDef = toolRegistry.get(toolCall.name);
 
@@ -158,7 +182,7 @@ export async function executeToolCall(
     };
   }
 
-  if (toolDef.requiresConsent) {
+  if (requireConsentForAllTools || toolDef.requiresConsent) {
     callbacks.onConsentRequired(toolCall.id, toolCall.name, args);
     return {
       toolCallId: toolCall.id,
@@ -171,10 +195,21 @@ export async function executeToolCall(
 
   callbacks.onToolStart(toolCall.id, toolCall.name, args);
 
+  if (abortSignal?.aborted) {
+    callbacks.onToolError(toolCall.id, "Command aborted by user");
+    return {
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      result: { output: "Aborted by user", exitCode: 130 },
+      needsConsent: false,
+      needsManualExecution: false,
+    };
+  }
+
   try {
     const ctx = buildExecutionContext(sessionId, (chunk) => {
       callbacks.onToolOutput(toolCall.id, chunk);
-    });
+    }, abortSignal);
 
     const result = await toolDef.execute(args, ctx);
     result.output = truncateOutput(result.output);
@@ -220,9 +255,13 @@ export async function executeToolCalls(
   sessionId: string,
   toolCalls: ToolCallData[],
   callbacks: ToolExecutionCallbacks,
+  abortSignal?: AbortSignal,
+  requireConsentForAllTools?: boolean,
 ): Promise<ToolExecutionResult[]> {
   const results = await Promise.all(
-    toolCalls.map((tc) => executeToolCall(sessionId, tc, callbacks)),
+    toolCalls.map((tc) =>
+      executeToolCall(sessionId, tc, callbacks, abortSignal, requireConsentForAllTools),
+    ),
   );
   return results;
 }
@@ -233,6 +272,7 @@ export async function executeConsentedTool(
   toolName: string,
   args: Record<string, any>,
   callbacks: ToolExecutionCallbacks,
+  abortSignal?: AbortSignal,
 ): Promise<ToolResult> {
   const toolDef = toolRegistry.get(toolName);
   if (!toolDef) {
@@ -244,7 +284,7 @@ export async function executeConsentedTool(
   try {
     const ctx = buildExecutionContext(sessionId, (chunk) => {
       callbacks.onToolOutput(toolCallId, chunk);
-    });
+    }, abortSignal);
 
     const result = await toolDef.execute(args, ctx);
     result.output = truncateOutput(result.output);

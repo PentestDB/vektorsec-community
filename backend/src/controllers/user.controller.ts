@@ -122,6 +122,7 @@ export const getCapabilities = async (req: Request, res: Response) => {
       buckets: capabilityBuckets,
       selectedCapabilities: user.configs.capabilities ?? [],
       installedCapabilities: user.configs.installedCapabilities ?? [],
+      requireConsentForAllTools: user.configs.requireConsentForAllTools ?? false,
     });
   } catch (error) {
     console.log(error);
@@ -132,19 +133,24 @@ export const getCapabilities = async (req: Request, res: Response) => {
 export const updateCapabilities = async (req: Request, res: Response) => {
   try {
     const user = res.locals.user;
-    const { capabilities } = req.body;
+    const { capabilities, requireConsentForAllTools } = req.body;
 
-    if (!capabilities || !Array.isArray(capabilities)) {
-      return res.status(400).json({ message: "Invalid data" });
+    if (capabilities !== undefined) {
+      if (!Array.isArray(capabilities)) {
+        return res.status(400).json({ message: "Invalid capabilities data" });
+      }
+      user.configs.capabilities = capabilities;
+
+      const toolNames = capabilities.filter((name: string) => {
+        const cap = allCapabilities.find((c) => c.name === name);
+        return cap && cap.type === "binary";
+      });
+      user.configs.tools = toolNames;
     }
 
-    user.configs.capabilities = capabilities;
-
-    const toolNames = capabilities.filter((name: string) => {
-      const cap = allCapabilities.find((c) => c.name === name);
-      return cap && cap.type === "binary";
-    });
-    user.configs.tools = toolNames;
+    if (typeof requireConsentForAllTools === "boolean") {
+      user.configs.requireConsentForAllTools = requireConsentForAllTools;
+    }
 
     await user.save();
     return res.status(200).json({ message: "Capabilities updated" });

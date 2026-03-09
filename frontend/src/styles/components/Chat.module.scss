@@ -5,12 +5,14 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   position: relative;
   background: var(--bg-primary, #0a0a0a);
 }
 
 .messagesArea {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 1.5rem 2rem;
   display: flex;
@@ -59,7 +61,7 @@
 .message {
   display: flex;
   flex-direction: column;
-  max-width: 90%;
+  width: 100%;
   animation: fadeIn 0.2s ease;
 }
 
@@ -147,9 +149,7 @@
 /* ─── Tool Call Block ─────────────────────────────────────────── */
 
 .toolCallBlock {
-  align-self: flex-start;
   width: 100%;
-  max-width: 90%;
   margin: 0.25rem 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -170,6 +170,31 @@
 
   &:hover {
     background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.toolCallCopyBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--secondary-text, #666);
+  cursor: pointer;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--primary-text, #fff);
+  }
+
+  &.copied {
+    color: #52c41a;
   }
 }
 
@@ -221,15 +246,83 @@
   background: rgba(255, 77, 79, 0.1);
 }
 
-.toolCallOutput {
+.toolCallCodePreview {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 0.75rem;
-  max-height: 400px;
+  max-height: 300px;
   overflow: auto;
+  background: rgba(0, 0, 0, 0.25);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  code {
+    font-family: "JetBrains Mono", monospace !important;
+    background: transparent !important;
+  }
+
+  code span {
+    background: transparent !important;
+  }
+}
+
+.toolCallOutputSection {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.toolCallOutputHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-text, #666);
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--primary-text, #aaa);
+  }
+}
+
+.toolCallOutput {
+  padding: 0 0.75rem 0.5rem;
+  max-height: 300px;
+  overflow: auto;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
 
   pre {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-family: "JetBrains Mono", monospace;
     line-height: 1.5;
     color: var(--primary-text, #ccc);
@@ -242,8 +335,8 @@
 
 .consentBanner {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.75rem;
   padding: 1rem 1.5rem;
   background: rgba(250, 173, 20, 0.08);
   border: 1px solid rgba(250, 173, 20, 0.2);
@@ -259,17 +352,79 @@
       font-size: 0.82rem;
     }
 
-    .consentCommand {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.78rem;
-      color: var(--primary-text, #ccc);
-      margin-top: 0.25rem;
+    .consentCodePreview {
+      margin-top: 0.5rem;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      max-height: 300px;
+      overflow-y: auto;
+
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 2px;
+      }
+
+      pre {
+        margin: 0 !important;
+      }
+
+      code {
+        font-family: "JetBrains Mono", monospace !important;
+        background: transparent !important;
+      }
+
+      code span {
+        background: transparent !important;
+      }
     }
   }
 
   .consentActions {
     display: flex;
     gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  .consentApproveBtn,
+  .consentDenyBtn {
+    padding: 0.35rem 1rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .consentApproveBtn {
+    background: rgba(82, 196, 26, 0.15);
+    color: #52c41a;
+    border-color: rgba(82, 196, 26, 0.3);
+
+    &:hover {
+      background: rgba(82, 196, 26, 0.25);
+      border-color: rgba(82, 196, 26, 0.5);
+    }
+  }
+
+  .consentDenyBtn {
+    background: rgba(255, 77, 79, 0.1);
+    color: #ff6b6b;
+    border-color: rgba(255, 77, 79, 0.25);
+
+    &:hover {
+      background: rgba(255, 77, 79, 0.2);
+      border-color: rgba(255, 77, 79, 0.4);
+    }
   }
 }
 
@@ -377,6 +532,7 @@
 /* ─── Input Area ──────────────────────────────────────────────── */
 
 .inputArea {
+  flex-shrink: 0;
   padding: 1rem 2rem 1.5rem;
   border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   background: var(--bg-primary, #0a0a0a);
@@ -384,7 +540,7 @@
 
 .inputWrapper {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -406,7 +562,8 @@
     resize: none;
     outline: none;
     max-height: 150px;
-    min-height: 24px;
+    min-height: 32px;
+    padding: 0.2rem 0;
     font-family: inherit;
 
     &::placeholder {
@@ -440,21 +597,21 @@
 }
 
 .sendButton {
-  background: var(--accent-color, #4a9eff);
+  background: #4a9eff;
   color: #fff;
 
   &:hover:not(:disabled) {
-    filter: brightness(1.1);
+    background: #5aadff;
   }
 }
 
 .pauseButton {
-  background: rgba(255, 80, 80, 0.15);
+  background: rgba(255, 80, 80, 0.2);
   color: #ff6b6b;
-  border: 1px solid rgba(255, 80, 80, 0.3);
+  border: 1px solid rgba(255, 80, 80, 0.35);
 
   &:hover:not(:disabled) {
-    background: rgba(255, 80, 80, 0.25);
+    background: rgba(255, 80, 80, 0.3);
   }
 }
 
@@ -470,7 +627,10 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #555;
+
+    &.ready {
+      background: #52c41a;
+    }
 
     &.running {
       background: #52c41a;
@@ -485,6 +645,10 @@
       background: #faad14;
       animation: pulse 1.5s ease infinite;
     }
+  }
+
+  .statusReady {
+    color: #52c41a;
   }
 }
 

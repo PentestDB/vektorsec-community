@@ -15,6 +15,28 @@ import UserModel from "../models/User/User.model";
 const MAX_ITERATIONS = 25;
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
 
+// ─── Abort controller registry (for immediate pause) ───────────────────
+
+const abortControllers = new Map<string, AbortController>();
+
+export function registerAbortController(sessionId: string): AbortController {
+  const ctrl = new AbortController();
+  abortControllers.set(sessionId, ctrl);
+  return ctrl;
+}
+
+export function abortSession(sessionId: string): void {
+  const ctrl = abortControllers.get(sessionId);
+  if (ctrl) {
+    try {
+      ctrl.abort();
+    } catch {
+      // already aborted
+    }
+    abortControllers.delete(sessionId);
+  }
+}
+
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
 export interface SSEWriter {
@@ -145,6 +167,9 @@ export async function runAgentLoop(params: {
     sse.end();
     return;
   }
+
+  const user = await UserModel.findById(session.uid).lean();
+  const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
 
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
@@ -285,7 +310,13 @@ export async function runAgentLoop(params: {
         },
       };
 
-      const toolResults = await executeToolCalls(sessionId, assistantToolCalls, callbacks);
+      const toolResults = await executeToolCalls(
+        sessionId,
+        assistantToolCalls,
+        callbacks,
+        params.abortSignal,
+        requireConsentForAllTools,
+      );
 
       const needsConsent = toolResults.find((r) => r.needsConsent);
       if (needsConsent) {
@@ -355,14 +386,25 @@ export async function runAgentLoop(params: {
     }
 
     await appendMessages(sessionId, newMessages);
-    await setAgentState(sessionId, "idle");
-    sse.write("done", { message: "Agent turn completed", iterations: iteration });
+
+    if (params.abortSignal?.aborted) {
+      await setAgentState(sessionId, "paused");
+      sse.write("paused", { message: "Agent paused by user" });
+    } else {
+      await setAgentState(sessionId, "idle");
+      sse.write("done", { message: "Agent turn completed", iterations: iteration });
+    }
     sse.end();
   } catch (err: any) {
     console.error("[agent] Loop error:", err);
     await appendMessages(sessionId, newMessages);
-    await setAgentState(sessionId, "idle");
-    sse.write("error", { message: err.message ?? "Agent loop error" });
+    const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
+    await setAgentState(sessionId, isAbort ? "paused" : "idle");
+    if (isAbort) {
+      sse.write("paused", { message: "Agent paused by user" });
+    } else {
+      sse.write("error", { message: err.message ?? "Agent loop error" });
+    }
     sse.end();
   }
 }
@@ -374,8 +416,9 @@ export async function initAndRun(params: {
   userId: string;
   userMessage: string;
   sse: SSEWriter;
+  abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, userId, userMessage, sse } = params;
+  const { sessionId, userId, userMessage, sse, abortSignal } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -402,7 +445,7 @@ export async function initAndRun(params: {
 
   sse.write("user_message_ack", { id: userMsg.id });
 
-  await runAgentLoop({ sessionId, sse });
+  await runAgentLoop({ sessionId, sse, abortSignal });
 }
 
 // ─── Handle consent response and resume ──────────────────────────────
@@ -411,8 +454,9 @@ export async function handleConsent(params: {
   sessionId: string;
   approved: boolean;
   sse: SSEWriter;
+  abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, approved, sse } = params;
+  const { sessionId, approved, sse, abortSignal } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session || !session.pendingConsent) {
@@ -438,7 +482,7 @@ export async function handleConsent(params: {
     };
     await appendMessages(sessionId, [denialMsg]);
     await setAgentState(sessionId, "idle");
-    await runAgentLoop({ sessionId, sse });
+    await runAgentLoop({ sessionId, sse, abortSignal });
     return;
   }
 
@@ -451,7 +495,7 @@ export async function handleConsent(params: {
     onManualExecutionRequired() {},
   };
 
-  const result = await executeConsentedTool(sessionId, toolCallId, toolName, toolArgs, callbacks);
+  const result = await executeConsentedTool(sessionId, toolCallId, toolName, toolArgs, callbacks, abortSignal);
 
   const toolMsg: AgentMessageDoc = {
     id: uuidv4(),
@@ -464,7 +508,7 @@ export async function handleConsent(params: {
   };
   await appendMessages(sessionId, [toolMsg]);
 
-  await runAgentLoop({ sessionId, sse });
+  await runAgentLoop({ sessionId, sse, abortSignal });
 }
 
 // ─── Handle manual execution output submission ───────────────────────
@@ -473,8 +517,9 @@ export async function handleManualOutput(params: {
   sessionId: string;
   output: string;
   sse: SSEWriter;
+  abortSignal?: AbortSignal;
 }): Promise<void> {
-  const { sessionId, output, sse } = params;
+  const { sessionId, output, sse, abortSignal } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session || !session.pendingManualExecution) {
@@ -501,5 +546,5 @@ export async function handleManualOutput(params: {
 
   sse.write("tool_done", { id: toolCallId, exitCode: 0, outputLength: output.length });
 
-  await runAgentLoop({ sessionId, sse });
+  await runAgentLoop({ sessionId, sse, abortSignal });
 }

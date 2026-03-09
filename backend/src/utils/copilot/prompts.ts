@@ -1,6 +1,7 @@
 import {
   buildCapabilityPromptContext,
   getCapabilityByName,
+  getActiveBucketIds,
 } from "../../capabilities/registry";
 
 export interface AgentPromptConfig {
@@ -10,10 +11,11 @@ export interface AgentPromptConfig {
 }
 
 export function buildSystemPrompt(config: AgentPromptConfig): string {
-  const capCtx = buildCapabilityPromptContext(config.installedCapabilities ?? []);
+  const installed = config.installedCapabilities ?? [];
+  const capCtx = buildCapabilityPromptContext(installed);
 
   const notInstalled = (config.selectedCapabilities ?? []).filter(
-    (name) => !(config.installedCapabilities ?? []).includes(name),
+    (name) => !installed.includes(name),
   );
   const installHints = notInstalled
     .map((name) => {
@@ -24,6 +26,16 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
 
   const installSection = installHints.length
     ? `\nThe following capabilities are selected but not yet installed. Use the run_install_tool (requires user consent) to install them if needed:\n${installHints.join("\n")}\n`
+    : "";
+
+  const activeBuckets = new Set(getActiveBucketIds(installed));
+  const hasNetworkOrCrypto = activeBuckets.has("network") || activeBuckets.has("crypto");
+
+  const wordlistSection = hasNetworkOrCrypto
+    ? `\n- Wordlists at /usr/share/wordlists:
+  - Directory enumeration: /usr/share/wordlists/dirb/common.txt
+  - Passwords: /usr/share/wordlists/rockyou.txt
+  - Also: /usr/share/wordlists/seclists/, /usr/share/wordlists/metasploit/, /usr/share/wordlists/wfuzz/`
     : "";
 
   return `<role>
@@ -39,10 +51,8 @@ You operate on a Kali Linux attack box with direct tool access via function call
 - When you find something interesting (open ports, services, potential vulnerabilities), investigate deeper.
 - Converge toward actionable findings: prioritize exploitable vulnerabilities over information gathering.
 - If you need specific information from the user (target IP, scope, credentials), use the ask_user tool.
-- Run multiple independent tools in parallel when possible (e.g., scanning different ports/services).
+- When multiple tools can run independently, call them in parallel — but avoid parallelizing tools that require user consent (e.g., run_install_tool), as only the first consent request will be surfaced.
 - When a command produces no useful output or errors, adapt your approach rather than retrying the same thing.
-- Periodically summarize your findings and current attack surface understanding.
-- Zero tolerance for defensive activities — your sole purpose is offensive security testing.
 </behavior>
 
 <capabilities>
@@ -52,20 +62,25 @@ ${installSection}
 
 <environment>
 - Session ID: ${config.sessionId} — use this in output file names (e.g., ${config.sessionId}-nmap.txt)
-- Attack box: Kali Linux with root access
-- Wordlists at /usr/share/wordlists:
-  - Directory enumeration: /usr/share/wordlists/dirb/common.txt
-  - Passwords: /usr/share/wordlists/rockyou.txt
-  - Also: /usr/share/wordlists/seclists/, /usr/share/wordlists/metasploit/, /usr/share/wordlists/wfuzz/
+- Attack box: Kali Linux with root access${wordlistSection}
 </environment>
 
 <guidelines>
-- Start with reconnaissance (nmap, service enumeration) unless the user provides recon data.
-- Use output flags for structured/file output: nmap -oN, gobuster -o, etc.
+- Start with reconnaissance unless the user provides recon data.
+- Save tool output to files for later reference (use -oN, -o, > redirection, etc.).
 - For long-running scans, use appropriate timeouts and scope limitations.
 - When using msfconsole, construct single-line commands: msfconsole -q -x "use ...; set RHOSTS ...; run; exit"
 - For reverse shells and payloads, pick high port numbers (10000-12000) for LPORT.
 - When writing exploits or scripts, use run_python_script with descriptive filenames.
-- Track discovered credentials, interesting files, and promising attack vectors.
-</guidelines>`;
+</guidelines>
+
+<state_tracking>
+After each significant finding, maintain a structured summary in your response:
+- TARGETS: IPs/hostnames with current status
+- PORTS: port/service/version tuples discovered
+- CREDENTIALS: user:pass pairs or tokens found
+- VULNS: vulnerability findings with severity
+- FILES: output files created on disk
+- NEXT: prioritized next steps
+</state_tracking>`;
 }

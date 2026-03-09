@@ -32,11 +32,41 @@ function renderMarkdown(text) {
   });
 }
 
-export default function ChatMessage({ message }) {
+function findToolOutput(toolCallId, allMessages) {
+  if (!toolCallId || !allMessages) return null;
+  return allMessages.find(
+    (m) => m.role === "tool" && m.toolCallId === toolCallId,
+  );
+}
+
+const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
   const { role, content, streaming, isError, isSummary, toolCalls } = message;
 
   if (role === "tool") {
-    return <ToolCallBlock message={message} />;
+    const hasPairedAssistant = allMessages?.some(
+      (m) =>
+        m.role === "assistant" &&
+        m.toolCalls?.some((tc) => tc.id === message.toolCallId),
+    );
+    if (hasPairedAssistant) return null;
+
+    let enrichedMessage = message;
+    if (!message.args && message.toolCallId && allMessages) {
+      const assistantMsg = [...allMessages].reverse().find(
+        (m) =>
+          m.role === "assistant" &&
+          m.toolCalls?.some((tc) => tc.id === message.toolCallId),
+      );
+      if (assistantMsg) {
+        const tc = assistantMsg.toolCalls.find(
+          (tc) => tc.id === message.toolCallId,
+        );
+        if (tc) {
+          enrichedMessage = { ...message, args: tc.arguments };
+        }
+      }
+    }
+    return <ToolCallBlock message={enrichedMessage} />;
   }
 
   if (role === "system") {
@@ -69,30 +99,30 @@ export default function ChatMessage({ message }) {
             {renderMarkdown(content)}
           </div>
         )}
-        {toolCalls?.map((tc, i) => (
-          <div key={tc.id || i} className={styles.toolCallBlock}>
-            <div className={styles.toolCallHeader}>
-              <span className={styles.toolCallName}>
-                {tc.name}
-              </span>
-              <span className={styles.toolCallArgs}>
-                {typeof tc.arguments === "string"
-                  ? (() => {
-                      try {
-                        const parsed = JSON.parse(tc.arguments);
-                        return parsed.command ?? parsed.query ?? parsed.question ?? tc.arguments;
-                      } catch {
-                        return tc.arguments;
-                      }
-                    })()
-                  : ""}
-              </span>
-            </div>
-          </div>
-        ))}
+        {toolCalls?.map((tc) => {
+          const toolOutput = findToolOutput(tc.id, allMessages);
+          const toolMsg = toolOutput
+            ? {
+                ...toolOutput,
+                toolName: toolOutput.toolName || tc.name,
+                args: toolOutput.args || tc.arguments,
+              }
+            : {
+                id: `inline_${tc.id}`,
+                role: "tool",
+                toolCallId: tc.id,
+                toolName: tc.name,
+                args: tc.arguments,
+                content: "",
+                streaming: false,
+              };
+          return <ToolCallBlock key={tc.id} message={toolMsg} />;
+        })}
       </div>
     );
   }
 
   return null;
-}
+});
+
+export default ChatMessage;

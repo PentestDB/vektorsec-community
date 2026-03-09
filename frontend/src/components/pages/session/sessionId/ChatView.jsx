@@ -5,6 +5,7 @@ import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import ManualExecutionBlock from "./ManualExecutionBlock";
+import ConsentBanner from "./ConsentBanner";
 import useAgentStream from "@/hooks/useAgentStream";
 import {
   getSessionHistory,
@@ -25,6 +26,7 @@ export default function ChatView({ sessionId }) {
     pendingManualExecution,
     setPendingManualExecution,
     startStream,
+    abort,
     loadHistory,
   } = useAgentStream({
     sessionId,
@@ -75,13 +77,15 @@ export default function ChatView({ sessionId }) {
   const handlePause = useCallback(async () => {
     try {
       await pauseAgent({ sessionId });
+      abort();
     } catch (err) {
       notification.error({
         message: "Failed to pause",
         description: err?.response?.data?.message ?? "Something went wrong",
       });
+      abort();
     }
-  }, [sessionId]);
+  }, [sessionId, abort]);
 
   const handleConsent = useCallback(
     (approved) => {
@@ -118,36 +122,15 @@ export default function ChatView({ sessionId }) {
         )}
 
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
+          <ChatMessage key={msg.id} message={msg} allMessages={messages} />
         ))}
 
         {pendingConsent && agentState === "waiting_consent" && (
-          <div className={styles.consentBanner}>
-            <div className={styles.consentInfo}>
-              <div className={styles.consentTitle}>
-                Tool installation requires approval
-              </div>
-              <div className={styles.consentCommand}>
-                {pendingConsent.args?.command ?? pendingConsent.toolName}
-              </div>
-            </div>
-            <div className={styles.consentActions}>
-              <Button
-                type="primary"
-                size="small"
-                onClick={() => handleConsent(true)}
-              >
-                Approve
-              </Button>
-              <Button
-                size="small"
-                danger
-                onClick={() => handleConsent(false)}
-              >
-                Deny
-              </Button>
-            </div>
-          </div>
+          <ConsentBanner
+            pendingConsent={pendingConsent}
+            onApprove={() => handleConsent(true)}
+            onDeny={() => handleConsent(false)}
+          />
         )}
 
         {pendingManualExecution && agentState === "waiting_manual_execution" && (

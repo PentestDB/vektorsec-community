@@ -235,7 +235,9 @@ const SessionLayout = ({ children, params }) => {
               onClose={() => dispatch(updateDisclaimer(false))}
             />
           )}
-          {children}
+          <div className={styles.sessionContent}>
+            {children}
+          </div>
           <TerminalComponent
             show={status === "running" && !pathname.includes("/gui")}
             readyToConnect={readyToConnect}

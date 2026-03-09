@@ -52,6 +52,8 @@ export default function ChatInput({
             ? "Waiting for command output"
             : "Ready";
 
+  const isReady = !["running", "paused", "waiting_consent", "waiting_manual_execution"].includes(agentState);
+
   const statusClass =
     agentState === "running"
       ? styles.running
@@ -59,7 +61,7 @@ export default function ChatInput({
         ? styles.paused
         : agentState === "waiting_consent" || agentState === "waiting_manual_execution"
           ? styles.waitingConsent
-          : "";
+          : styles.ready;
 
   return (
     <div className={styles.inputArea}>
@@ -101,7 +103,7 @@ export default function ChatInput({
       </div>
       <div className={styles.statusBar}>
         <span className={`${styles.statusDot} ${statusClass}`} />
-        <span>{statusLabel}</span>
+        <span className={isReady ? styles.statusReady : ""}>{statusLabel}</span>
       </div>
     </div>
   );

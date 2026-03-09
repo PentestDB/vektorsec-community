@@ -10,10 +10,51 @@ export default function useAgentStream({ sessionId, onComplete }) {
   const controllerRef = useRef(null);
   const streamingAssistantRef = useRef(null);
   const toolCallAccRef = useRef({});
+  const toolOutputBufferRef = useRef({});
+  const toolOutputRafRef = useRef(null);
+  const thinkingBufferRef = useRef(null);
+  const thinkingRafRef = useRef(null);
+
+  const flushToolOutputBuffer = useCallback(() => {
+    const buffer = toolOutputBufferRef.current;
+    const ids = Object.keys(buffer);
+    if (ids.length === 0) return;
+
+    setMessages((prev) => {
+      let next = prev;
+      for (const id of ids) {
+        const chunk = buffer[id];
+        if (!chunk) continue;
+        next = next.map((m) =>
+          m.id === id ? { ...m, content: m.content + chunk } : m,
+        );
+      }
+      return next;
+    });
+    toolOutputBufferRef.current = {};
+    toolOutputRafRef.current = null;
+  }, []);
+
+  const flushThinkingBuffer = useCallback(() => {
+    const ref = streamingAssistantRef.current;
+    if (!ref || thinkingBufferRef.current === null) return;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === ref.id ? { ...m, content: ref.content } : m)),
+    );
+    thinkingBufferRef.current = null;
+    thinkingRafRef.current = null;
+  }, []);
 
   const flushAssistant = useCallback(() => {
     const ref = streamingAssistantRef.current;
     if (!ref) return;
+
+    if (thinkingRafRef.current) {
+      cancelAnimationFrame(thinkingRafRef.current);
+      thinkingRafRef.current = null;
+      thinkingBufferRef.current = null;
+    }
+
     setMessages((prev) => {
       const existing = prev.find((m) => m.id === ref.id);
       if (existing) {
@@ -52,10 +93,10 @@ export default function useAgentStream({ sessionId, onComplete }) {
             ]);
           }
           streamingAssistantRef.current.content += data.content;
-          const ref = streamingAssistantRef.current;
-          setMessages((prev) =>
-            prev.map((m) => (m.id === ref.id ? { ...m, content: ref.content } : m)),
-          );
+          thinkingBufferRef.current = true;
+          if (!thinkingRafRef.current) {
+            thinkingRafRef.current = requestAnimationFrame(flushThinkingBuffer);
+          }
         })
         .onEvent("tool_call_start", (data) => {
           toolCallAccRef.current[data.index] = {
@@ -103,15 +144,18 @@ export default function useAgentStream({ sessionId, onComplete }) {
           ]);
         })
         .onEvent("tool_output", (data) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === `tool_${data.id}`
-                ? { ...m, content: m.content + data.chunk }
-                : m,
-            ),
-          );
+          const key = `tool_${data.id}`;
+          toolOutputBufferRef.current[key] =
+            (toolOutputBufferRef.current[key] ?? "") + data.chunk;
+          if (!toolOutputRafRef.current) {
+            toolOutputRafRef.current = requestAnimationFrame(flushToolOutputBuffer);
+          }
         })
         .onEvent("tool_done", (data) => {
+          if (toolOutputRafRef.current) {
+            cancelAnimationFrame(toolOutputRafRef.current);
+            flushToolOutputBuffer();
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === `tool_${data.id}`
@@ -121,6 +165,11 @@ export default function useAgentStream({ sessionId, onComplete }) {
           );
         })
         .onEvent("tool_error", (data) => {
+          if (toolOutputRafRef.current) {
+            cancelAnimationFrame(toolOutputRafRef.current);
+            toolOutputBufferRef.current = {};
+            toolOutputRafRef.current = null;
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === `tool_${data.id}`
@@ -159,9 +208,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
             },
           ]);
         })
-        .onEvent("summary_done", () => {
-          // Summary completed, UI can show indicator
-        })
+        .onEvent("summary_done", () => {})
         .onEvent("paused", () => {
           flushAssistant();
           setAgentState("paused");
@@ -192,7 +239,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
           controllerRef.current = null;
         });
     },
-    [sessionId, flushAssistant, onComplete],
+    [sessionId, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, onComplete],
   );
 
   const abort = useCallback(() => {

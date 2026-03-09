@@ -243,7 +243,7 @@ function logResponse(config: ProviderConfig, elapsed: number, result: InvokeResu
 
 function buildCompletionConfig(
   config: ProviderConfig,
-  opts: InvokeOptions,
+  opts: InvokeOptions & { abortSignal?: AbortSignal },
   temperature: number,
   stream: boolean,
 ): any {

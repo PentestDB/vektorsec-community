@@ -1,4 +1,4 @@
-import { message, notification } from "antd";
+import { message, notification, Dropdown } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
@@ -13,12 +13,13 @@ import rect from "@/assets/sidebar/rect.svg";
 import { useDispatch, useSelector } from "react-redux";
 import { setRecon, updateCurrentSession } from "@/store/user.slice";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "react-query";
+import { useMutation, useQuery, useQueryClient } from "react-query";
 import { initiateNetcatSession } from "@/services/copilot.service";
+import { getCapabilities, updateCapabilities } from "@/services/user.service";
 import { updateSessions } from "@/store/user.slice";
 import { updateActiveTerminal } from "@/store/socket.slice";
 import { FiMonitor } from "react-icons/fi";
-import { TbPlus } from "react-icons/tb";
+import { TbPlus, TbChevronDown, TbCheck } from "react-icons/tb";
 import { v4 as uuidv4 } from "uuid";
 import { useState } from "react";
 import ToDoModal from "../pages/session/sessionId/ToDoModal";
@@ -29,6 +30,40 @@ const Sidebar = ({ sessionId }) => {
   const queryClient = useQueryClient();
 
   const [showTodo, setShowTodo] = useState(false);
+
+  const { data: capabilitiesData } = useQuery("capabilities", getCapabilities);
+  const requireConsent = capabilitiesData?.requireConsentForAllTools ?? false;
+
+  const updateCapabilitiesMutation = useMutation(updateCapabilities, {
+    onSuccess: () => {
+      message.success("Tool execution mode updated");
+      queryClient.invalidateQueries("capabilities");
+    },
+    onError: () => {
+      message.error("Failed to update tool execution mode");
+    },
+  });
+
+  const toolExecutionMenu = {
+    items: [
+      {
+        key: "auto",
+        label: "Auto run",
+        icon: !requireConsent ? <TbCheck size={14} /> : null,
+      },
+      {
+        key: "consent",
+        label: "Ask for consent before every tool call",
+        icon: requireConsent ? <TbCheck size={14} /> : null,
+      },
+    ].map((item) => ({
+      ...item,
+      onClick: () =>
+        updateCapabilitiesMutation.mutate({
+          requireConsentForAllTools: item.key === "consent",
+        }),
+    })),
+  };
 
   const { sessions, status, readyToConnect } = useSelector(
     (state) => state.user
@@ -140,6 +175,19 @@ const Sidebar = ({ sessionId }) => {
           <AiOutlineDoubleLeft />
           Exit Workspace
         </div>
+
+        <Dropdown
+          menu={toolExecutionMenu}
+          trigger={["click"]}
+          placement="bottomLeft"
+        >
+          <div className={styles.toolExecutionDropdown}>
+            <span className={styles.toolExecutionLabel}>
+              {requireConsent ? "Ask consent" : "Auto run"}
+            </span>
+            <TbChevronDown className={styles.toolExecutionChevron} />
+          </div>
+        </Dropdown>
 
         <div className={styles.newProcessGroup}>
           <div

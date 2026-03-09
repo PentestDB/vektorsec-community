@@ -10,6 +10,8 @@ import {
   handleManualOutput,
   runAgentLoop,
   setPaused,
+  registerAbortController,
+  abortSession,
 } from "../services/agent.service";
 
 export const createSession = async (req: Request, res: Response) => {
@@ -62,8 +64,10 @@ export const sendMessage = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
+    const abortCtrl = registerAbortController(sessionId);
 
     req.on("close", () => {
+      abortSession(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
@@ -72,6 +76,7 @@ export const sendMessage = async (req: Request, res: Response) => {
       userId,
       userMessage: message,
       sse,
+      abortSignal: abortCtrl.signal,
     });
   } catch (err: any) {
     console.error("[agent] sendMessage error:", err);
@@ -93,6 +98,7 @@ export const pauseAgent = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    abortSession(sessionId);
     await setPaused(sessionId, true);
 
     return res.status(200).json({ message: "Pause signal sent" });
@@ -119,17 +125,19 @@ export const resumeAgent = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
+    const abortCtrl = registerAbortController(sessionId);
 
     req.on("close", () => {
+      abortSession(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
     await setPaused(sessionId, false);
 
     if (message) {
-      await initAndRun({ sessionId, userId, userMessage: message, sse });
+      await initAndRun({ sessionId, userId, userMessage: message, sse, abortSignal: abortCtrl.signal });
     } else {
-      await runAgentLoop({ sessionId, sse });
+      await runAgentLoop({ sessionId, sse, abortSignal: abortCtrl.signal });
     }
   } catch (err: any) {
     console.error("[agent] resumeAgent error:", err);
@@ -156,12 +164,14 @@ export const respondToConsent = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
+    const abortCtrl = registerAbortController(sessionId);
 
     req.on("close", () => {
+      abortSession(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
-    await handleConsent({ sessionId, approved, sse });
+    await handleConsent({ sessionId, approved, sse, abortSignal: abortCtrl.signal });
   } catch (err: any) {
     console.error("[agent] respondToConsent error:", err);
     if (!res.headersSent) {
@@ -187,12 +197,14 @@ export const submitManualOutput = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
+    const abortCtrl = registerAbortController(sessionId);
 
     req.on("close", () => {
+      abortSession(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
-    await handleManualOutput({ sessionId, output, sse });
+    await handleManualOutput({ sessionId, output, sse, abortSignal: abortCtrl.signal });
   } catch (err: any) {
     console.error("[agent] submitManualOutput error:", err);
     if (!res.headersSent) {
