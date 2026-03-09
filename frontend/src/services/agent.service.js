@@ -45,6 +45,11 @@ export const submitManualOutput = async ({ sessionId, output }) => {
   return res.data;
 };
 
+export const getSlashCommands = async () => {
+  const res = await apiClient.get("/agent/slash-commands");
+  return res.data;
+};
+
 // Shell API
 export const getShellList = async (sessionId) => {
   const res = await apiClient.get(`/shell/${sessionId}/list`);

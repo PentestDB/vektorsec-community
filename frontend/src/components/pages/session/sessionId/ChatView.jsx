@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useCallback } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { useQuery } from "react-query";
 import { Button, notification } from "antd";
 import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
+import SlashCommandResult from "./SlashCommandResult";
 import ManualExecutionBlock from "./ManualExecutionBlock";
 import ConsentBanner from "./ConsentBanner";
 import SubagentBlock from "@/components/agent/SubagentBlock";
@@ -19,6 +21,7 @@ export default function ChatView({ sessionId }) {
 
   const {
     messages,
+    setMessages,
     agentState,
     setAgentState,
     pendingConsent,
@@ -80,11 +83,25 @@ export default function ChatView({ sessionId }) {
 
   const handleSend = useCallback(
     (message) => {
+      if (message.startsWith("/")) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uuidv4(),
+            role: "user",
+            content: message,
+            isSlashCommand: true,
+            timestamp: new Date(),
+          },
+        ]);
+        startStream({ message, endpoint: "slash-command" });
+        return;
+      }
       const endpoint =
         agentState === "paused" ? "resume" : "message";
       startStream({ message, endpoint });
     },
-    [agentState, startStream],
+    [agentState, startStream, setMessages],
   );
 
   const handlePause = useCallback(async () => {
@@ -137,6 +154,9 @@ export default function ChatView({ sessionId }) {
         {messages.map((msg) => {
           if (msg.role === "subagent") {
             return <SubagentBlock key={msg.id} message={msg} />;
+          }
+          if (msg.role === "slash_command_result") {
+            return <SlashCommandResult key={msg.id} message={msg} />;
           }
           return <ChatMessage key={msg.id} message={msg} allMessages={messages} />;
         })}

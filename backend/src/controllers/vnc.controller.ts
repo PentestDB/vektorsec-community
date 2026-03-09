@@ -3,6 +3,7 @@ import ssh2 from "ssh2";
 import { executeCommand, generateRandomPassword } from "../utils/fileUtils";
 import { buildSSHConfig } from "../utils/sshConfig";
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
+import { VNC_DISPLAY, VNC_RFBPORT, WEBSOCKIFY_PORT } from "../config/constants";
 
 const FIND_VNC_BIN = [
   'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec";',
@@ -71,10 +72,10 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
 
             // Ensure xstartup exists with DISPLAY export
             await exec(
-              `mkdir -p ~/.vnc && echo '#!/bin/bash\\nexport DISPLAY=:1\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
+              `mkdir -p ~/.vnc && echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup`
             );
 
-            // Kill all existing VNC/Xvfb for a clean start on :1
+            // Kill all existing VNC/Xvfb for a clean start
             await exec(
               "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
               "pkill -f x11vnc 2>/dev/null || true; " +
@@ -98,30 +99,31 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
             // Start VNC based on detected binary
             if (isXvncDirect) {
               await exec(
-                `${vncBin} :1 -geometry 1280x800 -depth 24 -rfbport 5901 ` +
+                `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
                 `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
                 `-pn > /dev/null 2>&1 &`
               );
               await new Promise((r) => setTimeout(r, 1500));
-              await exec("export DISPLAY=:1 && ~/.vnc/xstartup &");
+              await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
             } else if (isX11vnc) {
               await exec(
                 "command -v Xvfb >/dev/null 2>&1 || (export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
               );
-              await exec("Xvfb :1 -screen 0 1280x800x24 > /dev/null 2>&1 &");
-              await new Promise((r) => setTimeout(r, 1000));
-              await exec("export DISPLAY=:1 && ~/.vnc/xstartup &");
+              await exec(`Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`);
+              await new Promise((r) => setTimeout(r, 2000));
+              await exec(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
               await exec(
-                `x11vnc -display :1 -rfbport 5901 -passwd '${escapedPassword}' -forever -shared -noxdamage > /dev/null 2>&1 &`
+                `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escapedPassword}' -forever -shared -noxdamage > /dev/null 2>&1 &`
               );
+              await new Promise((r) => setTimeout(r, 1500));
             } else {
-              await exec(`${vncBin} -geometry 1280x800 -depth 24 :1`);
+              await exec(`${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`);
             }
 
             // Start websockify
-            await exec("pkill -f 'websockify.*9020' 2>/dev/null || true");
+            await exec(`pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`);
             await exec(
-              "websockify --web /usr/share/novnc/ 9020 localhost:5901 > /dev/null 2>&1 &"
+              `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`
             );
 
             await new Promise((resolve) => setTimeout(resolve, 1000));

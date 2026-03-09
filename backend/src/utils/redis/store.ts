@@ -40,12 +40,6 @@ export const getSessionData = async (sessionId: string) => {
 
     sessionData["isMainThread"] = Number(sessionData["isMainThread"]);
 
-    const todoJSON = sessionData["todo"];
-
-    if (todoJSON) {
-      sessionData["todo"] = JSON.parse(todoJSON);
-    }
-
     const contextJSON = sessionData["context"];
 
     if (contextJSON) {
@@ -102,7 +96,6 @@ export const getSessionData = async (sessionId: string) => {
       command: sessionData["command"],
       isMainThread: sessionData["isMainThread"],
       subprocess: sessionData["subprocess"],
-      todo: sessionData["todo"],
       netcat: sessionData["netcat"],
       previousContexts: sessionData["previousContexts"],
       mainSessionId: sessionData["main_session_id"],
@@ -121,7 +114,6 @@ export const storeSession = async ({
   sessionId,
   history,
   context,
-  todo,
   scans,
   command,
   mainSessionId,
@@ -131,7 +123,6 @@ export const storeSession = async ({
   sessionId: string;
   history?: HistoryData[];
   context?: ContextData;
-  todo?: any;
   command?: SingleCommandData;
   mainSessionId?: string;
   isMainThread?: number;
@@ -157,10 +148,6 @@ export const storeSession = async ({
 
     if (context) {
       await redisClient.HSET(sessionKey, "context", JSON.stringify(context));
-    }
-
-    if (todo) {
-      await redisClient.HSET(sessionKey, "todo", JSON.stringify(todo));
     }
 
     if (scans) {
@@ -196,14 +183,10 @@ export const isValidSession = async (sessionId: string) => {
     const sessionContextExists = await redisClient.exists(
       `${sessionKey}:context`
     );
-    const sessionTodoExists = await redisClient.exists(`${sessionKey}:todo`);
-
-    // await redisClient.disconnect();
     if (
       sessionExists &&
       sessionHistoryExists &&
-      sessionContextExists &&
-      sessionTodoExists
+      sessionContextExists
     ) {
       return true;
     }
@@ -348,36 +331,6 @@ export const updateSessionSummary = async ({ sessionId, context }: any) => {
   }
 
   // await redisClient.disconnect();
-};
-
-export const getSessionTodoList = async (sessionId: string) => {
-  // await connectToRedis();
-  const todo_list = await redisClient.hGet(`session:${sessionId}`, "todo");
-
-  if (!todo_list) {
-    return;
-  }
-
-  // await redisClient.disconnect();
-  return JSON.parse(todo_list);
-};
-
-export const updateSessionTodoList = async ({
-  sessionId,
-  todo,
-}: {
-  sessionId: string;
-  todo: any;
-}) => {
-  try {
-    await redisClient.HSET(
-      `session:${sessionId}`,
-      "todo",
-      JSON.stringify(todo)
-    );
-  } catch (err) {
-    console.log(err);
-  }
 };
 
 export const updateSessionCommandToNone = async (sessionId: string) => {
@@ -606,18 +559,6 @@ export const updateSessionContext = async ({
       JSON.stringify(item, null, 2)
     );
   }
-};
-
-export const updateSessionTodo = async ({
-  sessionId,
-  todo,
-}: {
-  sessionId: string;
-  todo: any;
-}) => {
-  const sessionKey = `session:${sessionId}`;
-
-  await redisClient.HSET(sessionKey, "todo", JSON.stringify(todo, null, 2));
 };
 
 export const clearSessionSubprocesses = async (sessionId: string) => {

@@ -32,7 +32,6 @@ export interface CopilotSessionData {
   command?: any;
   subprocess?: any;
   isMainThread: number;
-  todo: any;
   mainSessionId?: string;
   [key: string]: any;
 }

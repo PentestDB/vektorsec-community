@@ -295,6 +295,37 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
             ),
           );
         })
+        .onEvent("slash_command_ack", (data) => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `slash_ack_${Date.now()}`,
+              role: "system",
+              content: data.message,
+              isSlashCommand: true,
+              timestamp: new Date(),
+            },
+          ]);
+        })
+        .onEvent("slash_command_result", (data) => {
+          if (data.action === "clear_messages") {
+            setMessages([]);
+          }
+          if (data.action === "reset_state") {
+            setAgentState("idle");
+          }
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `slash_result_${Date.now()}`,
+              role: "slash_command_result",
+              command: data.command,
+              content: data.content,
+              success: data.success,
+              timestamp: new Date(),
+            },
+          ]);
+        })
         .onEvent("summarizing", (data) => {
           setMessages((prev) => [
             ...prev,

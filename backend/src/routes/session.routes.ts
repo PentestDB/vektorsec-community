@@ -8,7 +8,6 @@ import {
   initiateCopilotSession,
   finalizeSummary,
   storeToolOutputData,
-  finalizeTodoAndResetHistory,
   undoPreviousStep,
   takeActionOnResponse,
   uploadAnalysisFile,
@@ -30,8 +29,6 @@ router.post("/store-command-output", [verifySess], storeToolOutputData);
 router.post("/generate-summary", [verifySess], generateLoopSummary);
 
 router.post("/finalize-summary", [verifySess], finalizeSummary);
-
-router.post("/reset-loop-history", [verifySess], finalizeTodoAndResetHistory);
 
 router.post("/analyze-all-subprocess", [verifySess], analyzeAllSubprocessData);
 

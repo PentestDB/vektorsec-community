@@ -3,7 +3,6 @@ import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
 import vpn from "@/assets/sidebar/vpn.svg";
-import todo from "@/assets/sidebar/todo.svg";
 import quad from "@/assets/sidebar/quad.svg";
 import docs from "@/assets/sidebar/docs.svg";
 import help from "@/assets/sidebar/help.svg";
@@ -17,16 +16,11 @@ import { clearContext } from "@/services/agent.service";
 import { updateSessions } from "@/store/user.slice";
 import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
-import { useState } from "react";
-import ToDoModal from "../pages/session/sessionId/ToDoModal";
-
 const Sidebar = ({ sessionId }) => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
-
-  const [showTodo, setShowTodo] = useState(false);
 
   const { data: capabilitiesData } = useQuery("capabilities", getCapabilities);
   const requireConsent = capabilitiesData?.requireConsentForAllTools ?? false;
@@ -222,10 +216,6 @@ const Sidebar = ({ sessionId }) => {
             <MdOutlineDeleteSweep size={15} />
             Clear Context
           </div>
-          <div className={styles.options} onClick={() => setShowTodo(true)}>
-            <Image src={todo} width={14} height={14} alt="" />
-            Todo List
-          </div>
           <div
             className={styles.options}
             onClick={() => window.open("https://copilot-docs.bugbase.ai/", "_blank")}
@@ -242,12 +232,6 @@ const Sidebar = ({ sessionId }) => {
           </div>
         </div>
       </div>
-
-      <ToDoModal
-        show={showTodo}
-        setShow={setShowTodo}
-        session_id={sessionId}
-      />
 
     </div>
   );

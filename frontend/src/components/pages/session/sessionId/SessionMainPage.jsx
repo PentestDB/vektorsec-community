@@ -4,7 +4,6 @@ import React, { useState, useCallback } from "react";
 import { notification } from "antd";
 import ChatView from "./ChatView";
 import ShellPanel from "@/components/shells/ShellPanel";
-import ConnectionStatusBar from "@/components/agent/ConnectionStatusBar";
 import useShellSocket from "@/hooks/useShellSocket";
 import { reconnectSSH } from "@/services/agent.service";
 
@@ -76,12 +75,6 @@ const SessionMainPage = ({ session_id }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <ConnectionStatusBar
-        connectionStatus={connectionStatus}
-        wsConnected={wsConnected}
-        onReconnectSSH={handleReconnectSSH}
-      />
-
       <div
         id="session-split-container"
         style={{
@@ -108,13 +101,13 @@ const SessionMainPage = ({ session_id }) => {
           style={{
             width: 4,
             cursor: "col-resize",
-            backgroundColor: isDragging ? "#58a6ff" : "#21262d",
+            backgroundColor: isDragging ? "#8e35ff" : "rgba(255, 255, 255, 0.06)",
             transition: isDragging ? "none" : "background-color 0.15s ease",
             flexShrink: 0,
             zIndex: 10,
           }}
-          onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "#30363d"; }}
-          onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "#21262d"; }}
+          onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.12)"; }}
+          onMouseLeave={(e) => { if (!isDragging) e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.06)"; }}
         />
 
         {/* Shell Panel */}
@@ -135,6 +128,8 @@ const SessionMainPage = ({ session_id }) => {
             spawnShell={spawnShell}
             closeShell={closeShell}
             connectionStatus={connectionStatus}
+            wsConnected={wsConnected}
+            onReconnectSSH={handleReconnectSSH}
           />
         </div>
       </div>

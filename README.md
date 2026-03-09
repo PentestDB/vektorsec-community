@@ -18,10 +18,6 @@ Explore the [Github Wiki](https://github.com/bugbasesecurity/pentest-copilot/wik
 <img src="./assets/dashboard.jpeg">
 </p>
 
-<p align="center">
-<img src="./assets/todo-list.jpeg">
-</p>
-
 ## Pentest Copilot in action 🚀
 
 Here is a quick walkthrough of Pentest Copilot in action trying to PWN a TryHackMe machine [RootMe](https://tryhackme.com/room/rrootme) a boot2root challenge.
@@ -265,9 +261,9 @@ Below is a rundown of what Pentest Copilot brings to the table:
 | **Feature**                         | **Description**                                                                                                                    | **Feature**                  | **Description**                                                                                                                      |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | **🤖 AI-Powered Guidance**          | Leverages LLMs to assist users through all stages of penetration testing.                                                | **⚙️ Workflow Support**      | Facilitates reconnaissance, enumeration, vulnerability identification, privilege escalation, data extraction, and footprint cleanup. |
-| **📝 Todo List Management**         | Maintains a per-session todo list, helping organize prospective attack vectors for structured planning.                        | **🔧 Custom Tool Selection** | Enables users to choose preferred tools by visiting `/settings/tools`, which the copilot uses to generate commands.                  |
-| **🏴‍☠️ Exploit Box (Kali Container)** | Offers a Kali Linux container with pre-installed tools (modifiable via `./kali/tools.sh`), accessible via SSH, OpenVPN, and noVNC. | **💻 Integrated Terminal**   | Provides direct terminal access to the Kali container from the workspace page for command execution.                                 |
-| **🔒 VPN Integration**              | Allows users to upload custom OpenVPN config files and connect the Kali container to a VPN via the UI.                             | **🏠 Workspace Management**  | Supports creating and managing multiple workspaces, each with isolated sessions.                                                     |
+| **🔧 Custom Tool Selection**        | Enables users to choose preferred tools by visiting `/settings/tools`, which the copilot uses to generate commands.              | **💻 Integrated Terminal**   | Provides direct terminal access to the Kali container from the workspace page for command execution.                                 |
+| **🏴‍☠️ Exploit Box (Kali Container)** | Offers a Kali Linux container with pre-installed tools (modifiable via `./kali/tools.sh`), accessible via SSH, OpenVPN, and noVNC. | **🔒 VPN Integration**      | Allows users to upload custom OpenVPN config files and connect the Kali container to a VPN via the UI.                               |
+| **🏠 Workspace Management**         | Supports creating and managing multiple workspaces, each with isolated sessions.                                                   |                              |                                                                                                                                      |
 
 ## Frontend Technology
 

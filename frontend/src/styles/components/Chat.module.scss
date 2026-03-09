@@ -530,6 +530,168 @@
   justify-content: flex-end;
 }
 
+/* ─── Slash Command Menu ─────────────────────────────────────── */
+
+.slashMenu {
+  position: relative;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated, #141414);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  animation: slideUp 0.15s ease;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slashMenuHeader {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--secondary-text, #666);
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.slashMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.1s;
+
+  &:hover,
+  &.slashMenuItemActive {
+    background: rgba(74, 158, 255, 0.1);
+  }
+}
+
+.slashMenuCmd {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-color, #4a9eff);
+  min-width: 100px;
+}
+
+.slashMenuDesc {
+  font-size: 0.78rem;
+  color: var(--secondary-text, #888);
+}
+
+/* ─── Slash Command Result ───────────────────────────────────── */
+
+.slashCommandResult {
+  width: 100%;
+  margin: 0.35rem 0;
+  border: 1px solid rgba(74, 158, 255, 0.15);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(74, 158, 255, 0.03);
+  animation: fadeIn 0.2s ease;
+}
+
+.slashCommandHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: rgba(74, 158, 255, 0.06);
+  border-bottom: 1px solid rgba(74, 158, 255, 0.1);
+}
+
+.slashCommandIcon {
+  font-size: 0.85rem;
+}
+
+.slashCommandLabel {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-color, #4a9eff);
+}
+
+.slashCommandContent {
+  padding: 0.75rem 1rem;
+  font-size: 0.84rem;
+  line-height: 1.7;
+  color: var(--primary-text, #e0e0e0);
+
+  h1, h2, h3, h4 {
+    color: var(--primary-text, #fff);
+    margin: 0.6em 0 0.3em;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+
+  h1 { font-size: 1.1em; }
+  h2 { font-size: 1em; }
+  h3 { font-size: 0.92em; }
+  h4 { font-size: 0.88em; color: var(--secondary-text, #aaa); }
+
+  strong {
+    color: var(--primary-text, #fff);
+  }
+
+  code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.12em 0.35em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  pre {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+
+  :global(.list-item) {
+    display: block;
+    padding-left: 0.25rem;
+  }
+}
+
 /* ─── Input Area ──────────────────────────────────────────────── */
 
 .inputArea {

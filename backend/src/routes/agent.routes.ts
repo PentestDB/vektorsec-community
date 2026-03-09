@@ -12,6 +12,8 @@ import {
   deleteSession,
   getUserSessions,
   clearContext,
+  handleSlashCommand,
+  getSlashCommands,
 } from "../controllers/agent.controller";
 
 const router = express.Router();
@@ -28,5 +30,7 @@ router.post("/resume", [verifySess], resumeAgent);
 router.post("/consent", [verifySess], respondToConsent);
 router.post("/manual-output", [verifySess], submitManualOutput);
 router.post("/clear-context", [verifySess], clearContext);
+router.post("/slash-command", [verifySess], handleSlashCommand);
+router.get("/slash-commands", [verifySess], getSlashCommands);
 
 export { router as agentRoutes };

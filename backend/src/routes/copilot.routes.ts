@@ -10,8 +10,6 @@ import {
   downloadCommandFiles,
   getSessionHistory,
   deleteCopilotSession,
-  getTodoListSession,
-  updateTodoListSession,
 } from "../controllers/copilot.controller";
 
 const router = express.Router();
@@ -31,10 +29,6 @@ router.post("/create-subprocess", [verifySess], createCopilotSubprocess);
 router.post("/complete-subprocess", [verifySess], completeCopilotSubprocess);
 
 router.post("/delete-session", [verifySess], deleteCopilotSession);
-
-router.post("/get-session-todo-list", [verifySess], getTodoListSession);
-
-router.post("/update-todo-list", [verifySess], updateTodoListSession);
 
 // Command Files
 router.post("/download", [verifySess], downloadCommandFiles);

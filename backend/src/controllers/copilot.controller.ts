@@ -155,11 +155,5 @@ export const createCopilotSubprocess = async (_req: Request, res: Response) =>
 export const completeCopilotSubprocess = async (_req: Request, res: Response) =>
   res.status(410).json({ message: "Subprocesses replaced by parallel tool calls" });
 
-export const getTodoListSession = async (_req: Request, res: Response) =>
-  res.status(410).json({ message: "Todo list replaced by agentic planning" });
-
-export const updateTodoListSession = async (_req: Request, res: Response) =>
-  res.status(410).json({ message: "Todo list replaced by agentic planning" });
-
 export const downloadCommandFiles = async (_req: Request, res: Response) =>
   res.status(410).json({ message: "Download not yet available in new agent system" });

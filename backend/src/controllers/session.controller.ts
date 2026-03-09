@@ -16,7 +16,6 @@ export const finalizeCopilotCommand = stub;
 export const storeToolOutputData = stub;
 export const generateLoopSummary = stub;
 export const finalizeSummary = stub;
-export const finalizeTodoAndResetHistory = stub;
 export const undoPreviousStep = stub;
 export const takeActionOnResponse = stub;
 export const uploadAnalysisFile = stub;

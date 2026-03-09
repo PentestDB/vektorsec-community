@@ -57,7 +57,7 @@ const AUTO_SETUP_STEPS = [
   { title: "Connecting to exploit box", icon: <CloudServerOutlined /> },
   { title: "Installing VNC & GUI packages", icon: <SettingOutlined /> },
   { title: "Configuring VNC server", icon: <DesktopOutlined /> },
-  { title: "Starting VNC server (DISPLAY=:1)", icon: <PlayCircleOutlined /> },
+  { title: "Starting VNC server (DISPLAY=:89)", icon: <PlayCircleOutlined /> },
   { title: "Starting noVNC proxy", icon: <ApiOutlined /> },
 ];
 
@@ -163,26 +163,9 @@ const GUISettingsPage = () => {
     },
   });
 
-  if (isLoading) return <Loader />;
-
   const configured = data?.configured;
   const activeMode = setupMode ?? data?.mode ?? null;
   const isAutoRunning = autoSetupMutation.isLoading;
-
-  const handleManualSubmit = (values) => {
-    saveMutation.mutate({
-      mode: "manual",
-      host: values.host,
-      port: values.port || 9020,
-      password: values.password,
-      baseUrl: values.baseUrl?.trim() || undefined,
-    });
-  };
-
-
-  const handleAutoSetup = () => {
-    autoSetupMutation.mutate();
-  };
 
   useEffect(() => {
     if (data && (data.mode === "manual" || activeMode === "manual")) {
@@ -194,6 +177,22 @@ const GUISettingsPage = () => {
       });
     }
   }, [data, activeMode, form]);
+
+  if (isLoading) return <Loader />;
+
+  const handleManualSubmit = (values) => {
+    saveMutation.mutate({
+      mode: "manual",
+      host: values.host,
+      port: values.port || 9020,
+      password: values.password,
+      baseUrl: values.baseUrl?.trim() || undefined,
+    });
+  };
+
+  const handleAutoSetup = () => {
+    autoSetupMutation.mutate();
+  };
 
   return (
     <div className={styles.settingsContainer}>
@@ -527,8 +526,8 @@ const GUISettingsPage = () => {
             <InfoCircleOutlined />
             <span>
               This will install a VNC server (TigerVNC / Xvnc) and noVNC web client on
-              your exploit box via SSH. A lightweight GUI session (xterm) is started by
-              default; if Xfce or Openbox is available it will be used instead. DISPLAY=:1
+              your exploit box via SSH.               A lightweight GUI session (xterm) is started by
+              default; if Xfce or Openbox is available it will be used instead. DISPLAY=:89
               is always set. Requires internet access on the exploit box and SSH to be configured.
             </span>
           </div>

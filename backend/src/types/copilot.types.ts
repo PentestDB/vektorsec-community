@@ -40,6 +40,5 @@ export interface CopilotSessionData {
   context?: ContextData;
   command: CommandData;
   isMainThread: number;
-  todo: any;
   mainSessionId?: string;
 }

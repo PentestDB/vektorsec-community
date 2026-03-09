@@ -49,14 +49,6 @@ export const finalizeSummary = async (body) => {
   return res.data;
 };
 
-export const finalizeTodoAndResetHistory = async (body) => {
-  const token = body.cancelToken;
-  const res = await apiClient.post(`/session/reset-loop-history`, body, {
-    cancelToken: token,
-  });
-  return res.data;
-};
-
 export const analyzeAllSubprocess = async (body) => {
   const token = body.cancelToken;
   const res = await apiClient.post(`/session/analyze-all-subprocess`, body, {

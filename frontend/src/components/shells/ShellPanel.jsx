@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { ApiOutlined, DisconnectOutlined, ReloadOutlined } from "@ant-design/icons";
 import ShellTabBar from "./ShellTabBar";
 import ShellTerminal from "./ShellTerminal";
 
@@ -13,9 +14,13 @@ export default function ShellPanel({
   spawnShell,
   closeShell,
   connectionStatus,
+  wsConnected,
+  onReconnectSSH,
 }) {
   const [activeShellId, setActiveShellId] = useState(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const activeShells = shells.filter((s) => s.status === "active");
+  const sshOk = connectionStatus?.sshConnected;
 
   const currentShellId = activeShellId && activeShells.find((s) => s.shellId === activeShellId)
     ? activeShellId
@@ -34,35 +39,95 @@ export default function ShellPanel({
     }
   }, [activeShellId, activeShells, closeShell]);
 
+  const handleReconnect = async () => {
+    if (reconnecting || !onReconnectSSH) return;
+    setReconnecting(true);
+    try {
+      await onReconnectSSH();
+    } finally {
+      setTimeout(() => setReconnecting(false), 2000);
+    }
+  };
+
   return (
     <div style={{
       display: "flex",
       flexDirection: "column",
       height: "100%",
-      backgroundColor: "#0d1117",
-      borderLeft: "1px solid #21262d",
+      backgroundColor: "#111111",
+      borderLeft: "1px solid rgba(255, 255, 255, 0.06)",
     }}>
-      {/* Connection status bar */}
       <div style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        padding: "4px 10px",
-        backgroundColor: "#161b22",
-        borderBottom: "1px solid #30363d",
+        gap: 14,
+        padding: "5px 12px",
+        backgroundColor: "#0a0a0a",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
         fontSize: 11,
-        color: "#8b949e",
         fontFamily: "'JetBrains Mono', monospace",
+        color: "#a1a1a1",
       }}>
-        <span style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          backgroundColor: connectionStatus.sshConnected ? "#7ee787" : "#f85149",
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {sshOk ? (
+            <ApiOutlined style={{ color: "#10ca00", fontSize: 12 }} />
+          ) : (
+            <DisconnectOutlined style={{ color: "#ff3e3e", fontSize: 12 }} />
+          )}
+          <span style={{ color: sshOk ? "#10ca00" : "#ff3e3e" }}>
+            SSH {sshOk ? "Connected" : "Disconnected"}
+          </span>
+          {!sshOk && onReconnectSSH && (
+            <button
+              onClick={handleReconnect}
+              disabled={reconnecting}
+              style={{
+                background: "none",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: 4,
+                color: reconnecting ? "#6d6d6d" : "#8e35ff",
+                cursor: reconnecting ? "not-allowed" : "pointer",
+                padding: "1px 6px",
+                fontSize: 10,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                marginLeft: 2,
+              }}
+            >
+              <ReloadOutlined spin={reconnecting} style={{ fontSize: 9 }} />
+              {reconnecting ? "..." : "Reconnect"}
+            </button>
+          )}
+        </div>
+
+        <div style={{
+          width: 1,
+          height: 12,
+          backgroundColor: "rgba(255, 255, 255, 0.08)",
         }} />
-        <span>SSH {connectionStatus.sshConnected ? "Connected" : "Disconnected"}</span>
-        {connectionStatus.error && !connectionStatus.sshConnected && (
-          <span style={{ color: "#f85149", marginLeft: 4 }}>({connectionStatus.error})</span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            backgroundColor: wsConnected ? "#10ca00" : "#ff3e3e",
+          }} />
+          <span>WS {wsConnected ? "Connected" : "Disconnected"}</span>
+        </div>
+
+        {connectionStatus?.lastError && !sshOk && (
+          <>
+            <div style={{
+              width: 1,
+              height: 12,
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+            }} />
+            <span style={{ color: "#ff3e3e" }}>
+              {connectionStatus.lastError}
+            </span>
+          </>
         )}
       </div>
 
@@ -90,7 +155,7 @@ export default function ShellPanel({
             alignItems: "center",
             justifyContent: "center",
             height: "100%",
-            color: "#484f58",
+            color: "#6d6d6d",
             fontSize: 14,
             fontFamily: "'JetBrains Mono', monospace",
             flexDirection: "column",
@@ -102,12 +167,15 @@ export default function ShellPanel({
               style={{
                 padding: "6px 16px",
                 borderRadius: 6,
-                border: "1px solid #30363d",
-                backgroundColor: "#21262d",
-                color: "#c9d1d9",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                backgroundColor: "rgba(142, 53, 255, 0.1)",
+                color: "#ffffff",
                 cursor: "pointer",
                 fontSize: 13,
+                transition: "all 150ms ease",
               }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(142, 53, 255, 0.2)"}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(142, 53, 255, 0.1)"}
             >
               Spawn Shell
             </button>

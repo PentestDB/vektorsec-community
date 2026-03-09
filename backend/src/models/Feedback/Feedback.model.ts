@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 
 export interface loopHistoryDoc {
-  stepType: "init" | "command" | "output" | "summary" | "todo";
+  stepType: "init" | "command" | "output" | "summary";
   status: "not-started" | "processing" | "pending" | "completed";
   data: {
     content?: string;

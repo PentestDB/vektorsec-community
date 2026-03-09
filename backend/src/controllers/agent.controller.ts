@@ -13,6 +13,7 @@ import {
   registerAbortController,
   abortSession,
 } from "../services/agent.service";
+import { parseSlashCommand, executeSlashCommand, matchCommands, SLASH_COMMANDS } from "../services/slash-commands";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -327,6 +328,44 @@ export const clearContext = async (req: Request, res: Response) => {
     console.error("[agent] clearContext error:", err);
     return res.status(400).json({ message: "Failed to clear context" });
   }
+};
+
+export const handleSlashCommand = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId, message } = req.body;
+
+    if (!sessionId || !message) {
+      return res.status(400).json({ message: "sessionId and message are required" });
+    }
+
+    const parsed = parseSlashCommand(message);
+    if (!parsed) {
+      return res.status(400).json({ message: "Not a valid slash command" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const sse = createSSEWriter(res);
+
+    await executeSlashCommand({
+      sessionId,
+      userId,
+      command: parsed.command,
+      args: parsed.args,
+      sse,
+    });
+  } catch (err: any) {
+    console.error("[agent] handleSlashCommand error:", err);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: err.message ?? "Slash command error" });
+    }
+  }
+};
+
+export const getSlashCommands = async (_req: Request, res: Response) => {
+  return res.status(200).json(SLASH_COMMANDS);
 };
 
 export const getUserSessions = async (req: Request, res: Response) => {

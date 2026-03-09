@@ -48,16 +48,6 @@ export const getSessionInfo = async (body) => {
   return res.data;
 };
 
-export const getSessionTodoList = async (body) => {
-  const res = await apiClient.post(`/copilot/get-session-todo-list`, body);
-  return res.data;
-};
-
-export const updateSessionTodoList = async (body) => {
-  const res = await apiClient.post(`/copilot/update-todo-list`, body);
-  return res.data;
-};
-
 export const completeSubprocess = async ({ session_id }) => {
   const res = await apiClient.post(`/copilot/complete-subprocess`, {
     session_id,
