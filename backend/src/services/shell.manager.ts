@@ -222,7 +222,14 @@ export class ShellManager extends EventEmitter {
         return reject(new Error("SSH not connected"));
       }
 
-      if (shell.type === "pty") {
+      if (shell.type === "pty" && shell.purpose === "exploit-box") {
+        const cmd = `mkdir -p ${WORKSPACE_DIR} && cd ${WORKSPACE_DIR} && exec $SHELL`;
+        this.sshConnection.exec(cmd, { pty: { term: "xterm-256color", cols: 200, rows: 50 } }, (err, channel) => {
+          if (err) return reject(err);
+          this.wireChannel(shell, channel);
+          resolve();
+        });
+      } else if (shell.type === "pty") {
         this.sshConnection.shell({ term: "xterm-256color", cols: 200, rows: 50 }, (err, channel) => {
           if (err) return reject(err);
           this.wireChannel(shell, channel);
@@ -294,10 +301,6 @@ export class ShellManager extends EventEmitter {
 
     this.shells.set(shellId, shell);
     await this.openChannel(shell);
-
-    if (purpose === "exploit-box" && shell.channel) {
-      shell.channel.write(`cd ${WORKSPACE_DIR}\n`);
-    }
 
     this.emit("shell_created", {
       shellId,
