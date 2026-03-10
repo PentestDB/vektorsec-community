@@ -14,6 +14,7 @@ import {
   saveUserInformation,
   updateCapabilities,
   updateModelConfig,
+  updateSafetyProtections,
   updateSSHConfig,
   updateToolsPreference,
   updateUserProfile,
@@ -65,6 +66,7 @@ router.post("/detect-capabilities", [verifySess], detectCapabilities);
 
 router.get("/get-ssh-config", [verifySess], getSSHConfig);
 router.post("/update-ssh-config", [verifySess], updateSSHConfig);
+router.post("/update-safety-protections", [verifySess], updateSafetyProtections);
 
 router.get("/get-vnc-config", [verifySess], getVNCConfig);
 router.post("/update-vnc-config", [verifySess], updateVNCConfig);

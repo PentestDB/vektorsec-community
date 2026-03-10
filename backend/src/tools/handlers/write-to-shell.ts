@@ -1,4 +1,5 @@
 import { ToolDefinition } from "../types";
+import { isDangerousShellInput } from "../../utils/commandSafety";
 
 const writeToShell: ToolDefinition = {
   name: "write_to_shell",
@@ -19,6 +20,13 @@ const writeToShell: ToolDefinition = {
       },
     },
     required: ["shell_id", "input"],
+  },
+  shouldRequireConsent(args, ctx) {
+    const shellInfo = ctx.getShellInfo(args.shell_id);
+    if (!shellInfo || shellInfo.purpose === "reverse-shell" || shellInfo.purpose === "listener") {
+      return false;
+    }
+    return isDangerousShellInput(args.input).dangerous;
   },
   async execute(args, ctx) {
     const { shell_id, input } = args;

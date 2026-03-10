@@ -210,6 +210,7 @@ export async function runAgentLoop(params: {
 
   const user = await UserModel.findById(session.uid).lean();
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
+  const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
   const disabledAgentTools: string[] = session.disabledAgentTools ?? [];
 
   await setAgentState(sessionId, "running");
@@ -406,8 +407,8 @@ export async function runAgentLoop(params: {
         onToolError(id, error) {
           sse.write("tool_error", { id, error });
         },
-        onConsentRequired(id, name, args) {
-          sse.write("consent_required", { id, name, args });
+        onConsentRequired(id, name, args, safetyBlock) {
+          sse.write("consent_required", { id, name, args, safetyBlock: safetyBlock ?? false });
         },
       };
 
@@ -417,6 +418,7 @@ export async function runAgentLoop(params: {
         callbacks,
         executionCtx,
         requireConsentForAllTools,
+        disableSafetyProtections,
       );
 
       // Track spawned subagents

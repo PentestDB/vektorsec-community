@@ -131,7 +131,9 @@ ${installSection}
 - Date: ${date} (${day})
 - Time: ${time} ${tz}
 - Session ID: ${config.sessionId} — use this in output file names (e.g., ${config.sessionId}-nmap.txt)
-- Attack box: Kali Linux with root access${wordlistSection}
+- Attack box: Kali Linux with root access
+- Working directory: ~/pentest-workspace — all commands run here by default. Files, scripts, and tool output are stored in this directory. Do NOT delete or write outside this workspace on the attack box.
+- For reverse shells on target machines, you may operate from any directory. When spawning a shell for a reverse connection, use purpose "reverse-shell".${wordlistSection}
 </environment>
 
 ${burpSection}<guidelines>
@@ -142,6 +144,7 @@ ${burpSection}<guidelines>
 - For reverse shells and payloads, pick high port numbers (10000-12000) for LPORT.
 - When writing exploits or scripts, use run_python_script with descriptive filenames.
 - To install a missing tool, call run_install_tool with the tool name — do NOT construct install commands yourself.
+- Destructive system commands (rm -rf /, disk wipes, shutdowns) are blocked and require explicit user approval regardless of auto-run settings.
 </guidelines>
 
 <state_tracking>

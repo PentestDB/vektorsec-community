@@ -3,11 +3,14 @@ import { EventEmitter } from "events";
 import { v4 as uuidv4 } from "uuid";
 import { buildSSHConfig, SSHConfig } from "../utils/sshConfig";
 import { ShellType, ShellCreator } from "../models/Sessions/Sessions.model";
+import { WORKSPACE_DIR } from "../utils/commandSafety";
 
 const RING_BUFFER_MAX = 256 * 1024; // 256KB per shell
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
+
+export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
 
 export interface ShellInfo {
   shellId: string;
@@ -16,6 +19,7 @@ export interface ShellInfo {
   status: "active" | "closed";
   createdBy: ShellCreator;
   subagentId?: string;
+  purpose: ShellPurpose;
   createdAt: Date;
   bufferLength: number;
 }
@@ -25,6 +29,7 @@ export interface ShellSpawnOptions {
   type?: ShellType;
   createdBy?: ShellCreator;
   subagentId?: string;
+  purpose?: ShellPurpose;
 }
 
 class RingBuffer {
@@ -77,6 +82,7 @@ interface ManagedShell {
   outputBuffer: RingBuffer;
   createdBy: ShellCreator;
   subagentId?: string;
+  purpose: ShellPurpose;
   createdAt: Date;
 }
 
@@ -118,6 +124,9 @@ export class ShellManager extends EventEmitter {
         this.connecting = false;
         this.reconnectAttempt = 0;
         console.log(`[ShellManager:${this.sessionId}] SSH connected`);
+        ssh.exec(`mkdir -p ${WORKSPACE_DIR}`, (err) => {
+          if (err) console.warn(`[ShellManager:${this.sessionId}] Failed to create workspace dir:`, err.message);
+        });
         this.emit("connection_status", { sshConnected: true });
         resolve();
       });
@@ -269,6 +278,7 @@ export class ShellManager extends EventEmitter {
     }
 
     const shellId = `sh_${uuidv4().slice(0, 8)}`;
+    const purpose = opts.purpose ?? "exploit-box";
     const shell: ManagedShell = {
       shellId,
       label: opts.label,
@@ -278,11 +288,16 @@ export class ShellManager extends EventEmitter {
       outputBuffer: new RingBuffer(),
       createdBy: opts.createdBy ?? "agent",
       subagentId: opts.subagentId,
+      purpose,
       createdAt: new Date(),
     };
 
     this.shells.set(shellId, shell);
     await this.openChannel(shell);
+
+    if (purpose === "exploit-box" && shell.channel) {
+      shell.channel.write(`cd ${WORKSPACE_DIR}\n`);
+    }
 
     this.emit("shell_created", {
       shellId,
@@ -290,6 +305,7 @@ export class ShellManager extends EventEmitter {
       type: shell.type,
       createdBy: shell.createdBy,
       subagentId: shell.subagentId,
+      purpose: shell.purpose,
     });
 
     return shellId;
@@ -409,6 +425,7 @@ export class ShellManager extends EventEmitter {
       status: s.status,
       createdBy: s.createdBy,
       subagentId: s.subagentId,
+      purpose: s.purpose,
       createdAt: s.createdAt,
       bufferLength: s.outputBuffer.length,
     }));
@@ -432,6 +449,7 @@ export class ShellManager extends EventEmitter {
       status: s.status,
       createdBy: s.createdBy,
       subagentId: s.subagentId,
+      purpose: s.purpose,
       createdAt: s.createdAt,
       bufferLength: s.outputBuffer.length,
     };

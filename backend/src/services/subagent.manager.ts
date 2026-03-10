@@ -8,6 +8,7 @@ import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { ExecutionContext, ToolResult } from "../tools/types";
+import UserModel from "../models/User/User.model";
 
 const MAX_SUBAGENT_ITERATIONS = 15;
 const MAX_SUBAGENT_WALL_CLOCK_MS = 10 * 60 * 1000; // 10 minutes
@@ -171,10 +172,11 @@ export class SubagentManager extends EventEmitter {
       agentId: subagentId,
       runCommand: (cmd, timeoutMs) =>
         this.shellManager.execInShell(cmd, timeoutMs, onChunk, abortSignal),
-      spawnShell: async (label, type) => {
+      spawnShell: async (label, type, purpose) => {
         const id = await this.shellManager.spawnShell({
           label: `[${subagentId}] ${label}`,
           type,
+          purpose,
           createdBy: "subagent",
           subagentId,
         });
@@ -191,6 +193,7 @@ export class SubagentManager extends EventEmitter {
         Promise.resolve(this.shellManager.readOutput(shellId, fromOffset)),
       closeShell: (shellId) => this.shellManager.closeShell(shellId),
       listShells: () => this.shellManager.getShellList(),
+      getShellInfo: (shellId) => this.shellManager.getShell(shellId),
       onOutput: onChunk,
     });
 
@@ -307,6 +310,30 @@ export class SubagentManager extends EventEmitter {
             continue;
           }
 
+          const user = await UserModel.findById(userId).lean();
+          const disableSafety = user?.configs?.disableSafetyProtections ?? false;
+
+          const ctx = buildCtx((chunk) => {
+            sse.write("subagent_progress", {
+              subagentId,
+              type: "tool_output",
+              content: chunk,
+            });
+          });
+
+          if (!disableSafety && toolDef.shouldRequireConsent?.(args, ctx)) {
+            messages.push({
+              id: uuidv4(),
+              role: "tool",
+              content: "Blocked: this command was flagged as potentially destructive. Subagents cannot execute dangerous commands. Use a different approach or ask the main agent to run this with user approval.",
+              toolCallId: tc.id,
+              toolName: tc.name,
+              timestamp: new Date(),
+              turnIndex: 0,
+            });
+            continue;
+          }
+
           sse.write("subagent_progress", {
             subagentId,
             type: "tool_start",
@@ -314,14 +341,6 @@ export class SubagentManager extends EventEmitter {
           });
 
           try {
-            const ctx = buildCtx((chunk) => {
-              sse.write("subagent_progress", {
-                subagentId,
-                type: "tool_output",
-                content: chunk,
-              });
-            });
-
             const toolResult = await toolDef.execute(args, ctx);
             toolResult.output = truncateOutput(toolResult.output);
 

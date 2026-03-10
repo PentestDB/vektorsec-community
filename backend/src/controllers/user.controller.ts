@@ -1239,6 +1239,7 @@ export const repairVNC = async (req: Request, res: Response) => {
 export const getSSHConfig = async (_req: Request, res: Response) => {
   try {
     const env = readEnvFile();
+    const user = res.locals.user;
 
     return res.status(200).json({
       host: env.SSH_HOST || "",
@@ -1248,6 +1249,7 @@ export const getSSHConfig = async (_req: Request, res: Response) => {
       password: env.SSH_PASSWORD || "",
       hasPrivateKey: !!env.SSH_PRIVATE_KEY,
       configured: !!(env.SSH_HOST && env.SSH_USERNAME),
+      disableSafetyProtections: user?.configs?.disableSafetyProtections ?? false,
     });
   } catch (error) {
     console.log(error);
@@ -1257,7 +1259,7 @@ export const getSSHConfig = async (_req: Request, res: Response) => {
 
 export const updateSSHConfig = async (req: Request, res: Response) => {
   try {
-    const { host, port, username, authMethod, password, privateKeyPath, passphrase } = req.body;
+    const { host, port, username, authMethod, password, privateKeyPath, passphrase, disableSafetyProtections } = req.body;
 
     if (!host || !username) {
       return res.status(400).json({ message: "Host and username are required" });
@@ -1282,10 +1284,35 @@ export const updateSSHConfig = async (req: Request, res: Response) => {
 
     updateEnvVars(updates);
 
+    if (typeof disableSafetyProtections === "boolean") {
+      const user = res.locals.user;
+      user.configs.disableSafetyProtections = disableSafetyProtections;
+      await user.save();
+    }
+
     return res.status(200).json({ message: "SSH configuration updated" });
   } catch (error) {
     console.log(error);
     return res.status(400).json({ message: "Failed to update SSH config" });
+  }
+};
+
+export const updateSafetyProtections = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    const { disableSafetyProtections } = req.body;
+
+    if (typeof disableSafetyProtections !== "boolean") {
+      return res.status(400).json({ message: "disableSafetyProtections must be a boolean" });
+    }
+
+    user.configs.disableSafetyProtections = disableSafetyProtections;
+    await user.save();
+
+    return res.status(200).json({ message: "Safety protections updated", disableSafetyProtections });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update safety protections" });
   }
 };
 

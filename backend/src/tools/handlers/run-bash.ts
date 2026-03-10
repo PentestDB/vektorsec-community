@@ -1,4 +1,5 @@
 import { ToolDefinition } from "../types";
+import { isDangerousCommand, WORKSPACE_DIR } from "../../utils/commandSafety";
 
 const runBash: ToolDefinition = {
   name: "run_bash",
@@ -23,12 +24,17 @@ const runBash: ToolDefinition = {
     required: ["command"],
   },
   timeoutMs: 300_000,
+  shouldRequireConsent(args) {
+    return isDangerousCommand(args.command).dangerous;
+  },
   async execute(args, ctx) {
     const command = args.command;
     if (!command) return { output: "Error: no command provided", exitCode: 1 };
 
+    const sandboxedCommand = `cd ${WORKSPACE_DIR} && ${command}`;
+
     const timeoutMs = args.timeout_seconds ? args.timeout_seconds * 1000 : this.timeoutMs;
-    const { output, exitCode } = await ctx.runCommand(command, timeoutMs);
+    const { output, exitCode } = await ctx.runCommand(sandboxedCommand, timeoutMs);
 
     const files: string[] = [];
     const redirectMatch = command.match(/-o\w?\s+(\S+)|>\s*(\S+)/);

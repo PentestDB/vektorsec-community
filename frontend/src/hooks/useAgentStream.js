@@ -295,6 +295,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
             toolCallId: data.id,
             toolName: data.name,
             args: data.args,
+            safetyBlock: data.safetyBlock ?? false,
           });
           setAgentState("waiting_consent");
         })

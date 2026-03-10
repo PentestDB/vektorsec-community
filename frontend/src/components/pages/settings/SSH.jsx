@@ -13,6 +13,7 @@ import {
   Divider,
   Tooltip,
   Button,
+  Switch,
 } from "antd";
 import {
   CheckCircleFilled,
@@ -25,7 +26,7 @@ import Loader from "@/components/common/loader/Loader";
 import SSHTestTerminalModal from "./SSHTestTerminalModal";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { getSSHConfig, updateSSHConfig } from "@/services/user.service";
+import { getSSHConfig, updateSSHConfig, updateSafetyProtections } from "@/services/user.service";
 
 const SSHPage = () => {
   const queryClient = useQueryClient();
@@ -35,6 +36,7 @@ const SSHPage = () => {
   const [authMethod, setAuthMethod] = useState("password");
   const [saving, setSaving] = useState(false);
   const [testModalOpen, setTestModalOpen] = useState(false);
+  const [safetyDisabled, setSafetyDisabled] = useState(false);
 
   useEffect(() => {
     if (data) {
@@ -45,8 +47,25 @@ const SSHPage = () => {
         authMethod: data.authMethod || "password",
       });
       setAuthMethod(data.authMethod || "password");
+      setSafetyDisabled(data.disableSafetyProtections ?? false);
     }
   }, [data, form]);
+
+  const safetyMutation = useMutation(updateSafetyProtections, {
+    onSuccess: (_, variables) => {
+      setSafetyDisabled(variables.disableSafetyProtections);
+      queryClient.invalidateQueries("ssh-config");
+      message.success(
+        variables.disableSafetyProtections
+          ? "Safety protections disabled"
+          : "Safety protections enabled"
+      );
+    },
+    onError: (err) => {
+      setSafetyDisabled(!safetyDisabled);
+      message.error(err?.response?.data?.message || "Failed to update safety protections");
+    },
+  });
 
   const saveMutation = useMutation(updateSSHConfig, {
     onSuccess: () => {
@@ -221,6 +240,33 @@ const SSHPage = () => {
           </PrimaryButton>
         </div>
       </Form>
+
+      <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
+
+      <div className={styles.safetySection}>
+        <div className={styles.safetySectionHeader}>
+          <div>
+            <div className={styles.safetySectionTitle}>
+              <WarningOutlined style={{ color: safetyDisabled ? "#ff4d4f" : "var(--secondary-text)" }} />
+              Disable Safety Protections
+            </div>
+            <div className={styles.safetySectionDesc}>
+              When enabled, destructive commands (<code>rm -rf /</code>, disk wipes, system shutdowns, etc.)
+              will execute without confirmation, even in auto-run mode.
+              The workspace directory (<code>~/pentest-workspace</code>) is still used.
+            </div>
+          </div>
+          <Switch
+            checked={safetyDisabled}
+            loading={safetyMutation.isLoading}
+            onChange={(checked) => {
+              setSafetyDisabled(checked);
+              safetyMutation.mutate({ disableSafetyProtections: checked });
+            }}
+            className={safetyDisabled ? styles.dangerSwitch : undefined}
+          />
+        </div>
+      </div>
 
       <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
 

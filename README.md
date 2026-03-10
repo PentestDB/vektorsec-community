@@ -31,6 +31,7 @@ https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Features](#features)
+- [Safety and Sandbox](#safety-and-sandbox)
 - [System Requirements](#system-requirements)
 - [Local Development](#local-development)
 - [Contributing](#contributing)
@@ -296,6 +297,47 @@ To run Pentest Copilot effectively, your host machine should meet the following 
 | Browser Agent | Agentic browser automation via Magnitude for login testing, form interaction, and DOM extraction. Uses a separate model. Configure at Settings > Browser Agent. |
 | VNC / GUI | Graphical access to the Kali desktop via noVNC. Manual mode (external VNC) or auto mode (provision VNC on exploit box). Configure at Settings > GUI. |
 | Google Search | Optional web search tool for the AI. Requires Google API key and Custom Search Engine ID. |
+
+## Safety and Sandbox
+
+Pentest Copilot includes safety mechanisms to protect the exploit box (attack machine) from accidental destructive operations while allowing unrestricted control over target machines.
+
+### Workspace Directory
+
+All agent operations on the exploit box run inside `~/pentest-workspace/` by default. This keeps generated files, scripts, scan output, and tool artifacts organized in one place rather than scattered across the filesystem. The workspace is automatically created when the SSH connection is established.
+
+- `run_bash` commands are prefixed with `cd ~/pentest-workspace &&` so relative output paths land in the workspace
+- `run_python_script` writes and executes scripts from the workspace directory
+- New PTY shells (`spawn_shell`) automatically `cd` into the workspace on creation
+- The workspace path is configurable via the `WORKSPACE_DIR` environment variable
+
+### Dangerous Command Prevention
+
+Destructive commands are intercepted and require explicit user approval, even when auto-run mode is enabled. This applies to both `run_bash` and `write_to_shell` (for exploit-box shells only). Blocked patterns include:
+
+- Recursive deletion of system-critical paths (`rm -rf /`, `rm -rf /etc`, etc.)
+- Disk/device writes (`dd of=/dev/sda`, `mkfs`, etc.)
+- Fork bombs
+- System shutdown/reboot/halt commands
+- Blanket permission changes on root filesystem
+
+When a dangerous command is detected, a red "Safety Block" consent banner appears in the chat, requiring the user to explicitly approve or deny the command.
+
+### Shell Purpose Tagging
+
+When spawning shells, the agent tags them with a purpose:
+
+- **exploit-box** (default): Subject to workspace sandboxing and dangerous command checks
+- **reverse-shell**: No restrictions — the agent can operate from any directory and run any command on the target
+- **listener**: No restrictions — used for netcat/socat listeners
+
+### Disable Safety Protections
+
+Power users can disable the dangerous command blocking entirely via **Settings > SSH / Exploit Box > Disable Safety Protections**. When enabled:
+
+- Destructive commands execute without consent interception
+- The workspace directory behavior is preserved (organizational, not a security gate)
+- Static consent requirements (e.g., `run_install_tool`) still apply
 
 ## Frontend Technology
 

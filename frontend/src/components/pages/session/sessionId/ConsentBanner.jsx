@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined, WarningOutlined } from "@ant-design/icons";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
@@ -20,6 +20,11 @@ const CONSENT_CONFIG = {
     getCode: (args) => args?.script ?? "",
     language: "python",
   },
+  write_to_shell: {
+    title: "Shell input requires approval",
+    getCode: (args) => args?.input ?? "",
+    language: "bash",
+  },
 };
 
 const DEFAULT_CONFIG = {
@@ -28,10 +33,12 @@ const DEFAULT_CONFIG = {
   language: "text",
 };
 
-function getConsentSummary(toolName) {
+function getConsentSummary(toolName, safetyBlock) {
+  if (safetyBlock) return "Dangerous command blocked by safety system";
   if (toolName === "run_bash") return "Review command";
   if (toolName === "run_python_script") return "Review script";
   if (toolName === "run_install_tool") return "Review install";
+  if (toolName === "write_to_shell") return "Review shell input";
   return "Review action";
 }
 
@@ -44,21 +51,30 @@ const highlighterCustomStyle = {
 };
 
 export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
-  const { toolName, args } = pendingConsent;
+  const { toolName, args, safetyBlock } = pendingConsent;
   const config = CONSENT_CONFIG[toolName] ?? DEFAULT_CONFIG;
   const code = config.getCode(args);
-  const summary = getConsentSummary(toolName);
+  const summary = getConsentSummary(toolName, safetyBlock);
+
+  const bannerClassName = safetyBlock
+    ? `${styles.consentBanner} ${styles.consentBannerDanger}`
+    : styles.consentBanner;
+
+  const BadgeIcon = safetyBlock ? WarningOutlined : ExclamationCircleOutlined;
+  const badgeLabel = safetyBlock ? "Safety Block" : "Approval";
 
   return (
-    <div className={styles.consentBanner}>
+    <div className={bannerClassName}>
       <div className={styles.consentInfo}>
         <div className={styles.consentHeader}>
-          <div className={styles.consentBadge}>
-            <ExclamationCircleOutlined />
-            <span>Approval</span>
+          <div className={safetyBlock ? styles.consentBadgeDanger : styles.consentBadge}>
+            <BadgeIcon />
+            <span>{badgeLabel}</span>
           </div>
           <div className={styles.consentTitleGroup}>
-            <div className={styles.consentTitle}>{config.title}</div>
+            <div className={styles.consentTitle}>
+              {safetyBlock ? "Potentially destructive command blocked" : config.title}
+            </div>
             <div className={styles.consentSubtitle}>{summary}</div>
           </div>
           <div className={styles.consentActions}>

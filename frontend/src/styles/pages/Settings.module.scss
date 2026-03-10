@@ -390,6 +390,48 @@
   }
 }
 
+.safetySection {
+  padding: 0.75rem 0;
+
+  .safetySectionHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .safetySectionTitle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary-text);
+    margin-bottom: 0.35rem;
+  }
+
+  .safetySectionDesc {
+    font-size: 0.72rem;
+    color: var(--secondary-text);
+    line-height: 1.6;
+    max-width: 480px;
+
+    code {
+      font-size: 0.68rem;
+      color: #ff7875;
+      background: rgba(255, 77, 79, 0.08);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+  }
+}
+
+.dangerSwitch {
+  &:where(.ant-switch-checked) {
+    background: #ff4d4f !important;
+  }
+}
+
 .notesSection {
   color: var(--secondary-text);
   font-size: 0.72rem;

@@ -1,4 +1,5 @@
 import { ToolDefinition } from "../types";
+import { WORKSPACE_DIR } from "../../utils/commandSafety";
 
 const runPythonScript: ToolDefinition = {
   name: "run_python_script",
@@ -28,18 +29,18 @@ const runPythonScript: ToolDefinition = {
     }
 
     if (file_name) {
-      const writeCmd = `cat > /tmp/${file_name} << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`;
+      const writeCmd = `cat > ${WORKSPACE_DIR}/${file_name} << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`;
       await ctx.runCommand(writeCmd, 10_000);
 
       const { output, exitCode } = await ctx.runCommand(
-        `cd /tmp && python3 ${file_name}`,
+        `cd ${WORKSPACE_DIR} && python3 ${file_name}`,
         this.timeoutMs,
       );
       return { output, exitCode, files: [file_name] };
     }
 
     const { output, exitCode } = await ctx.runCommand(
-      `python3 << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
+      `cd ${WORKSPACE_DIR} && python3 << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
       this.timeoutMs,
     );
     return { output, exitCode };

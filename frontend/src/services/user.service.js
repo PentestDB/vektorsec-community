@@ -89,6 +89,11 @@ export const updateSSHConfig = async (body) => {
   return res.data;
 };
 
+export const updateSafetyProtections = async (body) => {
+  const res = await apiClient.post("/user/update-safety-protections", body);
+  return res.data;
+};
+
 export const getVNCConfig = async () => {
   const res = await apiClient.get("/user/get-vnc-config");
   return res.data;

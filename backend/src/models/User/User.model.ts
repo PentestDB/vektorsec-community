@@ -27,6 +27,7 @@ export interface UserDoc extends mongoose.Document {
     capabilities: string[];
     installedCapabilities: string[];
     requireConsentForAllTools?: boolean;
+    disableSafetyProtections?: boolean;
   };
   referredBy: mongoose.Types.ObjectId;
   workingIndustry: string;
@@ -82,6 +83,10 @@ const UserSchema = new Schema({
       default: [],
     },
     requireConsentForAllTools: {
+      type: Boolean,
+      default: false,
+    },
+    disableSafetyProtections: {
       type: Boolean,
       default: false,
     },

@@ -1,7 +1,7 @@
 import { toolRegistry } from "../tools/registry";
 import { ExecutionContext, ToolResult } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
-import { ShellManager } from "./shell.manager";
+import { ShellManager, ShellPurpose } from "./shell.manager";
 import { SubagentManager } from "./subagent.manager";
 import { SSEWriter } from "./agent.service";
 
@@ -13,7 +13,7 @@ export interface ToolExecutionCallbacks {
   onToolOutput: (toolCallId: string, chunk: string) => void;
   onToolDone: (toolCallId: string, result: ToolResult) => void;
   onToolError: (toolCallId: string, error: string) => void;
-  onConsentRequired: (toolCallId: string, toolName: string, args: Record<string, any>) => void;
+  onConsentRequired: (toolCallId: string, toolName: string, args: Record<string, any>, safetyBlock?: boolean) => void;
 }
 
 export interface ToolExecutionResult {
@@ -51,8 +51,8 @@ export function buildExecutionContext(params: {
     agentId,
     runCommand: (command: string, timeoutMs?: number) =>
       shellManager.execInShell(command, timeoutMs, onChunk, abortSignal),
-    spawnShell: (label: string, type?: "pty" | "exec") =>
-      shellManager.spawnShell({ label, type, createdBy: agentId === "main" ? "agent" : "subagent", subagentId: agentId !== "main" ? agentId : undefined }),
+    spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) =>
+      shellManager.spawnShell({ label, type, purpose, createdBy: agentId === "main" ? "agent" : "subagent", subagentId: agentId !== "main" ? agentId : undefined }),
     writeToShell: (shellId: string, data: string) =>
       shellManager.writeToShell(shellId, data),
     readShellOutput: (shellId: string, fromOffset?: number) =>
@@ -61,6 +61,8 @@ export function buildExecutionContext(params: {
       shellManager.closeShell(shellId),
     listShells: () =>
       shellManager.getShellList(),
+    getShellInfo: (shellId: string) =>
+      shellManager.getShell(shellId),
     spawnSubagent: subagentManager && sse && userId
       ? (task: string) =>
           subagentManager.spawn({
@@ -80,6 +82,7 @@ export async function executeToolCall(
   callbacks: ToolExecutionCallbacks,
   ctx: ExecutionContext,
   requireConsentForAllTools?: boolean,
+  disableSafetyProtections?: boolean,
 ): Promise<ToolExecutionResult> {
   const toolDef = toolRegistry.get(toolCall.name);
 
@@ -108,11 +111,13 @@ export async function executeToolCall(
     };
   }
 
+  const safetyTriggered = !disableSafetyProtections && (toolDef.shouldRequireConsent?.(args, ctx) ?? false);
   const needsConsent =
     requireConsentForAllTools ||
-    (requireConsentForAllTools !== false && (toolDef.requiresConsent ?? false));
+    (requireConsentForAllTools !== false && (toolDef.requiresConsent ?? false)) ||
+    safetyTriggered;
   if (needsConsent) {
-    callbacks.onConsentRequired(toolCall.id, toolCall.name, args);
+    callbacks.onConsentRequired(toolCall.id, toolCall.name, args, safetyTriggered);
     return {
       toolCallId: toolCall.id,
       toolName: toolCall.name,
@@ -157,10 +162,11 @@ export async function executeToolCalls(
   callbacks: ToolExecutionCallbacks,
   ctx: ExecutionContext,
   requireConsentForAllTools?: boolean,
+  disableSafetyProtections?: boolean,
 ): Promise<ToolExecutionResult[]> {
   const results = await Promise.all(
     toolCalls.map((tc) =>
-      executeToolCall(sessionId, tc, callbacks, ctx, requireConsentForAllTools),
+      executeToolCall(sessionId, tc, callbacks, ctx, requireConsentForAllTools, disableSafetyProtections),
     ),
   );
   return results;

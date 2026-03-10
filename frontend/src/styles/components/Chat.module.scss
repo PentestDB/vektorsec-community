@@ -604,6 +604,28 @@
   }
 }
 
+.consentBannerDanger {
+  background: linear-gradient(180deg, rgba(255, 77, 79, 0.12), rgba(255, 77, 79, 0.05));
+  border-color: rgba(255, 77, 79, 0.28);
+  box-shadow: 0 10px 30px rgba(255, 0, 0, 0.08);
+}
+
+.consentBadgeDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 77, 79, 0.16);
+  border: 1px solid rgba(255, 77, 79, 0.32);
+  color: #ff4d4f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* ─── Manual Execution Block ──────────────────────────────────── */
 
 .manualExecBlock {

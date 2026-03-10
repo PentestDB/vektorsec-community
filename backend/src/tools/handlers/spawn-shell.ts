@@ -14,6 +14,13 @@ const spawnShell: ToolDefinition = {
         type: "string",
         description: "A short descriptive label for this shell (e.g. 'nmap-scan', 'nc-listener-4444', 'exploit-session')",
       },
+      purpose: {
+        type: "string",
+        enum: ["exploit-box", "reverse-shell", "listener"],
+        description: "Shell purpose. Use 'exploit-box' (default) for commands on the attack box, " +
+          "'reverse-shell' for shells that will receive reverse connections from targets, " +
+          "'listener' for netcat/socat listeners waiting for connections.",
+      },
     },
     required: ["label"],
   },
@@ -21,10 +28,12 @@ const spawnShell: ToolDefinition = {
     const label = args.label;
     if (!label) return { output: "Error: label is required", exitCode: 1 };
 
+    const purpose = args.purpose || "exploit-box";
+
     try {
-      const shellId = await ctx.spawnShell(label, "pty");
+      const shellId = await ctx.spawnShell(label, "pty", purpose);
       return {
-        output: `Shell spawned successfully.\nshell_id: ${shellId}\nlabel: ${label}\n\nYou can now use this shell_id with run_bash, write_to_shell, and read_shell.`,
+        output: `Shell spawned successfully.\nshell_id: ${shellId}\nlabel: ${label}\npurpose: ${purpose}\n\nYou can now use this shell_id with write_to_shell and read_shell.`,
         exitCode: 0,
       };
     } catch (err: any) {
