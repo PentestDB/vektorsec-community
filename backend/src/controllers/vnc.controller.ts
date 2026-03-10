@@ -3,7 +3,7 @@ import ssh2 from "ssh2";
 import { executeCommand, generateRandomPassword } from "../utils/fileUtils";
 import { buildSSHConfig } from "../utils/sshConfig";
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
-import { VNC_DISPLAY, VNC_RFBPORT, WEBSOCKIFY_PORT } from "../config/constants";
+import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
 
 const FIND_VNC_BIN = [
   'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec";',
@@ -26,6 +26,9 @@ function pickVncPath(raw: string): string {
 
 export const getVNCCredentials = async (req: Request, res: Response) => {
   try {
+    const VNC_DISPLAY = getVncDisplay();
+    const VNC_RFBPORT = getVncRfbPort();
+    const WEBSOCKIFY_PORT = getWebsockifyPort();
     const env = readEnvFile();
     const vncMode = env.VNC_MODE || "";
     const savedHost = env.VNC_HOST || "";

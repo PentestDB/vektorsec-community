@@ -19,10 +19,6 @@ const TOML_KEY_MAP: Record<string, Record<string, string>> = {
     secret: "SESS_SECRET",
     lifetime: "SESS_LIFETIME",
   },
-  frontend: {
-    backend_uri: "NEXT_PUBLIC_BACKEND_URI",
-    deployment: "NEXT_PUBLIC_DEPLOYMENT",
-  },
   tracing: {
     enabled: "LANGFUSE_ENABLED",
     public_key: "LANGFUSE_PUBLIC_KEY",

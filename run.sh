@@ -4,6 +4,7 @@
 #  Configures, builds, and runs the entire stack.
 #
 #  Commands: start | config | dev | stop | logs | status | help
+#  Flags:    --quick / -q   Skip all configuration prompts
 # ============================================================
 
 set -euo pipefail
@@ -35,6 +36,7 @@ COMPOSE_FILE=""
 IS_WSL=false
 NEED_SSH_KEY_MOUNT=false
 DEV_MODE=false
+QUICK_MODE=false
 
 resolve_env_path() {
     if [[ "${DEV_MODE:-false}" == true ]]; then
@@ -56,13 +58,15 @@ print_banner() {
 
 show_commands() {
     echo -e "   ${BOLD}Commands:${NC}"
-    echo -e "     ${CYAN}start${NC}   Guided start: choose normal or developer mode"
-    echo -e "     ${CYAN}config${NC}  Update model keys, Google search, tracing, or exploit box settings"
-    echo -e "     ${CYAN}dev${NC}     Start directly in developer mode"
-    echo -e "     ${CYAN}stop${NC}    Stop all containers"
-    echo -e "     ${CYAN}logs${NC}    Tail container logs"
-    echo -e "     ${CYAN}status${NC}  Show container status"
-    echo -e "     ${CYAN}help${NC}    Show full help"
+    echo -e "     ${CYAN}start${NC}        Guided start: choose normal or developer mode"
+    echo -e "     ${CYAN}start -q${NC}     Quick start: skip prompts, use existing config"
+    echo -e "     ${CYAN}config${NC}       Update model keys, Google search, tracing, or exploit box settings"
+    echo -e "     ${CYAN}dev${NC}          Start directly in developer mode"
+    echo -e "     ${CYAN}dev -q${NC}       Quick dev start: skip prompts"
+    echo -e "     ${CYAN}stop${NC}         Stop all containers"
+    echo -e "     ${CYAN}logs${NC}         Tail container logs"
+    echo -e "     ${CYAN}status${NC}       Show container status"
+    echo -e "     ${CYAN}help${NC}         Show full help"
     echo
 }
 
@@ -70,6 +74,7 @@ info()    { echo -e " ${GREEN}[✓]${NC} $1"; }
 warn()    { echo -e " ${YELLOW}[!]${NC} $1"; }
 err()     { echo -e " ${RED}[✗]${NC} $1"; }
 section() { echo; echo -e " ${CYAN}${BOLD}── $1 ──${NC}"; }
+hint()    { echo -e "   ${DIM}$1${NC}"; }
 prompt_input() { echo -en " ${CYAN}$1${NC} "; }
 
 confirm() {
@@ -132,6 +137,15 @@ get_toml_var() {
     local file="$1" key="$2"
     grep "^${key} " "$file" 2>/dev/null | head -1 \
         | sed 's/[^=]*= *//; s/ *#.*//; s/^"//; s/"$//' || true
+}
+
+mask_key() {
+    local key="$1"
+    if [[ ${#key} -le 8 ]]; then
+        echo "****"
+    else
+        echo "${key:0:4}...${key: -4}"
+    fi
 }
 
 # ── Prerequisites ─────────────────────────────────────────
@@ -357,8 +371,140 @@ select_launch_mode() {
     esac
 }
 
+# ── Smart configuration (skip if already configured) ──────
+
+is_model_configured() {
+    local key
+    key=$(get_env "$DYNAMIC_ENV" "MODEL_API_KEY")
+    [[ -n "$key" ]]
+}
+
+is_google_configured() {
+    local key cx
+    key=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
+    cx=$(get_env "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID")
+    [[ -n "$key" && -n "$cx" ]]
+}
+
+is_langfuse_configured() {
+    local enabled
+    enabled=$(get_toml_var "$CONFIG_TOML" "enabled")
+    [[ "$enabled" == "true" ]]
+}
+
+is_exploit_box_configured() {
+    local host
+    host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
+    [[ -n "$host" ]]
+}
+
+show_current_config_summary() {
+    section "Current Configuration"
+    echo
+
+    # Model
+    local provider model key
+    provider=$(get_env "$DYNAMIC_ENV" "MODEL_PROVIDER")
+    model=$(get_env "$DYNAMIC_ENV" "MODEL")
+    key=$(get_env "$DYNAMIC_ENV" "MODEL_API_KEY")
+    if [[ -n "$key" ]]; then
+        echo -e "   ${GREEN}●${NC} Model: ${BOLD}${provider:-openai}${NC} / ${model:-gpt-4o}  (key: $(mask_key "$key"))"
+    else
+        echo -e "   ${RED}●${NC} Model: ${BOLD}not configured${NC}  ${YELLOW}← required${NC}"
+    fi
+
+    # Google
+    local gkey gcx
+    gkey=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
+    gcx=$(get_env "$DYNAMIC_ENV" "CUSTOM-SEARCH-ENGINE-ID")
+    if [[ -n "$gkey" && -n "$gcx" ]]; then
+        echo -e "   ${GREEN}●${NC} Google Search: configured"
+    else
+        echo -e "   ${DIM}○${NC} Google Search: not set  ${DIM}(optional)${NC}"
+    fi
+
+    # Langfuse
+    local langfuse_on
+    langfuse_on=$(get_toml_var "$CONFIG_TOML" "enabled")
+    if [[ "$langfuse_on" == "true" ]]; then
+        echo -e "   ${GREEN}●${NC} Langfuse Tracing: enabled"
+    else
+        echo -e "   ${DIM}○${NC} Langfuse Tracing: disabled  ${DIM}(optional)${NC}"
+    fi
+
+    # Exploit box
+    local ssh_host ssh_user
+    ssh_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
+    ssh_user=$(get_env "$DYNAMIC_ENV" "SSH_USERNAME")
+    if [[ -n "$ssh_host" ]]; then
+        echo -e "   ${GREEN}●${NC} Exploit Box: ${ssh_user:-root}@${ssh_host}"
+    else
+        echo -e "   ${DIM}○${NC} Exploit Box: not set  ${DIM}(optional)${NC}"
+    fi
+
+    echo
+}
+
+configure_required_startup_smart() {
+    ensure_env_defaults
+
+    if is_model_configured; then
+        show_current_config_summary
+        if confirm "Keep current configuration and start?" "y"; then
+            info "Using existing configuration"
+            return
+        fi
+        echo
+    fi
+
+    # Model keys — always prompt if not configured
+    if ! is_model_configured; then
+        configure_model_keys
+    else
+        if confirm "Reconfigure model API keys?" "n"; then
+            configure_model_keys
+        else
+            info "Keeping current model config"
+        fi
+    fi
+
+    # Google search — optional, skip-friendly
+    if ! is_google_configured; then
+        echo
+        hint "Google Search enables web search during pentesting. (optional, set up later via Settings UI)"
+        if confirm "Configure Google Search API now?" "n"; then
+            configure_google_search
+        else
+            info "Skipped — configure anytime via Settings UI or ./run.sh config"
+        fi
+    fi
+
+    # Langfuse — optional, skip-friendly
+    if ! is_langfuse_configured; then
+        echo
+        hint "Langfuse provides LLM call tracing & observability. (optional, requires restart to change)"
+        if confirm "Configure Langfuse tracing now?" "n"; then
+            configure_langfuse
+        else
+            info "Skipped — configure anytime via ./run.sh config (requires restart)"
+        fi
+    fi
+
+    # Exploit box — optional, skip-friendly
+    if ! is_exploit_box_configured; then
+        echo
+        hint "Exploit Box is the SSH target where pentesting commands run. (optional, set up later via Settings UI)"
+        if confirm "Configure exploit box now?" "n"; then
+            configure_exploit_box
+        else
+            info "Skipped — configure anytime via Settings UI or ./run.sh config"
+        fi
+    fi
+}
+
 configure_static_full() {
-    section "Full Static Configuration (Developer Mode)"
+    section "Static Configuration (Developer Mode)"
+    hint "These settings require a process restart to take effect."
     ensure_config_defaults
     ensure_frontend_env
 
@@ -413,6 +559,7 @@ configure_static_full() {
     fi
 
     section "Database"
+    hint "One-time setup. Change only if using external MongoDB/Redis."
     default_mongo="mongodb://localhost:27017/pentestcopilot"
     default_redis="redis://localhost:6379"
 
@@ -439,38 +586,13 @@ configure_static_full() {
         set_toml_var "$CONFIG_TOML" "redis_url" "$default_redis"
     fi
 
-    section "Session"
-    cur=$(get_toml_var "$CONFIG_TOML" "secret")
-    if [[ -z "$cur" || "$cur" == "thisismysessionsecret!123" ]]; then
-        generated_secret=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | base64 | tr -d '/+=' | head -c 64)
-        cur="$generated_secret"
-    fi
-    prompt_input "Session secret [${cur}]:"
-    read -r val
-    if [[ -n "$val" ]]; then
-        set_toml_var "$CONFIG_TOML" "secret" "$val"
-    else
-        set_toml_var "$CONFIG_TOML" "secret" "$cur"
-    fi
-
-    cur=$(get_toml_var "$CONFIG_TOML" "lifetime")
-    prompt_input "Session lifetime [${cur:-1000}]:"
-    read -r val
-    [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "lifetime" "$val"
-
     info "Developer-mode static config updated"
-}
-
-configure_required_startup() {
-    configure_model_keys
-    configure_google_search
-    configure_langfuse
-    configure_exploit_box
 }
 
 # ── Config options ─────────────────────────────────────────
 configure_model_keys() {
     section "Model API Keys"
+    hint "You can change this anytime via the Settings UI (no restart needed)."
     ensure_env_defaults
     local cur
     cur=$(get_env "$DYNAMIC_ENV" "MODEL_PROVIDER")
@@ -512,6 +634,7 @@ configure_model_keys() {
 
 configure_google_search() {
     section "Google Search"
+    hint "Optional. You can set this up later via the Settings UI."
     ensure_env_defaults
     local cur_key cur_cx key_status
 
@@ -521,7 +644,7 @@ configure_google_search() {
 
     cur_key=$(get_env "$DYNAMIC_ENV" "GOOGLE-API-KEY")
     if [[ -n "$cur_key" ]]; then
-        key_status="configured"
+        key_status="configured ($(mask_key "$cur_key"))"
     else
         key_status="not set"
     fi
@@ -600,6 +723,7 @@ configure_claude_oauth() {
 
 configure_langfuse() {
     section "Langfuse Tracing"
+    hint "Requires a container restart to take effect. Change via ./run.sh config."
     ensure_config_defaults
     echo
     echo -e "   ${DIM}Langfuse provides LLM observability. Get keys at https://cloud.langfuse.com${NC}"
@@ -627,6 +751,7 @@ configure_langfuse() {
 
 configure_exploit_box() {
     section "Exploit Box Connection"
+    hint "You can also configure this via the Settings UI after starting."
     ensure_env_defaults
     echo
     echo -e "   ${BOLD}1)${NC} Local PC over SSH"
@@ -648,7 +773,7 @@ configure_exploit_box() {
             ;;
         *)
             clear_exploit_box_config
-            info "Skipped exploit box config"
+            info "Skipped — configure anytime via Settings UI or ./run.sh config"
             ;;
     esac
 }
@@ -884,7 +1009,8 @@ launch() {
     fi
 
     echo
-    info "Config: config.toml, /srv/data/.env (editable via Settings UI)"
+    hint "Config files: config.toml (restart-required) | .env (hot-reloadable via Settings UI)"
+    hint "Additional features (Burp, Browser Agent, VNC) can be configured in the Settings UI."
     echo
     info "Commands: $0 stop | $0 logs | $0 status | $0 config"
 }
@@ -931,24 +1057,40 @@ launch_dev() {
     backend_url=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
     echo -e "   ${CYAN}Endpoints:${NC} Frontend ${frontend_url:-http://localhost:3000} | Backend ${backend_url:-http://localhost:8080}"
     echo
+    hint "Config files: config.toml (restart-required) | backend/.env (hot-reloadable)"
+    hint "Additional features (Burp, Browser Agent, VNC) can be configured in the Settings UI."
+    echo
 }
 
 # ── Commands ───────────────────────────────────────────────
 cmd_start() {
     check_prerequisites
     detect_wsl
-    select_launch_mode
+
+    if [[ "$QUICK_MODE" == true ]]; then
+        set_normal_mode
+    else
+        select_launch_mode
+    fi
 
     resolve_env_path
     ensure_config_defaults
     ensure_env_defaults
     ensure_frontend_env
 
-    if [[ "${DEV_MODE:-false}" == true ]]; then
+    if [[ "$QUICK_MODE" == true ]]; then
+        if is_model_configured; then
+            show_current_config_summary
+            info "Quick start — using existing configuration"
+        else
+            warn "No model API key configured — you must set this before using the agent."
+            hint "Configure via the Settings UI after starting, or re-run without -q."
+        fi
+    elif [[ "${DEV_MODE:-false}" == true ]]; then
         configure_static_full
-        configure_required_startup
+        configure_required_startup_smart
     else
-        configure_required_startup
+        configure_required_startup_smart
     fi
 
     if [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; then
@@ -970,13 +1112,16 @@ cmd_config() {
 
     section "Configuration"
     echo
-    echo -e "   ${BOLD}1)${NC} Model API keys"
-    echo -e "   ${BOLD}2)${NC} Google search"
-    echo -e "   ${BOLD}3)${NC} Langfuse tracing"
-    echo -e "   ${BOLD}4)${NC} Exploit box"
+    echo -e "   ${BOLD}1)${NC} Model API keys           ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}2)${NC} Google search             ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}3)${NC} Langfuse tracing          ${DIM}(requires container restart)${NC}"
+    echo -e "   ${BOLD}4)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
     echo -e "   ${BOLD}5)${NC} All of the above"
+    if [[ "${DEV_MODE:-false}" == true ]]; then
+        echo -e "   ${BOLD}6)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
+    fi
     echo
-    prompt_input "Choose [1/2/3/4/5]:"
+    prompt_input "Choose [1-${DEV_MODE:+6}${DEV_MODE:-5}]:"
     read -r choice
 
     case "$choice" in
@@ -990,6 +1135,13 @@ cmd_config() {
             configure_langfuse
             configure_exploit_box
             ;;
+        6)
+            if [[ "${DEV_MODE:-false}" == true ]]; then
+                configure_static_full
+            else
+                warn "No configuration changed"
+            fi
+            ;;
         *)
             warn "No configuration changed"
             ;;
@@ -1002,9 +1154,13 @@ cmd_config() {
             compose restart
             provision_data_volume
             info "Containers restarted"
+        else
+            hint "Runtime-editable settings (Model, Google, SSH) take effect without restart."
+            hint "Langfuse & server settings require a restart: ./run.sh stop && ./run.sh start"
         fi
     else
-        info "Config saved. Restart backend to apply."
+        info "Config saved."
+        hint "Runtime-editable settings take effect immediately. Restart backend for static config changes."
     fi
 }
 
@@ -1019,8 +1175,18 @@ cmd_dev() {
     ensure_env_defaults
     ensure_frontend_env
 
-    configure_static_full
-    configure_required_startup
+    if [[ "$QUICK_MODE" == true ]]; then
+        if is_model_configured; then
+            show_current_config_summary
+            info "Quick start — using existing configuration"
+        else
+            warn "No model API key configured — you must set this before using the agent."
+            hint "Configure via the Settings UI after starting, or re-run without -q."
+        fi
+    else
+        configure_static_full
+        configure_required_startup_smart
+    fi
 
     if [[ -d "$SSH_KEYS_DIR" ]] && [[ -n "$(ls -A "$SSH_KEYS_DIR" 2>/dev/null)" ]]; then
         NEED_SSH_KEY_MOUNT=true
@@ -1051,23 +1217,43 @@ cmd_status() {
 
 cmd_help() {
     print_banner
-    echo "Usage: $0 [command]"
+    echo "Usage: $0 [command] [flags]"
     echo
     show_commands
+    echo -e " ${BOLD}Flags:${NC}"
+    echo -e "   ${CYAN}--quick, -q${NC}   Skip all configuration prompts and use existing config."
+    echo -e "                Ideal for subsequent starts after initial setup."
+    echo
     echo "Default behavior:"
-    echo "  - \`$0\` / \`$0 start\`: always asks whether you want normal mode or developer mode"
+    echo "  - \`$0\` / \`$0 start\`: guided start with smart prompts (skips already-configured items)"
+    echo "  - \`$0 start -q\`: instant start using existing config (no prompts at all)"
     echo "  - Normal mode: guided setup, best for most users"
     echo "  - Developer mode: advanced setup, run frontend/backend manually"
-    echo "  - Both modes ask for model, Google search, Langfuse, and exploit box settings"
-    echo "  - No hidden mode is saved between runs"
     echo
-    echo "Files: config.toml (static) | backend/.env (dynamic, editable via Settings)"
+    echo -e " ${BOLD}Configuration Layers:${NC}"
+    echo -e "   ${CYAN}config.toml${NC}    Static settings (server, DB, session, Langfuse)."
+    echo -e "                  Changes require a restart."
+    echo -e "   ${CYAN}backend/.env${NC}   Dynamic settings (model, SSH, VNC, Burp, Magnitude)."
+    echo -e "                  Changes take effect immediately (editable via Settings UI)."
+    echo -e "   ${CYAN}frontend/.env${NC}  Frontend build settings (NEXT_PUBLIC_*)."
+    echo -e "                  Changes require a frontend rebuild."
     echo
 }
 
 # ── Main ──────────────────────────────────────────────────
 main() {
     cd "$SCRIPT_DIR"
+
+    # Parse global flags
+    local args=()
+    for arg in "$@"; do
+        case "$arg" in
+            --quick|-q) QUICK_MODE=true ;;
+            *) args+=("$arg") ;;
+        esac
+    done
+    set -- "${args[@]+"${args[@]}"}"
+
     print_banner
     show_commands
 

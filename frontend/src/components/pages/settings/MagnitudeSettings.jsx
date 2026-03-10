@@ -355,7 +355,7 @@ const MagnitudeSettingsPage = () => {
         <Row gutter={16}>
           <Col span={modelProvider === "openai-compatible" ? 12 : 24}>
             <Form.Item name="apiKey" label="API Key" rules={[{ required: true, message: "API key is required" }]}>
-              <Input type="password" autoComplete="off" placeholder={providerDef?.placeholder || "API key"} />
+              <Input.Password autoComplete="off" placeholder={providerDef?.placeholder || "API key"} visibilityToggle />
             </Form.Item>
           </Col>
           {modelProvider === "openai-compatible" && (

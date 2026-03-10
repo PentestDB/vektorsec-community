@@ -22,6 +22,31 @@ html {
   color: var(--primary-text);
 }
 
+/* App-wide input placeholder color for readable contrast on dark backgrounds */
+input::placeholder,
+textarea::placeholder,
+.ant-input::placeholder,
+.ant-input-affix-wrapper input::placeholder,
+.ant-input-number-input::placeholder,
+.ant-picker-input input::placeholder {
+  color: var(--placeholder-color) !important;
+  opacity: 1;
+}
+
+.ant-select-selection-placeholder {
+  color: var(--placeholder-color) !important;
+}
+
+/* Ensure password visibility toggle (eye icon) is visible app-wide */
+.ant-input-password .ant-input-suffix .anticon {
+  color: var(--secondary-text);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--primary-text);
+  }
+}
+
 @font-face {
   font-family: "Menlo for powerline";
   src: url("../assets/fonts/menlo-for-powerline/MenloPowerline.ttf");

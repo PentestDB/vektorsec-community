@@ -55,7 +55,7 @@ const initializeApp = async () => {
     };
 
     const app = express();
-    const port = 8080;
+    const port = parseInt(process.env.PORT || "8080", 10);
 
     const defaultWhitelist = [
       "http://127.0.0.1:8080",

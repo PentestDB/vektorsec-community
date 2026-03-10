@@ -17,10 +17,6 @@ redis_url = "redis://redis:6379"
 secret = "thisismysessionsecret!123"
 lifetime = 1000
 
-[frontend]
-backend_uri = "http://localhost:8080"
-deployment = "LOCAL"
-
 [tracing]
 enabled = false
 public_key = ""

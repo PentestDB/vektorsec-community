@@ -5,10 +5,24 @@ export const CONTAINER_EXPIRY_MS = 65 * 60 * 1000; // 65 minutes
 
 export const VNC_GEOMETRY = "1280x800";
 export const VNC_DEPTH = 24;
+
+export function getVncDisplay(): string {
+  return process.env.VNC_DISPLAY || ":89";
+}
+export function getVncRfbPort(): number {
+  return parseInt(process.env.VNC_RFBPORT || "5989", 10);
+}
+export function getWebsockifyPort(): number {
+  return parseInt(process.env.WEBSOCKIFY_PORT || "9020", 10);
+}
+
+/** @deprecated Use getVncDisplay() for runtime-safe access */
 export const VNC_DISPLAY = ":89";
-export const VNC_DISPLAY_NUM = 89;
-export const VNC_RFBPORT = 5989; // 5900 + display number
+/** @deprecated Use getVncRfbPort() for runtime-safe access */
+export const VNC_RFBPORT = 5989;
+/** @deprecated Use getWebsockifyPort() for runtime-safe access */
 export const WEBSOCKIFY_PORT = 9020;
+export const VNC_DISPLAY_NUM = 89;
 export const WEBSOCKIFY_TARGET = "localhost:5989";
 
 export const KALI_API_PORT = 5000;

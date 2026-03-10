@@ -2,7 +2,7 @@ import { Response, Request } from "express";
 import crypto from "crypto";
 import axios from "axios";
 import moment from "moment";
-import { VNC_DISPLAY, VNC_RFBPORT, WEBSOCKIFY_PORT } from "../config/constants";
+import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
 import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
 
 export const updateUserProfile = async (req: Request, res: Response) => {
@@ -566,6 +566,9 @@ export const resetVNCConfig = async (_req: Request, res: Response) => {
 };
 
 export const autoSetupVNC = async (_req: Request, res: Response) => {
+  const VNC_DISPLAY = getVncDisplay();
+  const VNC_RFBPORT = getVncRfbPort();
+  const WEBSOCKIFY_PORT = getWebsockifyPort();
   const { buildSSHConfig } = await import("../utils/sshConfig");
   const ssh2 = await import("ssh2");
   const { generateRandomPassword } = await import("../utils/fileUtils");
@@ -812,6 +815,9 @@ function parseVncPath(raw: string): string {
 }
 
 async function runDiagnostics(): Promise<DiagCheck[]> {
+  const VNC_DISPLAY = getVncDisplay();
+  const VNC_RFBPORT = getVncRfbPort();
+  const WEBSOCKIFY_PORT = getWebsockifyPort();
   const { execSSHCommand } = await import("../services/ssh.service");
 
   const checks: DiagCheck[] = [];
@@ -982,6 +988,9 @@ export const diagnoseVNC = async (_req: Request, res: Response) => {
 
 export const repairVNC = async (req: Request, res: Response) => {
   try {
+    const VNC_DISPLAY = getVncDisplay();
+    const VNC_RFBPORT = getVncRfbPort();
+    const WEBSOCKIFY_PORT = getWebsockifyPort();
     const { execSSHCommand } = await import("../services/ssh.service");
     const env = readEnvFile();
     const savedPassword = env[VNC_ENV_KEYS.password] || "";
