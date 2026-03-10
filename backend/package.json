@@ -41,7 +41,7 @@
     "archiver": "^5.3.1",
     "axios": "^1.4.0",
     "bcrypt": "^5.1.1",
-    "burp-rpc": "^1.0.3",
+    "burp-rpc": "^1.0.6",
     "cheerio": "^1.0.0-rc.12",
     "cloudflare": "^2.9.1",
     "connect-redis": "^7.1.0",

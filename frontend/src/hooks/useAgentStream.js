@@ -11,7 +11,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
     store.getState().getOrCreate(sessionId);
   }, [sessionId, store]);
 
-  const { messages, agentState, pendingConsent, pendingManualExecution, subagents } =
+  const { messages, agentState, pendingConsent, pendingManualExecution, subagents, tokenUsage } =
     useAgentStreamStore(
       useShallow((state) => {
         const s = state.sessions[sessionId];
@@ -21,6 +21,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
           pendingConsent: s?.pendingConsent ?? null,
           pendingManualExecution: s?.pendingManualExecution ?? null,
           subagents: s?.subagents ?? [],
+          tokenUsage: s?.tokenUsage ?? null,
         };
       }),
     );
@@ -52,6 +53,11 @@ export default function useAgentStream({ sessionId, onComplete }) {
 
   const setSubagents = useCallback(
     (val) => store.getState().setSubagents(sessionId, val),
+    [sessionId, store],
+  );
+
+  const setTokenUsage = useCallback(
+    (val) => store.getState().setTokenUsage(sessionId, val),
     [sessionId, store],
   );
 
@@ -463,6 +469,14 @@ export default function useAgentStream({ sessionId, onComplete }) {
             },
           ]);
         })
+        .onEvent("token_usage", (data) => {
+          setTokenUsage({
+            totalTokens: data.totalTokens,
+            promptTokens: data.promptTokens,
+            completionTokens: data.completionTokens,
+            contextLimit: data.contextLimit,
+          });
+        })
         .onEvent("summary_done", () => {})
         .onEvent("paused", () => {
           flushAssistant();
@@ -495,7 +509,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
           refs().controllerRef.current = null;
         });
     },
-    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete],
   );
 
   const abort = useCallback(() => {
@@ -523,6 +537,8 @@ export default function useAgentStream({ sessionId, onComplete }) {
     setPendingManualExecution,
     subagents,
     setSubagents,
+    tokenUsage,
+    setTokenUsage,
     startStream,
     abort,
     loadHistory,

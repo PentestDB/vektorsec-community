@@ -8,7 +8,7 @@ import {
   Row,
   Col,
   Tag,
-  message,
+  App,
   Button,
 } from "antd";
 import {
@@ -22,9 +22,10 @@ import Loader from "@/components/common/loader/Loader";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getBurpConfig, updateBurpConfig } from "@/services/user.service";
-import { getBurpProxyHistory } from "@/services/burp.service";
+import { getBurpConnectionStatus } from "@/services/burp.service";
 
 const BurpSettingsPage = () => {
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("burp-config", getBurpConfig);
 
@@ -46,6 +47,7 @@ const BurpSettingsPage = () => {
     onSuccess: () => {
       message.success("Burp configuration saved");
       queryClient.invalidateQueries("burp-config");
+      queryClient.invalidateQueries("burp-connection-status");
       setSaving(false);
     },
     onError: (err) => {
@@ -66,10 +68,12 @@ const BurpSettingsPage = () => {
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await getBurpProxyHistory({ page: 1, pageSize: 1 });
+      const result = await getBurpConnectionStatus();
       setTestResult({
-        success: true,
-        message: `Connected — ${result.total} proxy entries found`,
+        success: result.connected,
+        message: result.connected
+          ? `Connected — Burp ${result.burpVersion || ""} (extension ${result.extensionVersion || ""})`.trim()
+          : result.message || "Connection failed",
       });
     } catch (err) {
       setTestResult({

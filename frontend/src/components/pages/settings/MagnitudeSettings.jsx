@@ -10,7 +10,7 @@ import {
   Row,
   Col,
   Tag,
-  message,
+  App,
   Divider,
   Tooltip,
 } from "antd";
@@ -93,6 +93,7 @@ function buildProviders(catalog) {
 }
 
 const MagnitudeSettingsPage = () => {
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("magnitude-config", getMagnitudeConfig);
   const { data: catalog } = useQuery("available-models", getAvailableModels, {

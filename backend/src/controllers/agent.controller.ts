@@ -16,6 +16,7 @@ import {
 import { parseSlashCommand, executeSlashCommand, matchCommands, SLASH_COMMANDS } from "../services/slash-commands";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
+import { getProvider } from "../utils/llm/providers";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -228,6 +229,20 @@ export const getHistory = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    let contextLimit = 128_000;
+    try {
+      const config = await getProvider();
+      const MODEL_LIMITS: Record<string, number> = {
+        "gpt-4o": 128_000, "gpt-4o-mini": 128_000, "gpt-4-turbo": 128_000,
+        "gpt-4": 8_192, "gpt-3.5-turbo": 16_385, "gpt-5-nano": 128_000,
+        "claude-sonnet-4-20250514": 200_000, "claude-3-5-sonnet-20241022": 200_000,
+        "claude-3-opus-20240229": 200_000, "claude-3-haiku-20240307": 200_000,
+      };
+      for (const [key, limit] of Object.entries(MODEL_LIMITS)) {
+        if (config.model.includes(key)) { contextLimit = limit; break; }
+      }
+    } catch { /* use default */ }
+
     return res.status(200).json({
       messages: session.messages,
       agentState: session.agentState,
@@ -235,6 +250,8 @@ export const getHistory = async (req: Request, res: Response) => {
       pendingConsent: session.pendingConsent ?? null,
       pendingManualExecution: session.pendingManualExecution ?? null,
       shells: session.shells ?? [],
+      totalTokens: session.totalTokens ?? 0,
+      contextLimit,
       subagents: (session.subagents ?? []).map((s) => ({
         subagentId: s.subagentId,
         parentId: s.parentId,

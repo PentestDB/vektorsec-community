@@ -1,12 +1,31 @@
 import { Client as SSHClient } from "ssh2";
 import { buildSSHConfig } from "../utils/sshConfig";
 
-export async function execSSHCommand(command: string): Promise<string> {
+export async function execSSHCommand(command: string, timeoutMs?: number): Promise<string> {
   const sshConfig = buildSSHConfig();
 
   return new Promise<string>((resolve, reject) => {
     let output = "";
+    let settled = false;
     const ssh = new SSHClient();
+
+    let timer: NodeJS.Timeout | null = null;
+    if (timeoutMs && timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        ssh.end();
+        reject(new Error(`SSH operation timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }
+
+    const finish = (err: Error | null, result?: string) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(result ?? "");
+    };
 
     ssh
       .on("ready", () => {
@@ -14,7 +33,7 @@ export async function execSSHCommand(command: string): Promise<string> {
           if (err) {
             console.error("SSH exec error:", err);
             ssh.end();
-            reject(err);
+            finish(err);
             return;
           }
 
@@ -28,15 +47,18 @@ export async function execSSHCommand(command: string): Promise<string> {
 
           stream.on("close", () => {
             ssh.end();
-            resolve(output);
+            finish(null, output);
           });
         });
       })
       .on("error", (err: Error) => {
         console.error("SSH connection error:", err);
-        reject(err);
+        finish(err);
       })
-      .connect(sshConfig);
+      .connect({
+        ...sshConfig,
+        ...(timeoutMs ? { readyTimeout: timeoutMs } : {}),
+      });
   });
 }
 

@@ -323,6 +323,161 @@
     }
   }
 
+  .contextPanel {
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--secondary-bg, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+  }
+
+  .contextHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .contextDonut {
+    flex-shrink: 0;
+    display: block;
+  }
+
+  .contextHeaderText {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+  }
+
+  .contextPct {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary-text, #e0e0e0);
+    letter-spacing: -0.02em;
+  }
+
+  .contextSubtitle {
+    font-size: 0.55rem;
+    color: var(--secondary-text, #666);
+    margin-top: 0.05rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+
+  .contextBar {
+    height: 2px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+    margin: 0.5rem 0;
+    overflow: hidden;
+  }
+
+  .contextBarFill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .contextDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .contextRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.65rem;
+
+    span:first-child {
+      color: var(--secondary-text, #888);
+      font-weight: 500;
+    }
+
+    span:last-child {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--primary-text, #ccc);
+      font-weight: 500;
+    }
+  }
+
+  .contextDivider {
+    height: 1px;
+    background: var(--border-subtle, rgba(255, 255, 255, 0.06));
+    margin: 0.25rem 0;
+  }
+
+  .contextRowWithHelp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .contextHelpWrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .contextHelpIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-size: 0.5rem;
+    font-weight: 700;
+    color: var(--secondary-text, #666);
+    cursor: help;
+    line-height: 1;
+    transition: border-color 0.15s, color 0.15s;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+      color: var(--primary-text, #ccc);
+    }
+  }
+
+  .contextHelpTip {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 180px;
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-elevated, #1a1a1a);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    font-size: 0.6rem;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--secondary-text, #aaa);
+    z-index: 200;
+    pointer-events: auto;
+    animation: contextTipIn 0.12s ease;
+
+    &::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 4px solid transparent;
+      border-top-color: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  @keyframes contextTipIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(2px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
 }
 
 .divider {

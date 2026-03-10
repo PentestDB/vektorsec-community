@@ -18,6 +18,9 @@ import { updateSessions } from "@/store/user.slice";
 import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { TbRadar } from "react-icons/tb";
+import { useAgentStreamStore } from "@/store/agentStream.store";
+import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
+
 const Sidebar = ({ sessionId }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -44,6 +47,9 @@ const Sidebar = ({ sessionId }) => {
   };
 
   const { sessions } = useSelector((state) => state.user);
+  const tokenUsage = useAgentStreamStore(
+    (state) => state.sessions[sessionId]?.tokenUsage ?? null,
+  );
 
   const handleClickTab = (id) => {
     dispatch(updateCurrentSession(id));
@@ -216,6 +222,7 @@ const Sidebar = ({ sessionId }) => {
       </div>
 
       <div className={styles.additionalOptions}>
+        {tokenUsage && <ContextUsageIndicator tokenUsage={tokenUsage} />}
         <div className={styles.supportStep}>
           <div
             className={styles.options}

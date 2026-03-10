@@ -9,6 +9,7 @@ interface ShellSocketClient {
   sessionId: string;
   userId: string;
   subscribedShells: Set<string>;
+  shellSentOffsets: Map<string, number>;
 }
 
 const clients = new Map<WebSocket, ShellSocketClient>();
@@ -33,9 +34,11 @@ function subscribeToShellEvents(client: ShellSocketClient, shellManager: ShellMa
   const listeners = new Map<string, (...args: any[]) => void>();
 
   const onOutput = (info: { shellId: string; data: string; offset: number }) => {
-    if (client.subscribedShells.has(info.shellId)) {
-      send(client.ws, "shell_output", info);
-    }
+    if (!client.subscribedShells.has(info.shellId)) return;
+    const sentOffset = client.shellSentOffsets.get(info.shellId);
+    if (sentOffset !== undefined && info.offset <= sentOffset) return;
+    client.shellSentOffsets.set(info.shellId, info.offset);
+    send(client.ws, "shell_output", info);
   };
 
   const onCreated = (info: { shellId: string; label: string; type: string; createdBy: string }) => {
@@ -45,6 +48,7 @@ function subscribeToShellEvents(client: ShellSocketClient, shellManager: ShellMa
   const onClosed = (info: { shellId: string }) => {
     send(client.ws, "shell_closed", info);
     client.subscribedShells.delete(info.shellId);
+    client.shellSentOffsets.delete(info.shellId);
   };
 
   const onConnectionStatus = (status: { sshConnected: boolean; error?: string }) => {
@@ -121,6 +125,7 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
       sessionId,
       userId,
       subscribedShells: new Set(),
+      shellSentOffsets: new Map(),
     };
     clients.set(ws, client);
 
@@ -178,7 +183,8 @@ async function handleMessage(
         send(client.ws, "error", { message: "shellId required" });
         return;
       }
-      client.subscribedShells.add(shellId);
+      // Don't add to subscribedShells yet — wait for request_buffer so the
+      // full buffer replay is sent first and the live listener doesn't race.
       send(client.ws, "shell_status", {
         shellId,
         status: shellManager.getShell(shellId)?.status ?? "closed",
@@ -190,6 +196,7 @@ async function handleMessage(
       const { shellId } = data ?? {};
       if (shellId) {
         client.subscribedShells.delete(shellId);
+        client.shellSentOffsets.delete(shellId);
       }
       break;
     }
@@ -216,7 +223,13 @@ async function handleMessage(
       }
       try {
         const { data: bufData, offset } = shellManager.readOutput(shellId, fromOffset);
-        send(client.ws, "shell_output", { shellId, data: bufData, offset });
+        client.shellSentOffsets.set(shellId, offset);
+        if (bufData) {
+          send(client.ws, "shell_output", { shellId, data: bufData, offset });
+        }
+        // Activate live forwarding only after the buffer snapshot offset is recorded,
+        // so the onOutput listener skips anything already covered by the replay.
+        client.subscribedShells.add(shellId);
       } catch (err: any) {
         send(client.ws, "error", { message: err.message });
       }
@@ -256,6 +269,16 @@ async function handleMessage(
       } catch (err: any) {
         send(client.ws, "error", { message: err.message });
       }
+      break;
+    }
+
+    case "resize_shell": {
+      const { shellId, cols, rows } = data ?? {};
+      if (!shellId || cols == null || rows == null) {
+        send(client.ws, "error", { message: "shellId, cols, and rows required" });
+        return;
+      }
+      shellManager.resizeShell(shellId, cols, rows);
       break;
     }
 

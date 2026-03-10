@@ -1,26 +1,30 @@
 import fs from "fs";
+import dotenv from "dotenv";
 import { getEnvFilePath, reloadEnv } from "./loadConfig";
+
+/**
+ * Escape a value for safe .env writing. Wraps in double quotes and escapes
+ * backslashes, double quotes, and newlines so values with special chars
+ * (e.g. [ ] # $ in passwords) are preserved correctly.
+ */
+function escapeEnvValue(value: string): string {
+  if (value === undefined || value === null) return '""';
+  const s = String(value);
+  const escaped = s
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+  return `"${escaped}"`;
+}
 
 export function readEnvFile(): Record<string, string> {
   const envPath = getEnvFilePath();
   if (!fs.existsSync(envPath)) return {};
 
-  const vars: Record<string, string> = {};
-  const lines = fs.readFileSync(envPath, "utf-8").split("\n");
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-
-    const key = trimmed.slice(0, eqIdx).trim();
-    const raw = trimmed.slice(eqIdx + 1).trim();
-    vars[key] = raw.replace(/^(['"])(.*)\1$/, "$2");
-  }
-
-  return vars;
+  const content = fs.readFileSync(envPath, "utf-8");
+  const parsed = dotenv.parse(content);
+  return parsed;
 }
 
 export function writeEnvFile(vars: Record<string, string>): void {
@@ -32,7 +36,7 @@ export function writeEnvFile(vars: Record<string, string>): void {
   ];
 
   for (const [key, value] of Object.entries(vars)) {
-    lines.push(`${key}=${value}`);
+    lines.push(`${key}=${escapeEnvValue(value)}`);
   }
 
   lines.push("");

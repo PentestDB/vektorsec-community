@@ -114,11 +114,15 @@ export class ShellManager extends EventEmitter {
   async connect(): Promise<void> {
     if (this.connected || this.connecting || this.destroyed) return;
     this.connecting = true;
+    this.sshConfig = buildSSHConfig();
 
     return new Promise<void>((resolve, reject) => {
       const ssh = new SSHClient();
+      let settled = false;
 
       ssh.on("ready", () => {
+        if (settled) return;
+        settled = true;
         this.sshConnection = ssh;
         this.connected = true;
         this.connecting = false;
@@ -133,29 +137,46 @@ export class ShellManager extends EventEmitter {
 
       ssh.on("error", (err: Error) => {
         console.error(`[ShellManager:${this.sessionId}] SSH error:`, err.message);
-        this.connecting = false;
-        this.emit("connection_status", { sshConnected: false, error: err.message });
-        if (!this.connected) {
+        if (!settled) {
+          settled = true;
+          this.connecting = false;
+          try { ssh.end(); } catch { /* ignore */ }
+          this.emit("connection_status", { sshConnected: false, error: err.message });
           reject(err);
-        } else {
+        } else if (this.connected && this.sshConnection === ssh) {
           this.handleDisconnect();
         }
       });
 
       ssh.on("close", () => {
-        if (this.connected) {
+        if (this.connected && this.sshConnection === ssh) {
           this.handleDisconnect();
         }
       });
 
       ssh.on("end", () => {
-        if (this.connected) {
+        if (this.connected && this.sshConnection === ssh) {
           this.handleDisconnect();
         }
       });
 
       ssh.connect(this.sshConfig);
     });
+  }
+
+  async reconnect(): Promise<void> {
+    if (this.sshConnection) {
+      try { this.sshConnection.end(); } catch { /* ignore */ }
+      this.sshConnection = null;
+    }
+    this.connected = false;
+    this.connecting = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempt = 0;
+    await this.connect();
   }
 
   private handleDisconnect(): void {
@@ -323,6 +344,16 @@ export class ShellManager extends EventEmitter {
       throw new Error(`Shell ${shellId} has no active channel (SSH disconnected?)`);
     }
     shell.channel.write(data);
+  }
+
+  resizeShell(shellId: string, cols: number, rows: number): void {
+    const shell = this.shells.get(shellId);
+    if (!shell || shell.status !== "active" || !shell.channel) return;
+    try {
+      (shell.channel as any).setWindow(rows, cols, 0, 0);
+    } catch {
+      // channel may be closing
+    }
   }
 
   async execInShell(

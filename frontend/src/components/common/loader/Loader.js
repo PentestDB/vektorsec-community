@@ -1,11 +1,15 @@
-import styles from "@/app/page.module.scss";
-import { Spin } from "antd";
+import styles from "./Loader.module.scss";
 
-const Loader = () => {
+const Loader = ({ message = "Loading", subtext }) => {
   return (
-    <div className={styles.container}>
-      <h1>Loading</h1>
-      <Spin size="large" />
+    <div className={styles.wrapper}>
+      <div className={styles.dots}>
+        <span className={styles.dot} aria-hidden />
+        <span className={styles.dot} aria-hidden />
+        <span className={styles.dot} aria-hidden />
+      </div>
+      <p className={styles.message}>{message}</p>
+      {subtext && <span className={styles.subtext}>{subtext}</span>}
     </div>
   );
 };

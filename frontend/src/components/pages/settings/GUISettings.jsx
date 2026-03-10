@@ -9,8 +9,7 @@ import {
   Col,
   Tag,
   Button,
-  message,
-  notification,
+  App,
   Divider,
   Tooltip,
   Popconfirm,
@@ -56,6 +55,7 @@ const AUTO_SETUP_STEPS = [
 ];
 
 const GUISettingsPage = () => {
+  const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const [advForm] = Form.useForm();
   const queryClient = useQueryClient();

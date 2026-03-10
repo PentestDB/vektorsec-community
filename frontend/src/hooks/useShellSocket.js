@@ -161,6 +161,10 @@ export default function useShellSocket({ sessionId, onError }) {
     send("close_shell", { shellId });
   }, [send]);
 
+  const resizeShell = useCallback((shellId, cols, rows) => {
+    send("resize_shell", { shellId, cols, rows });
+  }, [send]);
+
   const onShellOutput = useCallback((shellId, callback) => {
     outputCallbacks.current.set(shellId, callback);
     return () => {
@@ -196,6 +200,7 @@ export default function useShellSocket({ sessionId, onError }) {
     sendShellInput,
     spawnShell,
     closeShell,
+    resizeShell,
     onShellOutput,
     refreshShellList,
   };

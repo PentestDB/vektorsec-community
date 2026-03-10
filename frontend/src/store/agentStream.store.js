@@ -8,6 +8,7 @@ function createSessionState() {
     pendingManualExecution: null,
     subagents: [],
     historyLoaded: false,
+    tokenUsage: null,
 
     controllerRef: { current: null },
     streamingAssistantRef: { current: null },
@@ -108,6 +109,19 @@ export const useAgentStreamStore = create((set, get) => ({
         sessions: {
           ...state.sessions,
           [sessionId]: { ...s, subagents: newSubagents },
+        },
+      };
+    });
+  },
+
+  setTokenUsage: (sessionId, tokenUsage) => {
+    set((state) => {
+      const s = state.sessions[sessionId];
+      if (!s) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...s, tokenUsage },
         },
       };
     });

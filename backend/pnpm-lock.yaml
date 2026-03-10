@@ -63,8 +63,8 @@ importers:
         specifier: ^5.1.1
         version: 5.1.1
       burp-rpc:
-        specifier: ^1.0.3
-        version: 1.0.3
+        specifier: ^1.0.6
+        version: 1.0.6
       cheerio:
         specifier: ^1.0.0-rc.12
         version: 1.2.0
@@ -1235,8 +1235,8 @@ packages:
     resolution: {integrity: sha512-lHblz4ahamxpTmnsk+MNTRWsjYKv965MwOrSJyeD588rR3Jcu7swE+0wN5F+PbL5cjgu/9ObkhfzEPuofEMwLA==}
     engines: {node: '>=10.0.0'}
 
-  burp-rpc@1.0.3:
-    resolution: {integrity: sha512-mgEjjGrqYVSJVyV91QRI7h0eUETOA6mnaz3LucLU+n4l7+IhwcURD6m6SJTPqnPWKl5IOuAFrRIe7JGje58YuA==}
+  burp-rpc@1.0.6:
+    resolution: {integrity: sha512-QVhdXR/J+e0SYihYIbDg16FHtW6z0kx8wB/NuMIp6WsMBGw6h7Ajr+Cq0SFjPK7956JVgy/c6f8qXHzjztUYVA==}
     engines: {node: '>=18'}
 
   busboy@1.6.0:
@@ -4622,7 +4622,7 @@ snapshots:
   buildcheck@0.0.7:
     optional: true
 
-  burp-rpc@1.0.3:
+  burp-rpc@1.0.6:
     dependencies:
       '@grpc/grpc-js': 1.14.3
       '@grpc/proto-loader': 0.7.15

@@ -48,6 +48,7 @@ const SessionMainPage = ({ session_id }) => {
     sendShellInput,
     spawnShell,
     closeShell,
+    resizeShell,
     onShellOutput,
   } = useShellSocket({ sessionId: session_id, onError: handleShellError });
 
@@ -130,6 +131,7 @@ const SessionMainPage = ({ session_id }) => {
             onShellOutput={onShellOutput}
             spawnShell={spawnShell}
             closeShell={closeShell}
+            resizeShell={resizeShell}
             connectionStatus={connectionStatus}
             wsConnected={wsConnected}
             onReconnectSSH={handleReconnectSSH}

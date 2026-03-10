@@ -1,38 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { BulbOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
+import ReactMarkdown from "react-markdown";
 import styles from "@/styles/components/Chat.module.scss";
 import ToolCallBlock from "./ToolCallBlock";
-
-function renderMarkdown(text) {
-  if (!text) return null;
-
-  const parts = text.split(/(```[\s\S]*?```)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith("```")) {
-      const match = part.match(/```(\w*)\n?([\s\S]*?)```/);
-      const code = match ? match[2] : part.slice(3, -3);
-      return (
-        <pre key={i}>
-          <code>{code.trim()}</code>
-        </pre>
-      );
-    }
-
-    const lines = part.split("\n").map((line, j) => {
-      const boldLine = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-      const codeLine = boldLine.replace(/`([^`]+)`/g, "<code>$1</code>");
-      return (
-        <span key={j}>
-          {j > 0 && <br />}
-          <span dangerouslySetInnerHTML={{ __html: codeLine }} />
-        </span>
-      );
-    });
-
-    return <span key={i}>{lines}</span>;
-  });
-}
 
 function ReasoningBlock({ reasoning, isStreaming }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -196,7 +167,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
           <div
             className={`${styles.assistantMessage} ${streaming ? styles.streamingCursor : ""}`}
           >
-            {renderMarkdown(content)}
+            <ReactMarkdown>{content}</ReactMarkdown>
           </div>
         )}
         {toolCalls?.map((tc) => {

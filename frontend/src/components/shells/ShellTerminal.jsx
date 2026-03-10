@@ -12,6 +12,7 @@ export default function ShellTerminal({
   unsubscribeShell,
   sendShellInput,
   onShellOutput,
+  resizeShell,
 }) {
   const containerRef = useRef(null);
   const disposedRef = useRef(false);
@@ -67,14 +68,18 @@ export default function ShellTerminal({
       webglAddon = null;
     }
 
-    requestAnimationFrame(() => {
-      if (disposedRef.current) return;
+    const syncResize = () => {
+      if (disposedRef.current || !resizeShell) return;
       try {
         fitAddon.fit();
+        const { cols, rows } = terminal;
+        if (cols > 0 && rows > 0) resizeShell(shellId, cols, rows);
       } catch {
         // container not visible yet
       }
-    });
+    };
+
+    requestAnimationFrame(syncResize);
 
     terminal.onData((data) => {
       sendShellInput(shellId, data);
@@ -82,18 +87,20 @@ export default function ShellTerminal({
 
     subscribeShell(shellId, { fullBuffer: true });
 
+    const isFirstWriteRef = { current: true };
     const cleanup = onShellOutput(shellId, (data) => {
-      if (!disposedRef.current) terminal.write(data);
+      if (disposedRef.current) return;
+      if (isFirstWriteRef.current && typeof data === "string") {
+        isFirstWriteRef.current = false;
+        // Strip zsh PROMPT_EOL_MARK — the "%" (possibly wrapped in ANSI reverse-video
+        // escapes) followed by spaces and a carriage return. This appears when PTY and
+        // terminal dimensions are briefly out of sync on spawn (xtermjs/xterm.js#2564).
+        data = data.replace(/^(\x1b\[[0-9;]*m)*%(\x1b\[[0-9;]*m)*\s*\r/, "");
+      }
+      if (data) terminal.write(data);
     });
 
-    const resizeObserver = new ResizeObserver(() => {
-      if (disposedRef.current) return;
-      try {
-        fitAddon.fit();
-      } catch {
-        // ignore
-      }
-    });
+    const resizeObserver = new ResizeObserver(syncResize);
     resizeObserver.observe(containerRef.current);
 
     return () => {
@@ -104,7 +111,7 @@ export default function ShellTerminal({
       try { webglAddon?.dispose(); } catch { /* already disposed */ }
       try { terminal.dispose(); } catch { /* already disposed */ }
     };
-  }, [shellId, subscribeShell, unsubscribeShell, sendShellInput, onShellOutput]);
+  }, [shellId, subscribeShell, unsubscribeShell, sendShellInput, onShellOutput, resizeShell]);
 
   return (
     <div

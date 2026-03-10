@@ -13,6 +13,7 @@ export default function ShellPanel({
   onShellOutput,
   spawnShell,
   closeShell,
+  resizeShell,
   connectionStatus,
   wsConnected,
   onReconnectSSH,
@@ -148,6 +149,7 @@ export default function ShellPanel({
             unsubscribeShell={unsubscribeShell}
             sendShellInput={sendShellInput}
             onShellOutput={onShellOutput}
+            resizeShell={resizeShell}
           />
         ) : (
           <div style={{

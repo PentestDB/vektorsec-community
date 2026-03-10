@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { notification } from "antd";
+import { DownOutlined } from "@ant-design/icons";
 import Image from "next/image";
 import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
@@ -18,6 +19,9 @@ export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+  const FAR_UP_THRESHOLD = 250;
 
   const {
     messages,
@@ -45,8 +49,9 @@ export default function ChatView({ sessionId }) {
   const updateStickToBottom = useCallback(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    shouldStickToBottomRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldStickToBottomRef.current = distFromBottom < 150;
+    setShowScrollBtn(distFromBottom > FAR_UP_THRESHOLD);
   }, []);
 
   const historyLoaded = useAgentStreamStore(
@@ -57,6 +62,7 @@ export default function ChatView({ sessionId }) {
   useEffect(() => {
     if (historyLoaded) {
       shouldStickToBottomRef.current = true;
+      setShowScrollBtn(false);
       setTimeout(() => scrollToBottom(), 50);
     }
   }, [historyLoaded, scrollToBottom]);
@@ -239,6 +245,18 @@ export default function ChatView({ sessionId }) {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {showScrollBtn && !isEmpty && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom("smooth")}
+          title="Scroll to latest"
+          className={styles.scrollToBottomBtn}
+        >
+          <DownOutlined />
+          <span>scroll to latest</span>
+        </button>
+      )}
 
       <ChatInput
         onSend={handleSend}

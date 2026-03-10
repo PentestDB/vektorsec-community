@@ -5,7 +5,7 @@ import SessionsModel, {
   AgentMessageDoc,
   AgentState,
 } from "../models/Sessions/Sessions.model";
-import { invoke_llm_streaming, ToolCallData, ReasoningMode } from "../utils/llm/providers";
+import { invoke_llm_streaming, ToolCallData, ReasoningMode, getProvider } from "../utils/llm/providers";
 import { readEnvFile } from "../utils/envWriter";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { toolRegistry } from "../tools/registry";
@@ -137,6 +137,26 @@ async function trackTokens(
       },
     },
   );
+}
+
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  "gpt-4o": 128_000,
+  "gpt-4o-mini": 128_000,
+  "gpt-4-turbo": 128_000,
+  "gpt-4": 8_192,
+  "gpt-3.5-turbo": 16_385,
+  "gpt-5-nano": 128_000,
+  "claude-sonnet-4-20250514": 200_000,
+  "claude-3-5-sonnet-20241022": 200_000,
+  "claude-3-opus-20240229": 200_000,
+  "claude-3-haiku-20240307": 200_000,
+};
+
+function getModelContextLimit(model: string): number {
+  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
+    if (model.includes(key)) return limit;
+  }
+  return 128_000;
 }
 
 // ─── Build shell status context (injected after summarization) ──────
@@ -367,6 +387,16 @@ export async function runAgentLoop(params: {
           result.usage.completion_tokens ?? 0,
           result.usage.total_tokens ?? 0,
         );
+
+        const updatedSession = await SessionsModel.findOne({ sessionId }).select("totalTokens").lean();
+        const config = await getProvider();
+        const contextLimit = getModelContextLimit(config.model);
+        sse.write("token_usage", {
+          totalTokens: updatedSession?.totalTokens ?? 0,
+          promptTokens: result.usage.prompt_tokens ?? 0,
+          completionTokens: result.usage.completion_tokens ?? 0,
+          contextLimit,
+        });
       }
 
       const assistantMsg: AgentMessageDoc = {

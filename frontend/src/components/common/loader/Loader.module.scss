@@ -1,0 +1,73 @@
+@import "@/styles/_variables";
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    var(--filled-purple) 0%,
+    var(--primary-purple) 100%
+  );
+  box-shadow: 0 0 12px rgba(142, 53, 255, 0.4);
+  animation: bounce 1.4s ease-in-out infinite both;
+
+  &:nth-child(1) {
+    animation-delay: -0.32s;
+  }
+
+  &:nth-child(2) {
+    animation-delay: -0.16s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0s;
+  }
+}
+
+@keyframes bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.65);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 16px rgba(142, 53, 255, 0.6);
+  }
+}
+
+.message {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--primary-text);
+  letter-spacing: -0.02em;
+  text-align: center;
+  max-width: 20rem;
+}
+
+.subtext {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--secondary-text);
+  letter-spacing: 0.01em;
+}

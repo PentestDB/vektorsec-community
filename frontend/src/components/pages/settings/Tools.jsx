@@ -1,12 +1,13 @@
 import Loader from "@/components/common/loader/Loader";
 import { getUserTools, toolPreferenceUpdate } from "@/services/user.service";
 import styles from "@/styles/pages/Tools.module.scss";
-import { Checkbox, Col, Form, message, Row } from "antd";
+import { Checkbox, Col, Form, App, Row } from "antd";
 import { debounce } from "lodash";
 import { FiExternalLink } from "react-icons/fi";
 import { useMutation, useQuery } from "react-query";
 
 const ToolsPage = () => {
+  const { message } = App.useApp();
   const { data, isLoading } = useQuery("user-tools", getUserTools);
 
   const updateToolsMutation = useMutation(toolPreferenceUpdate, {

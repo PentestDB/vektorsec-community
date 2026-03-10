@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { App, Spin } from "antd";
-import styles from "@/app/page.module.scss";
+import { App } from "antd";
 import { checkSession } from "@/services/auth.service";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "react-query";
 import { useDispatch } from "react-redux";
 import { loginUser, logout } from "@/store/user.slice";
 import MobileScreen from "./MobileScreen";
+import Loader from "@/components/common/loader/Loader";
+import styles from "@/app/page.module.scss";
 
 export const AuthContextProvider = ({ children }) => {
   const [loading, setLoading] = React.useState(true);
@@ -69,10 +70,10 @@ export const AuthContextProvider = ({ children }) => {
   return (
     <>
       {loading ? (
-        <div className={styles.container}>
-          <h1>Checking if you are logged-in</h1>
-          <Spin size="large" />
-        </div>
+        <Loader
+          message="Checking session"
+          subtext="Verifying your credentials..."
+        />
       ) : pathname === "/login" ? (
         <>{children}</>
       ) : (

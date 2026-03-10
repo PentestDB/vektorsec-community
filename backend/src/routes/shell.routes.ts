@@ -3,10 +3,28 @@ import { verifySess } from "../middlewares/VerifySession.middleware";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import { requireActiveSession } from "../services/session.helpers";
 import SessionsModel from "../models/Sessions/Sessions.model";
+import { execSSHCommand } from "../services/ssh.service";
 
 const router = Router();
 
 router.use(verifySess);
+
+const SSH_TEST_TIMEOUT_MS = 500;
+
+router.post("/test-ssh", async (_req: Request, res: Response) => {
+  try {
+    const whoami = await execSSHCommand("whoami", SSH_TEST_TIMEOUT_MS);
+    return res.status(200).json({
+      success: true,
+      message: `SSH connected as ${whoami.trim()}`,
+    });
+  } catch (err: any) {
+    return res.status(200).json({
+      success: false,
+      message: err.message || "SSH connection failed",
+    });
+  }
+});
 
 router.get("/:sessionId/list", async (req: Request, res: Response) => {
   try {
@@ -117,7 +135,7 @@ router.post("/:sessionId/reconnect", async (req: Request, res: Response) => {
     if (!session) return;
 
     const mgr = await sessionLifecycle.getShellManager(sessionId);
-    await mgr.connect();
+    await mgr.reconnect();
     return res.status(200).json({ message: "Reconnected", sshConnected: true });
   } catch (err: any) {
     return res.status(500).json({ message: `Reconnect failed: ${err.message}` });

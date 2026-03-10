@@ -8,7 +8,7 @@ import styles from "@/styles/pages/Capabilities.module.scss";
 import {
   Checkbox,
   Collapse,
-  message,
+  App,
   Tag,
   Tooltip,
   Button,
@@ -82,6 +82,7 @@ const CapabilityItem = ({ cap, checked, installed, onChange }) => {
 };
 
 const CapabilitiesPage = () => {
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [detecting, setDetecting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

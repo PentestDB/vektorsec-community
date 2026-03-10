@@ -9,7 +9,7 @@ import {
   Row,
   Col,
   Tag,
-  message,
+  App,
   Divider,
   Tooltip,
   Button,
@@ -23,19 +23,20 @@ import {
 import { TbTerminal2 } from "react-icons/tb";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
-import SSHTestTerminalModal from "./SSHTestTerminalModal";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getSSHConfig, updateSSHConfig, updateSafetyProtections } from "@/services/user.service";
+import { apiClient } from "@/utils/axios.config";
 
 const SSHPage = () => {
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("ssh-config", getSSHConfig);
 
   const [form] = Form.useForm();
   const [authMethod, setAuthMethod] = useState("password");
   const [saving, setSaving] = useState(false);
-  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [testingSSH, setTestingSSH] = useState(false);
   const [safetyDisabled, setSafetyDisabled] = useState(false);
 
   useEffect(() => {
@@ -109,7 +110,22 @@ const SSHPage = () => {
             type="default"
             size="small"
             icon={<TbTerminal2 />}
-            onClick={() => setTestModalOpen(true)}
+            loading={testingSSH}
+            onClick={async () => {
+              setTestingSSH(true);
+              try {
+                const { data: res } = await apiClient.post("/shell/test-ssh");
+                if (res.success) {
+                  message.success(res.message);
+                } else {
+                  message.error(res.message || "SSH connection failed");
+                }
+              } catch (err) {
+                message.error(err?.response?.data?.message || "SSH connection failed");
+              } finally {
+                setTestingSSH(false);
+              }
+            }}
           >
             Test connectivity
           </Button>
@@ -284,10 +300,6 @@ const SSHPage = () => {
         </ul>
       </div>
 
-      <SSHTestTerminalModal
-        open={testModalOpen}
-        onClose={() => setTestModalOpen(false)}
-      />
     </div>
   );
 };

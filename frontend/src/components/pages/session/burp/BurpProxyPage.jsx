@@ -17,6 +17,7 @@ import {
 import { TbRadar } from "react-icons/tb";
 import { useQuery, useMutation } from "react-query";
 import {
+  getBurpConnectionStatus,
   getBurpProxyHistory,
   getBurpProxyEntry,
   sendBurpRequest,
@@ -520,6 +521,19 @@ const BurpProxyPage = ({ sessionId }) => {
     prevFilterRef.current = { debouncedSearch, methodParam, statusRange, hideAssets };
   }, [debouncedSearch, methodParam, statusRange, hideAssets]);
 
+  const {
+    data: connectionStatus,
+    isLoading: connectionLoading,
+    refetch: refetchConnection,
+  } = useQuery("burp-connection-status", getBurpConnectionStatus, {
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const burpConnected = connectionStatus?.connected === true;
+
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery(
     ["burp-proxy-history", page, pageSize, debouncedSearch, methodParam, statusRange, hideAssets],
     () =>
@@ -533,6 +547,7 @@ const BurpProxyPage = ({ sessionId }) => {
         hideAssets: hideAssets ? "true" : undefined,
       }),
     {
+      enabled: burpConnected,
       keepPreviousData: true,
       refetchOnWindowFocus: false,
       retry: 1,
@@ -542,7 +557,7 @@ const BurpProxyPage = ({ sessionId }) => {
   const { data: interceptData, refetch: refetchIntercept } = useQuery(
     ["burp-intercept-status"],
     getProxyInterceptStatus,
-    { refetchOnWindowFocus: false, retry: false }
+    { enabled: burpConnected, refetchOnWindowFocus: false, retry: false }
   );
 
   const interceptMutation = useMutation(
@@ -573,9 +588,9 @@ const BurpProxyPage = ({ sessionId }) => {
   });
 
   const errMsg = error?.response?.data?.message || "";
-  const notConfigured =
-    error?.response?.data?.notConfigured ||
-    (error?.response?.status === 400 && /not configured|Burp RPC/i.test(errMsg));
+  const notConfigured = connectionStatus?.configured === false;
+  const configuredButDisconnected =
+    connectionStatus?.configured === true && connectionStatus?.connected === false;
 
   const openRepeater = (record) => {
     setRepeaterRecord(record);
@@ -723,6 +738,17 @@ const BurpProxyPage = ({ sessionId }) => {
     },
   ];
 
+  if (connectionLoading) {
+    return (
+      <div className={styles.burpContainer}>
+        <div className={styles.emptyState}>
+          <Spin size="large" />
+          <p style={{ marginTop: "1rem" }}>Checking Burp connection...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (notConfigured) {
     return (
       <div className={styles.burpContainer}>
@@ -743,6 +769,40 @@ const BurpProxyPage = ({ sessionId }) => {
           >
             Enable in Settings
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (configuredButDisconnected) {
+    return (
+      <div className={styles.burpContainer}>
+        <div className={styles.emptyState}>
+          <TbRadar className={styles.emptyIcon} />
+          <h3>Burp Suite Not Connected</h3>
+          <p>
+            {connectionStatus?.message ||
+              "Burp is configured but cannot connect. Make sure Burp Suite with the RPC extension is running."}
+          </p>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+            <Button
+              type="primary"
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => refetchConnection()}
+            >
+              Retry Connection
+            </Button>
+            <Button
+              size="small"
+              icon={<SettingOutlined />}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("open-settings", { detail: "burp" }));
+              }}
+            >
+              Check Settings
+            </Button>
+          </div>
         </div>
       </div>
     );

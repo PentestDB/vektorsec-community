@@ -9,8 +9,7 @@ import {
   Row,
   Col,
   Tag,
-  message,
-  notification,
+  App,
   Tooltip,
   Popconfirm,
   Divider,
@@ -163,6 +162,7 @@ const OAuthCodeModal = ({ open, onCancel, onSubmit, loading }) => {
 };
 
 const ModelsPage = () => {
+  const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("model-config", getModelConfig);

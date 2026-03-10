@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import { readEnvFile } from "../utils/envWriter";
 
+const BURP_DISCONNECTED_MSG =
+  "Burp Suite appears to be disconnected. " +
+  "Please verify the Burp RPC extension is loaded and running, " +
+  "and check your host/port configuration in Settings.";
+
 function getBurpConnection() {
   const env = readEnvFile();
   const host = env.BURP_RPC_HOST;
@@ -12,6 +17,95 @@ async function createBurpClient(host: string, port: number) {
   const { BurpClient } = await import("burp-rpc");
   return new BurpClient({ host, port });
 }
+
+function isBurpUnreachable(err: any): boolean {
+  return err?.code === 14 || err?.code === 4;
+}
+
+/**
+ * Lightweight health check for Burp connectivity.
+ * No auth required — useful for monitoring and dashboards.
+ * Uses the dedicated Ping RPC to verify the gRPC channel is alive.
+ */
+export const getBurpHealth = async (_req: Request, res: Response) => {
+  try {
+    const { host, port } = getBurpConnection();
+
+    if (!host || !String(host).trim()) {
+      return res.status(200).json({
+        configured: false,
+        connected: false,
+        message: "Burp RPC is not configured.",
+      });
+    }
+
+    const burp = await createBurpClient(host, port);
+
+    try {
+      const ping = await burp.ping();
+      return res.status(200).json({
+        configured: true,
+        connected: true,
+        burpVersion: ping.burpVersion,
+        extensionVersion: ping.extensionVersion,
+      });
+    } catch {
+      return res.status(200).json({
+        configured: true,
+        connected: false,
+        message: BURP_DISCONNECTED_MSG,
+      });
+    } finally {
+      burp.close();
+    }
+  } catch (error: any) {
+    return res.status(200).json({
+      configured: true,
+      connected: false,
+      message: BURP_DISCONNECTED_MSG,
+    });
+  }
+};
+
+export const getBurpConnectionStatus = async (_req: Request, res: Response) => {
+  try {
+    const { host, port } = getBurpConnection();
+
+    if (!host || !String(host).trim()) {
+      return res.status(200).json({
+        configured: false,
+        connected: false,
+        message: "Burp RPC is not configured. Set the host and port in Settings.",
+      });
+    }
+
+    const burp = await createBurpClient(host, port);
+
+    try {
+      const ping = await burp.ping();
+      return res.status(200).json({
+        configured: true,
+        connected: true,
+        burpVersion: ping.burpVersion,
+        extensionVersion: ping.extensionVersion,
+      });
+    } catch {
+      return res.status(200).json({
+        configured: true,
+        connected: false,
+        message: BURP_DISCONNECTED_MSG,
+      });
+    } finally {
+      burp.close();
+    }
+  } catch (error: any) {
+    return res.status(200).json({
+      configured: true,
+      connected: false,
+      message: BURP_DISCONNECTED_MSG,
+    });
+  }
+};
 
 export const getBurpProxyHistory = async (req: Request, res: Response) => {
   try {
@@ -56,10 +150,8 @@ export const getBurpProxyHistory = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("[burp] Proxy history error:", error.message);
 
-    if (error?.code === 14) {
-      return res.status(502).json({
-        message: "Could not connect to Burp Suite. Make sure the Burp RPC extension is running.",
-      });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
 
     return res.status(500).json({ message: "Failed to fetch proxy history" });
@@ -112,10 +204,8 @@ export const getBurpProxyEntry = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("[burp] Proxy entry error:", error.message);
 
-    if (error?.code === 14) {
-      return res.status(502).json({
-        message: "Could not connect to Burp Suite.",
-      });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
 
     return res.status(500).json({ message: "Failed to fetch proxy entry" });
@@ -180,8 +270,8 @@ export const sendBurpRequest = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Send request error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to send request" });
   }
@@ -237,8 +327,8 @@ export const sendToRepeater = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Send to repeater error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to send to Repeater" });
   }
@@ -292,8 +382,8 @@ export const sendToIntruder = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Send to intruder error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to send to Intruder" });
   }
@@ -338,8 +428,8 @@ export const sendAndReceiveRepeater = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Repeater send error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to send via Repeater" });
   }
@@ -363,8 +453,8 @@ export const generateCollaboratorPayload = async (req: Request, res: Response) =
     }
   } catch (error: any) {
     console.error("[burp] Collaborator generate error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to generate Collaborator payload" });
   }
@@ -392,8 +482,8 @@ export const pollCollaborator = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Collaborator poll error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to poll Collaborator" });
   }
@@ -416,8 +506,8 @@ export const getProxyInterceptStatus = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Intercept status error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to get intercept status" });
   }
@@ -445,8 +535,8 @@ export const setProxyIntercept = async (req: Request, res: Response) => {
     }
   } catch (error: any) {
     console.error("[burp] Set intercept error:", error.message);
-    if (error?.code === 14) {
-      return res.status(502).json({ message: "Could not connect to Burp Suite." });
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
     }
     return res.status(500).json({ message: "Failed to set intercept" });
   }

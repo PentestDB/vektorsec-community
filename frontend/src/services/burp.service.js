@@ -1,5 +1,16 @@
 import { apiClient } from "@/utils/axios.config";
 
+/** Lightweight health check (no auth). Use for status bars or monitoring. */
+export const getBurpHealth = async () => {
+  const res = await apiClient.get("/burp/health");
+  return res.data;
+};
+
+export const getBurpConnectionStatus = async () => {
+  const res = await apiClient.get("/burp/connection-status");
+  return res.data;
+};
+
 export const getBurpProxyHistory = async ({
   page = 1,
   pageSize = 20,
