@@ -287,7 +287,7 @@ To run Pentest Copilot effectively, your host machine should meet the following 
 | AI-Powered Guidance | Leverages LLMs to assist users through all stages of penetration testing. |
 | Workflow Support | Facilitates reconnaissance, enumeration, vulnerability identification, privilege escalation, data extraction, and footprint cleanup. |
 | Custom Tool Selection | Users choose preferred CLI tools at Settings > Capabilities. The copilot uses these to generate commands. |
-| Agent Tools | Toggle individual AI tools (bash, Python, shells, Google search, subagents, Burp Suite, browser agent) at Settings > Agent Tools. |
+| Agent Tools | Toggle individual AI tools (bash, Python, shells, Google search, subagents, Burp Suite, browser agent) per session in the session sidebar. |
 | Integrated Terminal | Direct terminal access to the Kali container from the workspace page for command execution. |
 | Exploit Box (Kali Container) | Kali Linux container with pre-installed tools (modifiable via `./kali/tools.sh`), accessible via SSH, OpenVPN, and noVNC. |
 | VPN Integration | Upload custom OpenVPN config files and connect the Kali container to a VPN via the UI. |
@@ -319,10 +319,9 @@ Core routes:
 - `/session/[session_id]/vpn`: Upload and connect custom OpenVPN configs
 - `/session/[session_id]/burp`: Burp proxy history, request inspection, send to Repeater/Intruder
 
-Settings routes:
+Agent Tools (per-session) are toggled in the session sidebar. Settings routes:
 
 - `/settings/models`: LLM provider and model selection
-- `/settings/agent-tools`: Toggle AI tools (bash, Burp, browser, etc.)
 - `/settings/capabilities`: CLI tool preferences
 - `/settings/ssh`: Exploit box SSH configuration
 - `/settings/gui`: VNC configuration

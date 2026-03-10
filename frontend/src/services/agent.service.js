@@ -15,6 +15,16 @@ export const getSessionInfo = async (sessionId) => {
   return res.data;
 };
 
+export const getSessionAgentToolsConfig = async (sessionId) => {
+  const res = await apiClient.get(`/agent/session/${sessionId}/agent-tools-config`);
+  return res.data;
+};
+
+export const updateSessionAgentToolsConfig = async (sessionId, body) => {
+  const res = await apiClient.post(`/agent/session/${sessionId}/agent-tools-config`, body);
+  return res.data;
+};
+
 export const getSessionHistory = async (sessionId) => {
   const res = await apiClient.get(`/agent/session/${sessionId}/history`);
   return res.data;

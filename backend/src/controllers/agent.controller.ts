@@ -14,6 +14,8 @@ import {
   abortSession,
 } from "../services/agent.service";
 import { parseSlashCommand, executeSlashCommand, matchCommands, SLASH_COMMANDS } from "../services/slash-commands";
+import { toolRegistry } from "../tools/registry";
+import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -366,6 +368,61 @@ export const handleSlashCommand = async (req: Request, res: Response) => {
 
 export const getSlashCommands = async (_req: Request, res: Response) => {
   return res.status(200).json(SLASH_COMMANDS);
+};
+
+export const getSessionAgentToolsConfig = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+      return res.status(400).json({ message: "sessionId is required" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const disabledTools: string[] = session.disabledAgentTools || [];
+    const unconfigured = new Set(getUnconfiguredToolNames());
+    const allTools = toolRegistry.getAll().map((t) => ({
+      name: t.name,
+      description: t.description,
+      enabled: !disabledTools.includes(t.name),
+      configured: !unconfigured.has(t.name),
+    }));
+
+    return res.status(200).json({ tools: allTools });
+  } catch (err: any) {
+    console.error("[agent] getSessionAgentToolsConfig error:", err);
+    return res.status(400).json({ message: "Failed to get agent tools config" });
+  }
+};
+
+export const updateSessionAgentToolsConfig = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+    const { disabledTools } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ message: "sessionId is required" });
+    }
+
+    if (!Array.isArray(disabledTools)) {
+      return res.status(400).json({ message: "disabledTools must be an array" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    session.disabledAgentTools = disabledTools;
+    await session.save();
+
+    return res.status(200).json({ message: "Agent tools config updated" });
+  } catch (err: any) {
+    console.error("[agent] updateSessionAgentToolsConfig error:", err);
+    return res.status(400).json({ message: "Failed to update agent tools config" });
+  }
 };
 
 export const getUserSessions = async (req: Request, res: Response) => {

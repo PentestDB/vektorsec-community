@@ -7,6 +7,7 @@ import SessionsModel, {
 } from "../models/Sessions/Sessions.model";
 import { invoke_llm_streaming, ToolCallData, ReasoningMode } from "../utils/llm/providers";
 import { readEnvFile } from "../utils/envWriter";
+import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { toolRegistry } from "../tools/registry";
 import {
   executeToolCalls,
@@ -209,7 +210,7 @@ export async function runAgentLoop(params: {
 
   const user = await UserModel.findById(session.uid).lean();
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
-  const disabledAgentTools: string[] = (user?.configs as any)?.disabledAgentTools ?? [];
+  const disabledAgentTools: string[] = session.disabledAgentTools ?? [];
 
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
@@ -300,7 +301,11 @@ export async function runAgentLoop(params: {
       }
 
       const openaiMessages = messagesToOpenAI(messages);
-      const tools = toolRegistry.toOpenAISchemas({ disabledTools: disabledAgentTools });
+      const unconfiguredTools = getUnconfiguredToolNames();
+      const tools = toolRegistry.toOpenAISchemas({
+        disabledTools: disabledAgentTools,
+        unconfiguredTools,
+      });
 
       const env = readEnvFile();
       const reasoningMode = (env.REASONING_MODE || "medium") as ReasoningMode;

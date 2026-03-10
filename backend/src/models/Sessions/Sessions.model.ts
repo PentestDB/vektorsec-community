@@ -102,6 +102,7 @@ export interface SessionDoc extends mongoose.Document {
   shells: ShellDoc[];
   subagents: SubagentDoc[];
   connectionState: ConnectionStateDoc;
+  disabledAgentTools?: string[];
 }
 
 const ToolCallSchema = new Schema(
@@ -235,6 +236,10 @@ const SessionSchema = new Schema({
       lastError: { type: String },
     },
     default: { sshConnected: false },
+  },
+  disabledAgentTools: {
+    type: [{ type: String }],
+    default: [],
   },
 });
 

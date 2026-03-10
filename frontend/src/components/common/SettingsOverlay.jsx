@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbRadar, TbWorldWww, TbPlugConnected } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbRadar, TbWorldWww } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
@@ -11,7 +11,6 @@ import SSHPage from "@/components/pages/settings/SSH";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
-import AgentToolsPage from "@/components/pages/settings/AgentTools";
 
 const TABS = [
   {
@@ -19,13 +18,6 @@ const TABS = [
     label: "My Account",
     icon: RiAccountCircleLine,
     component: MyAccount,
-  },
-  {
-    key: "agent-tools",
-    label: "Agent Tools",
-    description: "Enable or disable tools available to the AI agent during sessions.",
-    icon: TbPlugConnected,
-    component: AgentToolsPage,
   },
   {
     key: "capabilities",

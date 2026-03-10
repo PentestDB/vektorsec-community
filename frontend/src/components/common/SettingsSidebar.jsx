@@ -2,7 +2,7 @@ import { Col } from "antd";
 import { AiOutlineDoubleLeft } from "react-icons/ai";
 import styles from "@/styles/pages/Session.module.scss";
 import { RiAccountCircleLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbWorldWww, TbPlugConnected } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbWorldWww } from "react-icons/tb";
 import { usePathname, useRouter } from "next/navigation";
 
 const settingItems = [
@@ -11,12 +11,6 @@ const settingItems = [
         title: "My Account",
         path: "/settings",
         icon: <RiAccountCircleLine className={styles.sidebarIcon} />
-    },
-    {
-        title: "Agent Tools",
-        name: "Agent Tools",
-        path: "/settings/agent-tools",
-        icon: <TbPlugConnected className={styles.sidebarIcon} />
     },
     {
         title: "Capabilities",

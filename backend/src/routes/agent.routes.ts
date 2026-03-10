@@ -14,6 +14,8 @@ import {
   clearContext,
   handleSlashCommand,
   getSlashCommands,
+  getSessionAgentToolsConfig,
+  updateSessionAgentToolsConfig,
 } from "../controllers/agent.controller";
 
 const router = express.Router();
@@ -22,6 +24,8 @@ router.post("/create-session", [verifySess], createSession);
 router.post("/sessions", [verifySess], getUserSessions);
 router.get("/session/:sessionId", [verifySess], getSessionInfo);
 router.get("/session/:sessionId/history", [verifySess], getHistory);
+router.get("/session/:sessionId/agent-tools-config", [verifySess], getSessionAgentToolsConfig);
+router.post("/session/:sessionId/agent-tools-config", [verifySess], updateSessionAgentToolsConfig);
 router.post("/delete-session", [verifySess], deleteSession);
 
 router.post("/message", [verifySess], sendMessage);

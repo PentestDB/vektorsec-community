@@ -4,10 +4,10 @@ import SessionsModel, { AgentMessageDoc, SubagentStatus } from "../models/Sessio
 import { ShellManager } from "./shell.manager";
 import { SSEWriter } from "./agent.service";
 import { toolRegistry } from "../tools/registry";
+import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { ExecutionContext, ToolResult } from "../tools/types";
-import UserModel from "../models/User/User.model";
 
 const MAX_SUBAGENT_ITERATIONS = 15;
 const MAX_SUBAGENT_WALL_CLOCK_MS = 10 * 60 * 1000; // 10 minutes
@@ -142,8 +142,8 @@ export class SubagentManager extends EventEmitter {
   }): Promise<void> {
     const { subagentId, task, sse, userId, abortSignal } = params;
 
-    const subagentUser = await UserModel.findById(userId).lean();
-    const disabledAgentTools: string[] = (subagentUser?.configs as any)?.disabledAgentTools ?? [];
+    const session = await SessionsModel.findOne({ sessionId: this.sessionId }).lean();
+    const disabledAgentTools: string[] = session?.disabledAgentTools ?? [];
 
     const systemMsg: AgentMessageDoc = {
       id: `sys_${subagentId}`,
@@ -208,7 +208,12 @@ export class SubagentManager extends EventEmitter {
         }
 
         const openaiMessages = messagesToOpenAI(messages);
-        const tools = toolRegistry.toOpenAISchemas({ excludeSubagent: true, disabledTools: disabledAgentTools });
+        const unconfiguredTools = getUnconfiguredToolNames();
+        const tools = toolRegistry.toOpenAISchemas({
+          excludeSubagent: true,
+          disabledTools: disabledAgentTools,
+          unconfiguredTools,
+        });
 
         let assistantContent = "";
         let assistantToolCalls: ToolCallData[] = [];

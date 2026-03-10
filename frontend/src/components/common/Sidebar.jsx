@@ -13,6 +13,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
 import { clearContext } from "@/services/agent.service";
+import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
 import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
@@ -150,6 +151,8 @@ const Sidebar = ({ sessionId }) => {
             }} />
           </div>
         </div>
+
+        <AgentToolsPanel sessionId={sessionId} />
 
         <div className={styles.sessionOptions}>
           {sessions

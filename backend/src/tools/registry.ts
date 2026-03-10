@@ -45,6 +45,7 @@ class ToolRegistry {
   toOpenAISchemas(opts?: {
     excludeSubagent?: boolean;
     disabledTools?: string[];
+    unconfiguredTools?: string[];
   }): OpenAI.Chat.ChatCompletionTool[] {
     let tools = this.getAll();
     if (opts?.excludeSubagent) {
@@ -53,6 +54,10 @@ class ToolRegistry {
     if (opts?.disabledTools?.length) {
       const disabled = new Set(opts.disabledTools);
       tools = tools.filter((t) => !disabled.has(t.name));
+    }
+    if (opts?.unconfiguredTools?.length) {
+      const unconf = new Set(opts.unconfiguredTools);
+      tools = tools.filter((t) => !unconf.has(t.name));
     }
     return tools.map(toolToOpenAISchema);
   }
