@@ -241,7 +241,7 @@ const Sidebar = ({ sessionId }) => {
           </div>
           <div
             className={styles.options}
-            onClick={() => window.open("https://copilot-docs.bugbase.ai/", "_blank")}
+            onClick={() => window.open("https://github.com/bugbasesecurity/pentest-copilot/wiki", "_blank")}
           >
             <Image src={docs} width={14} height={14} alt="" />
             Documentation

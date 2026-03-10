@@ -8,7 +8,7 @@
 ![GitHub Repo stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot)
 ![GitHub forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot)
 
-Pentest Copilot is an AI-powered browser-based ethical hacking assistant designed to streamline pentesting workflows.
+Pentest Copilot is a state-of-the-art, open-source autonomous pentesting solution built for real-world engagements—with support for boot2root boxes and CTF challenges.
 
 Explore the [Github Wiki](https://github.com/bugbasesecurity/pentest-copilot/wiki) for detailed documentation on features, installation, and usage.
 
@@ -20,7 +20,7 @@ Explore the [Github Wiki](https://github.com/bugbasesecurity/pentest-copilot/wik
 
 ## Pentest Copilot in Action
 
-A quick walkthrough of Pentest Copilot testing a TryHackMe machine [RootMe](https://tryhackme.com/room/rrootme), a boot2root challenge.
+A walkthrough of Pentest Copilot testing a TryHackMe machine [RootMe](https://tryhackme.com/room/rrootme).
 
 https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 
@@ -41,7 +41,7 @@ https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
 
 <h2 id="introduction">Introduction</h2>
 
-Pentest Copilot is an open-source tool built to assist ethical hackers and penetration testers. By integrating LLMs, it automates and enhances various pentesting tasks. The tool is deployable locally with Docker and includes an optional Kali Linux container for simulating a pentest environment.
+Pentest Copilot is a state-of-the-art, open-source autonomous pentesting solution designed for real-life security engagements. By integrating LLMs, it automates and enhances reconnaissance, exploitation, and post-exploitation—enabling security teams to run structured assessments with minimal manual overhead. It can also be used for boot2root boxes and CTF challenges. The tool is deployable locally with Docker and includes an optional Kali Linux container for simulating a pentest environment.
 
 ### Why Pentest Copilot?
 

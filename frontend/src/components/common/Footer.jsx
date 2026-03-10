@@ -72,9 +72,6 @@ const Footer = () => {
                   <a className={styles.footerLink} href="/login">
                     Login
                   </a>
-                  <a className={styles.footerLink} href="/ai">
-                    AI
-                  </a>
                 </div>
               </Col>
               <Col lg={5} md={12} sm={12} xs={12}>
@@ -86,7 +83,9 @@ const Footer = () => {
 
                   <a
                     className={styles.footerLink}
-                    href="https://copilot-docs.bugbase.ai"
+                    href="https://github.com/bugbasesecurity/pentest-copilot/wiki"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
                     Documentation
                   </a>
@@ -122,7 +121,7 @@ const Footer = () => {
       </div>
 
       <div className={styles.footerBottom}>
-        <p>BugBase Pte Ltd © 2024</p>
+        <p>BugBase Pte Ltd © 2025</p>
         <div className={styles.socialIcons}>
           <span
             style={{

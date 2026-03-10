@@ -572,7 +572,10 @@ const BurpProxyPage = ({ sessionId }) => {
     },
   });
 
-  const notConfigured = error?.response?.data?.notConfigured;
+  const errMsg = error?.response?.data?.message || "";
+  const notConfigured =
+    error?.response?.data?.notConfigured ||
+    (error?.response?.status === 400 && /not configured|Burp RPC/i.test(errMsg));
 
   const openRepeater = (record) => {
     setRepeaterRecord(record);
@@ -725,9 +728,9 @@ const BurpProxyPage = ({ sessionId }) => {
       <div className={styles.burpContainer}>
         <div className={styles.emptyState}>
           <TbRadar className={styles.emptyIcon} />
-          <h3>Burp Suite Not Configured</h3>
+          <h3>Burp Suite Not Enabled</h3>
           <p>
-            Set the Burp RPC host and port in Settings to connect to your Burp Suite instance.
+            Burp is not configured. Set the Burp RPC host and port in Settings to connect to your Burp Suite instance.
           </p>
           <Button
             type="primary"
@@ -738,7 +741,7 @@ const BurpProxyPage = ({ sessionId }) => {
               window.dispatchEvent(new CustomEvent("open-settings", { detail: "burp" }));
             }}
           >
-            Configure
+            Enable in Settings
           </Button>
         </div>
       </div>

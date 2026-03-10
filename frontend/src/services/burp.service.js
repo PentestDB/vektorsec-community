@@ -9,9 +9,13 @@ export const getBurpProxyHistory = async ({
   statusMax,
   hideAssets,
 } = {}) => {
-  const res = await apiClient.get("/burp/proxy-history", {
-    params: { page, pageSize, search, method, statusMin, statusMax, hideAssets },
-  });
+  const params = { page, pageSize };
+  if (search != null) params.search = search;
+  if (method != null) params.method = method;
+  if (statusMin != null) params.statusMin = statusMin;
+  if (statusMax != null) params.statusMax = statusMax;
+  if (hideAssets != null) params.hideAssets = hideAssets;
+  const res = await apiClient.get("/burp/proxy-history", { params });
   return res.data;
 };
 

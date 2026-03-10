@@ -5,15 +5,15 @@ import PrimaryButton from "./PrimaryButton";
 import copilotLogo from "@/assets/copilot-logo-full.svg";
 import { useEffect, useState } from "react";
 import { CloseOutlined, MenuOutlined } from "@ant-design/icons";
+import { FaGithub } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu } from "antd";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import CopilotLogo from "./CopilotLogo";
 
 const Navbar = ({ nobg }) => {
   const [toggle, setToggle] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
 
   const openSidebar = () => {
     setToggle(true);
@@ -50,31 +50,17 @@ const Navbar = ({ nobg }) => {
       </a>
 
       <div className={styles.navItems}>
-        {navItems.map((item, index) =>
-          item.window ? (
-            <span
-              key={index}
-              className={
-                item.link === pathname ? styles.navItemSelected : styles.navItem
-              }
-              style={{ cursor: "pointer" }}
-              onClick={() => window.open(item.link, "_blank")}
-            >
-              {item.name}
-            </span>
-          ) : (
-            <Link
-              href={item.link}
-              key={index}
-              className={
-                item.link === pathname ? styles.navItemSelected : styles.navItem
-              }
-            >
-              {item.name}
-            </Link>
-          )
-        )}
-
+        <a
+          href="https://github.com/bugbasesecurity/pentest-copilot"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.navItem}
+          style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}
+          title="Star on GitHub"
+        >
+          <FaGithub size={18} />
+          <span>GitHub</span>
+        </a>
         <div className={styles.login}>
           <PrimaryButton onClick={() => router.push("/login")}>
             Sign In
@@ -116,15 +102,12 @@ const Navbar = ({ nobg }) => {
                 style={{ width: "100%" }}
                 mode="inline"
                 items={[
-      
                   {
-                    key: "2",
-                    label: <Link href="/ai">AI</Link>,
-                  },
-                  {
-                    key: "3",
+                    key: "4",
                     label: (
-                      <Link href="https://copilot-docs.bugbase.ai">Docs</Link>
+                      <a href="https://github.com/bugbasesecurity/pentest-copilot" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: "inherit", textDecoration: "none" }}>
+                        <FaGithub size={16} /> GitHub
+                      </a>
                     ),
                   },
                   {
@@ -143,16 +126,3 @@ const Navbar = ({ nobg }) => {
 };
 
 export default Navbar;
-
-const navItems = [
-  {
-    name: "AI",
-    link: "/ai",
-  },
-  {
-    name: "Docs",
-    link: "https://copilot-docs.bugbase.ai",
-    window: true,
-  },
-
-];

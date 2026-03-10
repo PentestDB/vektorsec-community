@@ -17,7 +17,7 @@ export const getBurpProxyHistory = async (req: Request, res: Response) => {
   try {
     const { host, port } = getBurpConnection();
 
-    if (!host) {
+    if (!host || !String(host).trim()) {
       return res.status(400).json({
         message: "Burp RPC is not configured. Set the host and port in Settings.",
         notConfigured: true,

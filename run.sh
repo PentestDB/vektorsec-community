@@ -490,15 +490,10 @@ configure_required_startup_smart() {
         fi
     fi
 
-    # Exploit box — optional, skip-friendly
+    # Exploit box — essential, always prompt if not configured
     if ! is_exploit_box_configured; then
         echo
-        hint "Exploit Box is the SSH target where pentesting commands run. (optional, set up later via Settings UI)"
-        if confirm "Configure exploit box now?" "n"; then
-            configure_exploit_box
-        else
-            info "Skipped — configure anytime via Settings UI or ./run.sh config"
-        fi
+        configure_exploit_box
     fi
 }
 
@@ -527,7 +522,7 @@ configure_static_full() {
     [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "port" "$val"
 
     cur=$(get_toml_var "$CONFIG_TOML" "deployment")
-    prompt_input "Deployment [${cur:-LOCAL}]:"
+    prompt_input "Deployment [LOCAL/PROD] [${cur:-LOCAL}]:"
     read -r val
     [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "deployment" "$val"
 
@@ -541,7 +536,7 @@ configure_static_full() {
     fi
 
     frontend_deployment=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT")
-    prompt_input "Frontend deployment mode [${frontend_deployment:-LOCAL}]:"
+    prompt_input "Frontend deployment mode [LOCAL/PRODUCTION] [${frontend_deployment:-LOCAL}]:"
     read -r val
     if [[ -n "$val" ]]; then
         set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "$val"
@@ -751,29 +746,30 @@ configure_langfuse() {
 
 configure_exploit_box() {
     section "Exploit Box Connection"
-    hint "You can also configure this via the Settings UI after starting."
+    hint "The exploit box is the SSH target where pentesting commands run. You can change this later via Settings UI."
     ensure_env_defaults
     echo
-    echo -e "   ${BOLD}1)${NC} Local PC over SSH"
-    echo -e "   ${BOLD}2)${NC} Remote VM / server over SSH"
-    echo -e "   ${BOLD}3)${NC} Provision Docker Kali VM"
-    echo -e "   ${BOLD}4)${NC} Skip for now"
-    prompt_input "Choose [1/2/3/4]:"
+    echo -e "   ${BOLD}1)${NC} Kali VM exploit box spin up"
+    echo -e "   ${BOLD}2)${NC} Connect to external exploit box (any VM via SSH, including your local computer)"
+    echo -e "   ${BOLD}3)${NC} ${RED}No exploit box${NC}  ${RED}(reduces Pentest Copilot functionality significantly)${NC}"
+    prompt_input "Choose [1/2/3]:"
     read -r ssh_choice
 
     case "$ssh_choice" in
         1)
-            configure_local_ssh
-            ;;
-        2)
-            configure_remote_ssh
-            ;;
-        3)
             configure_docker_kali
             ;;
-        *)
+        2)
+            configure_connect_external_exploit_box
+            ;;
+        3)
+            echo
+            warn "No exploit box selected — Pentest Copilot will have reduced functionality (no terminal, shells, or command execution on a target)."
             clear_exploit_box_config
-            info "Skipped — configure anytime via Settings UI or ./run.sh config"
+            ;;
+        *)
+            warn "Invalid choice. Select 1, 2, or 3."
+            configure_exploit_box
             ;;
     esac
 }
@@ -792,8 +788,8 @@ clear_exploit_box_config() {
     set_env_var "$DYNAMIC_ENV" "SSH_PRIVATE_KEY_PASSPHRASE" ""
 }
 
-configure_local_ssh() {
-    local default_host default_user
+configure_connect_external_exploit_box() {
+    local default_host default_port default_user cur_host cur_port cur_user
     if [[ "${DEV_MODE:-false}" == true ]]; then
         DEPLOY_MODE="dev"
         default_host="localhost"
@@ -801,25 +797,22 @@ configure_local_ssh() {
         set_normal_mode
         default_host="host.docker.internal"
     fi
+    default_port="22"
     default_user="$(id -un 2>/dev/null || whoami 2>/dev/null || echo "root")"
-    info "Configure SSH access to your local machine"
-    configure_external_ssh "$default_host" "22" "$default_user"
-}
 
-configure_remote_ssh() {
-    local cur_host cur_port cur_user
-    if [[ "${DEV_MODE:-false}" == true ]]; then
-        DEPLOY_MODE="dev"
-    else
-        set_normal_mode
-    fi
     cur_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
     cur_port=$(get_env "$DYNAMIC_ENV" "SSH_PORT")
     cur_user=$(get_env "$DYNAMIC_ENV" "SSH_USERNAME")
-    case "$cur_host" in
-        ""|localhost|host.docker.internal|kali) cur_host="" ;;
-    esac
-    configure_external_ssh "${cur_host}" "${cur_port:-22}" "${cur_user:-root}"
+    if [[ -n "$cur_host" ]]; then
+        case "$cur_host" in
+            localhost|host.docker.internal|kali) ;;
+            *) default_host="$cur_host"; default_port="${cur_port:-22}"; default_user="${cur_user:-$default_user}" ;;
+        esac
+    fi
+
+    echo
+    hint "Enter host (use ${default_host} for your local machine, or any VM IP/hostname for remote)"
+    configure_external_ssh "$default_host" "$default_port" "$default_user"
 }
 
 configure_docker_kali() {

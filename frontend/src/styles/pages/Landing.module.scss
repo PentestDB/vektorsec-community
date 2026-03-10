@@ -431,10 +431,34 @@
           .viewOptions {
             display: flex;
             gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
             animation: fadeInUp 0.8s ease 0.25s both;
 
             .ctaBtn {
               min-width: 10.5rem;
+            }
+
+            .githubStarBtn {
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              padding: 0 1.25rem;
+              height: 2.75rem;
+              border-radius: 2rem;
+              font-size: 0.9rem;
+              font-weight: 500;
+              color: rgba(255, 255, 255, 0.85);
+              background: rgba(255, 255, 255, 0.06);
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              text-decoration: none;
+              transition: all 0.2s ease;
+
+              &:hover {
+                color: #fff;
+                background: rgba(255, 255, 255, 0.12);
+                border-color: rgba(255, 255, 255, 0.3);
+              }
             }
 
             @include responsive(tablet2) {

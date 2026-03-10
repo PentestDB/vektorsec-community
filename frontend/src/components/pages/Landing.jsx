@@ -52,6 +52,7 @@ import Slider from "../common/Slider";
 import LandingSVG from "@/utils/landingSVG";
 import { useRouter } from "next/navigation";
 import { FiArrowRight } from "react-icons/fi";
+import { FaGithub } from "react-icons/fa";
 
 const LandingPage = () => {
   const [activeSlide, setActiveSlide] = useState(0);
@@ -185,15 +186,24 @@ const LandingPage = () => {
                     }}
                     onClick={() =>
                       window.open(
-                        "https://copilot-docs.bugbase.ai",
+                        "https://github.com/bugbasesecurity/pentest-copilot/wiki",
                         "_blank"
                       )
                     }
                   >
                     Documentation
                   </PrimaryButton>
+                  <a
+                    href="https://github.com/bugbasesecurity/pentest-copilot"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.githubStarBtn}
+                  >
+                    <FaGithub size={20} />
+                    <span>Star on GitHub</span>
+                  </a>
                 </div>
-                <p className={styles.cc}>no credit card required</p>
+                <p className={styles.cc}>Don't Hack Solo</p>
               </div>
             </div>
           </div>

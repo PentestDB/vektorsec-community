@@ -9,6 +9,7 @@ import { logoutUser } from "@/services/auth.service";
 import { useMutation } from "react-query";
 import Link from "next/link";
 import { RiLogoutCircleRLine, RiSettings3Line } from "react-icons/ri";
+import { FaGithub } from "react-icons/fa";
 import { logout } from "@/store/user.slice";
 import CopilotLogo from "./CopilotLogo";
 import SettingsOverlay from "./SettingsOverlay";
@@ -71,6 +72,15 @@ const HeaderLinks = ({ sessionId, sessionName, logoVisible = true }) => {
         )}
         <div className={styles.options}>
           <div className={styles.username}>{user.name}</div>
+          <a
+            href="https://github.com/bugbasesecurity/pentest-copilot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.headerIconBtn}
+            title="Star on GitHub"
+          >
+            <FaGithub />
+          </a>
           <button
             className={styles.headerIconBtn}
             onClick={() => setSettingsOpen(true)}
