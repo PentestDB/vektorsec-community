@@ -209,6 +209,7 @@ export async function runAgentLoop(params: {
 
   const user = await UserModel.findById(session.uid).lean();
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
+  const disabledAgentTools: string[] = (user?.configs as any)?.disabledAgentTools ?? [];
 
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
@@ -299,7 +300,7 @@ export async function runAgentLoop(params: {
       }
 
       const openaiMessages = messagesToOpenAI(messages);
-      const tools = toolRegistry.toOpenAISchemas();
+      const tools = toolRegistry.toOpenAISchemas({ disabledTools: disabledAgentTools });
 
       const env = readEnvFile();
       const reasoningMode = (env.REASONING_MODE || "medium") as ReasoningMode;

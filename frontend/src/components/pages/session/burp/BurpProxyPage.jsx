@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Table, Tag, Button, Empty, Spin, Modal, Switch, message } from "antd";
+import { Table, Tag, Button, Empty, Spin, Modal, Switch, Select, Input, message } from "antd";
 import {
   ReloadOutlined,
   WarningOutlined,
@@ -10,13 +10,21 @@ import {
   SendOutlined,
   ExportOutlined,
   RocketOutlined,
+  ThunderboltOutlined,
+  SearchOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { useQuery, useMutation } from "react-query";
 import {
   getBurpProxyHistory,
+  getBurpProxyEntry,
   sendBurpRequest,
   sendToRepeater,
+  sendToIntruder,
+  repeaterSend,
+  getProxyInterceptStatus,
+  setProxyIntercept,
 } from "@/services/burp.service";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
@@ -105,9 +113,7 @@ const HttpCodeBlock = ({ content, isRequest = true }) => {
   if (!content) {
     return (
       <div className={styles.codeBlock}>
-        <div style={{ padding: "1rem", color: "var(--secondary-text-500)", fontSize: "0.68rem" }}>
-          (empty)
-        </div>
+        <div className={styles.responsePlaceholder}>(empty)</div>
       </div>
     );
   }
@@ -119,8 +125,16 @@ const HttpCodeBlock = ({ content, isRequest = true }) => {
   );
 };
 
-const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace }) => {
+const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace, onSendToIntruder }) => {
   const [activeTab, setActiveTab] = useState("request");
+
+  const { data: fullEntry, isLoading: entryLoading } = useQuery(
+    ["burp-proxy-entry", record.id],
+    () => getBurpProxyEntry(record.id),
+    { staleTime: 30_000, refetchOnWindowFocus: false }
+  );
+
+  const mergedRecord = fullEntry ? { ...record, ...fullEntry } : record;
 
   return (
     <div className={styles.expandedRow}>
@@ -144,9 +158,10 @@ const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace }) => {
             size="small"
             icon={<RocketOutlined />}
             className={styles.workspaceBtn}
+            disabled={entryLoading}
             onClick={(e) => {
               e.stopPropagation();
-              onSendToWorkspace(record);
+              onSendToWorkspace(mergedRecord);
             }}
           >
             Pentest
@@ -155,19 +170,38 @@ const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace }) => {
             size="small"
             icon={<SendOutlined />}
             className={styles.repeaterBtn}
+            disabled={entryLoading}
             onClick={(e) => {
               e.stopPropagation();
-              onOpenRepeater(record);
+              onOpenRepeater(mergedRecord);
             }}
           >
             Repeater
           </Button>
+          <Button
+            size="small"
+            icon={<ThunderboltOutlined />}
+            className={styles.repeaterBtn}
+            disabled={entryLoading}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSendToIntruder(mergedRecord);
+            }}
+          >
+            Intruder
+          </Button>
         </div>
       </div>
-      <HttpCodeBlock
-        content={activeTab === "request" ? record.rawRequest : record.rawResponse}
-        isRequest={activeTab === "request"}
-      />
+      {entryLoading ? (
+        <div className={styles.responsePlaceholder}>
+          <Spin size="small" />
+        </div>
+      ) : (
+        <HttpCodeBlock
+          content={activeTab === "request" ? mergedRecord.rawRequest : mergedRecord.rawResponse}
+          isRequest={activeTab === "request"}
+        />
+      )}
     </div>
   );
 };
@@ -179,6 +213,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
   const [secure, setSecure] = useState(true);
   const [responseText, setResponseText] = useState("");
   const [responseTime, setResponseTime] = useState(null);
+  const [loadingEntry, setLoadingEntry] = useState(false);
 
   const sendMutation = useMutation(sendBurpRequest, {
     onMutate: () => {
@@ -207,14 +242,47 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
     },
   });
 
-  const handleOpen = useCallback(() => {
-    if (record) {
-      setRequestText(record.rawRequest || "");
-      setTargetHost(record.host || "");
-      setTargetPort(record.port || 443);
-      setSecure(record.secure ?? true);
-      setResponseText("");
+  const repeaterSendMutation = useMutation(repeaterSend, {
+    onMutate: () => {
+      setResponseTime(Date.now());
+    },
+    onSuccess: (data) => {
+      const elapsed = Date.now() - responseTime;
+      setResponseTime(elapsed);
+      setResponseText(data.rawResponse || "(no response body)");
+      message.success({ content: `Repeater response in ${elapsed}ms`, duration: 2 });
+    },
+    onError: (err) => {
       setResponseTime(null);
+      const msg = err?.response?.data?.message || "Failed to send via Repeater";
+      message.error({ content: msg, duration: 4 });
+    },
+  });
+
+  const handleOpen = useCallback(async () => {
+    if (!record) return;
+
+    setTargetHost(record.host || "");
+    setTargetPort(record.port || 443);
+    setSecure(record.secure ?? true);
+    setResponseText("");
+    setResponseTime(null);
+
+    if (record.rawRequest) {
+      setRequestText(record.rawRequest);
+    } else if (record.id != null) {
+      setLoadingEntry(true);
+      try {
+        const full = await getBurpProxyEntry(record.id);
+        setRequestText(full.rawRequest || "");
+      } catch {
+        setRequestText("");
+        message.error({ content: "Failed to load request details", duration: 3 });
+      } finally {
+        setLoadingEntry(false);
+      }
+    } else {
+      setRequestText("");
     }
   }, [record]);
 
@@ -246,6 +314,23 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
       secure,
       rawRequest: requestText,
       tabName: `${record?.method || "REQ"} ${record?.path || "/"}`,
+    });
+  };
+
+  const handleRepeaterSend = () => {
+    if (!targetHost.trim()) {
+      message.warning({ content: "Host is required", duration: 2 });
+      return;
+    }
+    if (!requestText.trim()) {
+      message.warning({ content: "Request body is empty", duration: 2 });
+      return;
+    }
+    repeaterSendMutation.mutate({
+      host: targetHost,
+      port: targetPort,
+      secure,
+      rawRequest: requestText,
     });
   };
 
@@ -290,15 +375,27 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
           <div className={styles.repeaterPaneHeader}>
             <span className={styles.paneLabel}>Request</span>
             <div className={styles.paneActions}>
+
               <Button
                 size="small"
                 type="primary"
                 icon={<SendOutlined />}
                 loading={sendMutation.isLoading}
+                disabled={loadingEntry}
                 onClick={handleSend}
                 className={styles.sendBtn}
               >
                 Send
+              </Button>
+              <Button
+                size="small"
+                icon={<SendOutlined />}
+                loading={repeaterSendMutation.isLoading}
+                disabled={loadingEntry}
+                onClick={handleRepeaterSend}
+                className={styles.toBurpBtn}
+              >
+                Send via Repeater
               </Button>
               <Button
                 size="small"
@@ -363,6 +460,25 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
   );
 };
 
+const STATUS_OPTIONS = [
+  { value: "", label: "All Status" },
+  { value: "2xx", label: "2xx Success" },
+  { value: "3xx", label: "3xx Redirect" },
+  { value: "4xx", label: "4xx Client Error" },
+  { value: "5xx", label: "5xx Server Error" },
+];
+
+const METHOD_LIST = ["GET", "POST", "PUT", "DELETE", "PATCH"];
+
+function useDebounce(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
 const BurpProxyPage = ({ sessionId }) => {
   const router = useRouter();
   const [page, setPage] = useState(1);
@@ -370,15 +486,91 @@ const BurpProxyPage = ({ sessionId }) => {
   const [repeaterOpen, setRepeaterOpen] = useState(false);
   const [repeaterRecord, setRepeaterRecord] = useState(null);
 
+  const [searchText, setSearchText] = useState("");
+  const debouncedSearch = useDebounce(searchText, 400);
+  const [methodFilter, setMethodFilter] = useState([]);
+  const [statusRange, setStatusRange] = useState("");
+  const [hideAssets, setHideAssets] = useState(false);
+
+  const statusMin = statusRange ? parseInt(statusRange.charAt(0)) * 100 : 0;
+  const statusMax = statusRange ? parseInt(statusRange.charAt(0)) * 100 + 99 : 0;
+  const methodParam = methodFilter.join(",");
+
+  const hasFilters = debouncedSearch || methodFilter.length > 0 || statusRange || hideAssets;
+
+  const clearFilters = () => {
+    setSearchText("");
+    setMethodFilter([]);
+    setStatusRange("");
+    setHideAssets(false);
+    setPage(1);
+  };
+
+  const prevFilterRef = useRef({ debouncedSearch, methodParam, statusRange, hideAssets });
+  useEffect(() => {
+    const prev = prevFilterRef.current;
+    if (
+      prev.debouncedSearch !== debouncedSearch ||
+      prev.methodParam !== methodParam ||
+      prev.statusRange !== statusRange ||
+      prev.hideAssets !== hideAssets
+    ) {
+      setPage(1);
+    }
+    prevFilterRef.current = { debouncedSearch, methodParam, statusRange, hideAssets };
+  }, [debouncedSearch, methodParam, statusRange, hideAssets]);
+
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery(
-    ["burp-proxy-history", page, pageSize],
-    () => getBurpProxyHistory({ page, pageSize }),
+    ["burp-proxy-history", page, pageSize, debouncedSearch, methodParam, statusRange, hideAssets],
+    () =>
+      getBurpProxyHistory({
+        page,
+        pageSize,
+        search: debouncedSearch || undefined,
+        method: methodParam || undefined,
+        statusMin: statusMin || undefined,
+        statusMax: statusMax || undefined,
+        hideAssets: hideAssets ? "true" : undefined,
+      }),
     {
       keepPreviousData: true,
       refetchOnWindowFocus: false,
       retry: 1,
     }
   );
+
+  const { data: interceptData, refetch: refetchIntercept } = useQuery(
+    ["burp-intercept-status"],
+    getProxyInterceptStatus,
+    { refetchOnWindowFocus: false, retry: false }
+  );
+
+  const interceptMutation = useMutation(
+    (enabled) => setProxyIntercept({ enabled }),
+    {
+      onSuccess: (_, enabled) => {
+        refetchIntercept();
+        message.success({
+          content: `Proxy intercept ${enabled ? "enabled" : "disabled"}`,
+          duration: 2,
+        });
+      },
+      onError: (err) => {
+        const msg = err?.response?.data?.message || "Failed to toggle intercept";
+        message.error({ content: msg, duration: 3 });
+      },
+    }
+  );
+
+  const intruderMutation = useMutation(sendToIntruder, {
+    onSuccess: () => {
+      message.success({ content: "Sent to Burp Intruder", duration: 2 });
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.message || "Failed to send to Intruder";
+      message.error({ content: msg, duration: 4 });
+    },
+  });
 
   const notConfigured = error?.response?.data?.notConfigured;
 
@@ -387,16 +579,44 @@ const BurpProxyPage = ({ sessionId }) => {
     setRepeaterOpen(true);
   };
 
-  const sendToWorkspace = useCallback((record) => {
+  const handleSendToIntruder = useCallback(async (record) => {
+    let fullRecord = record;
+    if (!record.rawRequest && record.id != null) {
+      try {
+        fullRecord = { ...record, ...(await getBurpProxyEntry(record.id)) };
+      } catch {
+        message.error({ content: "Failed to load request details", duration: 3 });
+        return;
+      }
+    }
+    intruderMutation.mutate({
+      host: fullRecord.host,
+      port: fullRecord.port || 443,
+      secure: fullRecord.secure ?? true,
+      rawRequest: fullRecord.rawRequest || "",
+      tabName: `${fullRecord.method || "REQ"} ${fullRecord.path || "/"}`,
+    });
+  }, [intruderMutation]);
+
+  const sendToWorkspace = useCallback(async (record) => {
+    let fullRecord = record;
+    if (!record.rawRequest && record.id != null) {
+      try {
+        fullRecord = { ...record, ...(await getBurpProxyEntry(record.id)) };
+      } catch {
+        message.error({ content: "Failed to load request details", duration: 3 });
+        return;
+      }
+    }
     const attachment = {
-      method: record.method,
-      host: record.host,
-      port: record.port || 443,
-      path: record.path,
-      secure: !!record.secure,
-      rawRequest: record.rawRequest || "",
-      rawResponse: record.rawResponse || "",
-      statusCode: record.statusCode,
+      method: fullRecord.method,
+      host: fullRecord.host,
+      port: fullRecord.port || 443,
+      path: fullRecord.path,
+      secure: !!fullRecord.secure,
+      rawRequest: fullRecord.rawRequest || "",
+      rawResponse: fullRecord.rawResponse || "",
+      statusCode: fullRecord.statusCode,
     };
     sessionStorage.setItem("burp-to-workspace", JSON.stringify(attachment));
     router.push(`/session/${sessionId}`);
@@ -529,20 +749,84 @@ const BurpProxyPage = ({ sessionId }) => {
     <div className={styles.burpContainer}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <h2>Proxy History</h2>
+          <h2 className={styles.headerTitle}>Proxy History</h2>
           {data?.total != null && (
             <span className={styles.entryCount}>{data.total}</span>
           )}
         </div>
-        <Button
-          icon={<ReloadOutlined spin={isFetching} />}
-          onClick={() => refetch()}
-          disabled={isFetching}
+        <div className={styles.headerRight}>
+          <div className={styles.interceptToggle}>
+            <span>Intercept</span>
+            <Switch
+              size="small"
+              checked={interceptData?.enabled ?? false}
+              loading={interceptMutation.isLoading}
+              onChange={(checked) => interceptMutation.mutate(checked)}
+            />
+          </div>
+          <Button
+            icon={<ReloadOutlined spin={isFetching} />}
+            onClick={() => refetch()}
+            disabled={isFetching}
+            size="small"
+            className={styles.refreshBtn}
+          >
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      <div className={styles.filterBar}>
+        <Input
+          placeholder="Search host, path, type..."
+          prefix={<SearchOutlined />}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          allowClear
+          className={styles.filterSearch}
+        />
+        <div className={styles.filterDivider} />
+        <div className={styles.filterMethods}>
+          {METHOD_LIST.map((m) => (
+            <Tag.CheckableTag
+              key={m}
+              checked={methodFilter.includes(m)}
+              onChange={(checked) =>
+                setMethodFilter((prev) =>
+                  checked ? [...prev, m] : prev.filter((v) => v !== m)
+                )
+              }
+              className={styles.filterMethodTag}
+            >
+              {m}
+            </Tag.CheckableTag>
+          ))}
+        </div>
+        <div className={styles.filterDivider} />
+        <Select
+          value={statusRange}
+          onChange={setStatusRange}
+          options={STATUS_OPTIONS}
+          className={styles.filterStatus}
+          popupMatchSelectWidth={false}
           size="small"
-          className={styles.refreshBtn}
-        >
-          Refresh
-        </Button>
+        />
+        <div className={styles.filterDivider} />
+        <div className={styles.filterToggle}>
+          <span>Hide assets</span>
+          <Switch size="small" checked={hideAssets} onChange={setHideAssets} />
+        </div>
+        {hasFilters && (
+          <Button
+            type="text"
+            size="small"
+            icon={<CloseCircleOutlined />}
+            onClick={clearFilters}
+            className={styles.filterClear}
+          >
+            Clear
+          </Button>
+        )}
       </div>
 
       {isError && !notConfigured && (
@@ -570,14 +854,19 @@ const BurpProxyPage = ({ sessionId }) => {
               setPageSize(ps);
             },
             showTotal: (total, range) => (
-              <span style={{ fontSize: "0.62rem", color: "var(--secondary-text-500)", fontFamily: "'JetBrains Mono', monospace" }}>
+              <span className={styles.lengthCell}>
                 {range[0]}&ndash;{range[1]} of {total}
               </span>
             ),
           }}
           expandable={{
             expandedRowRender: (record) => (
-              <ExpandedRow record={record} onOpenRepeater={openRepeater} onSendToWorkspace={sendToWorkspace} />
+              <ExpandedRow
+                record={record}
+                onOpenRepeater={openRepeater}
+                onSendToWorkspace={sendToWorkspace}
+                onSendToIntruder={handleSendToIntruder}
+              />
             ),
             expandRowByClick: true,
           }}

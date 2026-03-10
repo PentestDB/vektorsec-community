@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { confirmPopUp } from "./ConfirmPopUp";
 
 const BeforeUnloadWithPopup = () => {
   // const handleBeforeUnload = (e) => {

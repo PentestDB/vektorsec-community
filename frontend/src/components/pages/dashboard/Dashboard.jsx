@@ -1,13 +1,17 @@
 import styles from "@/styles/pages/Dashboard.module.scss";
-import { Input, message, Table, Tooltip } from "antd";
+import { Input, message, Table, Tooltip, Button, Space } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
-import { SearchOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import { AuthContextProvider } from "@/components/common/auth/AuthContext";
 
 import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import CreateSessionModal from "./CreateSessionModal";
 import { deleteSession, getUserSessions } from "@/services/agent.service";
 import moment from "moment";
@@ -15,7 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FiPlay, FiTrash } from "react-icons/fi";
 import Image from "next/image";
 import emptyBox from "@/assets/empty-box.svg";
-import { confirmPopUp } from "@/components/common/ConfirmPopUp";
+import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import { useDispatch } from "react-redux";
 import { useEffect } from "react";
 import { resetSessions } from "@/store/user.slice";
@@ -26,11 +30,13 @@ const DashboardPage = () => {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { user } = useSelector((state) => state.user);
+  const confirmPopUp = useConfirmPopUp();
 
   const launchWorkspace = searchParams.get("launch") === "true";
 
   const [show, setShow] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
   const dispatch = useDispatch();
 
@@ -42,13 +48,24 @@ const DashboardPage = () => {
     }
   );
 
+  const filteredSessions = useMemo(() => {
+    if (!sessionsData) return [];
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return sessionsData;
+    return sessionsData.filter(
+      (s) =>
+        (s.name || "").toLowerCase().includes(term) ||
+        (s.description || "").toLowerCase().includes(term) ||
+        (s.sessionId || "").toLowerCase().includes(term)
+    );
+  }, [sessionsData, searchTerm]);
+
   const deleteSessionMutation = useMutation(deleteSession, {
     onSuccess: (data) => {
       message.success(data?.message ?? "Workspace deleted successfully!");
       queryClient.invalidateQueries(["get-user-sessions"]);
     },
     onError: (error) => {
-      console.log(error);
       message.error(
         error?.response?.data?.message ?? "Failed to delete workspace!"
       );
@@ -57,36 +74,55 @@ const DashboardPage = () => {
 
   const columns = [
     {
+      title: "Workspace ID",
+      dataIndex: "sessionId",
+      key: "sessionId",
+      ellipsis: false,
+      render: (text) => (
+        <code className={styles.cellId}>{text || "—"}</code>
+      ),
+    },
+    {
       title: "Name",
       dataIndex: "name",
       key: "name",
+      ellipsis: true,
+      render: (text) => (
+        <span className={styles.cellName}>{text || "—"}</span>
+      ),
     },
     {
       title: "Description",
       dataIndex: "description",
       key: "description",
+      ellipsis: true,
+      render: (text) => (
+        <span className={styles.cellDescription}>{text || "—"}</span>
+      ),
     },
     {
-      title: "Workspace ID",
-      dataIndex: "sessionId",
-      key: "sessionId",
-    },
-    {
-      title: "Date",
+      title: "Created",
       dataIndex: "createdAt",
       key: "createdAt",
-      render: (text) => moment(text).format("Do MMM YYYY"),
+      width: 110,
+      render: (text) => (
+        <span className={styles.cellDate}>
+          {text ? moment(text).format("MMM D, YYYY") : "—"}
+        </span>
+      ),
     },
     {
-      title: "Actions",
+      title: "",
       key: "actions",
+      width: 100,
+      align: "right",
       render: (_, record) => (
-        <div className={styles.actions}>
+        <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
           <Tooltip
             title={
               record.boxStatus && record.boxStatus !== "stopped"
                 ? "Exploit Box is running"
-                : "Resume workspace"
+                : "Open workspace"
             }
           >
             <div
@@ -105,10 +141,10 @@ const DashboardPage = () => {
             </div>
           </Tooltip>
 
-          <Tooltip title="Delete Workspace">
+          <Tooltip title="Delete">
             <div
               className={styles.btnWrapRed}
-              onClick={(e) => onDelete(record.sessionId, e)}
+              onClick={(e) => onDeleteOne(record.sessionId, e)}
             >
               <FiTrash className={styles.iconBtn} />
             </div>
@@ -118,31 +154,43 @@ const DashboardPage = () => {
     },
   ];
 
-  const filterSessions = (sessions) => {
-    if (!sessions) {
-      return [];
-    }
-
-    const filtered = sessions.filter(
-      (session) =>
-        session.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        session.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        session.sessionId.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    return filtered;
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys) => setSelectedRowKeys(keys),
+    columnWidth: 48,
+    getCheckboxProps: (record) => ({
+      onClick: (e) => e.stopPropagation(),
+    }),
   };
 
-  const onDelete = (session_id, e) => {
-    e.stopPropagation();
-
+  const onDeleteOne = (sessionId, e) => {
+    e?.stopPropagation?.();
     confirmPopUp({
-      title: "Delete Workspace?",
-      content: "Are you sure you want to delete this workspace?",
-      okText: "Yes",
-      cancelText: "No",
+      title: "Delete workspace?",
+      content: "This workspace will be archived. You can no longer access it.",
+      okText: "Delete",
+      cancelText: "Cancel",
       onOk: async () => {
-        await deleteSessionMutation.mutateAsync({ session_id });
+        await deleteSessionMutation.mutateAsync({ sessionId });
+      },
+    });
+  };
+
+  const onBulkDelete = () => {
+    if (selectedRowKeys.length === 0) return;
+    confirmPopUp({
+      title: `Delete ${selectedRowKeys.length} workspace${selectedRowKeys.length > 1 ? "s" : ""}?`,
+      content:
+        "Selected workspaces will be archived. You will no longer be able to access them.",
+      okText: "Delete",
+      cancelText: "Cancel",
+      onOk: async () => {
+        await Promise.all(
+          selectedRowKeys.map((sessionId) =>
+            deleteSessionMutation.mutateAsync({ sessionId })
+          )
+        );
+        setSelectedRowKeys([]);
       },
     });
   };
@@ -158,6 +206,12 @@ const DashboardPage = () => {
     }
   }, [launchWorkspace]);
 
+  useEffect(() => {
+    setSelectedRowKeys((prev) =>
+      prev.filter((key) => filteredSessions.some((s) => s.sessionId === key))
+    );
+  }, [filteredSessions]);
+
   if (!user || isLoading) {
     return <Loader />;
   }
@@ -169,19 +223,49 @@ const DashboardPage = () => {
           <h1 className={styles.Title}>Workspaces</h1>
           <div className={styles.headerActions}>
             <Input
-              suffix={<SearchOutlined />}
-              className={styles.searchBox}
-              placeholder="Search your workspace"
+              prefix={<SearchOutlined className={styles.searchIcon} />}
+              placeholder="Search by name, description, or ID..."
+              value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              allowClear
+              className={styles.searchBox}
             />
             <PrimaryButton purple onClick={() => setShow(true)}>
-              <FiPlay /> Create New Workspace
+              <PlusOutlined /> Create Workspace
             </PrimaryButton>
           </div>
         </div>
+
         <div className={styles.sessionsList}>
+          <div className={styles.tableToolbar}>
+            {selectedRowKeys.length > 0 && (
+              <Space className={styles.bulkActions}>
+                <span className={styles.selectedCount}>
+                  {selectedRowKeys.length} selected
+                </span>
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={onBulkDelete}
+                  className={styles.bulkDeleteBtn}
+                >
+                  Delete selected
+                </Button>
+                <Button
+                  type="text"
+                  size="small"
+                  onClick={() => setSelectedRowKeys([])}
+                  className={styles.clearSelectionBtn}
+                >
+                  Clear selection
+                </Button>
+              </Space>
+            )}
+          </div>
+
           <div className={styles.sessionsListTable}>
-            {filterSessions(sessionsData).length === 0 ? (
+            {filteredSessions.length === 0 ? (
               <div className={styles.placeholder}>
                 <Image
                   src={emptyBox}
@@ -190,35 +274,40 @@ const DashboardPage = () => {
                   height={110}
                   className={styles.placeImage}
                 />
-                <h3>Create your first workspace</h3>
+                <h3>
+                  {sessionsData?.length
+                    ? "No workspaces match your search"
+                    : "Create your first workspace"}
+                </h3>
                 <p>
-                  Initiate debut workspace, commence hacking endeavors with
-                  unwavering determination.
+                  {sessionsData?.length
+                    ? "Try a different search term."
+                    : "Start a new penetration testing session and let the AI assist you."}
                 </p>
-                <PrimaryButton white onClick={() => setShow(true)}>
-                  Start Hacking
+                <PrimaryButton
+                  white
+                  onClick={() => (sessionsData?.length ? setSearchTerm("") : setShow(true))}
+                >
+                  {sessionsData?.length ? "Clear search" : "Create Workspace"}
                 </PrimaryButton>
               </div>
             ) : (
               <Table
+                rowKey="sessionId"
+                size="small"
                 columns={columns}
-                pagination={
-                  filterSessions(sessionsData)?.length > 10
-                    ? {
-                        pageSize: 10,
-                        total: filterSessions(sessionsData)?.length,
-                        showSizeChanger: false,
-                      }
-                    : false
-                }
-                dataSource={filterSessions(sessionsData)}
-                onRow={({ sessionId }) => {
-                  return {
-                    onClick: () => {
-                      router.push(`/session/${sessionId}`);
-                    },
-                  };
+                dataSource={filteredSessions}
+                rowSelection={rowSelection}
+                pagination={{
+                  pageSize: 10,
+                  showSizeChanger: true,
+                  showTotal: (total) => `${total} workspace${total !== 1 ? "s" : ""}`,
+                  pageSizeOptions: ["10", "20", "50"],
+                  size: "small",
                 }}
+                onRow={({ sessionId }) => ({
+                  onClick: () => router.push(`/session/${sessionId}`),
+                })}
               />
             )}
           </div>

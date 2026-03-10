@@ -1,32 +1,30 @@
-import { Modal } from "antd";
+import { App } from "antd";
 
-const { confirm } = Modal;
+export const useConfirmPopUp = () => {
+  const { modal } = App.useApp();
 
-export const confirmPopUp = (props) => {
-  confirm({
-    className: props.className,
-    title: props.title,
-    content: props.content,
-    icon: props.icon,
-    okText: props.okText,
-    cancelText: props.cancelText,
-    onOk() {
-      props.onOk();
-    },
-    onCancel() {
-      props.onCancel && props.onCancel();
-    },
-    okButtonProps: {
-      style: {
-        backgroundColor: props?.okButtonBg || "#cb444a",
-        border: "none",
+  return (props) => {
+    modal.confirm({
+      className: props.className,
+      title: props.title,
+      content: props.content,
+      icon: props.icon,
+      okText: props.okText,
+      cancelText: props.cancelText,
+      onOk: props.onOk,
+      onCancel: props.onCancel,
+      okButtonProps: {
+        style: {
+          backgroundColor: props?.okButtonBg || "#cb444a",
+          border: "none",
+        },
       },
-    },
-    cancelButtonProps: props?.cancelButtonProps || {
-      style: {
-        backgroundColor: props?.cancelButtonBg || "#e5e5e5",
-        border: "none",
+      cancelButtonProps: props?.cancelButtonProps || {
+        style: {
+          backgroundColor: props?.cancelButtonBg || "#e5e5e5",
+          border: "none",
+        },
       },
-    },
-  });
+    });
+  };
 };

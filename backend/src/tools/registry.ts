@@ -13,6 +13,11 @@ import listShells from "./handlers/list-shells";
 import closeShell from "./handlers/close-shell";
 import spawnSubagent from "./handlers/spawn-subagent";
 import sendToBurp from "./handlers/send-to-burp";
+import burpIntruder from "./handlers/burp-intruder";
+import burpCollaborator from "./handlers/burp-collaborator";
+// import burpProxyControl from "./handlers/burp-proxy-control";
+import burpProxyHistory from "./handlers/burp-proxy-history";
+import magnitudeBrowser from "./handlers/magnitude-browser";
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -37,10 +42,17 @@ class ToolRegistry {
     return Array.from(this.tools.keys());
   }
 
-  toOpenAISchemas(opts?: { excludeSubagent?: boolean }): OpenAI.Chat.ChatCompletionTool[] {
+  toOpenAISchemas(opts?: {
+    excludeSubagent?: boolean;
+    disabledTools?: string[];
+  }): OpenAI.Chat.ChatCompletionTool[] {
     let tools = this.getAll();
     if (opts?.excludeSubagent) {
       tools = tools.filter((t) => t.name !== "spawn_subagent");
+    }
+    if (opts?.disabledTools?.length) {
+      const disabled = new Set(opts.disabledTools);
+      tools = tools.filter((t) => !disabled.has(t.name));
     }
     return tools.map(toolToOpenAISchema);
   }
@@ -68,3 +80,8 @@ toolRegistry.register(listShells);
 toolRegistry.register(closeShell);
 toolRegistry.register(spawnSubagent);
 toolRegistry.register(sendToBurp);
+toolRegistry.register(burpIntruder);
+toolRegistry.register(burpCollaborator);
+// toolRegistry.register(burpProxyControl);
+toolRegistry.register(burpProxyHistory);
+toolRegistry.register(magnitudeBrowser);

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { useQuery } from "react-query";
-import { Button, notification } from "antd";
+import { notification } from "antd";
 import Image from "next/image";
 import styles from "@/styles/components/Chat.module.scss";
 import ChatMessage from "./ChatMessage";
@@ -12,10 +11,8 @@ import ManualExecutionBlock from "./ManualExecutionBlock";
 import ConsentBanner from "./ConsentBanner";
 import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
-import {
-  getSessionHistory,
-  pauseAgent,
-} from "@/services/agent.service";
+import { useAgentStreamStore } from "@/store/agentStream.store";
+import { pauseAgent } from "@/services/agent.service";
 
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
@@ -34,7 +31,6 @@ export default function ChatView({ sessionId }) {
     subagents,
     startStream,
     abort,
-    loadHistory,
   } = useAgentStream({
     sessionId,
     onComplete: () => {},
@@ -53,41 +49,17 @@ export default function ChatView({ sessionId }) {
       el.scrollHeight - el.scrollTop - el.clientHeight < 150;
   }, []);
 
-  const { isLoading: historyLoading } = useQuery(
-    ["agent-history", sessionId],
-    () => getSessionHistory(sessionId),
-    {
-      enabled: !!sessionId,
-      refetchOnWindowFocus: false,
-      retry: 2,
-      onSuccess: (data) => {
-        if (data?.messages) {
-          loadHistory(data.messages, data.subagents);
-        }
-        if (data?.agentState) {
-          setAgentState(data.agentState);
-        }
-        if (data?.pendingConsent) {
-          setPendingConsent(data.pendingConsent);
-        }
-        if (data?.pendingManualExecution) {
-          setPendingManualExecution(data.pendingManualExecution);
-        }
-        shouldStickToBottomRef.current = true;
-        setTimeout(() => {
-          scrollToBottom();
-        }, 50);
-      },
-      onError: (err) => {
-        notification.error({
-          message: "Failed to load session history",
-          description: err?.response?.data?.message ?? err?.message ?? "Something went wrong",
-          duration: 6,
-          placement: "bottomRight",
-        });
-      },
-    },
+  const historyLoaded = useAgentStreamStore(
+    (state) => state.sessions[sessionId]?.historyLoaded ?? false,
   );
+  const historyLoading = !historyLoaded;
+
+  useEffect(() => {
+    if (historyLoaded) {
+      shouldStickToBottomRef.current = true;
+      setTimeout(() => scrollToBottom(), 50);
+    }
+  }, [historyLoaded, scrollToBottom]);
 
   useEffect(() => {
     if (shouldStickToBottomRef.current) {

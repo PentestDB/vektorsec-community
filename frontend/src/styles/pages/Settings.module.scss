@@ -89,6 +89,32 @@
     color: var(--secondary-text-500);
   }
 
+  :global(.ant-form .ant-form-item .ant-form-item-control textarea.ant-input) {
+    min-height: unset;
+    padding: 0.5rem 0.75rem;
+    background: var(--input-bg) !important;
+    border: 1px solid var(--border-color-100);
+    color: var(--primary-text);
+
+    &::placeholder {
+      color: var(--secondary-text-500);
+    }
+
+    &:hover,
+    &:focus {
+      border-color: var(--filled-purple-100);
+      background: var(--input-bg) !important;
+    }
+  }
+
+  :global(.ant-switch) {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  :global(.ant-switch-checked) {
+    background: var(--filled-purple) !important;
+  }
+
   :global(.ant-form .ant-form-item .ant-form-item-control .ant-input-password .ant-input-suffix) {
     color: var(--secondary-text);
 

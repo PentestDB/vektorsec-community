@@ -26,6 +26,11 @@ import {
   repairVNC,
   getBurpConfig,
   updateBurpConfig,
+  getMagnitudeConfig,
+  updateMagnitudeConfig,
+  startMagnitudeAgent,
+  getAgentToolsConfig,
+  updateAgentToolsConfig,
 } from "../controllers/user.controller";
 import { uploadImageMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -70,5 +75,12 @@ router.post("/repair-vnc", [verifySess], repairVNC);
 
 router.get("/get-burp-config", [verifySess], getBurpConfig);
 router.post("/update-burp-config", [verifySess], updateBurpConfig);
+
+router.get("/get-magnitude-config", [verifySess], getMagnitudeConfig);
+router.post("/update-magnitude-config", [verifySess], updateMagnitudeConfig);
+router.post("/start-magnitude-agent", [verifySess], startMagnitudeAgent);
+
+router.get("/get-agent-tools-config", [verifySess], getAgentToolsConfig);
+router.post("/update-agent-tools-config", [verifySess], updateAgentToolsConfig);
 
 export { router as userRoutes };

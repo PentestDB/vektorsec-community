@@ -4,6 +4,7 @@ import { AuthContextProvider } from "@/components/common/auth/AuthContext";
 import Loader from "@/components/common/loader/Loader";
 import Sidebar from "@/components/common/Sidebar";
 import HeaderLinks from "@/components/common/HeaderLinks";
+import AgentStreamConnector from "@/components/common/AgentStreamConnector";
 import React, { use } from "react";
 import { useSelector } from "react-redux";
 import styles from "@/styles/pages/Session.module.scss";
@@ -18,6 +19,7 @@ const SessionLayout = ({ children, params }) => {
 
   return (
     <AuthContextProvider>
+      <AgentStreamConnector sessionId={session_id} />
       <div className={styles.sessionPage}>
         <Sidebar sessionId={session_id} />
         <div className={styles.sessionMainArea}>

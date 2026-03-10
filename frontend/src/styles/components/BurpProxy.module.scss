@@ -14,52 +14,221 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.65rem 1.25rem;
+  padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  background: var(--secondary-bg);
+}
 
-  .headerLeft {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 
-    h2 {
-      margin: 0;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--primary-text);
-      letter-spacing: -0.01em;
-    }
+.headerTitle {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary-text);
+  letter-spacing: -0.01em;
+}
 
-    .entryCount {
-      font-size: 0.62rem;
-      font-weight: 600;
-      color: var(--secondary-text);
-      background: var(--surface-active);
-      padding: 0.12rem 0.5rem;
-      border-radius: 9px;
-      font-family: "JetBrains Mono", monospace;
-    }
-  }
+.entryCount {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--secondary-text);
+  background: var(--surface-active);
+  padding: 0.1rem 0.45rem;
+  border-radius: 9px;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.interceptToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.65rem;
+  color: var(--secondary-text-500);
 }
 
 .refreshBtn {
-  font-size: 0.7rem !important;
-  height: 1.6rem !important;
-  padding: 0 0.6rem !important;
+  font-size: 0.65rem !important;
+  height: 1.5rem !important;
+  padding: 0 0.55rem !important;
   color: var(--secondary-text) !important;
   border: 1px solid var(--border-subtle) !important;
   background: transparent !important;
-  border-radius: 5px !important;
+  border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 0.3rem !important;
+  gap: 0.25rem !important;
   transition: all var(--transition-fast) !important;
 
   &:hover {
     color: var(--primary-text) !important;
     border-color: var(--border-default) !important;
     background: var(--surface-hover) !important;
+  }
+}
+
+// ── Filter bar ──────────────────────────────────────────────────────────────
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  background: var(--primary-bg);
+}
+
+.filterSearch {
+  width: 190px;
+  background: var(--primary-bg) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 4px !important;
+  height: 1.35rem !important;
+  min-height: 1.35rem !important;
+  padding: 0 0.35rem 0 0.4rem !important;
+  transition: border-color var(--transition-fast) !important;
+  align-items: center !important;
+
+  &:focus,
+  &:global(.ant-input-affix-wrapper-focused) {
+    border-color: var(--filled-purple) !important;
+    box-shadow: none !important;
+    background: var(--primary-bg) !important;
+  }
+
+  &:hover {
+    border-color: var(--border-default) !important;
+    background: var(--primary-bg) !important;
+  }
+
+  :global(.ant-input) {
+    font-size: 0.6rem !important;
+    font-family: "JetBrains Mono", monospace !important;
+    background: transparent !important;
+    color: var(--primary-text) !important;
+    line-height: 1.35rem !important;
+
+    &::placeholder {
+      color: var(--secondary-text-500) !important;
+    }
+  }
+
+  :global(.ant-input-clear-icon) {
+    color: var(--secondary-text-500) !important;
+    font-size: 0.52rem !important;
+
+    &:hover {
+      color: var(--primary-text) !important;
+    }
+  }
+
+  :global(.ant-input-prefix) {
+    color: var(--secondary-text-500) !important;
+    margin-inline-end: 0.25rem !important;
+    font-size: 0.55rem !important;
+  }
+}
+
+.filterMethods {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.filterMethodTag {
+  font-size: 0.55rem !important;
+  font-weight: 600 !important;
+  font-family: "JetBrains Mono", monospace !important;
+  padding: 0.06rem 0.3rem !important;
+  border-radius: 3px !important;
+  line-height: 1.5 !important;
+  cursor: pointer !important;
+  user-select: none;
+  border: 1px solid var(--border-subtle) !important;
+  background: transparent !important;
+  color: var(--secondary-text-500) !important;
+  transition: all var(--transition-fast) !important;
+
+  &:hover {
+    color: var(--primary-text) !important;
+    border-color: var(--border-default) !important;
+  }
+
+  &:global(.ant-tag-checkable-checked) {
+    background: var(--filled-purple) !important;
+    border-color: var(--filled-purple) !important;
+    color: #fff !important;
+  }
+}
+
+.filterStatus {
+  min-width: 105px;
+
+  :global(.ant-select-selector) {
+    height: 1.35rem !important;
+    background: var(--primary-bg) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 4px !important;
+    font-size: 0.6rem !important;
+    color: var(--secondary-text) !important;
+    padding: 0 0.4rem !important;
+  }
+
+  :global(.ant-select-selection-item) {
+    font-size: 0.6rem !important;
+    line-height: 1.25rem !important;
+    color: var(--secondary-text) !important;
+  }
+
+  :global(.ant-select-arrow) {
+    font-size: 0.5rem;
+    color: var(--secondary-text-500);
+  }
+
+  :global(.ant-select-focused .ant-select-selector) {
+    border-color: var(--filled-purple) !important;
+    box-shadow: none !important;
+  }
+}
+
+.filterDivider {
+  width: 1px;
+  height: 1rem;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.filterToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+
+  span {
+    font-size: 0.6rem;
+    color: var(--secondary-text-500);
+  }
+}
+
+.filterClear {
+  font-size: 0.58rem !important;
+  color: var(--secondary-text-500) !important;
+  padding: 0 0.25rem !important;
+  height: auto !important;
+
+  &:hover {
+    color: var(--primary-text) !important;
   }
 }
 
@@ -79,27 +248,33 @@
     border: none !important;
   }
 
+  :global(.ant-table-content) {
+    background: transparent !important;
+  }
+
   :global(.ant-table-thead > tr > th) {
     background: var(--secondary-bg) !important;
     color: var(--secondary-text) !important;
-    font-size: 0.6rem;
+    font-size: 0.58rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     border-bottom: 1px solid var(--border-subtle) !important;
-    padding: 0.4rem 0.65rem !important;
+    padding: 0.35rem 0.6rem !important;
     border-top: none !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    &::before {
+      display: none !important;
+    }
   }
 
   :global(.ant-table-tbody > tr > td) {
     border-bottom: 1px solid var(--border-subtle) !important;
-    padding: 0.32rem 0.65rem !important;
+    padding: 0.3rem 0.6rem !important;
     color: var(--primary-text);
     font-size: 0.72rem;
     vertical-align: middle;
-    background: transparent !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--primary-bg) !important;
   }
 
   :global(.ant-table-tbody > tr) {
@@ -112,7 +287,7 @@
   }
 
   :global(.ant-table-expanded-row > td) {
-    background: rgba(255, 255, 255, 0.015) !important;
+    background: var(--secondary-bg) !important;
     padding: 0 !important;
     border-bottom: 1px solid var(--border-default) !important;
   }
@@ -127,24 +302,54 @@
     padding: 0 !important;
   }
 
+  :global(.ant-table-tbody .ant-table-placeholder) {
+    background: var(--primary-bg) !important;
+  }
+
+  :global(.ant-table-tbody .ant-table-placeholder > td) {
+    background: var(--primary-bg) !important;
+    border-bottom: none !important;
+  }
+
+  :global(.ant-table-tbody .ant-table-placeholder .ant-table-cell) {
+    background: var(--primary-bg) !important;
+  }
+
+  :global(.ant-empty) {
+    color: var(--secondary-text-500) !important;
+  }
+
+  :global(.ant-empty-image svg) {
+    fill: var(--secondary-text-500);
+    opacity: 0.3;
+  }
+
+  :global(.ant-empty-description) {
+    color: var(--secondary-text-500) !important;
+    font-size: 0.7rem;
+  }
+
+  :global(.ant-spin-dot-item) {
+    background-color: var(--filled-purple);
+  }
+
   // pagination
   :global(.ant-pagination) {
-    margin: 0.5rem 0.75rem !important;
-    font-size: 0.7rem;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0.4rem 0.75rem !important;
+    font-size: 0.68rem;
   }
 
   :global(.ant-pagination .ant-pagination-item) {
     background: transparent;
     border-color: var(--border-subtle);
-    min-width: 26px;
-    height: 26px;
-    line-height: 24px;
+    min-width: 24px;
+    height: 24px;
+    line-height: 22px;
     border-radius: 4px;
 
     a {
       color: var(--secondary-text);
-      font-size: 0.68rem;
+      font-size: 0.65rem;
     }
 
     &:hover {
@@ -169,49 +374,40 @@
     background: transparent !important;
     border-color: var(--border-subtle) !important;
     color: var(--secondary-text) !important;
-    font-size: 0.68rem !important;
-    height: 26px !important;
+    font-size: 0.65rem !important;
+    height: 24px !important;
     border-radius: 4px !important;
   }
 
   :global(.ant-pagination .ant-pagination-options .ant-select-selection-item) {
     color: var(--secondary-text) !important;
-    font-size: 0.68rem !important;
-    line-height: 24px !important;
+    font-size: 0.65rem !important;
+    line-height: 22px !important;
   }
 
   :global(.ant-table-empty .ant-table-tbody > tr > td) {
     border-bottom: none !important;
-  }
-
-  :global(.ant-spin-dot-item) {
-    background-color: var(--filled-purple);
-  }
-
-  :global(.ant-empty-description) {
-    color: var(--secondary-text-500) !important;
-    font-size: 0.72rem;
   }
 }
 
 // ── Cell styles ─────────────────────────────────────────────────────────────
 
 .methodTag {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 700;
   font-family: "JetBrains Mono", monospace;
   letter-spacing: 0.03em;
   border: none;
-  min-width: 2.6rem;
+  min-width: 2.5rem;
   text-align: center;
   line-height: 1.7;
-  padding: 0 0.3rem;
+  padding: 0 0.25rem;
   border-radius: 3px;
 }
 
 .pathCell {
   font-family: "JetBrains Mono", monospace;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,24 +416,23 @@
 }
 
 .hostCell {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--secondary-text);
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .tlsIndicator {
-  font-size: 0.5rem;
+  font-size: 0.48rem;
   font-weight: 700;
   font-family: "JetBrains Mono", monospace;
   color: var(--bugbase-green);
-  background: rgba(16, 202, 0, 0.1);
-  padding: 0.05rem 0.25rem;
+  background: rgba(16, 202, 0, 0.08);
+  padding: 0.04rem 0.2rem;
   border-radius: 2px;
   letter-spacing: 0.04em;
   flex-shrink: 0;
@@ -246,7 +441,7 @@
 .statusCode {
   font-family: "JetBrains Mono", monospace;
   font-weight: 600;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
 
   &.status2xx { color: var(--bugbase-green); }
   &.status3xx { color: #79c0ff; }
@@ -255,14 +450,13 @@
 }
 
 .contentTypeCell {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   color: var(--secondary-text-500);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .lengthCell {
   font-family: "JetBrains Mono", monospace;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   color: var(--secondary-text-500);
 }
 
@@ -278,106 +472,107 @@
 // ── Expanded row ────────────────────────────────────────────────────────────
 
 .expandedRow {
-  padding: 0.6rem 0.75rem;
+  padding: 0.5rem 0.65rem;
+}
 
-  .expandedHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.4rem;
-  }
+.expandedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
 
-  .expandedTabs {
-    display: flex;
-    gap: 0;
-  }
+.expandedTabs {
+  display: flex;
+  gap: 0;
+}
 
-  .expandedTab {
-    padding: 0.3rem 0.65rem;
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--secondary-text);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: color var(--transition-fast), border-color var(--transition-fast);
-    user-select: none;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+.expandedTab {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--secondary-text);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  user-select: none;
 
-    &:hover {
-      color: var(--primary-text);
-    }
-  }
-
-  .expandedTabActive {
-    @extend .expandedTab;
+  &:hover {
     color: var(--primary-text);
-    border-bottom-color: var(--filled-purple);
-  }
-
-  .expandedActions {
-    display: flex;
-    gap: 0.3rem;
-  }
-
-  .repeaterBtn {
-    font-size: 0.65rem !important;
-    height: 1.4rem !important;
-    padding: 0 0.5rem !important;
-    color: var(--secondary-text) !important;
-    border: 1px solid var(--border-subtle) !important;
-    background: transparent !important;
-    border-radius: 4px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 0.25rem !important;
-
-    &:hover {
-      color: var(--filled-purple) !important;
-      border-color: var(--filled-purple-50) !important;
-    }
-  }
-
-  .workspaceBtn {
-    font-size: 0.65rem !important;
-    height: 1.4rem !important;
-    padding: 0 0.5rem !important;
-    color: var(--lime-green-700) !important;
-    border: 1px solid rgba(159, 239, 0, 0.2) !important;
-    background: rgba(159, 239, 0, 0.06) !important;
-    border-radius: 4px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 0.25rem !important;
-    font-weight: 600 !important;
-
-    &:hover {
-      color: var(--lime-green) !important;
-      border-color: rgba(159, 239, 0, 0.4) !important;
-      background: rgba(159, 239, 0, 0.1) !important;
-    }
   }
 }
 
+.expandedTabActive {
+  @extend .expandedTab;
+  color: var(--primary-text);
+  border-bottom-color: var(--filled-purple);
+}
+
+.expandedActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.repeaterBtn {
+  font-size: 0.6rem !important;
+  height: 1.35rem !important;
+  padding: 0 0.45rem !important;
+  color: var(--secondary-text) !important;
+  border: 1px solid var(--border-subtle) !important;
+  background: transparent !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.2rem !important;
+
+  &:hover {
+    color: var(--filled-purple) !important;
+    border-color: var(--filled-purple-50) !important;
+  }
+}
+
+.workspaceBtn {
+  font-size: 0.6rem !important;
+  height: 1.35rem !important;
+  padding: 0 0.45rem !important;
+  color: var(--lime-green-700) !important;
+  border: 1px solid rgba(159, 239, 0, 0.15) !important;
+  background: rgba(159, 239, 0, 0.04) !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.2rem !important;
+  font-weight: 600 !important;
+
+  &:hover {
+    color: var(--lime-green) !important;
+    border-color: rgba(159, 239, 0, 0.35) !important;
+    background: rgba(159, 239, 0, 0.08) !important;
+  }
+}
+
+// ── Code block ──────────────────────────────────────────────────────────────
+
 .codeBlock {
-  background: transparent;
+  background: var(--primary-bg);
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  max-height: 300px;
+  max-height: 280px;
   overflow: auto;
-  margin-top: 0.4rem;
+  margin-top: 0.35rem;
   position: relative;
 }
 
 .codeLines {
   display: table;
   width: 100%;
-  padding: 0.4rem 0;
+  padding: 0.35rem 0;
 }
 
 .codeLine {
   display: table-row;
   font-family: "JetBrains Mono", monospace;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   line-height: 1.6;
 
   &:hover {
@@ -387,7 +582,7 @@
 
 .lineNumber {
   display: table-cell;
-  padding: 0 0.5rem 0 0.6rem;
+  padding: 0 0.45rem 0 0.5rem;
   text-align: right;
   color: var(--secondary-text-500);
   user-select: none;
@@ -399,57 +594,23 @@
 
 .lineContent {
   display: table-cell;
-  padding: 0 0.6rem;
+  padding: 0 0.5rem;
   color: var(--primary-text);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-// Syntax highlighting tokens
-.httpMethod {
-  color: var(--filled-purple);
-  font-weight: 700;
-}
-
-.httpUrl {
-  color: var(--primary-text);
-}
-
-.httpVersion {
-  color: var(--secondary-text);
-}
-
-.httpHeaderName {
-  color: #79c0ff;
-}
-
-.httpHeaderValue {
-  color: var(--primary-text-100);
-}
-
-.httpStatusOk {
-  color: var(--bugbase-green);
-  font-weight: 700;
-}
-
-.httpStatusRedirect {
-  color: #79c0ff;
-  font-weight: 700;
-}
-
-.httpStatusClientErr {
-  color: var(--orange);
-  font-weight: 700;
-}
-
-.httpStatusServerErr {
-  color: #ff7b72;
-  font-weight: 700;
-}
-
-.httpBody {
-  color: var(--secondary-text);
-}
+// Syntax highlighting
+.httpMethod { color: var(--filled-purple); font-weight: 700; }
+.httpUrl { color: var(--primary-text); }
+.httpVersion { color: var(--secondary-text); }
+.httpHeaderName { color: #79c0ff; }
+.httpHeaderValue { color: var(--primary-text-100); }
+.httpStatusOk { color: var(--bugbase-green); font-weight: 700; }
+.httpStatusRedirect { color: #79c0ff; font-weight: 700; }
+.httpStatusClientErr { color: var(--orange); font-weight: 700; }
+.httpStatusServerErr { color: #ff7b72; font-weight: 700; }
+.httpBody { color: var(--secondary-text); }
 
 // ── Repeater modal ──────────────────────────────────────────────────────────
 
@@ -465,15 +626,14 @@
   :global(.ant-modal-header) {
     background: transparent !important;
     border-bottom: 1px solid var(--border-subtle);
-    padding: 0.6rem 1rem;
+    padding: 0.55rem 1rem;
     margin: 0;
   }
 
   :global(.ant-modal-title) {
     color: var(--primary-text) !important;
-    font-size: 0.78rem !important;
+    font-size: 0.75rem !important;
     font-weight: 600 !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
   }
 
   :global(.ant-modal-body) {
@@ -482,8 +642,8 @@
 
   :global(.ant-modal-close) {
     color: var(--secondary-text);
-    top: 0.45rem;
-    right: 0.6rem;
+    top: 0.4rem;
+    right: 0.55rem;
 
     &:hover {
       color: var(--primary-text);
@@ -492,7 +652,7 @@
 
   :global(.ant-modal-footer) {
     border-top: 1px solid var(--border-subtle);
-    padding: 0.5rem 1rem;
+    padding: 0.45rem 1rem;
     margin: 0;
   }
 }
@@ -500,68 +660,62 @@
 .repeaterMeta {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 1rem;
+  gap: 0.55rem;
+  padding: 0.4rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--secondary-bg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
 
-  .metaField {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
+.metaField {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 
-    label {
-      font-size: 0.6rem;
-      font-weight: 600;
-      color: var(--secondary-text);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      white-space: nowrap;
-    }
-
-    input {
-      background: var(--primary-bg);
-      border: 1px solid var(--border-subtle);
-      border-radius: 4px;
-      padding: 0.22rem 0.5rem;
-      color: var(--primary-text);
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.65rem;
-      outline: none;
-      transition: border-color var(--transition-fast);
-      height: 1.5rem;
-
-      &:focus {
-        border-color: var(--filled-purple);
-      }
-
-      &::placeholder {
-        color: var(--secondary-text-500);
-      }
-    }
-
-    .hostInput {
-      width: 160px;
-    }
-
-    .portInput {
-      width: 58px;
-    }
+  label {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: var(--secondary-text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
   }
 
-  .metaToggle {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
+  input {
+    background: var(--primary-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 0.2rem 0.45rem;
+    color: var(--primary-text);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.62rem;
+    outline: none;
+    transition: border-color var(--transition-fast);
+    height: 1.4rem;
 
-    span {
-      font-size: 0.6rem;
-      font-weight: 600;
-      color: var(--secondary-text);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+    &:focus {
+      border-color: var(--filled-purple);
     }
+
+    &::placeholder {
+      color: var(--secondary-text-500);
+    }
+  }
+}
+
+.hostInput { width: 150px; }
+.portInput { width: 54px; }
+
+.metaToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+
+  span {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: var(--secondary-text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 }
 
@@ -585,51 +739,48 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.65rem;
+  padding: 0.3rem 0.6rem;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--secondary-bg);
   flex-shrink: 0;
+}
 
-  .paneLabel {
-    font-size: 0.6rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--secondary-text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
+.paneLabel {
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-text);
+}
 
-  .paneActions {
-    display: flex;
-    gap: 0.3rem;
-  }
+.paneActions {
+  display: flex;
+  gap: 0.25rem;
 }
 
 .sendBtn {
-  font-size: 0.62rem !important;
-  height: 1.45rem !important;
-  padding: 0 0.55rem !important;
+  font-size: 0.6rem !important;
+  height: 1.35rem !important;
+  padding: 0 0.5rem !important;
   border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 0.25rem !important;
+  gap: 0.2rem !important;
   font-weight: 600 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
 }
 
 .toBurpBtn {
-  font-size: 0.62rem !important;
-  height: 1.45rem !important;
-  padding: 0 0.55rem !important;
+  font-size: 0.6rem !important;
+  height: 1.35rem !important;
+  padding: 0 0.5rem !important;
   color: var(--secondary-text) !important;
   border: 1px solid var(--border-subtle) !important;
   background: transparent !important;
   border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 0.25rem !important;
+  gap: 0.2rem !important;
   font-weight: 500 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
 
   &:hover {
     color: var(--primary-text) !important;
@@ -638,23 +789,22 @@
 }
 
 .workspaceBtnModal {
-  font-size: 0.62rem !important;
-  height: 1.45rem !important;
-  padding: 0 0.55rem !important;
+  font-size: 0.6rem !important;
+  height: 1.35rem !important;
+  padding: 0 0.5rem !important;
   color: var(--lime-green-700) !important;
-  border: 1px solid rgba(159, 239, 0, 0.2) !important;
-  background: rgba(159, 239, 0, 0.06) !important;
+  border: 1px solid rgba(159, 239, 0, 0.15) !important;
+  background: rgba(159, 239, 0, 0.04) !important;
   border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 0.25rem !important;
+  gap: 0.2rem !important;
   font-weight: 600 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
 
   &:hover {
     color: var(--lime-green) !important;
-    border-color: rgba(159, 239, 0, 0.4) !important;
-    background: rgba(159, 239, 0, 0.1) !important;
+    border-color: rgba(159, 239, 0, 0.35) !important;
+    background: rgba(159, 239, 0, 0.08) !important;
   }
 }
 
@@ -668,9 +818,9 @@
     background: transparent;
     color: var(--primary-text);
     border: none;
-    padding: 0.5rem 0.65rem;
+    padding: 0.45rem 0.6rem;
     font-family: "JetBrains Mono", monospace;
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     line-height: 1.6;
     resize: none;
     outline: none;
@@ -690,24 +840,23 @@
   flex: 1;
   overflow: auto;
   min-height: 0;
+}
 
-  .responsePlaceholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--secondary-text-500);
-    font-size: 0.72rem;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
+.responsePlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--secondary-text-500);
+  font-size: 0.7rem;
 }
 
 .responseTimeBadge {
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-family: "JetBrains Mono", monospace;
   color: var(--secondary-text);
   background: var(--surface-active);
-  padding: 0.1rem 0.4rem;
+  padding: 0.08rem 0.35rem;
   border-radius: 3px;
 }
 
@@ -719,52 +868,50 @@
   align-items: center;
   justify-content: center;
   padding: 5rem 2rem;
-  gap: 0.6rem;
+  gap: 0.5rem;
   color: var(--secondary-text);
   text-align: center;
-
-  .emptyIcon {
-    font-size: 1.8rem;
-    opacity: 0.2;
-  }
 
   h3 {
     margin: 0;
     color: var(--primary-text);
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 
   p {
     margin: 0;
-    font-size: 0.75rem;
-    max-width: 320px;
+    font-size: 0.72rem;
+    max-width: 300px;
     line-height: 1.5;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--secondary-text);
   }
 }
 
+.emptyIcon {
+  font-size: 1.6rem;
+  opacity: 0.2;
+}
+
 .configureBtn {
-  margin-top: 0.5rem;
-  font-size: 0.7rem !important;
-  height: 1.8rem !important;
-  padding: 0 1rem !important;
+  margin-top: 0.4rem;
+  font-size: 0.68rem !important;
+  height: 1.7rem !important;
+  padding: 0 0.9rem !important;
   border-radius: 5px !important;
   font-weight: 500 !important;
 }
 
 .errorBanner {
-  margin: 0.5rem 1rem;
-  padding: 0.45rem 0.6rem;
-  background: rgba(255, 62, 62, 0.05);
-  border: 1px solid rgba(255, 62, 62, 0.12);
+  margin: 0.4rem 1rem;
+  padding: 0.4rem 0.55rem;
+  background: rgba(255, 62, 62, 0.04);
+  border: 1px solid rgba(255, 62, 62, 0.1);
   border-radius: 4px;
   color: #ff7b72;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   flex-shrink: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }

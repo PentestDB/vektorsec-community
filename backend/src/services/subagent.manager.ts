@@ -142,6 +142,9 @@ export class SubagentManager extends EventEmitter {
   }): Promise<void> {
     const { subagentId, task, sse, userId, abortSignal } = params;
 
+    const subagentUser = await UserModel.findById(userId).lean();
+    const disabledAgentTools: string[] = (subagentUser?.configs as any)?.disabledAgentTools ?? [];
+
     const systemMsg: AgentMessageDoc = {
       id: `sys_${subagentId}`,
       role: "system",
@@ -205,7 +208,7 @@ export class SubagentManager extends EventEmitter {
         }
 
         const openaiMessages = messagesToOpenAI(messages);
-        const tools = toolRegistry.toOpenAISchemas({ excludeSubagent: true });
+        const tools = toolRegistry.toOpenAISchemas({ excludeSubagent: true, disabledTools: disabledAgentTools });
 
         let assistantContent = "";
         let assistantToolCalls: ToolCallData[] = [];

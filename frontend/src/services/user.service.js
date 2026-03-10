@@ -129,3 +129,28 @@ export const updateBurpConfig = async (body) => {
   return res.data;
 };
 
+export const getMagnitudeConfig = async () => {
+  const res = await apiClient.get("/user/get-magnitude-config");
+  return res.data;
+};
+
+export const updateMagnitudeConfig = async (body) => {
+  const res = await apiClient.post("/user/update-magnitude-config", body);
+  return res.data;
+};
+
+export const startMagnitudeAgent = async (body) => {
+  const res = await apiClient.post("/user/start-magnitude-agent", body);
+  return res.data;
+};
+
+export const getAgentToolsConfig = async () => {
+  const res = await apiClient.get("/user/get-agent-tools-config");
+  return res.data;
+};
+
+export const updateAgentToolsConfig = async (body) => {
+  const res = await apiClient.post("/user/update-agent-tools-config", body);
+  return res.data;
+};
+

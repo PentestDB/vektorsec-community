@@ -1,26 +1,63 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { connectAgentStream } from "@/services/agent.service";
 import { v4 as uuidv4 } from "uuid";
+import { useAgentStreamStore } from "@/store/agentStream.store";
+import { useShallow } from "zustand/react/shallow";
 
-export default function useAgentStream({ sessionId, onComplete, onShellSpawned }) {
-  const [messages, setMessages] = useState([]);
-  const [agentState, setAgentState] = useState("idle");
-  const [pendingConsent, setPendingConsent] = useState(null);
-  const [pendingManualExecution, setPendingManualExecution] = useState(null);
-  const [subagents, setSubagents] = useState([]);
-  const controllerRef = useRef(null);
-  const streamingAssistantRef = useRef(null);
-  const toolCallAccRef = useRef({});
-  const toolOutputBufferRef = useRef({});
-  const toolOutputRafRef = useRef(null);
-  const thinkingBufferRef = useRef(null);
-  const thinkingRafRef = useRef(null);
-  const reasoningBufferRef = useRef(null);
-  const reasoningRafRef = useRef(null);
-  const slashStreamRef = useRef(null);
+export default function useAgentStream({ sessionId, onComplete }) {
+  const store = useAgentStreamStore;
+
+  useEffect(() => {
+    store.getState().getOrCreate(sessionId);
+  }, [sessionId, store]);
+
+  const { messages, agentState, pendingConsent, pendingManualExecution, subagents } =
+    useAgentStreamStore(
+      useShallow((state) => {
+        const s = state.sessions[sessionId];
+        return {
+          messages: s?.messages ?? [],
+          agentState: s?.agentState ?? "idle",
+          pendingConsent: s?.pendingConsent ?? null,
+          pendingManualExecution: s?.pendingManualExecution ?? null,
+          subagents: s?.subagents ?? [],
+        };
+      }),
+    );
+
+  const refs = useCallback(() => {
+    const s = store.getState().getSession(sessionId);
+    return s || store.getState().getOrCreate(sessionId);
+  }, [sessionId, store]);
+
+  const setMessages = useCallback(
+    (updater) => store.getState().setMessages(sessionId, updater),
+    [sessionId, store],
+  );
+
+  const setAgentState = useCallback(
+    (val) => store.getState().setAgentState(sessionId, val),
+    [sessionId, store],
+  );
+
+  const setPendingConsent = useCallback(
+    (val) => store.getState().setPendingConsent(sessionId, val),
+    [sessionId, store],
+  );
+
+  const setPendingManualExecution = useCallback(
+    (val) => store.getState().setPendingManualExecution(sessionId, val),
+    [sessionId, store],
+  );
+
+  const setSubagents = useCallback(
+    (val) => store.getState().setSubagents(sessionId, val),
+    [sessionId, store],
+  );
 
   const flushToolOutputBuffer = useCallback(() => {
-    const buffer = toolOutputBufferRef.current;
+    const r = refs();
+    const buffer = r.toolOutputBufferRef.current;
     const ids = Object.keys(buffer);
     if (ids.length === 0) return;
 
@@ -35,43 +72,46 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
       }
       return next;
     });
-    toolOutputBufferRef.current = {};
-    toolOutputRafRef.current = null;
-  }, []);
+    r.toolOutputBufferRef.current = {};
+    r.toolOutputRafRef.current = null;
+  }, [refs, setMessages]);
 
   const flushReasoningBuffer = useCallback(() => {
-    const ref = streamingAssistantRef.current;
-    if (!ref || reasoningBufferRef.current === null) return;
+    const r = refs();
+    const ref = r.streamingAssistantRef.current;
+    if (!ref || r.reasoningBufferRef.current === null) return;
     setMessages((prev) =>
       prev.map((m) => (m.id === ref.id ? { ...m, reasoning: ref.reasoning } : m)),
     );
-    reasoningBufferRef.current = null;
-    reasoningRafRef.current = null;
-  }, []);
+    r.reasoningBufferRef.current = null;
+    r.reasoningRafRef.current = null;
+  }, [refs, setMessages]);
 
   const flushThinkingBuffer = useCallback(() => {
-    const ref = streamingAssistantRef.current;
-    if (!ref || thinkingBufferRef.current === null) return;
+    const r = refs();
+    const ref = r.streamingAssistantRef.current;
+    if (!ref || r.thinkingBufferRef.current === null) return;
     setMessages((prev) =>
       prev.map((m) => (m.id === ref.id ? { ...m, content: ref.content } : m)),
     );
-    thinkingBufferRef.current = null;
-    thinkingRafRef.current = null;
-  }, []);
+    r.thinkingBufferRef.current = null;
+    r.thinkingRafRef.current = null;
+  }, [refs, setMessages]);
 
   const flushAssistant = useCallback(() => {
-    const ref = streamingAssistantRef.current;
+    const r = refs();
+    const ref = r.streamingAssistantRef.current;
     if (!ref) return;
 
-    if (thinkingRafRef.current) {
-      cancelAnimationFrame(thinkingRafRef.current);
-      thinkingRafRef.current = null;
-      thinkingBufferRef.current = null;
+    if (r.thinkingRafRef.current) {
+      cancelAnimationFrame(r.thinkingRafRef.current);
+      r.thinkingRafRef.current = null;
+      r.thinkingBufferRef.current = null;
     }
-    if (reasoningRafRef.current) {
-      cancelAnimationFrame(reasoningRafRef.current);
-      reasoningRafRef.current = null;
-      reasoningBufferRef.current = null;
+    if (r.reasoningRafRef.current) {
+      cancelAnimationFrame(r.reasoningRafRef.current);
+      r.reasoningRafRef.current = null;
+      r.reasoningBufferRef.current = null;
     }
 
     setMessages((prev) => {
@@ -85,8 +125,8 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
       }
       return prev;
     });
-    streamingAssistantRef.current = null;
-  }, []);
+    r.streamingAssistantRef.current = null;
+  }, [refs, setMessages]);
 
   const startStream = useCallback(
     async ({ message, endpoint = "message", burpMeta = null }) => {
@@ -109,7 +149,9 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
         setAgentState("idle");
         return;
       }
-      controllerRef.current = stream;
+
+      const r = refs();
+      r.controllerRef.current = stream;
 
       stream
         .onEvent("user_message_ack", (data) => {
@@ -119,70 +161,74 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           ]);
         })
         .onEvent("reasoning", (data) => {
-          if (!streamingAssistantRef.current) {
+          const r2 = refs();
+          if (!r2.streamingAssistantRef.current) {
             const id = uuidv4();
-            streamingAssistantRef.current = { id, content: "", reasoning: "", toolCalls: [] };
+            r2.streamingAssistantRef.current = { id, content: "", reasoning: "", toolCalls: [] };
             setMessages((prev) => [
               ...prev,
               { id, role: "assistant", content: "", reasoning: "", toolCalls: [], streaming: true, reasoningStreaming: true },
             ]);
           }
-          streamingAssistantRef.current.reasoning += data.content;
-          reasoningBufferRef.current = true;
-          if (!reasoningRafRef.current) {
-            reasoningRafRef.current = requestAnimationFrame(flushReasoningBuffer);
+          r2.streamingAssistantRef.current.reasoning += data.content;
+          r2.reasoningBufferRef.current = true;
+          if (!r2.reasoningRafRef.current) {
+            r2.reasoningRafRef.current = requestAnimationFrame(flushReasoningBuffer);
           }
         })
         .onEvent("thinking", (data) => {
-          if (!streamingAssistantRef.current) {
+          const r2 = refs();
+          if (!r2.streamingAssistantRef.current) {
             const id = uuidv4();
-            streamingAssistantRef.current = { id, content: "", reasoning: "", toolCalls: [] };
+            r2.streamingAssistantRef.current = { id, content: "", reasoning: "", toolCalls: [] };
             setMessages((prev) => [
               ...prev,
               { id, role: "assistant", content: "", toolCalls: [], streaming: true },
             ]);
           }
-          if (streamingAssistantRef.current.reasoning) {
+          if (r2.streamingAssistantRef.current.reasoning) {
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === streamingAssistantRef.current.id ? { ...m, reasoningStreaming: false } : m,
+                m.id === r2.streamingAssistantRef.current.id ? { ...m, reasoningStreaming: false } : m,
               ),
             );
           }
-          streamingAssistantRef.current.content += data.content;
-          thinkingBufferRef.current = true;
-          if (!thinkingRafRef.current) {
-            thinkingRafRef.current = requestAnimationFrame(flushThinkingBuffer);
+          r2.streamingAssistantRef.current.content += data.content;
+          r2.thinkingBufferRef.current = true;
+          if (!r2.thinkingRafRef.current) {
+            r2.thinkingRafRef.current = requestAnimationFrame(flushThinkingBuffer);
           }
         })
         .onEvent("tool_call_start", (data) => {
-          toolCallAccRef.current[data.index] = {
+          refs().toolCallAccRef.current[data.index] = {
             id: data.id,
             name: data.name,
             arguments: "",
           };
         })
         .onEvent("tool_call_args", (data) => {
-          if (toolCallAccRef.current[data.index]) {
-            toolCallAccRef.current[data.index].arguments += data.content;
+          const r2 = refs();
+          if (r2.toolCallAccRef.current[data.index]) {
+            r2.toolCallAccRef.current[data.index].arguments += data.content;
           }
         })
         .onEvent("tool_call_ready", (data) => {
+          const r2 = refs();
           const tc = {
             id: data.id,
             name: data.name,
             arguments: data.arguments,
           };
-          if (streamingAssistantRef.current) {
-            streamingAssistantRef.current.toolCalls.push(tc);
-            const ref = streamingAssistantRef.current;
+          if (r2.streamingAssistantRef.current) {
+            r2.streamingAssistantRef.current.toolCalls.push(tc);
+            const ref = r2.streamingAssistantRef.current;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === ref.id ? { ...m, toolCalls: [...ref.toolCalls] } : m,
               ),
             );
           }
-          toolCallAccRef.current = {};
+          r2.toolCallAccRef.current = {};
         })
         .onEvent("tool_start", (data) => {
           flushAssistant();
@@ -201,16 +247,18 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           ]);
         })
         .onEvent("tool_output", (data) => {
+          const r2 = refs();
           const key = `tool_${data.id}`;
-          toolOutputBufferRef.current[key] =
-            (toolOutputBufferRef.current[key] ?? "") + data.chunk;
-          if (!toolOutputRafRef.current) {
-            toolOutputRafRef.current = requestAnimationFrame(flushToolOutputBuffer);
+          r2.toolOutputBufferRef.current[key] =
+            (r2.toolOutputBufferRef.current[key] ?? "") + data.chunk;
+          if (!r2.toolOutputRafRef.current) {
+            r2.toolOutputRafRef.current = requestAnimationFrame(flushToolOutputBuffer);
           }
         })
         .onEvent("tool_done", (data) => {
-          if (toolOutputRafRef.current) {
-            cancelAnimationFrame(toolOutputRafRef.current);
+          const r2 = refs();
+          if (r2.toolOutputRafRef.current) {
+            cancelAnimationFrame(r2.toolOutputRafRef.current);
             flushToolOutputBuffer();
           }
           setMessages((prev) =>
@@ -227,10 +275,11 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           );
         })
         .onEvent("tool_error", (data) => {
-          if (toolOutputRafRef.current) {
-            cancelAnimationFrame(toolOutputRafRef.current);
-            toolOutputBufferRef.current = {};
-            toolOutputRafRef.current = null;
+          const r2 = refs();
+          if (r2.toolOutputRafRef.current) {
+            cancelAnimationFrame(r2.toolOutputRafRef.current);
+            r2.toolOutputBufferRef.current = {};
+            r2.toolOutputRafRef.current = null;
           }
           setMessages((prev) =>
             prev.map((m) =>
@@ -258,7 +307,6 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           });
           setAgentState("waiting_manual_execution");
         })
-        // Subagent events
         .onEvent("subagent_spawned", (data) => {
           setSubagents((prev) => [
             ...prev,
@@ -360,8 +408,9 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
             setAgentState("idle");
           }
           const id = data.id || `slash_result_${Date.now()}`;
+          const r2 = refs();
           if (data.streaming) {
-            slashStreamRef.current = { id, content: data.content || "" };
+            r2.slashStreamRef.current = { id, content: data.content || "" };
           }
           setMessages((prev) => [
             ...prev,
@@ -377,7 +426,8 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           ]);
         })
         .onEvent("slash_command_stream", (data) => {
-          const ref = slashStreamRef.current;
+          const r2 = refs();
+          const ref = r2.slashStreamRef.current;
           if (ref && ref.id === data.id) {
             ref.content += data.content;
             const snapshot = ref.content;
@@ -389,7 +439,8 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           }
         })
         .onEvent("slash_command_done", (data) => {
-          const finalContent = slashStreamRef.current?.content || data.content;
+          const r2 = refs();
+          const finalContent = r2.slashStreamRef.current?.content || data.content;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === data.id
@@ -397,7 +448,7 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
                 : m,
             ),
           );
-          slashStreamRef.current = null;
+          r2.slashStreamRef.current = null;
         })
         .onEvent("summarizing", (data) => {
           setMessages((prev) => [
@@ -437,34 +488,28 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
         .onEvent("_stream_end", () => {
           flushAssistant();
           setAgentState((prev) => {
-            if (prev === "running") {
-              return "idle";
-            }
+            if (prev === "running") return "idle";
             return prev;
           });
-          controllerRef.current = null;
+          refs().controllerRef.current = null;
         });
     },
-    [sessionId, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete],
   );
 
   const abort = useCallback(() => {
-    controllerRef.current?.abort();
+    const r = refs();
+    r.controllerRef.current?.abort();
     flushAssistant();
     setAgentState("idle");
-  }, [flushAssistant]);
+  }, [refs, flushAssistant, setAgentState]);
 
-  const loadHistory = useCallback((historyMessages, historySubagents) => {
-    setMessages(
-      historyMessages.map((m) => ({
-        ...m,
-        streaming: false,
-      })),
-    );
-    if (historySubagents) {
-      setSubagents(historySubagents);
-    }
-  }, []);
+  const loadHistory = useCallback(
+    (historyMessages, historySubagents) => {
+      store.getState().loadHistory(sessionId, historyMessages, historySubagents);
+    },
+    [sessionId, store],
+  );
 
   return {
     messages,

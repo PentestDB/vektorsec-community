@@ -85,6 +85,10 @@ const UserSchema = new Schema({
       type: Boolean,
       default: false,
     },
+    disabledAgentTools: {
+      type: [{ type: String }],
+      default: [],
+    },
   },
   referredBy: { type: mongoose.Schema.Types.ObjectId },
   workingIndustry: { type: String },

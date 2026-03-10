@@ -50,22 +50,52 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
 
   const burpSection = burpConfigured
     ? `\n<burp_integration>
-You have access to Burp Suite via the send_to_burp tool. This sends HTTP requests through Burp's HTTP engine (which handles TLS, HTTP/2 negotiation, cookies, etc.) and returns the full raw response.
+You have access to Burp Suite for web application security testing. The following tools are available:
 
-When the user sends you an HTTP request to pentest:
-1. Analyze the request: identify the endpoint type, parameters, authentication, and data format.
-2. Identify vulnerability categories to test (e.g., SQL Injection, XSS, IDOR, Authentication Bypass, Command Injection, Path Traversal, SSRF, Mass Assignment, etc.).
-3. Present a brief summary of your analysis and proposed testing plan to the user.
-4. After user confirmation, systematically test each category using send_to_burp with crafted payloads.
-5. For each test, analyze the response carefully — look for error messages, status code changes, timing differences, reflected input, data leaks, or behavioral anomalies that indicate a vulnerability.
-6. Iterate: if you find a promising vector, deepen your testing with more specific payloads.
-7. Report findings with severity, evidence, and reproduction steps.
+**search_burp_proxy_history** — Search and browse HTTP traffic captured by Burp's proxy.
+  - Use action "search" with filters (search text, methods, status codes, hide_assets) to discover endpoints.
+  - Use action "get" with an entry_id to retrieve the full request/response for a specific entry.
 
-Request formatting rules:
+**send_to_burp_repeater** — Send a single crafted HTTP request through Burp and get the full response.
+  - Use this for precision testing: custom payloads, parameter tampering, header manipulation, injection testing (SQLi, XSS, IDOR, SSRF, auth bypass, etc.), and analyzing raw responses in detail.
+
+**send_to_burp_intruder** — Send a request to Burp Intruder for automated payload-based brute-force testing.
+  - Use this when you need to test many payloads against the same request: credential brute-forcing, ID enumeration, wordlist fuzzing, or testing multiple injection points simultaneously.
+
+**burp_collaborator** — Generate out-of-band payloads and poll for interactions.
+  - Use this to detect blind vulnerabilities (blind SSRF, blind XXE, blind SQLi) where the application makes an external request to a Collaborator-controlled domain.
+
+## Recommended Workflow
+
+When testing a web application with Burp configured:
+
+1. **Discover**: Use search_burp_proxy_history to explore the traffic captured by Burp's proxy. Search for interesting endpoints, API calls, authenticated requests, and forms. Use filters (method, status, search text) to narrow down.
+
+2. **Identify targets**: From the proxy history, pick requests that are worth testing — look for endpoints with parameters, POST bodies, authentication tokens, or state-changing operations.
+
+3. **Retrieve details**: Use search_burp_proxy_history with action "get" to fetch the full request/response for target entries. This gives you the exact headers, cookies, and body to work with.
+
+4. **Test with Repeater**: Use send_to_burp_repeater to send modified versions of the request with custom payloads. This is ideal for:
+   - Logical vulnerability testing (IDOR, privilege escalation, business logic flaws)
+   - Injection testing with specific crafted payloads (SQLi, XSS, SSTI, command injection)
+   - Authentication/authorization bypass attempts
+   - Header manipulation and parameter tampering
+   - Analyzing how the server responds to each crafted request
+
+5. **Brute-force with Intruder**: Use send_to_burp_intruder when you need to test many payloads:
+   - Credential brute-forcing (username/password lists)
+   - Fuzzing parameter values with wordlists
+   - Enumerating valid IDs, tokens, or paths
+   - Testing large payload sets across multiple insertion points
+
+6. **Out-of-band testing**: Use burp_collaborator to detect blind vulnerabilities where no direct response is visible.
+
+7. **Iterate**: Based on findings, deepen testing on promising vectors. Report findings with severity, evidence, and reproduction steps.
+
+## Request Formatting
 - Provide the complete raw HTTP request (request line + headers + body).
-- The tool auto-normalizes \\r\\n line endings and recalculates Content-Length.
+- Tools auto-normalize \\r\\n line endings and recalculate Content-Length.
 - Preserve all original headers (Host, Cookie, Authorization, etc.) unless intentionally testing without them.
-- When modifying the body, the Content-Length is recalculated automatically.
 </burp_integration>\n`
     : "";
 

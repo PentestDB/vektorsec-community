@@ -108,7 +108,10 @@ export async function executeToolCall(
     };
   }
 
-  if (requireConsentForAllTools || toolDef.requiresConsent) {
+  const needsConsent =
+    requireConsentForAllTools ||
+    (requireConsentForAllTools !== false && (toolDef.requiresConsent ?? false));
+  if (needsConsent) {
     callbacks.onConsentRequired(toolCall.id, toolCall.name, args);
     return {
       toolCallId: toolCall.id,

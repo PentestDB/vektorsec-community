@@ -25,12 +25,13 @@ function normalizeHttpRequest(raw: string): string {
 }
 
 const sendToBurp: ToolDefinition = {
-  name: "send_to_burp",
+  name: "send_to_burp_repeater",
   description:
-    "Send an HTTP request through Burp Suite and return the full HTTP response. " +
-    "Use this to test web application endpoints for vulnerabilities by sending " +
-    "crafted payloads (SQLi, XSS, IDOR, auth bypass, etc.) and analyzing the response. " +
-    "The request is sent through Burp's HTTP engine which handles TLS, HTTP/2 negotiation, " +
+    "Send an HTTP request through Burp Suite's Repeater and return the full HTTP response. " +
+    "Use this for precision testing of web endpoints — crafting custom payloads, modifying " +
+    "headers, testing authentication bypasses, logical flaws, parameter tampering, injection " +
+    "payloads (SQLi, XSS, IDOR, SSRF, etc.), and analyzing the raw response in detail. " +
+    "Each request is sent individually through Burp's HTTP engine which handles TLS, HTTP/2, " +
     "and connection management. Provide a complete raw HTTP request (request line + headers + body). " +
     "The tool automatically normalizes line endings and recalculates Content-Length.",
   parameters: {

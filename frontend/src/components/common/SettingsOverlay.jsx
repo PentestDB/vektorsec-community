@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbRadar } from "react-icons/tb";
+import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbRadar, TbWorldWww, TbPlugConnected } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
@@ -10,6 +10,8 @@ import ModelsPage from "@/components/pages/settings/Models";
 import SSHPage from "@/components/pages/settings/SSH";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
+import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
+import AgentToolsPage from "@/components/pages/settings/AgentTools";
 
 const TABS = [
   {
@@ -17,6 +19,13 @@ const TABS = [
     label: "My Account",
     icon: RiAccountCircleLine,
     component: MyAccount,
+  },
+  {
+    key: "agent-tools",
+    label: "Agent Tools",
+    description: "Enable or disable tools available to the AI agent during sessions.",
+    icon: TbPlugConnected,
+    component: AgentToolsPage,
   },
   {
     key: "capabilities",
@@ -50,6 +59,13 @@ const TABS = [
     description: "Connect to a Burp Suite instance via the Burp RPC extension.",
     icon: TbRadar,
     component: BurpSettingsPage,
+  },
+  {
+    key: "magnitude",
+    label: "Browser Agent",
+    description: "Configure Magnitude for agentic browser automation during pentests.",
+    icon: TbWorldWww,
+    component: MagnitudeSettingsPage,
   },
 ];
 

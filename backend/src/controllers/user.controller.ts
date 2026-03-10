@@ -107,6 +107,47 @@ export const getUserTools = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Agent Tools Toggle ─────────────────────────────────────────────
+
+import { toolRegistry } from "../tools/registry";
+
+export const getAgentToolsConfig = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    const disabledTools: string[] = user.configs.disabledAgentTools || [];
+
+    const allTools = toolRegistry.getAll().map((t) => ({
+      name: t.name,
+      description: t.description,
+      enabled: !disabledTools.includes(t.name),
+    }));
+
+    return res.status(200).json({ tools: allTools });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get agent tools config" });
+  }
+};
+
+export const updateAgentToolsConfig = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    const { disabledTools } = req.body;
+
+    if (!Array.isArray(disabledTools)) {
+      return res.status(400).json({ message: "disabledTools must be an array" });
+    }
+
+    user.configs.disabledAgentTools = disabledTools;
+    await user.save();
+
+    return res.status(200).json({ message: "Agent tools config updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update agent tools config" });
+  }
+};
+
 // ─── Capabilities ────────────────────────────────────────────────────
 
 import {
@@ -1322,5 +1363,160 @@ export const updateBurpConfig = async (req: Request, res: Response) => {
   } catch (error) {
     console.log(error);
     return res.status(400).json({ message: "Failed to update Burp config" });
+  }
+};
+
+// ─── Magnitude Browser Agent Configuration ───────────────────────────
+
+export const getMagnitudeConfig = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+
+    const mask = (key?: string) =>
+      key ? `${key.slice(0, 4)}${"•".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}` : "";
+
+    return res.status(200).json({
+      enabled: env.MAGNITUDE_ENABLED === "true",
+      proxyUrl: env.MAGNITUDE_PROXY_URL || "",
+      headless: env.MAGNITUDE_HEADLESS !== "false",
+      displayPort: env.MAGNITUDE_DISPLAY || "",
+      configured: env.MAGNITUDE_ENABLED === "true",
+      modelProvider: env.MAGNITUDE_MODEL_PROVIDER || "",
+      model: env.MAGNITUDE_MODEL || "",
+      apiKey: mask(env.MAGNITUDE_MODEL_API_KEY),
+      baseURL: env.MAGNITUDE_MODEL_BASE_URL || "",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get Magnitude config" });
+  }
+};
+
+export const updateMagnitudeConfig = async (req: Request, res: Response) => {
+  try {
+    const { enabled, proxyUrl, headless, displayPort, modelProvider, model, apiKey, baseURL } = req.body;
+
+    const updates: Record<string, string> = {
+      MAGNITUDE_ENABLED: String(!!enabled),
+      MAGNITUDE_HEADLESS: String(headless !== false),
+    };
+
+    if (proxyUrl !== undefined) {
+      updates.MAGNITUDE_PROXY_URL = proxyUrl || "";
+    }
+
+    if (displayPort !== undefined) {
+      updates.MAGNITUDE_DISPLAY = displayPort || "";
+    }
+
+    if (modelProvider !== undefined) updates.MAGNITUDE_MODEL_PROVIDER = modelProvider || "";
+    if (model !== undefined) updates.MAGNITUDE_MODEL = model || "";
+    if (apiKey !== undefined && !apiKey.includes("•")) {
+      updates.MAGNITUDE_MODEL_API_KEY = apiKey || "";
+    }
+    if (baseURL !== undefined) updates.MAGNITUDE_MODEL_BASE_URL = baseURL || "";
+
+    updateEnvVars(updates);
+
+    return res.status(200).json({ message: "Magnitude configuration updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update Magnitude config" });
+  }
+};
+
+export const startMagnitudeAgent = async (req: Request, res: Response) => {
+  try {
+    const { goal, targetUrl } = req.body;
+
+    if (!goal) {
+      return res.status(400).json({ message: "A goal is required to start the browser agent" });
+    }
+
+    if (!targetUrl) {
+      return res.status(400).json({ message: "A target URL is required" });
+    }
+
+    const env = readEnvFile();
+
+    if (env.MAGNITUDE_ENABLED !== "true") {
+      return res.status(400).json({ message: "Magnitude browser agent is not enabled. Enable it in Settings first." });
+    }
+
+    const provider = env.MAGNITUDE_MODEL_PROVIDER || "openai";
+    const model = env.MAGNITUDE_MODEL || "gpt-4o";
+    const apiKey = env.MAGNITUDE_MODEL_API_KEY || "";
+    const baseURL = env.MAGNITUDE_MODEL_BASE_URL || "";
+    const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
+    const headless = env.MAGNITUDE_HEADLESS !== "false";
+    const displayPort = env.MAGNITUDE_DISPLAY || "";
+
+    if (!apiKey) {
+      return res.status(400).json({ message: "No API key configured for the Browser Agent. Configure a model in Settings → Browser Agent." });
+    }
+
+    if (!headless && displayPort) {
+      process.env.DISPLAY = displayPort.startsWith(":") ? displayPort : `:${displayPort}`;
+    }
+
+    const PROVIDER_MAP: Record<string, string> = {
+      anthropic: "anthropic",
+      openai: "openai",
+      google: "google-ai",
+      "openai-compatible": "openai-generic",
+    };
+    const magnitudeLlmProvider = PROVIDER_MAP[provider] || "openai";
+
+    const { startBrowserAgent } = await import("magnitude-core");
+
+    const launchOptions: any = { headless };
+    if (proxyUrl) {
+      launchOptions.proxy = { server: proxyUrl };
+    }
+    if (!headless && displayPort) {
+      const display = displayPort.startsWith(":") ? displayPort : `:${displayPort}`;
+      launchOptions.env = { ...process.env, DISPLAY: display };
+    }
+
+    const agentConfig: any = {
+      url: targetUrl,
+      narrate: true,
+      browser: {
+        launchOptions,
+        contextOptions: { ignoreHTTPSErrors: true },
+      },
+      llm: {
+        provider: magnitudeLlmProvider,
+        options: {
+          model,
+          apiKey,
+          ...(baseURL ? { baseUrl: baseURL } : {}),
+        },
+      },
+    };
+
+    const agent = await startBrowserAgent(agentConfig);
+
+    try {
+      await agent.act(goal);
+      await agent.stop();
+      return res.status(200).json({
+        message: "Browser agent completed the goal successfully",
+        goal,
+        targetUrl,
+      });
+    } catch (agentError: any) {
+      try { await agent.stop(); } catch {}
+      return res.status(500).json({
+        message: `Browser agent failed: ${agentError.message}`,
+        goal,
+        targetUrl,
+      });
+    }
+  } catch (error: any) {
+    console.log(error);
+    return res.status(500).json({
+      message: `Failed to start Magnitude agent: ${error.message}`,
+    });
   }
 };

@@ -1,9 +1,22 @@
 import { apiClient } from "@/utils/axios.config";
 
-export const getBurpProxyHistory = async ({ page = 1, pageSize = 20 } = {}) => {
+export const getBurpProxyHistory = async ({
+  page = 1,
+  pageSize = 20,
+  search,
+  method,
+  statusMin,
+  statusMax,
+  hideAssets,
+} = {}) => {
   const res = await apiClient.get("/burp/proxy-history", {
-    params: { page, pageSize },
+    params: { page, pageSize, search, method, statusMin, statusMax, hideAssets },
   });
+  return res.data;
+};
+
+export const getBurpProxyEntry = async (id) => {
+  const res = await apiClient.get(`/burp/proxy-entry/${id}`);
   return res.data;
 };
 
@@ -25,5 +38,47 @@ export const sendToRepeater = async ({ host, port, secure, rawRequest, tabName }
     rawRequest,
     tabName,
   });
+  return res.data;
+};
+
+export const sendToIntruder = async ({ host, port, secure, rawRequest, tabName, insertionPoints }) => {
+  const res = await apiClient.post("/burp/send-to-intruder", {
+    host,
+    port,
+    secure,
+    rawRequest,
+    tabName,
+    insertionPoints,
+  });
+  return res.data;
+};
+
+export const repeaterSend = async ({ host, port, secure, rawRequest }) => {
+  const res = await apiClient.post("/burp/repeater-send", {
+    host,
+    port,
+    secure,
+    rawRequest,
+  });
+  return res.data;
+};
+
+export const generateCollaboratorPayload = async ({ customData } = {}) => {
+  const res = await apiClient.post("/burp/collaborator/generate", { customData });
+  return res.data;
+};
+
+export const pollCollaborator = async ({ secretKey }) => {
+  const res = await apiClient.post("/burp/collaborator/poll", { secretKey });
+  return res.data;
+};
+
+export const getProxyInterceptStatus = async () => {
+  const res = await apiClient.get("/burp/proxy/intercept-status");
+  return res.data;
+};
+
+export const setProxyIntercept = async ({ enabled }) => {
+  const res = await apiClient.post("/burp/proxy/set-intercept", { enabled });
   return res.data;
 };
