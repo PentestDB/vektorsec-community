@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useQuery } from "react-query";
 import { Button, notification } from "antd";
@@ -95,6 +95,44 @@ export default function ChatView({ sessionId }) {
     }
   }, [messages, scrollToBottom]);
 
+  useEffect(() => {
+    const handleContextCleared = (e) => {
+      if (e.detail?.sessionId && e.detail.sessionId !== sessionId) return;
+      setMessages([]);
+      setAgentState("idle");
+      setPendingConsent(null);
+      setPendingManualExecution(null);
+      abort();
+    };
+    window.addEventListener("context-cleared", handleContextCleared);
+    return () => window.removeEventListener("context-cleared", handleContextCleared);
+  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, abort]);
+
+  const [burpAttachment, setBurpAttachment] = useState(null);
+
+  const buildBurpMessage = useCallback((userText, attachment) => {
+    const scheme = attachment.secure ? "https" : "http";
+    const target = `${attachment.method} ${scheme}://${attachment.host}${attachment.path}`;
+    const tls = attachment.secure ? "Yes" : "No";
+
+    let msg = "";
+    if (userText.trim()) {
+      msg += `${userText.trim()}\n\n`;
+    } else {
+      msg += `Analyze and pentest the following HTTP request captured from Burp Suite proxy:\n\n`;
+    }
+    msg += `Target: ${target}\n`;
+    msg += `Host: ${attachment.host} | Port: ${attachment.port || 443} | TLS: ${tls}\n\n`;
+    msg += `--- RAW REQUEST ---\n${attachment.rawRequest || "(empty)"}\n--- END REQUEST ---\n`;
+    if (attachment.rawResponse) {
+      msg += `\n--- RAW RESPONSE ---\n${attachment.rawResponse}\n--- END RESPONSE ---\n`;
+    }
+    if (!userText.trim()) {
+      msg += `\nAnalyze this request for potential vulnerabilities and suggest testing categories.`;
+    }
+    return msg;
+  }, []);
+
   const handleSend = useCallback(
     (message) => {
       if (message.startsWith("/")) {
@@ -111,11 +149,18 @@ export default function ChatView({ sessionId }) {
         startStream({ message, endpoint: "slash-command" });
         return;
       }
+
+      let finalMessage = message;
+      if (burpAttachment) {
+        finalMessage = buildBurpMessage(message, burpAttachment);
+        setBurpAttachment(null);
+      }
+
       const endpoint =
         agentState === "paused" ? "resume" : "message";
-      startStream({ message, endpoint });
+      startStream({ message: finalMessage, endpoint });
     },
-    [agentState, startStream, setMessages],
+    [agentState, startStream, setMessages, burpAttachment, buildBurpMessage],
   );
 
   const handlePause = useCallback(async () => {
@@ -149,7 +194,6 @@ export default function ChatView({ sessionId }) {
     [setPendingManualExecution, setAgentState, startStream],
   );
 
-  // Check for pending Burp requests on mount / navigation
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
     if (historyLoading || burpPendingProcessed.current) return;
@@ -157,9 +201,14 @@ export default function ChatView({ sessionId }) {
     if (pending) {
       sessionStorage.removeItem("burp-to-workspace");
       burpPendingProcessed.current = true;
-      setTimeout(() => handleSend(pending), 300);
+      try {
+        const parsed = JSON.parse(pending);
+        setBurpAttachment(parsed);
+      } catch {
+        setBurpAttachment(null);
+      }
     }
-  }, [historyLoading, handleSend]);
+  }, [historyLoading]);
 
   const isEmpty = messages.length === 0 && !historyLoading;
 
@@ -221,6 +270,8 @@ export default function ChatView({ sessionId }) {
         onPause={handlePause}
         agentState={agentState}
         disabled={historyLoading || agentState === "waiting_consent" || agentState === "waiting_manual_execution"}
+        burpAttachment={burpAttachment}
+        onDismissBurpAttachment={() => setBurpAttachment(null)}
       />
     </div>
   );

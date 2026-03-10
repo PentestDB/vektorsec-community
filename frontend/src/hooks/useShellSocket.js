@@ -137,10 +137,10 @@ export default function useShellSocket({ sessionId, onError }) {
     }
   }, []);
 
-  const subscribeShell = useCallback((shellId) => {
+  const subscribeShell = useCallback((shellId, opts) => {
     subscribedShells.current.add(shellId);
     send("subscribe_shell", { shellId });
-    const offset = shellOffsets.current[shellId] ?? 0;
+    const offset = opts?.fullBuffer ? 0 : (shellOffsets.current[shellId] ?? 0);
     send("request_buffer", { shellId, fromOffset: offset });
   }, [send]);
 

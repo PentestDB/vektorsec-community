@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
-import "xterm/css/xterm.css";
+import React, { useEffect, useRef } from "react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
+import "@xterm/xterm/css/xterm.css";
 
 export default function ShellTerminal({
   shellId,
@@ -12,19 +13,18 @@ export default function ShellTerminal({
   sendShellInput,
   onShellOutput,
 }) {
-  const terminalRef = useRef(null);
   const containerRef = useRef(null);
-  const fitAddonRef = useRef(null);
-  const mountedRef = useRef(false);
+  const disposedRef = useRef(false);
 
   useEffect(() => {
-    if (!containerRef.current || mountedRef.current) return;
-    mountedRef.current = true;
+    if (!containerRef.current) return;
+    disposedRef.current = false;
 
     const terminal = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
-      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+      fontSize: 14,
+      lineHeight: 1.15,
+      fontFamily: "'Courier New', 'DejaVu Sans Mono', monospace",
       theme: {
         background: "#111111",
         foreground: "#f3f3f3",
@@ -55,26 +55,39 @@ export default function ShellTerminal({
     terminal.loadAddon(fitAddon);
     terminal.open(containerRef.current);
 
+    let webglAddon = null;
     try {
-      fitAddon.fit();
+      webglAddon = new WebglAddon();
+      webglAddon.onContextLoss(() => {
+        webglAddon?.dispose();
+        webglAddon = null;
+      });
+      terminal.loadAddon(webglAddon);
     } catch {
-      // container not visible yet
+      webglAddon = null;
     }
 
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
+    requestAnimationFrame(() => {
+      if (disposedRef.current) return;
+      try {
+        fitAddon.fit();
+      } catch {
+        // container not visible yet
+      }
+    });
 
     terminal.onData((data) => {
       sendShellInput(shellId, data);
     });
 
-    subscribeShell(shellId);
+    subscribeShell(shellId, { fullBuffer: true });
 
     const cleanup = onShellOutput(shellId, (data) => {
-      terminal.write(data);
+      if (!disposedRef.current) terminal.write(data);
     });
 
     const resizeObserver = new ResizeObserver(() => {
+      if (disposedRef.current) return;
       try {
         fitAddon.fit();
       } catch {
@@ -84,11 +97,12 @@ export default function ShellTerminal({
     resizeObserver.observe(containerRef.current);
 
     return () => {
-      mountedRef.current = false;
+      disposedRef.current = true;
       cleanup?.();
       unsubscribeShell(shellId);
       resizeObserver.disconnect();
-      terminal.dispose();
+      try { webglAddon?.dispose(); } catch { /* already disposed */ }
+      try { terminal.dispose(); } catch { /* already disposed */ }
     };
   }, [shellId, subscribeShell, unsubscribeShell, sendShellInput, onShellOutput]);
 
@@ -98,6 +112,8 @@ export default function ShellTerminal({
       style={{
         width: "100%",
         height: "100%",
+        padding: "4px 0 0 4px",
+        boxSizing: "border-box",
         backgroundColor: "#111111",
       }}
     />

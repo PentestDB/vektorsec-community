@@ -1,7 +1,7 @@
 // styles
 import "./globals.scss";
 import "antd/dist/reset.css";
-import "xterm/css/xterm.css";
+import "@xterm/xterm/css/xterm.css";
 import { Inter } from "next/font/google";
 import QueryClientContext from "@/components/common/auth/QueryClient";
 import StoreProvider from "@/components/common/auth/StoreProvider";

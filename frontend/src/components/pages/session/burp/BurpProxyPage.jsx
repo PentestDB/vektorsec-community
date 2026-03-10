@@ -20,24 +20,6 @@ import {
 } from "@/services/burp.service";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
-function buildWorkspaceMessage(record) {
-  const scheme = record.secure ? "https" : "http";
-  const target = `${record.method} ${scheme}://${record.host}${record.path}`;
-  const tls = record.secure ? "Yes" : "No";
-
-  let msg = `Analyze and pentest the following HTTP request captured from Burp Suite proxy:\n\n`;
-  msg += `Target: ${target}\n`;
-  msg += `Host: ${record.host} | Port: ${record.port || 443} | TLS: ${tls}\n\n`;
-  msg += `--- RAW REQUEST ---\n${record.rawRequest || "(empty)"}\n--- END REQUEST ---\n`;
-
-  if (record.rawResponse) {
-    msg += `\n--- RAW RESPONSE ---\n${record.rawResponse}\n--- END RESPONSE ---\n`;
-  }
-
-  msg += `\nAnalyze this request for potential vulnerabilities and suggest testing categories.`;
-  return msg;
-}
-
 const METHOD_COLORS = {
   GET: "green",
   POST: "blue",
@@ -406,10 +388,19 @@ const BurpProxyPage = ({ sessionId }) => {
   };
 
   const sendToWorkspace = useCallback((record) => {
-    const msg = buildWorkspaceMessage(record);
-    sessionStorage.setItem("burp-to-workspace", msg);
+    const attachment = {
+      method: record.method,
+      host: record.host,
+      port: record.port || 443,
+      path: record.path,
+      secure: !!record.secure,
+      rawRequest: record.rawRequest || "",
+      rawResponse: record.rawResponse || "",
+      statusCode: record.statusCode,
+    };
+    sessionStorage.setItem("burp-to-workspace", JSON.stringify(attachment));
     router.push(`/session/${sessionId}`);
-    message.success({ content: "Request sent to workspace", duration: 2 });
+    message.success({ content: "Request attached to workspace", duration: 2 });
   }, [sessionId, router]);
 
   const columns = [

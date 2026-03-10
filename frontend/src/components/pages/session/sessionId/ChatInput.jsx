@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import styles from "@/styles/components/Chat.module.scss";
-import { SendOutlined, PauseCircleOutlined } from "@ant-design/icons";
+import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
+import { TbRadar } from "react-icons/tb";
 
 const SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
@@ -18,6 +19,8 @@ export default function ChatInput({
   onPause,
   agentState,
   disabled,
+  burpAttachment,
+  onDismissBurpAttachment,
 }) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -25,7 +28,7 @@ export default function ChatInput({
   const menuRef = useRef(null);
 
   const isRunning = agentState === "running";
-  const canSend = !isRunning && value.trim().length > 0 && !disabled;
+  const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
 
   const slashMatches = useMemo(() => {
     const trimmed = value.trimStart();
@@ -139,6 +142,34 @@ export default function ChatInput({
 
   return (
     <div className={styles.inputArea}>
+      {burpAttachment && (
+        <div className={styles.attachmentChip}>
+          <div className={styles.attachmentIcon}>
+            <TbRadar size={13} />
+          </div>
+          <div className={styles.attachmentInfo}>
+            <span className={styles.attachmentMethod}>
+              {burpAttachment.method}
+            </span>
+            <span className={styles.attachmentTarget}>
+              {burpAttachment.host}{burpAttachment.path}
+            </span>
+            {burpAttachment.statusCode && (
+              <span className={styles.attachmentStatus}>
+                {burpAttachment.statusCode}
+              </span>
+            )}
+          </div>
+          <button
+            className={styles.attachmentDismiss}
+            onClick={onDismissBurpAttachment}
+            title="Remove attachment"
+          >
+            <CloseOutlined style={{ fontSize: "0.6rem" }} />
+          </button>
+        </div>
+      )}
+
       {showMenu && (
         <div className={styles.slashMenu} ref={menuRef}>
           <div className={styles.slashMenuHeader}>Commands</div>
@@ -173,7 +204,9 @@ export default function ChatInput({
           placeholder={
             isRunning
               ? "Agent is working... click pause to interrupt"
-              : "Describe your target or type / for commands..."
+              : burpAttachment
+                ? "Add instructions for this request, or press Enter to analyze..."
+                : "Describe your target or type / for commands..."
           }
           rows={1}
           disabled={isRunning}

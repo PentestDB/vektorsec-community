@@ -17,6 +17,9 @@
     "@ant-design/icons": "^5.1.4",
     "@reduxjs/toolkit": "^1.9.5",
     "@stripe/stripe-js": "^1.54.1",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/addon-webgl": "0.19.0",
+    "@xterm/xterm": "5.5.0",
     "antd": "^5.6.1",
     "axios": "^1.4.0",
     "dayjs": "^1.11.13",
@@ -47,8 +50,6 @@
     "sass": "^1.63.4",
     "socket.io-client": "^4.6.2",
     "uuid": "^9.0.0",
-    "xterm": "^5.2.1",
-    "xterm-addon-fit": "^0.7.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

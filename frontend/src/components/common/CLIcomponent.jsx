@@ -2,9 +2,9 @@ import { ResizableBox } from "react-resizable";
 import styles from "@/styles/components/CLIcomponent.module.scss";
 import Image from "next/image";
 import cliSVG from "@/assets/cli.svg";
-import { Terminal } from "xterm";
+import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef } from "react";
-import { FitAddon } from "xterm-addon-fit";
+import { FitAddon } from "@xterm/addon-fit";
 
 let terminal;
 

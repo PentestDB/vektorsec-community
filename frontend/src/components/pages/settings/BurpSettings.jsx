@@ -15,6 +15,7 @@ import {
   CheckCircleFilled,
   WarningOutlined,
   ApiOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
@@ -170,12 +171,81 @@ const BurpSettingsPage = () => {
         </div>
       </Form>
 
-      <div className={styles.notesSection} style={{ marginTop: "1.25rem" }}>
+      <div style={{
+        marginTop: "1.5rem",
+        padding: "1rem",
+        background: "rgba(74, 158, 255, 0.04)",
+        border: "1px solid rgba(74, 158, 255, 0.12)",
+        borderRadius: 8,
+      }}>
+        <div style={{
+          fontSize: "0.78rem",
+          fontWeight: 600,
+          color: "var(--primary-text)",
+          marginBottom: "0.75rem",
+        }}>
+          Setup Guide
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+              background: "rgba(74, 158, 255, 0.12)", color: "var(--accent-color, #4a9eff)",
+              fontSize: "0.65rem", fontWeight: 700,
+            }}>1</span>
+            <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)" }}>
+              <span>Download the Burp RPC extension</span>
+              <div style={{ marginTop: "0.35rem" }}>
+                <Button
+                  type="default"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={() => window.open("https://github.com/shero4/burp-rpc/releases", "_blank")}
+                  style={{ fontSize: "0.72rem", height: "1.6rem" }}
+                >
+                  burp-rpc.jar
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+              background: "rgba(74, 158, 255, 0.12)", color: "var(--accent-color, #4a9eff)",
+              fontSize: "0.65rem", fontWeight: 700,
+            }}>2</span>
+            <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)" }}>
+              Import it as an extension in Burp Suite:
+              <br />
+              <code style={{
+                fontSize: "0.7rem", color: "var(--primary-purple)",
+                background: "rgba(127, 86, 217, 0.08)", padding: "1px 4px", borderRadius: 3,
+              }}>
+                Extensions → Add → Java → select burp-rpc.jar
+              </code>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+              background: "rgba(74, 158, 255, 0.12)", color: "var(--accent-color, #4a9eff)",
+              fontSize: "0.65rem", fontWeight: 700,
+            }}>3</span>
+            <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)" }}>
+              Enter the host and port above, then save and test the connection.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.notesSection} style={{ marginTop: "1rem" }}>
         <ul>
-          <li>
-            The <strong>Burp RPC extension</strong> must be loaded in Burp Suite
-            and listening on the configured host and port.
-          </li>
           <li>
             Default port is <code>50051</code>. Use <code>0.0.0.0</code> binding
             in the extension to allow remote connections.

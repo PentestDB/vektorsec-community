@@ -228,7 +228,7 @@ const Sidebar = ({ sessionId }) => {
                   try {
                     await clearContext({ sessionId });
                     message.success("Context cleared");
-                    window.location.reload();
+                    window.dispatchEvent(new CustomEvent("context-cleared", { detail: { sessionId } }));
                   } catch {
                     message.error("Failed to clear context");
                   }

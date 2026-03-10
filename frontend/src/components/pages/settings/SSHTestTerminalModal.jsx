@@ -4,8 +4,8 @@ import { Modal, Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
 import styles from "@/styles/components/SSHTestModal.module.scss";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI;

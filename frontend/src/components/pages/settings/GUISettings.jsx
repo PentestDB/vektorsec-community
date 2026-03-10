@@ -30,7 +30,6 @@ import {
   PlayCircleOutlined,
   ApiOutlined,
   WarningOutlined,
-  ReloadOutlined,
   MedicineBoxOutlined,
   SearchOutlined,
   ToolOutlined,
@@ -47,11 +46,6 @@ import {
   diagnoseVNC,
   repairVNC,
 } from "@/services/user.service";
-
-const generateVncPassword = () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  return Array.from({ length: 10 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join("");
-};
 
 const AUTO_SETUP_STEPS = [
   { title: "Connecting to exploit box", icon: <CloudServerOutlined /> },
@@ -202,15 +196,7 @@ const GUISettingsPage = () => {
             {data.mode === "auto" ? "Auto-Configured" : "Configured (Manual)"}
           </Tag>
         ) : (
-          <Tag
-            icon={<WarningOutlined />}
-            style={{
-              margin: 0,
-              background: "var(--surface-hover)",
-              border: "1px solid var(--border-color-100)",
-              color: "var(--secondary-text)",
-            }}
-          >
+          <Tag icon={<WarningOutlined />} color="warning">
             Not Configured
           </Tag>
         )}
@@ -440,20 +426,7 @@ const GUISettingsPage = () => {
                 </span>
               }
             >
-              <Input.Password
-                placeholder="Leave blank to keep current"
-                addonAfter={
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    onClick={() => advForm.setFieldValue("password", generateVncPassword())}
-                    style={{ padding: "0 4px", height: "auto" }}
-                  >
-                    Auto-generate
-                  </Button>
-                }
-              />
+              <Input.Password placeholder="Leave blank to keep current" />
             </Form.Item>
             <Form.Item
               name="baseUrl"
@@ -642,20 +615,7 @@ const GUISettingsPage = () => {
               }
               rules={[{ required: true, message: "Password is required" }]}
             >
-              <Input.Password
-                placeholder="Enter VNC password"
-                addonAfter={
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    onClick={() => form.setFieldValue("password", generateVncPassword())}
-                    style={{ padding: "0 4px", height: "auto" }}
-                  >
-                    Auto-generate
-                  </Button>
-                }
-              />
+              <Input.Password placeholder="Enter VNC password" />
             </Form.Item>
 
             <Form.Item
@@ -703,9 +663,6 @@ const GUISettingsPage = () => {
           </li>
           <li>
             <strong>Base URL Override</strong> must be reachable from your browser (e.g. localhost or VPN hostname).
-          </li>
-          <li>
-            Use <strong>Auto-generate</strong> for the password to avoid special-character connection errors.
           </li>
           <li>
             The GUI session is accessible from the <code>/gui</code> tab in any session.
