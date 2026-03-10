@@ -7,7 +7,7 @@ import { Tooltip } from "antd";
 import { usePathname } from "next/navigation";
 
 
-const loginRoutes = ["/dashboard", "/session", "/settings", "/onboarding"];
+const loginRoutes = ["/dashboard", "/session", "/onboarding"];
 
 
 const IntercommMessenger = () => {
