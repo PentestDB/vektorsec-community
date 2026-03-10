@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Form,
   Input,
@@ -16,6 +16,7 @@ import {
   Divider,
   Modal,
   Radio,
+  Segmented,
 } from "antd";
 import {
   CheckCircleFilled,
@@ -25,6 +26,7 @@ import {
   ApiOutlined,
   DisconnectOutlined,
   LinkOutlined,
+  BulbOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
@@ -232,6 +234,14 @@ const ModelsPage = () => {
     },
   });
 
+  const [reasoningMode, setReasoningMode] = useState(data?.reasoningMode ?? "off");
+
+  useEffect(() => {
+    if (data?.reasoningMode !== undefined) {
+      setReasoningMode(data.reasoningMode);
+    }
+  }, [data?.reasoningMode]);
+
   if (isLoading) return <Loader />;
 
   const handleSubmit = (values) => {
@@ -240,7 +250,23 @@ const ModelsPage = () => {
       model: values.model,
       apiKey: values.apiKey,
       baseURL: values.baseURL || "",
+      reasoningMode,
     });
+  };
+
+  const handleReasoningChange = (value) => {
+    setReasoningMode(value);
+    const currentProvider = form.getFieldValue("provider") || data?.provider;
+    const currentModel = form.getFieldValue("model") || data?.model;
+    if (currentProvider && currentModel) {
+      updateMutation.mutate({
+        provider: currentProvider,
+        model: currentModel,
+        apiKey: form.getFieldValue("apiKey") || data?.apiKey || "",
+        baseURL: form.getFieldValue("baseURL") || data?.baseURL || "",
+        reasoningMode: value,
+      });
+    }
   };
 
   return (
@@ -463,6 +489,54 @@ const ModelsPage = () => {
       )}
 
       <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
+
+      <div style={{ marginBottom: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <BulbOutlined style={{ color: "#e8c547", fontSize: 14 }} />
+          <strong style={{ fontSize: "0.82rem", color: "var(--primary-text, #fff)" }}>Reasoning</strong>
+          <Tag
+            style={{
+              margin: 0,
+              fontSize: "0.6rem",
+              padding: "0 4px",
+              lineHeight: "16px",
+              background: reasoningMode !== "off" ? "rgba(232, 197, 71, 0.12)" : "var(--surface-hover)",
+              border: `1px solid ${reasoningMode !== "off" ? "rgba(232, 197, 71, 0.25)" : "var(--border-color-100)"}`,
+              color: reasoningMode !== "off" ? "#e8c547" : "var(--secondary-text)",
+            }}
+          >
+            {reasoningMode === "off" ? "Disabled" : reasoningMode.charAt(0).toUpperCase() + reasoningMode.slice(1)}
+          </Tag>
+        </div>
+        <p style={{ fontSize: "0.72rem", color: "var(--primary-text, #e8e8e8)", margin: "0 0 10px 0", lineHeight: 1.5 }}>
+          Enable extended thinking for reasoning-capable models. The model will show its reasoning process before responding.
+          Requires Claude 4+ (Sonnet/Opus/Haiku) or OpenAI o-series (o1/o3/o4).
+        </p>
+        <Segmented
+          value={reasoningMode}
+          onChange={handleReasoningChange}
+          options={[
+            { value: "off", label: "Off" },
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+          ]}
+          size="small"
+          style={{ fontSize: "0.72rem" }}
+        />
+        {reasoningMode !== "off" && (
+          <div className={styles.infoBox} style={{ marginTop: 10, color: "var(--primary-text, #e8e8e8)" }}>
+            <InfoCircleOutlined />
+            <span>
+              {reasoningMode === "low" && "Light reasoning — quick analysis before responding (Anthropic: 4K token budget)."}
+              {reasoningMode === "medium" && "Moderate reasoning — thorough step-by-step analysis (Anthropic: 10K token budget)."}
+              {reasoningMode === "high" && "Deep reasoning — extensive deliberation for complex tasks (Anthropic: 32K token budget)."}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Divider style={{ borderColor: "var(--border-color-100)", margin: "0.75rem 0" }} />
 
       <div className={styles.notesSection}>
         <strong>Available Providers</strong>

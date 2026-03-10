@@ -15,7 +15,11 @@ const MyAccount = () => {
 
   const updateUserProfileMutation = useMutation(updateUserProfile, {
     onSuccess: async () => {
+      message.success("Profile updated");
       await queryClient.invalidateQueries("check-session");
+    },
+    onError: (err) => {
+      message.error(err?.response?.data?.message ?? "Failed to update profile");
     },
   });
 

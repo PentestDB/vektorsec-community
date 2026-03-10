@@ -5,7 +5,8 @@ import SessionsModel, {
   AgentMessageDoc,
   AgentState,
 } from "../models/Sessions/Sessions.model";
-import { invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
+import { invoke_llm_streaming, ToolCallData, ReasoningMode } from "../utils/llm/providers";
+import { readEnvFile } from "../utils/envWriter";
 import { toolRegistry } from "../tools/registry";
 import {
   executeToolCalls,
@@ -300,19 +301,28 @@ export async function runAgentLoop(params: {
       const openaiMessages = messagesToOpenAI(messages);
       const tools = toolRegistry.toOpenAISchemas();
 
+      const env = readEnvFile();
+      const reasoningMode = (env.REASONING_MODE || "medium") as ReasoningMode;
+
       let assistantContent = "";
+      let assistantReasoning = "";
       let assistantToolCalls: ToolCallData[] = [];
 
       const result = await invoke_llm_streaming({
         messages: openaiMessages,
         tools,
         temperature: 0.7,
+        reasoningMode,
         sessionId,
         userId: session.uid.toString(),
         tags: ["agent", "loop"],
         generationName: `agent-turn-${turnIndex}-iter-${iteration}`,
         abortSignal: params.abortSignal,
         onDelta(delta) {
+          if (delta.type === "reasoning" && delta.content) {
+            assistantReasoning += delta.content;
+            sse.write("reasoning", { content: delta.content });
+          }
           if (delta.type === "text" && delta.content) {
             assistantContent += delta.content;
             sse.write("thinking", { content: delta.content });
@@ -356,6 +366,7 @@ export async function runAgentLoop(params: {
         id: uuidv4(),
         role: "assistant",
         content: assistantContent || null,
+        reasoning: assistantReasoning || undefined,
         toolCalls: assistantToolCalls.length ? assistantToolCalls : undefined,
         timestamp: new Date(),
         turnIndex,

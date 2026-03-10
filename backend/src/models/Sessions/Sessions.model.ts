@@ -14,6 +14,7 @@ export interface AgentMessageDoc {
   id: string;
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
+  reasoning?: string;
   toolCalls?: AgentToolCallData[];
   toolCallId?: string;
   toolName?: string;
@@ -117,6 +118,7 @@ const AgentMessageSchema = new Schema(
     id: { type: String, required: true },
     role: { type: String, required: true, enum: ["system", "user", "assistant", "tool"] },
     content: { type: String, default: null },
+    reasoning: { type: String },
     toolCalls: { type: [ToolCallSchema], default: undefined },
     toolCallId: { type: String },
     toolName: { type: String },

@@ -15,6 +15,8 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
   const toolOutputRafRef = useRef(null);
   const thinkingBufferRef = useRef(null);
   const thinkingRafRef = useRef(null);
+  const reasoningBufferRef = useRef(null);
+  const reasoningRafRef = useRef(null);
   const slashStreamRef = useRef(null);
 
   const flushToolOutputBuffer = useCallback(() => {
@@ -37,6 +39,16 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
     toolOutputRafRef.current = null;
   }, []);
 
+  const flushReasoningBuffer = useCallback(() => {
+    const ref = streamingAssistantRef.current;
+    if (!ref || reasoningBufferRef.current === null) return;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === ref.id ? { ...m, reasoning: ref.reasoning } : m)),
+    );
+    reasoningBufferRef.current = null;
+    reasoningRafRef.current = null;
+  }, []);
+
   const flushThinkingBuffer = useCallback(() => {
     const ref = streamingAssistantRef.current;
     if (!ref || thinkingBufferRef.current === null) return;
@@ -56,13 +68,18 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
       thinkingRafRef.current = null;
       thinkingBufferRef.current = null;
     }
+    if (reasoningRafRef.current) {
+      cancelAnimationFrame(reasoningRafRef.current);
+      reasoningRafRef.current = null;
+      reasoningBufferRef.current = null;
+    }
 
     setMessages((prev) => {
       const existing = prev.find((m) => m.id === ref.id);
       if (existing) {
         return prev.map((m) =>
           m.id === ref.id
-            ? { ...m, content: ref.content, toolCalls: [...ref.toolCalls], streaming: false }
+            ? { ...m, content: ref.content, reasoning: ref.reasoning || undefined, toolCalls: [...ref.toolCalls], streaming: false, reasoningStreaming: false }
             : m,
         );
       }
@@ -72,7 +89,7 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
   }, []);
 
   const startStream = useCallback(
-    async ({ message, endpoint = "message" }) => {
+    async ({ message, endpoint = "message", burpMeta = null }) => {
       setAgentState("running");
 
       let stream;
@@ -98,17 +115,39 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
         .onEvent("user_message_ack", (data) => {
           setMessages((prev) => [
             ...prev,
-            { id: data.id, role: "user", content: message, timestamp: new Date() },
+            { id: data.id, role: "user", content: message, timestamp: new Date(), ...(burpMeta ? { burpMeta } : {}) },
           ]);
+        })
+        .onEvent("reasoning", (data) => {
+          if (!streamingAssistantRef.current) {
+            const id = uuidv4();
+            streamingAssistantRef.current = { id, content: "", reasoning: "", toolCalls: [] };
+            setMessages((prev) => [
+              ...prev,
+              { id, role: "assistant", content: "", reasoning: "", toolCalls: [], streaming: true, reasoningStreaming: true },
+            ]);
+          }
+          streamingAssistantRef.current.reasoning += data.content;
+          reasoningBufferRef.current = true;
+          if (!reasoningRafRef.current) {
+            reasoningRafRef.current = requestAnimationFrame(flushReasoningBuffer);
+          }
         })
         .onEvent("thinking", (data) => {
           if (!streamingAssistantRef.current) {
             const id = uuidv4();
-            streamingAssistantRef.current = { id, content: "", toolCalls: [] };
+            streamingAssistantRef.current = { id, content: "", reasoning: "", toolCalls: [] };
             setMessages((prev) => [
               ...prev,
               { id, role: "assistant", content: "", toolCalls: [], streaming: true },
             ]);
+          }
+          if (streamingAssistantRef.current.reasoning) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === streamingAssistantRef.current.id ? { ...m, reasoningStreaming: false } : m,
+              ),
+            );
           }
           streamingAssistantRef.current.content += data.content;
           thinkingBufferRef.current = true;
@@ -406,7 +445,7 @@ export default function useAgentStream({ sessionId, onComplete, onShellSpawned }
           controllerRef.current = null;
         });
     },
-    [sessionId, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, onComplete],
+    [sessionId, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete],
   );
 
   const abort = useCallback(() => {

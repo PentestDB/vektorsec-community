@@ -130,7 +130,7 @@ export default function ChatView({ sessionId }) {
     if (!userText.trim()) {
       msg += `\nAnalyze this request for potential vulnerabilities and suggest testing categories.`;
     }
-    return msg;
+    return { text: msg, burpMeta: { method: attachment.method, host: attachment.host, path: attachment.path, port: attachment.port, secure: attachment.secure, statusCode: attachment.statusCode } };
   }, []);
 
   const handleSend = useCallback(
@@ -151,14 +151,17 @@ export default function ChatView({ sessionId }) {
       }
 
       let finalMessage = message;
+      let burpMeta = null;
       if (burpAttachment) {
-        finalMessage = buildBurpMessage(message, burpAttachment);
+        const built = buildBurpMessage(message, burpAttachment);
+        finalMessage = built.text;
+        burpMeta = built.burpMeta;
         setBurpAttachment(null);
       }
 
       const endpoint =
         agentState === "paused" ? "resume" : "message";
-      startStream({ message: finalMessage, endpoint });
+      startStream({ message: finalMessage, endpoint, burpMeta });
     },
     [agentState, startStream, setMessages, burpAttachment, buildBurpMessage],
   );

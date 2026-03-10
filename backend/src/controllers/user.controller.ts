@@ -218,6 +218,8 @@ export const getModelConfig = async (_req: Request, res: Response) => {
     const isOAuth = provider === "anthropic" && oauthConnected;
     const configured = !!(model && (apiKey || isOAuth));
 
+    const reasoningMode = env.REASONING_MODE || "off";
+
     return res.status(200).json({
       provider,
       model,
@@ -226,6 +228,7 @@ export const getModelConfig = async (_req: Request, res: Response) => {
       configured,
       authMethod: isOAuth ? "oauth" : "api_key",
       oauthConnected: isOAuth,
+      reasoningMode,
     });
   } catch (error) {
     console.log(error);
@@ -235,7 +238,7 @@ export const getModelConfig = async (_req: Request, res: Response) => {
 
 export const updateModelConfig = async (req: Request, res: Response) => {
   try {
-    const { provider, model, apiKey, baseURL } = req.body;
+    const { provider, model, apiKey, baseURL, reasoningMode } = req.body;
 
     if (!provider || !model) {
       return res.status(400).json({ message: "Provider and model are required" });
@@ -252,6 +255,10 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       return res.status(400).json({ message: `Invalid provider. Must be one of: ${validProviders.join(", ")}` });
     }
 
+    if (reasoningMode && !["off", "low", "medium", "high"].includes(reasoningMode)) {
+      return res.status(400).json({ message: "Invalid reasoning mode. Must be one of: off, low, medium, high" });
+    }
+
     const isApiKeyMasked = apiKey?.includes("•");
     const existingKey = env[MODEL_ENV_KEYS.apiKey] || "";
 
@@ -260,6 +267,7 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       [MODEL_ENV_KEYS.model]: model,
       [MODEL_ENV_KEYS.apiKey]: isApiKeyMasked && existingKey ? existingKey : (apiKey || ""),
       [MODEL_ENV_KEYS.baseURL]: baseURL || "",
+      ...(reasoningMode !== undefined ? { REASONING_MODE: reasoningMode } : {}),
     };
 
     updateEnvVars(updates);
@@ -281,6 +289,7 @@ export const deleteModelConfig = async (req: Request, res: Response) => {
       [MODEL_ENV_KEYS.model]: "gpt-4o",
       [MODEL_ENV_KEYS.apiKey]: "",
       [MODEL_ENV_KEYS.baseURL]: "",
+      REASONING_MODE: "off",
     });
 
     const { clearProviderCache } = await import("../utils/llm/providers");

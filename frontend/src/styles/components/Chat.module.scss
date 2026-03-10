@@ -68,6 +68,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
   animation: fadeIn 0.2s ease;
 }
 
@@ -78,6 +79,7 @@
 
 .userMessage {
   align-self: flex-end;
+  max-width: 100%;
   background: var(--accent-bg, #1a3a5c);
   border: 1px solid var(--accent-border, #2a5a8c);
   border-radius: 12px 12px 4px 12px;
@@ -86,14 +88,19 @@
   font-size: 0.875rem;
   line-height: 1.6;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .assistantMessage {
   align-self: flex-start;
+  max-width: 100%;
   color: var(--primary-text, #e0e0e0);
   font-size: 0.875rem;
   line-height: 1.7;
   padding: 0.5rem 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 
   p {
     margin: 0.3em 0;
@@ -150,6 +157,108 @@
   border-color: rgba(255, 80, 80, 0.3);
   background: rgba(255, 80, 80, 0.08);
   color: #ff6b6b;
+}
+
+/* ─── Reasoning Block ────────────────────────────────────────── */
+
+.reasoningBlock {
+  width: 100%;
+  margin: 0.25rem 0;
+  border: 1px solid rgba(250, 200, 50, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(250, 200, 50, 0.03);
+  transition: border-color 0.2s;
+}
+
+.reasoningStreaming {
+  border-color: rgba(250, 200, 50, 0.25);
+
+  .reasoningIcon {
+    animation: pulse 1.5s ease infinite;
+  }
+}
+
+.reasoningHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.78rem;
+  color: var(--secondary-text, #aaa);
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(250, 200, 50, 0.05);
+  }
+}
+
+.reasoningIcon {
+  font-size: 0.82rem;
+  color: #e8c547;
+}
+
+.reasoningLabel {
+  font-weight: 600;
+  color: #e8c547;
+  font-size: 0.78rem;
+}
+
+.reasoningLive {
+  font-size: 0.68rem;
+  color: #e8c547;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(232, 197, 71, 0.1);
+  animation: pulse 1.5s ease infinite;
+}
+
+.reasoningMeta {
+  font-size: 0.68rem;
+  color: var(--secondary-text, #666);
+  margin-left: auto;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.reasoningChevron {
+  font-size: 0.6rem;
+  color: var(--secondary-text, #666);
+  transition: transform 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.reasoningContent {
+  border-top: 1px solid rgba(250, 200, 50, 0.08);
+  max-height: 400px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.15);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0;
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.6;
+    color: var(--secondary-text, #aaa);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 }
 
 /* ─── Tool Call Block ─────────────────────────────────────────── */
@@ -840,6 +949,112 @@
   &:hover {
     background: rgba(255, 80, 80, 0.15);
     color: #ff6b6b;
+  }
+}
+
+/* ─── Burp Request Block (collapsible in chat) ───────────────── */
+
+.burpRequestBlock {
+  width: 100%;
+  margin: 0.25rem 0;
+  border: 1px solid rgba(74, 158, 255, 0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(74, 158, 255, 0.04);
+}
+
+.burpRequestHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8rem;
+  color: var(--secondary-text, #aaa);
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(74, 158, 255, 0.08);
+  }
+}
+
+.burpRequestIcon {
+  font-size: 0.95rem;
+  color: var(--accent-color, #4a9eff);
+  flex-shrink: 0;
+}
+
+.burpRequestMethod {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-color, #4a9eff);
+  padding: 0.1rem 0.4rem;
+  background: rgba(74, 158, 255, 0.12);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.burpRequestTarget {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.73rem;
+  color: var(--primary-text, #e0e0e0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.burpRequestStatus {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--secondary-text, #888);
+  padding: 0.05rem 0.35rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.burpRequestChevron {
+  font-size: 0.6rem;
+  color: var(--secondary-text, #666);
+  transition: transform 0.15s;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.burpRequestBody {
+  border-top: 1px solid rgba(74, 158, 255, 0.1);
+  max-height: 400px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+
+  pre {
+    margin: 0;
+    padding: 0.75rem;
+    font-size: 0.72rem;
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.5;
+    color: var(--primary-text, #ccc);
+    white-space: pre-wrap;
+    word-break: break-all;
   }
 }
 
