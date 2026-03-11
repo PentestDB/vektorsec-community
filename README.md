@@ -13,14 +13,14 @@ An open-source, AI-driven penetration testing agent. Connects to a Kali attack b
 Built for real-world engagements, boot2root boxes, and CTFs.
 
 <p align="center">
-<img src="./assets/dashboard.jpeg">
+<img src="./assets/dashboard.png">
 </p>
 
 ## In Action
 
-Pentest Copilot testing a TryHackMe machine [RootMe](https://tryhackme.com/room/rrootme):
+Pentest Copilot testing OWASP Juice Shop:
 
-https://github.com/user-attachments/assets/5e50b14b-a64f-4ba1-9449-52d5ad61ead6
+<video src="https://github.com/bugbasesecurity/pentest-copilot/raw/main/assets/pentest-copilot-juice-box-demo.mp4" controls width="100%"></video>
 
 ## What It Does
 
