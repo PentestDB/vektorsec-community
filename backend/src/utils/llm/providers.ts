@@ -620,7 +620,7 @@ async function runOpenAIResponsesStream(
   reasoningMode: Exclude<ReasoningMode, "off">,
   start: number,
 ): Promise<InvokeResult> {
-  const client = buildClient(config);
+  const client = getClient(config, opts);
   const { instructions, input } = openaiToResponsesInput(opts.messages);
   const responsesTools = openaiToResponsesTools(opts.tools);
 

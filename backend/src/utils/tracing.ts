@@ -4,6 +4,8 @@
  */
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { AnthropicInstrumentation } from "@arizeai/openinference-instrumentation-anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 
 let _initialized = false;
 
@@ -19,8 +21,12 @@ export function initTracing(): void {
   if (!isTracingEnabled()) return;
 
   try {
+    const anthropicInstrumentation = new AnthropicInstrumentation();
+    anthropicInstrumentation.manuallyInstrument(Anthropic);
+
     const sdk = new NodeSDK({
       spanProcessors: [new LangfuseSpanProcessor()],
+      instrumentations: [anthropicInstrumentation],
     });
     sdk.start();
     _initialized = true;

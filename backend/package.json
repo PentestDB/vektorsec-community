@@ -24,6 +24,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@arizeai/openinference-instrumentation-anthropic": "^0.1.7",
     "@iarna/toml": "^2.2.5",
     "@jitsu/js": "^1.9.12",
     "@langfuse/openai": "^4.6.1",
