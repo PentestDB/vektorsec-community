@@ -13,7 +13,11 @@ An open-source, AI-driven penetration testing agent. Connects to a Kali attack b
 Built for real-world engagements, boot2root boxes, and CTFs.
 
 <p align="center">
-<img src="./assets/dashboard.png">
+<img src="./assets/dashboard_with_backdrop.png">
+</p>
+
+<p align="center">
+<img src="./assets/operationa_dashboard_with_backdrop.png">
 </p>
 
 ## In Action
