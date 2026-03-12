@@ -8,6 +8,7 @@ frontend/.env
 
 # ── Run script generated files ──
 .run.conf
+.run-state
 docker-compose.override.yml
 ssh-keys/
 

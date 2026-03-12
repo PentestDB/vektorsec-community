@@ -160,6 +160,10 @@ export class ShellManager extends EventEmitter {
         }
       });
 
+      ssh.on("keyboard-interactive", (_name: string, _instructions: string, _instructionsLang: string, prompts: any[], finish: (responses: string[]) => void) => {
+        finish(prompts.map(() => this.sshConfig?.password || ""));
+      });
+
       ssh.connect(this.sshConfig);
     });
   }

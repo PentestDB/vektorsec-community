@@ -22,11 +22,16 @@ services:
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
-      - data:/srv/data
+      - ./backend/.env:/srv/data/.env
       - ./config.toml:/srv/data/config.toml:ro
     depends_on:
-      - redis
-      - mongodb
+      redis:
+        condition: service_started
+      mongodb:
+        condition: service_started
+      kali:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:
@@ -54,14 +59,18 @@ services:
       - "5901:5901"
     volumes:
       - ./kali-data:/kali-data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/22'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
   mongodb-data:
     driver: local
   redis-data:
-    driver: local
-  data:
     driver: local
   kali-data:
     driver: local

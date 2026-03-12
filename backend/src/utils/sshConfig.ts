@@ -7,6 +7,7 @@ export interface SSHConfig {
   password?: string;
   privateKey?: string | Buffer;
   passphrase?: string;
+  tryKeyboard?: boolean;
 }
 
 let _sshConfigWarned = false;
@@ -41,6 +42,7 @@ export function buildSSHConfig(): SSHConfig {
     }
   } else {
     sshConfig.password = (process.env.SSH_PASSWORD || "").trim();
+    sshConfig.tryKeyboard = true;
     if (!_sshConfigWarned && !sshConfig.password && !sshConfig.host) {
       console.warn(
         "SSH: No SSH credentials configured — exploit box features will be unavailable."

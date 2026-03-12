@@ -51,6 +51,9 @@ export async function execSSHCommand(command: string, timeoutMs?: number): Promi
           });
         });
       })
+      .on("keyboard-interactive", (_name, _instructions, _instructionsLang, prompts, finish_auth) => {
+        finish_auth(prompts.map(() => sshConfig.password || ""));
+      })
       .on("error", (err: Error) => {
         console.error("SSH connection error:", err);
         finish(err);

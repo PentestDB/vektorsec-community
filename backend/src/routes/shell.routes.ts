@@ -9,7 +9,7 @@ const router = Router();
 
 router.use(verifySess);
 
-const SSH_TEST_TIMEOUT_MS = 500;
+const SSH_TEST_TIMEOUT_MS = 5000;
 
 router.post("/test-ssh", async (_req: Request, res: Response) => {
   try {

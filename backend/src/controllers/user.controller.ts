@@ -534,7 +534,7 @@ export const updateVNCConfig = async (req: Request, res: Response) => {
       [VNC_ENV_KEYS.host]: host ?? env[VNC_ENV_KEYS.host] ?? "",
       [VNC_ENV_KEYS.port]: String(port ?? env[VNC_ENV_KEYS.port] ?? 9020),
       [VNC_ENV_KEYS.password]: password !== undefined && password !== "" ? password : (env[VNC_ENV_KEYS.password] || ""),
-      [VNC_ENV_KEYS.setupDone]: mode === "manual" ? "true" : "false",
+      [VNC_ENV_KEYS.setupDone]: mode === "manual" ? "true" : (env[VNC_ENV_KEYS.setupDone] || "false"),
       [VNC_ENV_KEYS.baseUrl]: typeof baseUrl === "string" ? baseUrl.trim() : "",
     };
 
@@ -742,12 +742,16 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           const vncHost = sshConfig.host || "localhost";
           const vncPort = "9020";
 
+          const isDockerInternal = vncHost !== "localhost" && vncHost !== "127.0.0.1" && !/^\d+\.\d+\.\d+\.\d+$/.test(vncHost) && !vncHost.includes(".");
+          const baseUrl = isDockerInternal ? `http://localhost:${vncPort}` : "";
+
           updateEnvVars({
             [VNC_ENV_KEYS.mode]: "auto",
             [VNC_ENV_KEYS.host]: vncHost,
             [VNC_ENV_KEYS.port]: vncPort,
             [VNC_ENV_KEYS.password]: randomPassword,
             [VNC_ENV_KEYS.setupDone]: "true",
+            [VNC_ENV_KEYS.baseUrl]: baseUrl,
           });
 
           sshClient.end();

@@ -37,14 +37,34 @@ IS_WSL=false
 NEED_SSH_KEY_MOUNT=false
 DEV_MODE=false
 QUICK_MODE=false
+STATE_FILE="$SCRIPT_DIR/.run-state"
 
 resolve_env_path() {
-    if [[ "${DEV_MODE:-false}" == true ]]; then
-        DYNAMIC_ENV="$SCRIPT_DIR/backend/.env"
-    else
-        DYNAMIC_ENV=$(mktemp "${TMPDIR:-/tmp}/pentest-copilot-env.XXXXXX")
-        trap 'rm -f "$DYNAMIC_ENV" 2>/dev/null' EXIT
+    DYNAMIC_ENV="$SCRIPT_DIR/backend/.env"
+}
+
+save_run_state() {
+    cat > "$STATE_FILE" <<EOF
+DEPLOY_MODE=${DEPLOY_MODE:-}
+COMPOSE_FILE=${COMPOSE_FILE:-}
+DEV_MODE=${DEV_MODE:-false}
+EOF
+}
+
+load_run_state() {
+    if [[ -f "$STATE_FILE" ]]; then
+        local saved_deploy saved_compose saved_dev
+        saved_deploy=$(grep '^DEPLOY_MODE=' "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-)
+        saved_compose=$(grep '^COMPOSE_FILE=' "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-)
+        saved_dev=$(grep '^DEV_MODE=' "$STATE_FILE" 2>/dev/null | cut -d'=' -f2-)
+        if [[ -n "$saved_compose" ]]; then
+            DEPLOY_MODE="$saved_deploy"
+            COMPOSE_FILE="$saved_compose"
+            DEV_MODE="${saved_dev:-false}"
+            return 0
+        fi
     fi
+    return 1
 }
 
 # ── Helpers ────────────────────────────────────────────────
@@ -240,22 +260,11 @@ ensure_config_defaults() {
     fi
 }
 
-seed_env_from_container() {
-    [[ "${DEV_MODE:-false}" == true ]] && return
-    [[ -s "${DYNAMIC_ENV:-}" ]] && return
-    local container_id
-    container_id=$(compose ps -q backend 2>/dev/null | head -1 || true)
-    if [[ -n "$container_id" ]]; then
-        docker cp "${container_id}:/srv/data/.env" "$DYNAMIC_ENV" 2>/dev/null && info "Loaded .env from container" || true
-    fi
-}
-
 ensure_env_defaults() {
     if [[ ! -f "$DYNAMIC_ENV_TMPL" ]]; then
         err "Template not found: $DYNAMIC_ENV_TMPL"
         exit 1
     fi
-    seed_env_from_container
     if [[ ! -s "$DYNAMIC_ENV" ]]; then
         cp "$DYNAMIC_ENV_TMPL" "$DYNAMIC_ENV"
         info "Created .env from template"
@@ -273,6 +282,15 @@ ensure_frontend_env() {
     fi
     if [[ "$IS_WSL" == true ]]; then
         sed -i 's/127\.0\.0\.1/localhost/g' "$FRONTEND_ENV"
+    fi
+}
+
+sync_compose_file_from_config() {
+    [[ "${DEV_MODE:-false}" == true ]] && return
+    local ssh_host
+    ssh_host=$(get_env "$DYNAMIC_ENV" "SSH_HOST")
+    if [[ "$ssh_host" == "kali" ]]; then
+        set_normal_kali_mode
     fi
 }
 
@@ -316,17 +334,50 @@ select_mode_for_configuration() {
     esac
 }
 
+detect_running_mode() {
+    local has_kali has_backend
+    has_kali=$(docker ps --filter "name=kali" --format '{{.Names}}' 2>/dev/null | head -1)
+    has_backend=$(docker ps --filter "name=pentest-copilot-backend" --format '{{.Names}}' 2>/dev/null | head -1)
+
+    if [[ -n "$has_kali" && -n "$has_backend" ]]; then
+        set_normal_kali_mode
+        info "Detected: Full Docker + Kali"
+    elif [[ -n "$has_backend" ]]; then
+        set_normal_mode
+        info "Detected: Core Docker mode"
+    elif [[ -n "$has_kali" ]]; then
+        DEV_MODE=true
+        COMPOSE_FILE="docker-compose.dev.yml"
+        DEPLOY_MODE="dev"
+        info "Detected: Developer mode (with Kali)"
+    else
+        # Nothing running — check for dev-mode infra (mongodb/redis only)
+        local has_mongo
+        has_mongo=$(docker ps --filter "name=pentest-copilot-mongodb" --format '{{.Names}}' 2>/dev/null | head -1)
+        if [[ -n "$has_mongo" ]]; then
+            DEV_MODE=true
+            COMPOSE_FILE="docker-compose.dev.yml"
+            DEPLOY_MODE="dev"
+            info "Detected: Developer mode"
+        else
+            return 1
+        fi
+    fi
+    return 0
+}
+
 select_mode_for_operations() {
+    if detect_running_mode; then
+        return
+    fi
+
     section "Choose Which Environment To Manage"
     echo
+    echo -e "   ${DIM}No running containers detected — please choose:${NC}"
+    echo
     echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker mode${NC}"
-    echo -e "      ${DIM}Manage containers started by the standard Docker setup.${NC}"
-    echo
     echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali${NC}"
-    echo -e "      ${DIM}Manage the full Docker stack, including the provisioned Kali container.${NC}"
-    echo
     echo -e "   ${BOLD}3)${NC} ${YELLOW}Developer mode${NC}"
-    echo -e "      ${DIM}Manage support containers used while developing locally.${NC}"
     echo
     prompt_input "Choose [1/2/3]:"
     read -r mode_choice
@@ -452,6 +503,7 @@ configure_required_startup_smart() {
         show_current_config_summary
         if confirm "Keep current configuration and start?" "y"; then
             info "Using existing configuration"
+            sync_compose_file_from_config
             return
         fi
         echo
@@ -490,11 +542,20 @@ configure_required_startup_smart() {
         fi
     fi
 
-    # Exploit box — essential, always prompt if not configured
+    # Exploit box — prompt if not configured, or offer reconfiguration
     if ! is_exploit_box_configured; then
         echo
         configure_exploit_box
+    else
+        if confirm "Reconfigure exploit box?" "n"; then
+            configure_exploit_box
+        else
+            info "Keeping current exploit box config"
+        fi
     fi
+
+    # Ensure compose file matches the configured SSH target
+    sync_compose_file_from_config
 }
 
 configure_static_full() {
@@ -749,7 +810,7 @@ configure_exploit_box() {
     hint "The exploit box is the SSH target where pentesting commands run. You can change this later via Settings UI."
     ensure_env_defaults
     echo
-    echo -e "   ${BOLD}1)${NC} Kali VM exploit box spin up"
+    echo -e "   ${BOLD}1)${NC} Kali VM exploit box spin up  ${DIM}(first build can take 15-30+ min)${NC}"
     echo -e "   ${BOLD}2)${NC} Connect to external exploit box (any VM via SSH, including your local computer)"
     echo -e "   ${BOLD}3)${NC} ${RED}No exploit box${NC}  ${RED}(reduces Pentest Copilot functionality significantly)${NC}"
     prompt_input "Choose [1/2/3]:"
@@ -816,6 +877,10 @@ configure_connect_external_exploit_box() {
 }
 
 configure_docker_kali() {
+    echo
+    warn "The Kali image is large. The first build may take 15-30+ minutes depending"
+    warn "on your internet speed and hardware. Subsequent starts reuse the cached image."
+    echo
     if [[ "${DEV_MODE:-false}" == true ]]; then
         DEPLOY_MODE="dev-kali"
         info "Provisioning Kali in Docker for developer mode"
@@ -943,18 +1008,6 @@ ensure_compose_override() {
     fi
 }
 
-provision_data_volume() {
-    [[ "${DEV_MODE:-false}" == true ]] && return
-    local container_id
-    container_id=$(compose ps -q backend 2>/dev/null | head -1)
-    [[ -z "$container_id" ]] && return
-    if [[ -s "$DYNAMIC_ENV" ]]; then
-        docker cp "$DYNAMIC_ENV" "${container_id}:/srv/data/.env"
-        info "Provisioned .env → container"
-        rm -f "$DYNAMIC_ENV" 2>/dev/null
-    fi
-}
-
 # ── Launch (Docker mode) ──────────────────────────────────
 launch() {
     local build_flag="${1:-}"
@@ -971,6 +1024,14 @@ launch() {
     section "Launching Pentest Copilot"
 
     ensure_compose_override
+    save_run_state
+
+    # Ensure backend/.env exists before compose up (bind-mounted into container)
+    if [[ ! -f "$DYNAMIC_ENV" ]]; then
+        cp "$DYNAMIC_ENV_TMPL" "$DYNAMIC_ENV"
+        info "Created .env from template"
+    fi
+
     info "Compose file: $COMPOSE_FILE"
 
     if [[ "$build_flag" == "--build" ]]; then
@@ -978,10 +1039,11 @@ launch() {
     fi
 
     echo
-    compose up ${build_flag} -d
+    if ! compose up ${build_flag} -d; then
+        warn "Compose exited with an error — retrying without build..."
+        compose up -d
+    fi
     echo
-
-    provision_data_volume
 
     section "Pentest Copilot is Running"
     echo
@@ -1061,7 +1123,10 @@ cmd_start() {
     detect_wsl
 
     if [[ "$QUICK_MODE" == true ]]; then
-        set_normal_mode
+        if ! load_run_state; then
+            set_normal_mode
+        fi
+        info "Mode: ${DEPLOY_MODE:-core} (from previous run)"
     else
         select_launch_mode
     fi
@@ -1145,7 +1210,6 @@ cmd_config() {
         if confirm "Restart containers to apply changes?" "y"; then
             ensure_compose_override
             compose restart
-            provision_data_volume
             info "Containers restarted"
         else
             hint "Runtime-editable settings (Model, Google, SSH) take effect without restart."
@@ -1202,10 +1266,72 @@ cmd_logs() {
     compose logs -f "${@}"
 }
 
+format_status_icon() {
+    local status="$1"
+    case "$status" in
+        *healthy*)  echo -e "${GREEN}●${NC}" ;;
+        *running*)  echo -e "${GREEN}●${NC}" ;;
+        *exited*|*dead*) echo -e "${RED}●${NC}" ;;
+        *restarting*) echo -e "${YELLOW}●${NC}" ;;
+        *) echo -e "${DIM}○${NC}" ;;
+    esac
+}
+
+format_uptime() {
+    local status="$1"
+    echo "$status" | sed 's/Up //' | sed 's/ (healthy)//' | sed 's/About /~/'
+}
+
 cmd_status() {
     check_prerequisites
     select_mode_for_operations
-    compose ps
+
+    local ps_output
+    ps_output=$(compose ps --format '{{.Name}}|{{.Service}}|{{.Status}}|{{.Ports}}' 2>/dev/null)
+
+    if [[ -z "$ps_output" ]]; then
+        warn "No containers found for this environment."
+        return
+    fi
+
+    section "Container Status"
+    echo
+
+    while IFS='|' read -r name service status ports; do
+        local icon uptime port_summary
+        icon=$(format_status_icon "$status")
+        uptime=$(format_uptime "$status")
+
+        port_summary=""
+        if [[ -n "$ports" ]]; then
+            port_summary=$(echo "$ports" | grep -oP '0\.0\.0\.0:\K[0-9]+' | sort -n | paste -sd', ' -)
+        fi
+
+        printf "   %b  ${BOLD}%-12s${NC} %-20s" "$icon" "$service" "$uptime"
+        if [[ -n "$port_summary" ]]; then
+            echo -e "  ${DIM}ports: ${port_summary}${NC}"
+        else
+            echo
+        fi
+    done <<< "$ps_output"
+
+    echo
+
+    if [[ "${DEPLOY_MODE:-}" == "kali" || "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
+        section "Quick Access"
+        echo
+        echo -e "   ${GREEN}Frontend${NC}   http://localhost:3000"
+        echo -e "   ${GREEN}Backend${NC}    http://localhost:8080"
+        echo -e "   ${GREEN}Kali SSH${NC}   ssh root@localhost -p 4242"
+        echo -e "   ${GREEN}Kali noVNC${NC} http://localhost:4200"
+        echo
+    else
+        section "Quick Access"
+        echo
+        echo -e "   ${GREEN}Frontend${NC}   http://localhost:3000"
+        echo -e "   ${GREEN}Backend${NC}    http://localhost:8080"
+        echo
+    fi
 }
 
 cmd_help() {

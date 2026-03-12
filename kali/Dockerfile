@@ -1,66 +1,76 @@
 FROM kalilinux/kali-rolling
 
 ENV USER=root
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install core services and additional desktop packages
+# ── Layer 1: SSH + services (small, rarely changes) ──
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       openssh-server \
       shellinabox \
       openvpn \
-      xfce4 \
-      xfce4-goodies \
-      tightvncserver \
-      novnc \
-      websockify \
-      xterm \
-      dbus-x11 \
-      fonts-dejavu-core \
-      xfonts-base \
-      nano \
-      firefox-esr && \
-      apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Configure SSH: create runtime directory, enable root login and empty passwords, and remove root password.
+# Configure SSH for passwordless root login
 RUN mkdir -p /var/run/sshd && \
-    sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/^#PermitEmptyPasswords.*/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#*\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#*\s*PermitEmptyPasswords.*/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#*\s*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config && \
+    grep -q '^PermitRootLogin' /etc/ssh/sshd_config    || echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
+    grep -q '^PermitEmptyPasswords' /etc/ssh/sshd_config || echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config && \
+    grep -q '^UsePAM' /etc/ssh/sshd_config              || echo 'UsePAM no' >> /etc/ssh/sshd_config && \
     passwd -d root
 
-# Expose required ports: SSH (22), shellinabox (4200), OpenVPN (1194/udp) and noVNC (9020)
 EXPOSE 22 4200 1194/udp 9020
 
-# Copy and set executable permissions for the entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# install just core tooling first (so this layer can cache)
+# ── Layer 2: Base utilities + build deps (needed for runtime tool installs) ──
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      build-essential curl git wget \
-      libpcap-dev \
-      ffuf wfuzz gobuster hydra patator crowbar nmap masscan \
-      amass whatweb wpscan sqlmap \
+    apt-get install -y --no-install-recommends \
+      build-essential curl git wget unzip tar \
+      python3 python3-pip python3-venv pipx \
       golang \
-      iputils-ping \
-      net-tools \
-      dnsutils \
-      && apt-get clean \
-      && rm -rf /var/lib/apt/lists/*
+      iputils-ping net-tools dnsutils \
+      nano bash-completion \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# installing Kali Linux core tools (Comment this out if you want a smaller and faster image build)
+# ── Layer 3: Core pentest tools (the essentials that should be pre-installed) ──
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    apt-get install -y --no-install-recommends \
+      nmap masscan \
+      sqlmap \
+      ffuf gobuster feroxbuster \
+      hydra \
+      nikto \
+      whatweb \
+      libpcap-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── Layer 4: Desktop / VNC (required for noVNC & GUI access) ──
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      xfce4 xfce4-goodies tightvncserver novnc websockify \
+      xterm dbus-x11 fonts-dejavu-core xfonts-base firefox-esr \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── Layer 5: Kali core tooling ──
+RUN apt-get update && \
+    apt-get install -y \
       kali-linux-headless \
       kali-linux-core \
-      kali-linux-default \
-      && apt-get clean \
-      && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# install your security tools in a second layer
+# ── Optional: kali-linux-default (uncomment for the full default tool suite) ──
+# WARNING: Adds ~500 extra packages and significant build time on top of core.
+# RUN apt-get update && \
+#     apt-get install -y kali-linux-default \
+#     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Additional security tools (Go-based & Python-based — uncomment to pre-install)
 COPY tools.sh /tools.sh
 RUN chmod +x /tools.sh
-# RUN DEBIAN_FRONTEND=noninteractive /tools.sh
+# RUN /tools.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
