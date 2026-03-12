@@ -20,7 +20,10 @@ Built for real-world engagements, boot2root boxes, and CTFs.
 
 Pentest Copilot performing an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/):
 
-[![Watch the demo](https://img.youtube.com/vi/L0bjYzuICWo/hqdefault.jpg)](https://www.youtube.com/watch?v=L0bjYzuICWo)
+
+<video src="https://github.com/user-attachments/assets/bbb2cab2-6db7-4578-a3b7-f45a1619a987" poster="./assets/video-thumbnail.jpg" controls></video>
+
+Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
 
 ## What It Does
 
