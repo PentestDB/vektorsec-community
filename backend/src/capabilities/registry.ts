@@ -1203,6 +1203,120 @@ Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP)`,
   ],
 };
 
+const webBucket: CapabilityBucket = {
+  id: "web",
+  label: "Web Application",
+  description: "Web application security testing: scanning, fuzzing, injection, authentication attacks, and API testing.",
+  promptContext: `Web application capabilities available:
+- nikto: nikto -h http://target — web server misconfiguration scanner
+- nuclei: nuclei -u http://target — fast template-based vulnerability scanner
+- commix: commix --url="http://target/page?cmd=id" — command injection
+- xsser: xsser -u "http://target/page?q=XSS" — XSS detection
+- jwt_tool: python3 jwt_tool.py <token> -T — JWT attack toolkit
+- wapiti: wapiti -u http://target — web vulnerability scanner
+- arjun: arjun -u http://target/page — HTTP parameter discovery
+Python: requests-html (JS rendering), PyJWT (JWT decode/encode)`,
+  capabilities: [
+    {
+      name: "nikto",
+      type: "binary",
+      bucket: "web",
+      label: "Nikto",
+      description: "Web server scanner. Detects dangerous files, outdated software, misconfigurations.",
+      usageHint: "nikto -h http://target -o output.txt",
+      installCommand: "apt install -y nikto",
+      checkCommand: "which nikto",
+      size: "5 MB",
+    },
+    {
+      name: "nuclei",
+      type: "binary",
+      bucket: "web",
+      label: "Nuclei",
+      description: "Fast template-based vulnerability scanner. 9000+ templates for CVEs, misconfigs, exposures.",
+      usageHint: "nuclei -u http://target -t /root/nuclei-templates",
+      installCommand: "apt install -y nuclei || go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+      checkCommand: "which nuclei",
+      size: "20 MB",
+    },
+    {
+      name: "commix",
+      type: "binary",
+      bucket: "web",
+      label: "Commix",
+      description: "Automated command injection exploitation tool.",
+      usageHint: "commix --url=\"http://target/page?cmd=id\"",
+      installCommand: "apt install -y commix",
+      checkCommand: "which commix",
+      size: "10 MB",
+    },
+    {
+      name: "xsser",
+      type: "binary",
+      bucket: "web",
+      label: "XSSer",
+      description: "Automated XSS detection and exploitation framework.",
+      usageHint: "xsser -u \"http://target/page?q=XSS\"",
+      installCommand: "pip install xsser",
+      checkCommand: "which xsser",
+      size: "5 MB",
+    },
+    {
+      name: "wapiti",
+      type: "binary",
+      bucket: "web",
+      label: "Wapiti",
+      description: "Web vulnerability scanner. Detects XSS, SQLi, LFI, RCE, SSRF, XXE.",
+      usageHint: "wapiti -u http://target -f html -o report.html",
+      installCommand: "pip install wapiti3",
+      checkCommand: "which wapiti",
+      size: "15 MB",
+    },
+    {
+      name: "arjun",
+      type: "binary",
+      bucket: "web",
+      label: "Arjun",
+      description: "HTTP parameter discovery. Find hidden GET/POST parameters.",
+      usageHint: "arjun -u http://target/page",
+      installCommand: "pip install arjun",
+      checkCommand: "which arjun",
+      size: "5 MB",
+    },
+    {
+      name: "jwt_tool",
+      type: "binary",
+      bucket: "web",
+      label: "jwt_tool",
+      description: "JWT attack toolkit. Algorithm confusion, none attack, brute-force secret.",
+      usageHint: "python3 jwt_tool.py <token> -T",
+      installCommand: "git clone https://github.com/ticarpi/jwt_tool /opt/jwt_tool && pip install -r /opt/jwt_tool/requirements.txt && ln -sf /opt/jwt_tool/jwt_tool.py /usr/local/bin/jwt_tool",
+      checkCommand: "which jwt_tool || test -f /opt/jwt_tool/jwt_tool.py",
+      size: "5 MB",
+    },
+    {
+      name: "requests-html",
+      type: "python_package",
+      bucket: "web",
+      label: "requests-html",
+      description: "HTTP requests with JavaScript rendering support.",
+      installCommand: "pip install requests-html",
+      checkCommand: "python3 -c 'import requests_html'",
+      size: "5 MB",
+    },
+    {
+      name: "PyJWT",
+      type: "python_package",
+      bucket: "web",
+      label: "PyJWT",
+      description: "Decode, encode and verify JWT tokens from Python scripts.",
+      installCommand: "pip install PyJWT",
+      checkCommand: "python3 -c 'import jwt'",
+      size: "1 MB",
+    },
+  ],
+};
+
 export const capabilityBuckets: CapabilityBucket[] = [
   coreBucket,
   networkBucket,
@@ -1211,6 +1325,7 @@ export const capabilityBuckets: CapabilityBucket[] = [
   cryptoBucket,
   forensicsBucket,
   stegoBucket,
+  webBucket,
 ];
 
 export const allCapabilities: Capability[] = capabilityBuckets.flatMap(
