@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
+import { formatMagnitudeError } from "../../utils/magnitudeError";
 import { z } from "zod";
 
 const magnitudeBrowser: ToolDefinition = {
@@ -56,7 +57,8 @@ const magnitudeBrowser: ToolDefinition = {
     const baseURL = env.MAGNITUDE_MODEL_BASE_URL || "";
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const displayPort = env.MAGNITUDE_DISPLAY || "";
+    const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
+    const normalizedDisplay = display.startsWith(":") ? display : `:${display}`;
 
     if (!apiKey) {
       return {
@@ -65,9 +67,8 @@ const magnitudeBrowser: ToolDefinition = {
       };
     }
 
-    if (!headless && displayPort) {
-      process.env.DISPLAY = displayPort.startsWith(":") ? displayPort : `:${displayPort}`;
-    }
+    // Always ensure DISPLAY is set for the process
+    process.env.DISPLAY = normalizedDisplay;
 
     const PROVIDER_MAP: Record<string, string> = {
       anthropic: "anthropic",
@@ -84,9 +85,8 @@ const magnitudeBrowser: ToolDefinition = {
       if (proxyUrl) {
         launchOptions.proxy = { server: proxyUrl };
       }
-      if (!headless && displayPort) {
-        const display = displayPort.startsWith(":") ? displayPort : `:${displayPort}`;
-        launchOptions.env = { ...process.env, DISPLAY: display };
+      if (!headless) {
+        launchOptions.env = { ...process.env, DISPLAY: normalizedDisplay };
       }
 
       const agentConfig: any = {
@@ -126,13 +126,13 @@ const magnitudeBrowser: ToolDefinition = {
       } catch (agentError: any) {
         try { await agent.stop(); } catch {}
         return {
-          output: `Browser agent failed during execution: ${agentError.message}`,
+          output: `Browser agent failed during execution: ${formatMagnitudeError(agentError)}`,
           exitCode: 1,
         };
       }
     } catch (err: any) {
       return {
-        output: `Failed to start Magnitude browser agent: ${err.message}`,
+        output: `Failed to start Magnitude browser agent: ${formatMagnitudeError(err)}`,
         exitCode: 1,
       };
     }

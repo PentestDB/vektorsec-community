@@ -20,6 +20,7 @@ function createSessionState() {
     reasoningBufferRef: { current: null },
     reasoningRafRef: { current: null },
     slashStreamRef: { current: null },
+    toolNameMapRef: { current: {} },
   };
 }
 

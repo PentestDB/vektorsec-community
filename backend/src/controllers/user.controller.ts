@@ -1,5 +1,6 @@
 import { Response, Request } from "express";
 import crypto from "crypto";
+import { formatMagnitudeError } from "../utils/magnitudeError";
 import axios from "axios";
 import moment from "moment";
 import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
@@ -1489,15 +1490,15 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     const baseURL = env.MAGNITUDE_MODEL_BASE_URL || "";
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const displayPort = env.MAGNITUDE_DISPLAY || "";
+    const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
+    const normalizedDisplay = display.startsWith(":") ? display : `:${display}`;
 
     if (!apiKey) {
       return res.status(400).json({ message: "No API key configured for the Browser Agent. Configure a model in Settings → Browser Agent." });
     }
 
-    if (!headless && displayPort) {
-      process.env.DISPLAY = displayPort.startsWith(":") ? displayPort : `:${displayPort}`;
-    }
+    // Always ensure DISPLAY is set for the process
+    process.env.DISPLAY = normalizedDisplay;
 
     const PROVIDER_MAP: Record<string, string> = {
       anthropic: "anthropic",
@@ -1513,9 +1514,8 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     if (proxyUrl) {
       launchOptions.proxy = { server: proxyUrl };
     }
-    if (!headless && displayPort) {
-      const display = displayPort.startsWith(":") ? displayPort : `:${displayPort}`;
-      launchOptions.env = { ...process.env, DISPLAY: display };
+    if (!headless) {
+      launchOptions.env = { ...process.env, DISPLAY: normalizedDisplay };
     }
 
     const agentConfig: any = {
@@ -1548,7 +1548,7 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     } catch (agentError: any) {
       try { await agent.stop(); } catch {}
       return res.status(500).json({
-        message: `Browser agent failed: ${agentError.message}`,
+        message: `Browser agent failed: ${formatMagnitudeError(agentError)}`,
         goal,
         targetUrl,
       });
@@ -1556,7 +1556,33 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.log(error);
     return res.status(500).json({
-      message: `Failed to start Magnitude agent: ${error.message}`,
+      message: `Failed to start Magnitude agent: ${formatMagnitudeError(error)}`,
     });
+  }
+};
+
+export const getBrowserAgentVNC = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    const magnitudeEnabled = env.MAGNITUDE_ENABLED === "true";
+    const headless = env.MAGNITUDE_HEADLESS !== "false";
+    const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
+    const novncPort = process.env.BROWSER_AGENT_NOVNC_PORT || "6080";
+
+    const fs = await import("fs");
+    const inDocker = fs.existsSync("/.dockerenv");
+
+    return res.status(200).json({
+      available: magnitudeEnabled && !headless,
+      enabled: magnitudeEnabled,
+      headless,
+      display,
+      novncPort,
+      vncRunning: inDocker,
+      mode: inDocker ? "docker" : "dev",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get Browser Agent VNC config" });
   }
 };

@@ -149,6 +149,11 @@ export const startMagnitudeAgent = async (body) => {
   return res.data;
 };
 
+export const getBrowserAgentVNC = async () => {
+  const res = await apiClient.get("/user/get-browser-agent-vnc");
+  return res.data;
+};
+
 export const getAgentToolsConfig = async () => {
   const res = await apiClient.get("/user/get-agent-tools-config");
   return res.data;

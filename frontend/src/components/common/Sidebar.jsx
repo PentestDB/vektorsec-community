@@ -17,7 +17,7 @@ import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
 import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
-import { TbRadar } from "react-icons/tb";
+import { TbRadar, TbWorldWww } from "react-icons/tb";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
 
@@ -95,10 +95,23 @@ const Sidebar = ({ sessionId }) => {
     router.push(`/session/${sessionId}/burp`);
   };
 
+  const navigateToBrowserAgent = () => {
+    const baId = `${sessionId}/browser-agent`;
+    let updatedSess = [...sessions];
+    const exists = updatedSess.find((s) => s.id === baId);
+    if (!exists) {
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: baId, is_main: false, is_active: true, type: "browser-agent" });
+      dispatch(updateSessions(updatedSess));
+    }
+    router.push(`/session/${sessionId}/browser-agent`);
+  };
+
   const isOnWorkspace = pathname === `/session/${sessionId}`;
   const isOnVPN = pathname?.includes("/vpn");
   const isOnGUI = pathname?.includes("/gui");
   const isOnBurp = pathname?.includes("/burp");
+  const isOnBrowserAgent = pathname?.includes("/browser-agent");
 
   return (
     <div className={styles.sidebar}>
@@ -217,6 +230,14 @@ const Sidebar = ({ sessionId }) => {
           >
             <TbRadar />
             Burp
+          </div>
+
+          <div
+            onClick={navigateToBrowserAgent}
+            className={isOnBrowserAgent ? styles.activeTab : styles.tab}
+          >
+            <TbWorldWww />
+            Browser Agent
           </div>
         </div>
       </div>

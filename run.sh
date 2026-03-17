@@ -217,16 +217,25 @@ ensure_config_defaults() {
         info "Created config.toml from template"
     fi
 
-    # Patch mongo/redis for dev mode
+    # Patch mongo/redis for the current mode
+    local cur_mongo cur_redis
+    cur_mongo=$(get_toml_var "$CONFIG_TOML" "mongo_uri")
+    cur_redis=$(get_toml_var "$CONFIG_TOML" "redis_url")
     if [[ "${DEV_MODE:-false}" == true ]]; then
-        local cur_mongo cur_redis
-        cur_mongo=$(get_toml_var "$CONFIG_TOML" "mongo_uri")
-        cur_redis=$(get_toml_var "$CONFIG_TOML" "redis_url")
+        # Dev mode: backend runs on host, uses localhost to reach containerized mongo/redis
         if [[ "$cur_mongo" == *"mongodb:"* && "$cur_mongo" != *"localhost"* ]]; then
             set_toml_var "$CONFIG_TOML" "mongo_uri" "mongodb://localhost:27017/pentestcopilot"
         fi
         if [[ "$cur_redis" == *"redis:"* && "$cur_redis" != *"localhost"* ]]; then
             set_toml_var "$CONFIG_TOML" "redis_url" "redis://localhost:6379"
+        fi
+    else
+        # Normal mode: backend runs in container, uses Docker service names
+        if [[ "$cur_mongo" == *"localhost"* ]]; then
+            set_toml_var "$CONFIG_TOML" "mongo_uri" "mongodb://mongodb:27017/pentestcopilot"
+        fi
+        if [[ "$cur_redis" == *"localhost"* ]]; then
+            set_toml_var "$CONFIG_TOML" "redis_url" "redis://redis:6379"
         fi
     fi
 

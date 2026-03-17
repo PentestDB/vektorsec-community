@@ -30,6 +30,7 @@ import {
   getMagnitudeConfig,
   updateMagnitudeConfig,
   startMagnitudeAgent,
+  getBrowserAgentVNC,
   getAgentToolsConfig,
   updateAgentToolsConfig,
 } from "../controllers/user.controller";
@@ -81,6 +82,7 @@ router.post("/update-burp-config", [verifySess], updateBurpConfig);
 router.get("/get-magnitude-config", [verifySess], getMagnitudeConfig);
 router.post("/update-magnitude-config", [verifySess], updateMagnitudeConfig);
 router.post("/start-magnitude-agent", [verifySess], startMagnitudeAgent);
+router.get("/get-browser-agent-vnc", [verifySess], getBrowserAgentVNC);
 
 router.get("/get-agent-tools-config", [verifySess], getAgentToolsConfig);
 router.post("/update-agent-tools-config", [verifySess], updateAgentToolsConfig);

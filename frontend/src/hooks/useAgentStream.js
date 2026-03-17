@@ -3,6 +3,7 @@ import { connectAgentStream } from "@/services/agent.service";
 import { v4 as uuidv4 } from "uuid";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { useShallow } from "zustand/react/shallow";
+import { notification } from "antd";
 
 export default function useAgentStream({ sessionId, onComplete }) {
   const store = useAgentStreamStore;
@@ -142,12 +143,19 @@ export default function useAgentStream({ sessionId, onComplete }) {
       try {
         stream = await connectAgentStream({ sessionId, message, endpoint });
       } catch (err) {
+        const errMsg = err?.message ?? "Unknown error";
+        notification.error({
+          message: "Connection Failed",
+          description: `Failed to connect to agent: ${errMsg}`,
+          duration: 6,
+          placement: "bottomRight",
+        });
         setMessages((prev) => [
           ...prev,
           {
             id: `error_${Date.now()}`,
             role: "system",
-            content: `Failed to connect to agent: ${err?.message ?? "Unknown error"}`,
+            content: `Failed to connect to agent: ${errMsg}`,
             isError: true,
             timestamp: new Date(),
           },
@@ -238,6 +246,18 @@ export default function useAgentStream({ sessionId, onComplete }) {
         })
         .onEvent("tool_start", (data) => {
           flushAssistant();
+          const r2 = refs();
+          r2.toolNameMapRef.current[data.id] = data.name;
+
+          if (data.name === "browser_action") {
+            notification.info({
+              message: "Browser Agent",
+              description: `Running: ${data.args?.goal || data.args?.action || "browser action"}`,
+              duration: 4,
+              placement: "bottomRight",
+            });
+          }
+
           setMessages((prev) => [
             ...prev,
             {
@@ -267,6 +287,31 @@ export default function useAgentStream({ sessionId, onComplete }) {
             cancelAnimationFrame(r2.toolOutputRafRef.current);
             flushToolOutputBuffer();
           }
+
+          const toolName = r2.toolNameMapRef.current[data.id];
+          if (toolName === "browser_action") {
+            const output = data.output || "";
+            const isXServerError = /X server|XServer|Missing X server|\$DISPLAY|headed browser/i.test(output);
+            if (data.exitCode !== 0) {
+              notification.error({
+                message: "Browser Agent Failed",
+                description: isXServerError
+                  ? "Missing X server or display. Set up VNC for headed mode, or enable headless in Settings → Magnitude."
+                  : output.length > 200 ? output.slice(0, 200) + "…" : output,
+                duration: 8,
+                placement: "bottomRight",
+              });
+            } else {
+              notification.success({
+                message: "Browser Agent",
+                description: output.length > 200 ? output.slice(0, 200) + "…" : (output || "Action completed successfully"),
+                duration: 5,
+                placement: "bottomRight",
+              });
+            }
+            delete r2.toolNameMapRef.current[data.id];
+          }
+
           setMessages((prev) =>
             prev.map((m) => {
               if (m.id !== `tool_${data.id}`) return m;
@@ -287,6 +332,22 @@ export default function useAgentStream({ sessionId, onComplete }) {
             r2.toolOutputBufferRef.current = {};
             r2.toolOutputRafRef.current = null;
           }
+
+          const toolName = r2.toolNameMapRef.current[data.id];
+          if (toolName === "browser_action") {
+            const errMsg = data.error || "Unknown error";
+            const isXServerError = /X server|XServer|Missing X server|\$DISPLAY|headed browser/i.test(errMsg);
+            notification.error({
+              message: "Browser Agent Error",
+              description: isXServerError
+                ? "Missing X server or display. Set up VNC for headed mode, or enable headless in Settings → Magnitude."
+                : errMsg.length > 200 ? errMsg.slice(0, 200) + "…" : errMsg,
+              duration: 8,
+              placement: "bottomRight",
+            });
+            delete r2.toolNameMapRef.current[data.id];
+          }
+
           setMessages((prev) =>
             prev.map((m) =>
               m.id === `tool_${data.id}`
@@ -484,6 +545,12 @@ export default function useAgentStream({ sessionId, onComplete }) {
         })
         .onEvent("error", (data) => {
           flushAssistant();
+          notification.error({
+            message: "Agent Error",
+            description: data.message?.length > 200 ? data.message.slice(0, 200) + "…" : data.message,
+            duration: 6,
+            placement: "bottomRight",
+          });
           setMessages((prev) => [
             ...prev,
             {

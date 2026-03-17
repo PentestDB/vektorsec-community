@@ -19,6 +19,7 @@ services:
     build: ./backend
     ports:
       - "8080:8080"
+      - "6080:6080"
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
