@@ -1,0 +1,28 @@
+---
+description: Tilde (~) path handling in shell commands executed via SSH
+globs: backend/src/tools/handlers/*.ts
+alwaysApply: false
+---
+
+# Shell Path Handling: ~ Does Not Expand in Quotes
+
+`WORKSPACE_DIR` is `~/pentest-workspace`. When constructing shell commands that reference file paths:
+
+- `~` is **not expanded** by bash inside double quotes: `stat "~/foo"` fails (looks for literal `~` directory)
+- `$HOME` **is expanded** inside double quotes: `stat "$HOME/foo"` works correctly
+
+Always replace a leading `~` with `$HOME` before interpolating paths into quoted shell commands:
+
+```typescript
+// ✅ GOOD
+const resolved = rawPath.replace(/^~(?=\/|$)/, "$HOME");
+await ctx.runCommand(`stat -c %s "${resolved}"`);
+
+// ❌ BAD — ~ won't expand inside double quotes
+await ctx.runCommand(`stat -c %s "${rawPath}"`);
+
+// ❌ BAD — unquoted path breaks on spaces
+await ctx.runCommand(`stat -c %s ${rawPath}`);
+```
+
+This applies to any tool handler that takes a user/agent-supplied file path and passes it to `ctx.runCommand`.

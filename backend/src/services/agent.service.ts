@@ -16,7 +16,8 @@ import {
   ToolExecutionCallbacks,
 } from "./agent.tools";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
-import { buildSystemPrompt, AgentPromptConfig } from "../utils/copilot/prompts";
+import { buildSystemPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/copilot/prompts";
+import { WORKSPACE_DIR } from "../utils/commandSafety";
 import UserModel from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
@@ -190,8 +191,10 @@ function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number):
 async function buildSystemMessage(
   sessionId: string,
   userId: string,
+  envInfo?: BoxEnvInfo,
 ): Promise<AgentMessageDoc> {
   const user = await UserModel.findById(userId);
+  const session = await SessionsModel.findOne({ sessionId }).select("ctfConfig").lean();
   const now = new Date();
   const promptConfig: AgentPromptConfig = {
     sessionId,
@@ -200,7 +203,19 @@ async function buildSystemMessage(
     currentDate: now.toISOString().split("T")[0],
     currentDay: now.toLocaleDateString("en-US", { weekday: "long" }),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    envInfo,
   };
+
+  if (session?.ctfConfig?.ctfName) {
+    const safeName = session.ctfConfig.ctfName
+      .replace(/[\/\\:*?"<>|]/g, "_")
+      .replace(/\s+/g, "_");
+    const wsBase = envInfo?.workspacePath ?? "~/pentest-workspace";
+    promptConfig.ctfConfig = {
+      ctfName: session.ctfConfig.ctfName,
+      workspacePath: `${wsBase}/${safeName}`,
+    };
+  }
 
   return {
     id: `sys_${sessionId}`,
@@ -245,10 +260,41 @@ export async function runAgentLoop(params: {
     }
   }
 
-  const subagentManager = new SubagentManager(sessionId, shellManager);
-  const spawnedSubagentIds: string[] = [];
+  // Detect attack box environment and rebuild system message with real info
+  let envInfo: BoxEnvInfo | undefined;
+  if (shellManager.isConnected) {
+    try {
+      const { output: envOut } = await shellManager.execInShell(
+        `echo "$USER|||$HOME|||$(uname -s)|||$(uname -m)"`,
+        10_000,
+      );
+      const parts = envOut.trim().split("|||");
+      if (parts.length >= 4) {
+        const home = parts[1];
+        const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
+        envInfo = {
+          user: parts[0],
+          home,
+          os: `${parts[2]} (${parts[3]})`,
+          workspacePath: resolvedWs,
+        };
+      }
+    } catch (err: any) {
+      console.warn(`[agent] Failed to detect box environment: ${err.message}`);
+    }
+  }
 
   let messages = [...session.messages];
+
+  // Replace system message with one that has resolved environment info
+  if (envInfo && messages.length > 0 && messages[0].role === "system") {
+    const updatedSysMsg = await buildSystemMessage(sessionId, userId, envInfo);
+    messages[0] = updatedSysMsg;
+  }
+
+  const subagentManager = new SubagentManager(sessionId, shellManager);
+  subagentManager.envInfo = envInfo;
+  const spawnedSubagentIds: string[] = [];
   const turnIndex = session.turnIndex;
   let iteration = 0;
   const newMessages: AgentMessageDoc[] = [];

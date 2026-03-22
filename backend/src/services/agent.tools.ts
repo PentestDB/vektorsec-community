@@ -59,6 +59,8 @@ export function buildExecutionContext(params: {
       Promise.resolve(shellManager.readOutput(shellId, fromOffset)),
     closeShell: (shellId: string) =>
       shellManager.closeShell(shellId),
+    resizeShell: (shellId: string, cols: number, rows: number) =>
+      shellManager.resizeShell(shellId, cols, rows),
     listShells: () =>
       shellManager.getShellList(),
     getShellInfo: (shellId: string) =>

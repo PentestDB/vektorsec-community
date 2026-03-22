@@ -15,6 +15,7 @@ export interface ExecutionContext {
   writeToShell: (shellId: string, data: string) => Promise<void>;
   readShellOutput: (shellId: string, fromOffset?: number) => Promise<{ data: string; offset: number }>;
   closeShell: (shellId: string) => Promise<void>;
+  resizeShell: (shellId: string, cols: number, rows: number) => void;
   listShells: () => ShellInfo[];
   getShellInfo: (shellId: string) => ShellInfo | undefined;
   spawnSubagent?: (task: string) => Promise<string>;

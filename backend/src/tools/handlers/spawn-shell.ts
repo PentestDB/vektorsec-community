@@ -21,6 +21,14 @@ const spawnShell: ToolDefinition = {
           "'reverse-shell' for shells that will receive reverse connections from targets, " +
           "'listener' for netcat/socat listeners waiting for connections.",
       },
+      rows: {
+        type: "number",
+        description: "Terminal rows (default 50). Set higher for TUI/game challenges (e.g. 60).",
+      },
+      cols: {
+        type: "number",
+        description: "Terminal columns (default 200). Set wider for TUI/game challenges (e.g. 120).",
+      },
     },
     required: ["label"],
   },
@@ -32,8 +40,19 @@ const spawnShell: ToolDefinition = {
 
     try {
       const shellId = await ctx.spawnShell(label, "pty", purpose);
+
+      const rows = args.rows ? Math.max(1, Math.min(args.rows, 500)) : undefined;
+      const cols = args.cols ? Math.max(1, Math.min(args.cols, 500)) : undefined;
+      if (rows || cols) {
+        ctx.resizeShell(shellId, cols || 200, rows || 50);
+      }
+
+      const sizeInfo = (rows || cols)
+        ? `\nterminal size: ${cols || 200}x${rows || 50}`
+        : "";
+
       return {
-        output: `Shell spawned successfully.\nshell_id: ${shellId}\nlabel: ${label}\npurpose: ${purpose}\n\nYou can now use this shell_id with write_to_shell and read_shell.`,
+        output: `Shell spawned successfully.\nshell_id: ${shellId}\nlabel: ${label}\npurpose: ${purpose}${sizeInfo}\n\nYou can now use this shell_id with write_to_shell and read_shell.`,
         exitCode: 0,
       };
     } catch (err: any) {

@@ -33,7 +33,17 @@ function truncateOutput(output: string): string {
   );
 }
 
-function buildSubagentSystemPrompt(task: string, parentSessionId: string): string {
+interface BoxEnvInfo {
+  user: string;
+  home: string;
+  os: string;
+  workspacePath: string;
+}
+
+function buildSubagentSystemPrompt(task: string, parentSessionId: string, envInfo?: BoxEnvInfo): string {
+  const boxDesc = envInfo ? `${envInfo.os} attack box` : "attack box";
+  const userDesc = envInfo ? ` as ${envInfo.user}` : "";
+
   return `<role>
 You are a Pentest Copilot subagent. You are a specialized parallel worker launched by the main agent to investigate a specific aspect of a penetration test.
 </role>
@@ -46,7 +56,7 @@ ${task}
 - Focus exclusively on the task described above. Be thorough but efficient.
 - Execute tools autonomously to achieve the task goal.
 - Think step-by-step: explain your reasoning briefly before each action.
-- You have access to the same Kali Linux attack box as the main agent.
+- You have access to the same ${boxDesc} as the main agent${userDesc}.
 - Use spawn_shell for long-running processes or netcat listeners.
 - When done, provide a clear structured summary of your findings.
 - You cannot spawn further subagents.
@@ -54,7 +64,8 @@ ${task}
 
 <environment>
 - Parent Session ID: ${parentSessionId}
-- Attack box: Kali Linux with root access
+- Attack box: ${boxDesc}${envInfo ? `\n- User: ${envInfo.user} (home: ${envInfo.home})` : ""}
+- Working directory: ${envInfo?.workspacePath ?? "~/pentest-workspace"}
 </environment>
 
 <output_format>
@@ -71,6 +82,7 @@ export class SubagentManager extends EventEmitter {
   private shellManager: ShellManager;
   private runningSubagents: Map<string, AbortController> = new Map();
   private completionCallbacks: Map<string, Array<(result: SubagentResult) => void>> = new Map();
+  envInfo?: BoxEnvInfo;
 
   constructor(sessionId: string, shellManager: ShellManager) {
     super();
@@ -149,7 +161,7 @@ export class SubagentManager extends EventEmitter {
     const systemMsg: AgentMessageDoc = {
       id: `sys_${subagentId}`,
       role: "system",
-      content: buildSubagentSystemPrompt(task, this.sessionId),
+      content: buildSubagentSystemPrompt(task, this.sessionId, this.envInfo),
       timestamp: new Date(),
       turnIndex: 0,
     };
@@ -192,6 +204,7 @@ export class SubagentManager extends EventEmitter {
       readShellOutput: (shellId, fromOffset) =>
         Promise.resolve(this.shellManager.readOutput(shellId, fromOffset)),
       closeShell: (shellId) => this.shellManager.closeShell(shellId),
+      resizeShell: (shellId, cols, rows) => this.shellManager.resizeShell(shellId, cols, rows),
       listShells: () => this.shellManager.getShellList(),
       getShellInfo: (shellId) => this.shellManager.getShell(shellId),
       onOutput: onChunk,

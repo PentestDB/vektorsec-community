@@ -5,6 +5,13 @@ import {
 } from "../../capabilities/registry";
 import { readEnvFile } from "../envWriter";
 
+export interface BoxEnvInfo {
+  user: string;
+  home: string;
+  os: string;
+  workspacePath: string;
+}
+
 export interface AgentPromptConfig {
   sessionId: string;
   installedCapabilities?: string[];
@@ -12,6 +19,11 @@ export interface AgentPromptConfig {
   currentDate?: string;
   currentDay?: string;
   timezone?: string;
+  envInfo?: BoxEnvInfo;
+  ctfConfig?: {
+    ctfName: string;
+    workspacePath: string;
+  };
 }
 
 export function buildSystemPrompt(config: AgentPromptConfig): string {
@@ -157,10 +169,15 @@ ${burpRequestFormatting}
   const tz = config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   const time = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 
+  const ei = config.envInfo;
+  const boxDesc = ei ? `${ei.os} attack box` : "attack box";
+  const userDesc = ei ? `${ei.user}` : "current user";
+  const wsPath = ei?.workspacePath ?? "~/pentest-workspace";
+
   return `<role>
 You are Pentest Copilot, an autonomous penetration testing agent specializing in identifying vulnerabilities and exploiting security weaknesses in computer systems and networks.
 
-You operate on a Kali Linux attack box with direct tool access via function calls. You make decisions independently — you do not ask for permission to run commands (except when installing new tools).
+You operate on a ${boxDesc} with direct tool access via function calls. You make decisions independently — you do not ask for permission to run commands (except when installing new tools).
 </role>
 
 <behavior>
@@ -175,7 +192,7 @@ You operate on a Kali Linux attack box with direct tool access via function call
 </behavior>
 
 <capabilities>
-${capCtx || "Standard Kali Linux tools available via run_bash."}
+${capCtx || "Standard tools available via run_bash."}
 ${installSection}
 </capabilities>
 
@@ -183,8 +200,9 @@ ${installSection}
 - Date: ${date} (${day})
 - Time: ${time} ${tz}
 - Session ID: ${config.sessionId} — use this in output file names (e.g., ${config.sessionId}-nmap.txt)
-- Attack box: Kali Linux with root access
-- Working directory: ~/pentest-workspace — all commands run here by default. Files, scripts, and tool output are stored in this directory. Do NOT delete or write outside this workspace on the attack box.
+- Attack box: ${boxDesc}
+- User: ${userDesc}${ei ? ` (home: ${ei.home})` : ""}
+- Working directory: ${wsPath} — all commands run here by default. Files, scripts, and tool output are stored in this directory. Always use this absolute path when referencing workspace files in scripts. Do NOT delete or write outside this workspace on the attack box.
 - For reverse shells on target machines, you may operate from any directory. When spawning a shell for a reverse connection, use purpose "reverse-shell".${wordlistSection}
 </environment>
 
@@ -199,7 +217,14 @@ ${burpSection}<guidelines>
 - Destructive system commands (rm -rf /, disk wipes, shutdowns) are blocked and require explicit user approval regardless of auto-run settings.
 </guidelines>
 
-<state_tracking>
+${config.ctfConfig ? `<ctf_mode>
+A CTF ("${config.ctfConfig.ctfName}") is connected. Challenge files are synced to ${config.ctfConfig.workspacePath}.
+Each subdirectory is one challenge containing a challenge.txt (name, category, points, description) and any attached files.
+When the user asks you to work on a challenge, start by reading its challenge.txt and inspecting the files in its directory.
+Flag format is typically CTF{...} — always look for flag patterns in command output, decoded data, and images.
+</ctf_mode>
+
+` : ""}<state_tracking>
 After each significant finding, maintain a structured summary in your response:
 - TARGETS: IPs/hostnames with current status
 - PORTS: port/service/version tuples discovered
