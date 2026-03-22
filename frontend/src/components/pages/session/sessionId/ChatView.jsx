@@ -33,6 +33,7 @@ export default function ChatView({ sessionId }) {
     pendingManualExecution,
     setPendingManualExecution,
     subagents,
+    setTokenUsage,
     startStream,
     abort,
   } = useAgentStream({
@@ -80,11 +81,12 @@ export default function ChatView({ sessionId }) {
       setAgentState("idle");
       setPendingConsent(null);
       setPendingManualExecution(null);
+      setTokenUsage(null);
       abort();
     };
     window.addEventListener("context-cleared", handleContextCleared);
     return () => window.removeEventListener("context-cleared", handleContextCleared);
-  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, abort]);
+  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setTokenUsage, abort]);
 
   const [burpAttachment, setBurpAttachment] = useState(null);
 
