@@ -1,0 +1,28 @@
+---
+description: Checklist for adding or removing agent tools
+globs: backend/src/tools/**/*.ts
+alwaysApply: false
+---
+
+# Tool Registration Checklist
+
+When adding or removing an agent tool, update ALL of these locations:
+
+## Backend (source of truth)
+1. **Handler**: `backend/src/tools/handlers/<tool-name>.ts` — create/delete the `ToolDefinition`
+2. **Registry**: `backend/src/tools/registry.ts` — import + `toolRegistry.register()`
+3. **Availability** (if tool requires config): `backend/src/utils/toolAvailability.ts` — add to unconfigured list when env var is missing
+
+## Frontend (must stay in sync with registry)
+4. **Sidebar panel**: `frontend/src/components/session/AgentToolsPanel.jsx`
+   - `TOOL_GROUPS` — add the tool name to the appropriate group (or create a new group)
+   - `TOOL_LABELS` — add a human-readable label
+5. **Chat transcript**: `frontend/src/components/pages/session/sessionId/ToolCallBlock.jsx`
+   - `TOOL_LABELS` — add the display label
+   - `formatArgsPreview()` — add a one-liner showing the most useful arg
+   - `getCodePreview()` — optionally add syntax-highlighted preview (for script/command tools)
+
+## Notes
+- The backend API (`GET /agent/session/:id/agent-tools-config`) dynamically returns all registered tools from `toolRegistry.getAll()`, so the backend side is automatic after step 2.
+- The frontend filters tools through `TOOL_GROUPS` — any tool not listed there won't appear in the sidebar even if the API returns it.
+- If the tool needs consent gating, set `requiresConsent: true` or implement `shouldRequireConsent` in the handler.

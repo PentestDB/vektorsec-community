@@ -18,6 +18,11 @@ const TOOL_GROUPS = [
     tools: ["google_search", "ask_user", "spawn_subagent"],
   },
   {
+    label: "Analysis",
+    description: "Vision and image analysis",
+    tools: ["view_image"],
+  },
+  {
     label: "Burp Suite",
     description: "Proxy, repeater, intruder",
     tools: ["search_burp_proxy_history", "send_to_burp_repeater", "send_to_burp_intruder", "burp_collaborator"],
@@ -41,6 +46,7 @@ const TOOL_LABELS = {
   list_shells: "List Shells",
   close_shell: "Close Shell",
   spawn_subagent: "Spawn Subagent",
+  view_image: "View Image",
   search_burp_proxy_history: "Proxy History",
   send_to_burp_repeater: "Burp Repeater",
   send_to_burp_intruder: "Burp Intruder",
