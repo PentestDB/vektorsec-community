@@ -18,6 +18,7 @@ import { updateSessions } from "@/store/user.slice";
 import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { TbRadar, TbWorldWww } from "react-icons/tb";
+import { FaFlag } from "react-icons/fa";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
 
@@ -107,11 +108,24 @@ const Sidebar = ({ sessionId }) => {
     router.push(`/session/${sessionId}/browser-agent`);
   };
 
+  const navigateToCtf = () => {
+    const ctfId = `${sessionId}/ctf`;
+    let updatedSess = [...sessions];
+    const exists = updatedSess.find((s) => s.id === ctfId);
+    if (!exists) {
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: ctfId, is_main: false, is_active: true, type: "ctf" });
+      dispatch(updateSessions(updatedSess));
+    }
+    router.push(`/session/${sessionId}/ctf`);
+  };
+
   const isOnWorkspace = pathname === `/session/${sessionId}`;
   const isOnVPN = pathname?.includes("/vpn");
   const isOnGUI = pathname?.includes("/gui");
   const isOnBurp = pathname?.includes("/burp");
   const isOnBrowserAgent = pathname?.includes("/browser-agent");
+  const isOnCtf = pathname?.includes("/ctf");
 
   return (
     <div className={styles.sidebar}>
@@ -238,6 +252,14 @@ const Sidebar = ({ sessionId }) => {
           >
             <TbWorldWww />
             Browser Agent
+          </div>
+
+          <div
+            onClick={navigateToCtf}
+            className={isOnCtf ? styles.activeTab : styles.tab}
+          >
+            <FaFlag />
+            CTF
           </div>
         </div>
       </div>

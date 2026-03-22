@@ -1,0 +1,405 @@
+.ctfContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--primary-bg);
+  color: var(--primary-text);
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 3rem;
+  text-align: center;
+  gap: 0.75rem;
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-text);
+    margin: 0;
+  }
+
+  p {
+    font-size: 0.82rem;
+    color: var(--secondary-text);
+    max-width: 400px;
+    line-height: 1.5;
+    margin: 0;
+  }
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  color: var(--secondary-text);
+  opacity: 0.5;
+  margin-bottom: 0.5rem;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--primary-text);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.connectForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 380px;
+  margin-top: 1rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--secondary-text);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.formInput {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--primary-text);
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+
+  &::placeholder {
+    color: var(--secondary-text);
+    opacity: 0.5;
+  }
+
+  &:focus {
+    border-color: var(--border-default);
+  }
+}
+
+.authToggle {
+  display: flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.authOption {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  color: var(--secondary-text);
+  background: transparent;
+  transition: all 0.15s;
+  border: none;
+
+  &:hover {
+    color: var(--primary-text);
+    background: var(--surface-hover);
+  }
+}
+
+.authOptionActive {
+  composes: authOption;
+  color: var(--primary-text);
+  background: var(--surface-active);
+}
+
+.connectBtn {
+  margin-top: 0.5rem;
+}
+
+// Header
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 2rem;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--primary-text);
+  }
+}
+
+.ctfBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(126, 231, 135, 0.15);
+  color: #7ee787;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.refreshBtn,
+.disconnectBtn {
+  font-size: 0.75rem !important;
+  border-radius: 6px !important;
+}
+
+.refreshBtn {
+  color: #7ee787 !important;
+  border-color: rgba(126, 231, 135, 0.4) !important;
+  background: rgba(126, 231, 135, 0.08) !important;
+
+  &:hover {
+    border-color: #7ee787 !important;
+    background: rgba(126, 231, 135, 0.15) !important;
+  }
+
+  &:disabled {
+    color: var(--secondary-text) !important;
+    border-color: var(--border-subtle) !important;
+    background: transparent !important;
+  }
+}
+
+.disconnectBtn {
+  color: var(--secondary-text) !important;
+  border-color: var(--border-subtle) !important;
+
+  &:hover {
+    color: #ff6b6b !important;
+    border-color: #ff6b6b !important;
+  }
+}
+
+// Connected content
+
+.connectedContent {
+  padding: 2rem;
+  flex: 1;
+}
+
+.infoCard {
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1.25rem;
+  max-width: 520px;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}
+
+.infoLabel {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--secondary-text);
+}
+
+.infoValue {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--primary-text);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.workspacePath {
+  composes: infoValue;
+  color: #7ee787;
+}
+
+.helpText {
+  margin-top: 1.5rem;
+  font-size: 0.78rem;
+  color: var(--secondary-text);
+  line-height: 1.6;
+  max-width: 520px;
+
+  code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-subtle);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    color: var(--primary-text);
+  }
+}
+
+// Sync result banners
+
+.syncResult {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  max-width: 520px;
+}
+
+.syncSuccess {
+  composes: syncResult;
+  background: rgba(126, 231, 135, 0.08);
+  border: 1px solid rgba(126, 231, 135, 0.2);
+  color: #7ee787;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.resultSummary {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.resultBreakdown {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.syncError {
+  composes: syncResult;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+}
+
+// Progress panel
+
+.progressPanel {
+  margin-top: 1rem;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  max-width: 520px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.progressPhase {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.progressCount {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--secondary-text);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.progressBarTrack {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: 2px;
+  background: #7ee787;
+  transition: width 0.25s ease;
+  min-width: 0;
+}
+
+.progressCurrent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.progressAction {
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: "JetBrains Mono", monospace;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.actionNew {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.15);
+}
+
+.actionUpdated {
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.15);
+}
+
+.actionSkipped {
+  color: var(--secondary-text);
+  background: var(--border-subtle);
+}
+
+.progressName {
+  font-size: 0.78rem;
+  color: var(--primary-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

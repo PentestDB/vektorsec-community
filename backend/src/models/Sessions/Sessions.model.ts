@@ -79,6 +79,16 @@ export interface ConnectionStateDoc {
   lastError?: string;
 }
 
+export interface CtfConfigDoc {
+  url: string;
+  ctfName: string;
+  authMethod: "token" | "credentials";
+  apiToken?: string;
+  username?: string;
+  sessionCookie?: string;
+  lastSynced?: Date;
+}
+
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
@@ -103,6 +113,7 @@ export interface SessionDoc extends mongoose.Document {
   subagents: SubagentDoc[];
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
+  ctfConfig?: CtfConfigDoc;
 }
 
 const ToolCallSchema = new Schema(
@@ -240,6 +251,18 @@ const SessionSchema = new Schema({
   disabledAgentTools: {
     type: [{ type: String }],
     default: [],
+  },
+  ctfConfig: {
+    type: {
+      url: { type: String, required: true },
+      ctfName: { type: String, required: true },
+      authMethod: { type: String, required: true, enum: ["token", "credentials"] },
+      apiToken: { type: String },
+      username: { type: String },
+      sessionCookie: { type: String },
+      lastSynced: { type: Date },
+    },
+    default: undefined,
   },
 });
 
