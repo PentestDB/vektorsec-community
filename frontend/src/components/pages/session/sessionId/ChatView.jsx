@@ -261,6 +261,7 @@ export default function ChatView({ sessionId }) {
       )}
 
       <ChatInput
+        sessionId={sessionId}
         onSend={handleSend}
         onPause={handlePause}
         agentState={agentState}

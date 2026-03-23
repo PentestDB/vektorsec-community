@@ -61,6 +61,11 @@ export const syncCtfStream = (sessionId, onEvent, onDone, onError) => {
   return () => controller.abort();
 };
 
+export const getCtfChallenges = async (sessionId) => {
+  const res = await apiClient.get(`/ctf/${sessionId}/challenges`);
+  return res.data;
+};
+
 export const disconnectCtf = async (sessionId) => {
   const res = await apiClient.post(`/ctf/${sessionId}/disconnect`);
   return res.data;

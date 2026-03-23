@@ -99,7 +99,7 @@ class SSHSession {
   }
 }
 
-function sanitizeDirName(name: string): string {
+export function sanitizeDirName(name: string): string {
   return name
     .replace(/[\/\\:*?"<>|]/g, "_")
     .replace(/\s+/g, "_")
@@ -363,6 +363,17 @@ async function doSync(
   }
 
   console.log(`[CTF] Sync complete: ${synced} new, ${updated} updated, ${skipped} unchanged`);
+
+  const index = challenges.map((ch) => ({
+    name: ch.name,
+    category: ch.category,
+    value: ch.value,
+    safeDir: sanitizeDirName(ch.name),
+  }));
+  const indexJson = JSON.stringify(index, null, 2).replace(/'/g, "'\\''");
+  await ssh.exec(`printf '%s' '${indexJson}' > "${ctfDir}/challenges.json"`);
+  console.log(`[CTF] Wrote challenges.json with ${index.length} entries`);
+
   return { synced, updated, skipped };
 }
 

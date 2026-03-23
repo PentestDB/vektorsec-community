@@ -23,6 +23,13 @@ export interface AgentPromptConfig {
   ctfConfig?: {
     ctfName: string;
     workspacePath: string;
+    activeSolve?: {
+      name: string;
+      challengeTxt: string;
+      files: string[];
+      challengeDir: string;
+      userNotes?: string;
+    };
   };
 }
 
@@ -224,7 +231,18 @@ When the user asks you to work on a challenge, start by reading its challenge.tx
 Flag format is typically CTF{...} — always look for flag patterns in command output, decoded data, and images.
 </ctf_mode>
 
-` : ""}<state_tracking>
+${config.ctfConfig.activeSolve ? `<current_challenge>
+You are currently solving: "${config.ctfConfig.activeSolve.name}"
+Working directory: ${config.ctfConfig.activeSolve.challengeDir}
+Always cd to this directory before running commands for this challenge.
+
+${config.ctfConfig.activeSolve.challengeTxt}
+
+${config.ctfConfig.activeSolve.files.length > 0 ? `Files in challenge directory:\n${config.ctfConfig.activeSolve.files.map(f => `- ${f}`).join("\n")}` : "No attached files in challenge directory."}
+${config.ctfConfig.activeSolve.userNotes ? `\nAdditional context from user:\n${config.ctfConfig.activeSolve.userNotes}` : ""}
+</current_challenge>
+
+` : ""}` : ""}<state_tracking>
 After each significant finding, maintain a structured summary in your response:
 - TARGETS: IPs/hostnames with current status
 - PORTS: port/service/version tuples discovered

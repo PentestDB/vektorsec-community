@@ -5,8 +5,11 @@ import {
   verifyToken,
   fetchChallenges,
   syncToWorkspace,
+  sanitizeDirName,
   SyncProgressEvent,
 } from "../services/ctf.service";
+import { execSSHCommand } from "../services/ssh.service";
+import { WORKSPACE_DIR } from "../utils/commandSafety";
 
 export const connectCtf = async (req: Request, res: Response) => {
   try {
@@ -171,5 +174,42 @@ export const disconnectCtf = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[CTF] disconnect error:", err.message);
     return res.status(400).json({ message: "Failed to disconnect from CTF" });
+  }
+};
+
+export const getCtfChallenges = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+
+    const session = await SessionsModel.findOne({ sessionId, uid: userId })
+      .select("ctfConfig.ctfName ctfConfig.activeSolve")
+      .lean();
+
+    if (!session?.ctfConfig?.ctfName) {
+      return res.status(200).json({ challenges: [], activeSolve: null });
+    }
+
+    const safeCTFName = sanitizeDirName(session.ctfConfig.ctfName);
+    let challenges: Array<{ name: string; category: string; value: number; safeDir: string }> = [];
+
+    try {
+      const home = (await execSSHCommand("echo $HOME")).trim();
+      const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
+      const indexPath = `${resolvedWs}/${safeCTFName}/challenges.json`;
+      const raw = await execSSHCommand(`cat "${indexPath}" 2>/dev/null || echo "[]"`);
+      challenges = JSON.parse(raw.trim());
+    } catch (err: any) {
+      console.warn("[CTF] Failed to read challenges.json from attack box:", err.message);
+    }
+
+    const activeSolve = session.ctfConfig.activeSolve
+      ? { name: session.ctfConfig.activeSolve.name, safeDir: session.ctfConfig.activeSolve.safeDir }
+      : null;
+
+    return res.status(200).json({ challenges, activeSolve });
+  } catch (err: any) {
+    console.error("[CTF] getCtfChallenges error:", err.message);
+    return res.status(400).json({ message: "Failed to get challenges" });
   }
 };

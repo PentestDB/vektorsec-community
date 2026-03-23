@@ -79,6 +79,15 @@ export interface ConnectionStateDoc {
   lastError?: string;
 }
 
+export interface CtfActiveSolveDoc {
+  name: string;
+  safeDir: string;
+  challengeTxt: string;
+  files: string[];
+  userNotes?: string;
+  setAt: Date;
+}
+
 export interface CtfConfigDoc {
   url: string;
   ctfName: string;
@@ -87,6 +96,7 @@ export interface CtfConfigDoc {
   username?: string;
   sessionCookie?: string;
   lastSynced?: Date;
+  activeSolve?: CtfActiveSolveDoc;
 }
 
 export interface SessionDoc extends mongoose.Document {
@@ -261,6 +271,17 @@ const SessionSchema = new Schema({
       username: { type: String },
       sessionCookie: { type: String },
       lastSynced: { type: Date },
+      activeSolve: {
+        type: {
+          name: { type: String, required: true },
+          safeDir: { type: String, required: true },
+          challengeTxt: { type: String, required: true },
+          files: { type: [String], default: [] },
+          userNotes: { type: String },
+          setAt: { type: Date, default: Date.now },
+        },
+        default: undefined,
+      },
     },
     default: undefined,
   },

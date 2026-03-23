@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useMemo, useEffect } from "react"
 import styles from "@/styles/components/Chat.module.scss";
 import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
+import { getCtfChallenges } from "@/services/ctf.service";
 
 const SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
@@ -12,9 +13,11 @@ const SLASH_COMMANDS = [
   { name: "export", description: "Export findings as a structured report" },
   { name: "shells", description: "List all shell sessions" },
   { name: "reset", description: "Reset agent state to idle" },
+  { name: "solve", description: "Focus on a CTF challenge" },
 ];
 
 export default function ChatInput({
+  sessionId,
   onSend,
   onPause,
   agentState,
@@ -26,6 +29,10 @@ export default function ChatInput({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const textareaRef = useRef(null);
   const menuRef = useRef(null);
+
+  const [challengeList, setChallengeList] = useState([]);
+  const [challengeSelectedIndex, setChallengeSelectedIndex] = useState(0);
+  const challengeFetchedRef = useRef(null);
 
   const isRunning = agentState === "running";
   const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
@@ -41,9 +48,44 @@ export default function ChatInput({
 
   const showMenu = slashMatches.length > 0 && !isRunning;
 
+  const isSolveArgMode = useMemo(() => {
+    const trimmed = value.trimStart().toLowerCase();
+    return trimmed.startsWith("/solve ") && !isRunning;
+  }, [value, isRunning]);
+
+  const challengeQuery = useMemo(() => {
+    if (!isSolveArgMode) return "";
+    return value.trimStart().slice(7).replace(/^["']|["']$/g, "").trim().toLowerCase();
+  }, [value, isSolveArgMode]);
+
+  const filteredChallenges = useMemo(() => {
+    if (!isSolveArgMode || challengeList.length === 0) return [];
+    if (!challengeQuery) return challengeList;
+    return challengeList.filter(
+      (c) =>
+        c.name.toLowerCase().includes(challengeQuery) ||
+        c.category.toLowerCase().includes(challengeQuery),
+    );
+  }, [isSolveArgMode, challengeList, challengeQuery]);
+
+  const showChallengeMenu = filteredChallenges.length > 0 && isSolveArgMode;
+
+  useEffect(() => {
+    if (!isSolveArgMode || !sessionId) return;
+    if (challengeFetchedRef.current === sessionId) return;
+    challengeFetchedRef.current = sessionId;
+    getCtfChallenges(sessionId)
+      .then((data) => setChallengeList(data.challenges || []))
+      .catch(() => setChallengeList([]));
+  }, [isSolveArgMode, sessionId]);
+
   useEffect(() => {
     setSelectedIndex(0);
   }, [slashMatches.length]);
+
+  useEffect(() => {
+    setChallengeSelectedIndex(0);
+  }, [filteredChallenges.length]);
 
   const acceptCommand = useCallback(
     (cmd) => {
@@ -51,6 +93,23 @@ export default function ChatInput({
       textareaRef.current?.focus();
     },
     [],
+  );
+
+  const acceptChallenge = useCallback(
+    (ch, send) => {
+      const quoted = `/solve "${ch.name}" `;
+      if (send) {
+        setValue(`/solve "${ch.name}"`);
+        setTimeout(() => {
+          onSend(`/solve "${ch.name}"`);
+          setValue("");
+        }, 0);
+      } else {
+        setValue(quoted);
+        textareaRef.current?.focus();
+      }
+    },
+    [onSend],
   );
 
   const handleSend = useCallback(() => {
@@ -64,6 +123,40 @@ export default function ChatInput({
 
   const handleKeyDown = useCallback(
     (e) => {
+      if (showChallengeMenu) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setChallengeSelectedIndex((prev) =>
+            prev < filteredChallenges.length - 1 ? prev + 1 : 0,
+          );
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setChallengeSelectedIndex((prev) =>
+            prev > 0 ? prev - 1 : filteredChallenges.length - 1,
+          );
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const ch = filteredChallenges[challengeSelectedIndex];
+          if (ch) acceptChallenge(ch, false);
+          return;
+        }
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          const ch = filteredChallenges[challengeSelectedIndex];
+          if (ch) acceptChallenge(ch, true);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setValue("");
+          return;
+        }
+      }
+
       if (showMenu) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -107,7 +200,7 @@ export default function ChatInput({
         handleSend();
       }
     },
-    [handleSend, showMenu, slashMatches, selectedIndex, acceptCommand, onSend],
+    [handleSend, showMenu, showChallengeMenu, slashMatches, selectedIndex, filteredChallenges, challengeSelectedIndex, acceptCommand, acceptChallenge, onSend],
   );
 
   const handleInput = useCallback(() => {
@@ -167,6 +260,26 @@ export default function ChatInput({
           >
             <CloseOutlined style={{ fontSize: "0.6rem" }} />
           </button>
+        </div>
+      )}
+
+      {showChallengeMenu && (
+        <div className={styles.slashMenu} ref={menuRef}>
+          <div className={styles.slashMenuHeader}>Challenges</div>
+          {filteredChallenges.map((ch, i) => (
+            <div
+              key={ch.safeDir}
+              className={`${styles.slashMenuItem} ${i === challengeSelectedIndex ? styles.slashMenuItemActive : ""}`}
+              onMouseEnter={() => setChallengeSelectedIndex(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                acceptChallenge(ch, true);
+              }}
+            >
+              <span className={styles.slashMenuCmd}>{ch.name}</span>
+              <span className={styles.slashMenuDesc}>{ch.category} &middot; {ch.value} pts</span>
+            </div>
+          ))}
         </div>
       )}
 

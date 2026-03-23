@@ -3,6 +3,9 @@ import SessionsModel, { AgentMessageDoc } from "../models/Sessions/Sessions.mode
 import { SSEWriter } from "./agent.service";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "./session.lifecycle";
+import { sanitizeDirName } from "./ctf.service";
+import { execSSHCommand } from "./ssh.service";
+import { WORKSPACE_DIR } from "../utils/commandSafety";
 
 export interface SlashCommandDef {
   name: string;
@@ -51,6 +54,12 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     name: "reset",
     description: "Reset agent state to idle (useful if agent is stuck)",
     usage: "/reset",
+  },
+  {
+    name: "solve",
+    description: "Focus on a specific CTF challenge (auto-suggests from synced challenges)",
+    usage: "/solve <challenge_name> [extra notes]",
+    args: [{ name: "challenge", required: true, description: "Challenge name or partial match" }],
   },
 ];
 
@@ -559,6 +568,208 @@ Use markdown formatting. Be thorough but concise.`,
       command: "shells",
       success: true,
       content: lines.join("\n"),
+    });
+    sse.write("done", { message: "Slash command completed" });
+    sse.end();
+  },
+
+  solve: async ({ sessionId, args, sse }) => {
+    const session = await SessionsModel.findOne({ sessionId });
+    if (!session) {
+      sse.write("slash_command_result", { command: "solve", success: false, content: "Session not found." });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    if (!session.ctfConfig?.ctfName) {
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: false,
+        content: "No CTF connected. Connect to a CTFd instance first.",
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    const ctfName = session.ctfConfig.ctfName;
+    const safeCTFName = sanitizeDirName(ctfName);
+
+    if (args.toLowerCase() === "clear" || args.toLowerCase() === "none") {
+      await SessionsModel.updateOne(
+        { sessionId },
+        { $unset: { "ctfConfig.activeSolve": 1 } },
+      );
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: true,
+        content: "Challenge focus cleared. The agent will no longer target a specific challenge.",
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    if (!args.trim()) {
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: false,
+        content: "Usage: `/solve <challenge_name>` — specify which challenge to focus on.\nUse `/solve clear` to deactivate challenge focus.",
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    let home: string;
+    let resolvedWs: string;
+    let ctfDir: string;
+
+    try {
+      home = (await execSSHCommand("echo $HOME")).trim();
+      resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
+      ctfDir = `${resolvedWs}/${safeCTFName}`;
+    } catch (err: any) {
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: false,
+        content: "Cannot connect to the attack box via SSH. Configure SSH settings first.",
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    let challenges: Array<{ name: string; category: string; value: number; safeDir: string }> = [];
+    try {
+      const raw = await execSSHCommand(`cat "${ctfDir}/challenges.json" 2>/dev/null || echo "[]"`);
+      challenges = JSON.parse(raw.trim());
+    } catch {
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: false,
+        content: "No challenges synced yet. Run sync from the CTF settings panel first.",
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    if (challenges.length === 0) {
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: false,
+        content: "No challenges synced yet. Run sync from the CTF settings panel first.",
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    const queryRaw = args.replace(/^["']|["']$/g, "").trim();
+    let userNotes = "";
+    let query = queryRaw;
+
+    const quotedMatch = args.match(/^["'](.+?)["']\s*(.*)/);
+    if (quotedMatch) {
+      query = quotedMatch[1].trim();
+      userNotes = quotedMatch[2].trim();
+    }
+
+    const queryLower = query.toLowerCase();
+    let matched = challenges.filter((c) => c.name.toLowerCase() === queryLower);
+    if (matched.length === 0) {
+      matched = challenges.filter((c) => c.safeDir.toLowerCase() === queryLower);
+    }
+    if (matched.length === 0) {
+      matched = challenges.filter((c) => c.name.toLowerCase().includes(queryLower));
+    }
+    if (matched.length === 0) {
+      matched = challenges.filter((c) => c.safeDir.toLowerCase().includes(queryLower));
+    }
+
+    if (matched.length === 0) {
+      const listing = challenges.map((c) => `- **${c.name}** (${c.category}, ${c.value} pts)`).join("\n");
+      sse.write("slash_command_result", {
+        command: "solve",
+        success: false,
+        content: `No challenge matching "${query}" found.\n\n### Available challenges:\n${listing}`,
+      });
+      sse.write("done", { message: "Slash command completed" });
+      sse.end();
+      return;
+    }
+
+    if (matched.length > 1) {
+      const exactName = matched.filter((c) => c.name.toLowerCase() === queryLower);
+      if (exactName.length === 1) {
+        matched = exactName;
+      } else {
+        const listing = matched.map((c) => `- **${c.name}** (${c.category}, ${c.value} pts)`).join("\n");
+        sse.write("slash_command_result", {
+          command: "solve",
+          success: false,
+          content: `Multiple challenges match "${query}". Be more specific:\n${listing}`,
+        });
+        sse.write("done", { message: "Slash command completed" });
+        sse.end();
+        return;
+      }
+    }
+
+    const challenge = matched[0];
+    const challengeDir = `${ctfDir}/${challenge.safeDir}`;
+
+    let challengeTxt = "";
+    try {
+      challengeTxt = await execSSHCommand(`cat "${challengeDir}/challenge.txt" 2>/dev/null`);
+    } catch {
+      challengeTxt = `Challenge: ${challenge.name}\nCategory: ${challenge.category}\nPoints: ${challenge.value}`;
+    }
+
+    let files: string[] = [];
+    try {
+      const lsOut = await execSSHCommand(`ls -1 "${challengeDir}" 2>/dev/null`);
+      files = lsOut.split("\n").map((l) => l.trim()).filter((l) => l && l !== "challenge.txt");
+    } catch {}
+
+    await SessionsModel.updateOne(
+      { sessionId },
+      {
+        $set: {
+          "ctfConfig.activeSolve": {
+            name: challenge.name,
+            safeDir: challenge.safeDir,
+            challengeTxt,
+            files,
+            userNotes: userNotes || undefined,
+            setAt: new Date(),
+          },
+        },
+      },
+    );
+
+    const lines: string[] = [
+      `### Solving: ${challenge.name}`,
+      ``,
+      `**Category:** ${challenge.category} | **Points:** ${challenge.value}`,
+      `**Working directory:** \`${challengeDir}\``,
+      ``,
+      challengeTxt.includes("Description:") ? "" : `${challengeTxt}\n`,
+      files.length > 0 ? `**Files:**\n${files.map((f) => `- \`${challengeDir}/${f}\``).join("\n")}` : "*No attached files*",
+    ];
+
+    if (userNotes) {
+      lines.push("", `**Your notes:** ${userNotes}`);
+    }
+
+    lines.push("", "The agent is now focused on this challenge. Send a message to start solving, or add more context.");
+
+    sse.write("slash_command_result", {
+      command: "solve",
+      success: true,
+      content: lines.filter((l) => l !== undefined).join("\n"),
     });
     sse.write("done", { message: "Slash command completed" });
     sse.end();

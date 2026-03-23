@@ -215,6 +215,16 @@ async function buildSystemMessage(
       ctfName: session.ctfConfig.ctfName,
       workspacePath: `${wsBase}/${safeName}`,
     };
+
+    if (session.ctfConfig.activeSolve) {
+      promptConfig.ctfConfig.activeSolve = {
+        name: session.ctfConfig.activeSolve.name,
+        challengeTxt: session.ctfConfig.activeSolve.challengeTxt,
+        files: session.ctfConfig.activeSolve.files,
+        challengeDir: `${wsBase}/${safeName}/${session.ctfConfig.activeSolve.safeDir}`,
+        userNotes: session.ctfConfig.activeSolve.userNotes,
+      };
+    }
   }
 
   return {
