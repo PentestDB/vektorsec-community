@@ -263,7 +263,7 @@ const commandHandlers: Record<string, CommandHandler> = {
     sse.end();
   },
 
-  summarize: async ({ sessionId, sse }) => {
+  summarize: async ({ sessionId, userId, sse }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
       sse.write("slash_command_result", { command: "summarize", success: false, content: "Session not found." });
@@ -311,6 +311,8 @@ const commandHandlers: Record<string, CommandHandler> = {
         { role: "user", content: conversationText },
       ],
       temperature: 0.3,
+      sessionId,
+      userId,
       tags: ["slash-command", "summarize"],
       generationName: "slash-summarize",
       onDelta(delta) {
@@ -419,7 +421,7 @@ const commandHandlers: Record<string, CommandHandler> = {
     sse.end();
   },
 
-  export: async ({ sessionId, sse }) => {
+  export: async ({ sessionId, userId, sse }) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) {
       sse.write("slash_command_result", { command: "export", success: false, content: "Session not found." });
@@ -499,6 +501,8 @@ Use markdown formatting. Be thorough but concise.`,
         { role: "user", content: conversationText },
       ],
       temperature: 0.3,
+      sessionId,
+      userId,
       tags: ["slash-command", "export"],
       generationName: "slash-export-report",
     });

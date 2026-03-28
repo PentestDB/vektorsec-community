@@ -236,6 +236,36 @@ async function buildSystemMessage(
   };
 }
 
+// ─── Build dynamic trace tags from preceding tool results ───────────
+
+export function buildTraceTags(
+  prefix: string,
+  messages: AgentMessageDoc[],
+  extra?: string[],
+): { tags: string[]; phase: string } {
+  const trailingTools: string[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "tool" && messages[i].toolName) {
+      trailingTools.push(messages[i].toolName!);
+    } else {
+      break;
+    }
+  }
+
+  const tags = [prefix];
+  if (extra) tags.push(...extra);
+
+  if (trailingTools.length === 0) {
+    tags.push("planning");
+    return { tags, phase: "plan" };
+  }
+
+  tags.push("analyze");
+  const uniqueTools = [...new Set(trailingTools)];
+  tags.push(...uniqueTools);
+  return { tags, phase: "analyze" };
+}
+
 // ─── Core agent loop ─────────────────────────────────────────────────
 
 export async function runAgentLoop(params: {
@@ -307,6 +337,7 @@ export async function runAgentLoop(params: {
   const spawnedSubagentIds: string[] = [];
   const turnIndex = session.turnIndex;
   let iteration = 0;
+  let lastPromptTokens: number | undefined;
   const newMessages: AgentMessageDoc[] = [];
 
   const executionCtx = buildExecutionContext({
@@ -357,10 +388,13 @@ export async function runAgentLoop(params: {
         }
       }
 
-      if (await shouldSummarize(messages)) {
+      if (await shouldSummarize(messages, lastPromptTokens)) {
         sse.write("summarizing", { message: "Context approaching limit, summarizing..." });
 
-        const { summaryMessage, preservedMessages } = await summarizeMessages(messages);
+        const { summaryMessage, preservedMessages } = await summarizeMessages(
+          messages,
+          { sessionId, userId },
+        );
         messages = preservedMessages;
 
         await replaceMessages(sessionId, messages);
@@ -391,6 +425,8 @@ export async function runAgentLoop(params: {
       let assistantReasoning = "";
       let assistantToolCalls: ToolCallData[] = [];
 
+      const { tags: traceTags, phase } = buildTraceTags("agent", messages);
+
       const result = await invoke_llm_streaming({
         messages: openaiMessages,
         tools,
@@ -398,8 +434,8 @@ export async function runAgentLoop(params: {
         reasoningMode,
         sessionId,
         userId: session.uid.toString(),
-        tags: ["agent", "loop"],
-        generationName: `agent-turn-${turnIndex}-iter-${iteration}`,
+        tags: traceTags,
+        generationName: `agent-${phase}-step-${iteration}`,
         abortSignal: params.abortSignal,
         onDelta(delta) {
           if (delta.type === "reasoning" && delta.content) {
@@ -437,19 +473,20 @@ export async function runAgentLoop(params: {
       assistantToolCalls = result.toolCalls;
 
       if (result.usage) {
+        lastPromptTokens = result.usage.prompt_tokens ?? 0;
+
         await trackTokens(
           sessionId,
-          result.usage.prompt_tokens ?? 0,
+          lastPromptTokens,
           result.usage.completion_tokens ?? 0,
           result.usage.total_tokens ?? 0,
         );
 
-        const updatedSession = await SessionsModel.findOne({ sessionId }).select("totalTokens").lean();
         const config = await getProvider();
         const contextLimit = getModelContextLimit(config.model);
         sse.write("token_usage", {
-          totalTokens: updatedSession?.totalTokens ?? 0,
-          promptTokens: result.usage.prompt_tokens ?? 0,
+          totalTokens: lastPromptTokens,
+          promptTokens: lastPromptTokens,
           completionTokens: result.usage.completion_tokens ?? 0,
           contextLimit,
         });
@@ -469,7 +506,10 @@ export async function runAgentLoop(params: {
 
       if (result.finishReason === "length") {
         sse.write("summarizing", { message: "Hit token limit, summarizing..." });
-        const { preservedMessages } = await summarizeMessages(messages);
+        const { preservedMessages } = await summarizeMessages(
+          messages,
+          { sessionId, userId },
+        );
         messages = preservedMessages;
         await replaceMessages(sessionId, messages);
         newMessages.length = 0;

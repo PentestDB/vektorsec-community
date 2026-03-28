@@ -45,13 +45,14 @@ function estimateMessagesTokens(messages: Array<{ role: string; content: string 
 
 export async function shouldSummarize(
   messages: AgentMessageDoc[],
+  lastPromptTokens?: number,
 ): Promise<boolean> {
   const config = await getProvider();
   const limit = getContextLimit(config.model);
-  const tokenEstimate = estimateMessagesTokens(
+  const inputTokens = lastPromptTokens ?? estimateMessagesTokens(
     messages.map((m) => ({ role: m.role, content: m.content })),
   );
-  return tokenEstimate > limit * SUMMARIZE_THRESHOLD;
+  return inputTokens > limit * SUMMARIZE_THRESHOLD;
 }
 
 const SUMMARIZE_SYSTEM_PROMPT = `You are a penetration test engagement summarizer. Your job is to compress a conversation history into a dense summary that preserves all important context for continuing the engagement.
@@ -73,6 +74,7 @@ Be comprehensive. This summary replaces the full conversation history.`;
 
 export async function summarizeMessages(
   messages: AgentMessageDoc[],
+  traceContext?: { sessionId?: string; userId?: string },
 ): Promise<{
   summaryMessage: AgentMessageDoc;
   preservedMessages: AgentMessageDoc[];
@@ -111,7 +113,9 @@ export async function summarizeMessages(
       { role: "user", content: conversationText },
     ] as OpenAI.Chat.ChatCompletionMessageParam[],
     temperature: 0.3,
-    tags: ["agent", "summarize"],
+    sessionId: traceContext?.sessionId,
+    userId: traceContext?.userId,
+    tags: ["agent", "context", "summarize"],
     generationName: "context-summarization",
   });
 

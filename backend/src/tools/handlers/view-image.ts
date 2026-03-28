@@ -134,6 +134,8 @@ const viewImage: ToolDefinition = {
           },
         ],
         temperature: 0.2,
+        sessionId: ctx.sessionId,
+        tags: ["tool", "vision", "view-image"],
         generationName: "view_image",
       });
 

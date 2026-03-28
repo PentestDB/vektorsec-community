@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { EventEmitter } from "events";
 import SessionsModel, { AgentMessageDoc, SubagentStatus } from "../models/Sessions/Sessions.model";
 import { ShellManager } from "./shell.manager";
-import { SSEWriter } from "./agent.service";
+import { SSEWriter, buildTraceTags } from "./agent.service";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
@@ -216,7 +216,10 @@ export class SubagentManager extends EventEmitter {
         if (abortSignal.aborted) break;
 
         if (await shouldSummarize(messages)) {
-          const { preservedMessages } = await summarizeMessages(messages);
+          const { preservedMessages } = await summarizeMessages(
+            messages,
+            { sessionId: this.sessionId, userId },
+          );
           messages = preservedMessages;
 
           const shellStatusMsg = this.buildShellStatusMessage(shellsCreated);
@@ -234,14 +237,16 @@ export class SubagentManager extends EventEmitter {
         let assistantContent = "";
         let assistantToolCalls: ToolCallData[] = [];
 
+        const { tags: traceTags, phase } = buildTraceTags("subagent", messages, [subagentId]);
+
         const result = await invoke_llm_streaming({
           messages: openaiMessages,
           tools,
           temperature: 0.7,
           sessionId: this.sessionId,
           userId,
-          tags: ["subagent", subagentId],
-          generationName: `subagent-${subagentId}-iter-${iteration}`,
+          tags: traceTags,
+          generationName: `subagent-${subagentId}-${phase}-step-${iteration}`,
           abortSignal,
           onDelta(delta) {
             if (delta.type === "text" && delta.content) {
