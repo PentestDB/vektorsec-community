@@ -403,3 +403,253 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+// Score badge in header
+
+.scoreBadge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(255, 215, 0, 0.12);
+  color: #ffd700;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+// Challenge list
+
+.challengeListLoading {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--secondary-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.challengeTable {
+  margin-top: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 100px 50px 100px 160px 80px;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  background: var(--secondary-bg);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-text);
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 1fr 100px 50px 100px 160px 80px;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+  transition: background 0.1s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.tableRowActive {
+  background: rgba(121, 192, 255, 0.06);
+  border-left: 2px solid #79c0ff;
+
+  &:hover {
+    background: rgba(121, 192, 255, 0.1);
+  }
+}
+
+.colName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.colCategory,
+.colPoints,
+.colStatus,
+.colFlag,
+.colAction {
+  display: flex;
+  align-items: center;
+}
+
+.colPoints {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--secondary-text);
+  justify-content: center;
+}
+
+.colAction {
+  justify-content: flex-end;
+}
+
+.challengeName {
+  font-weight: 500;
+  color: var(--primary-text);
+}
+
+.categoryTag {
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-subtle);
+  color: var(--secondary-text);
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+
+// Status badges
+
+.statusBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.statusPending {
+  color: var(--secondary-text);
+  background: var(--border-subtle);
+}
+
+.statusSolving {
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.12);
+}
+
+.statusSolved {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.12);
+}
+
+.statusSubmitted {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.12);
+}
+
+// Flag display
+
+.flagValue {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.08);
+  border: 1px solid rgba(126, 231, 135, 0.15);
+  padding: 0.08rem 0.35rem;
+  border-radius: 3px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  cursor: default;
+}
+
+.noFlag {
+  color: var(--secondary-text);
+  opacity: 0.4;
+}
+
+// Submit button
+
+.submitBtn {
+  font-size: 0.68rem !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  border-radius: 4px !important;
+}
+
+.resubmitBtn {
+  composes: submitBtn;
+  color: var(--secondary-text) !important;
+  border-color: var(--border-subtle) !important;
+  background: transparent !important;
+
+  &:hover {
+    color: #ffd700 !important;
+    border-color: rgba(255, 215, 0, 0.5) !important;
+    background: rgba(255, 215, 0, 0.06) !important;
+  }
+}
+
+// Re-auth
+
+.reauthBtn {
+  font-size: 0.75rem !important;
+  border-radius: 6px !important;
+  color: var(--secondary-text) !important;
+  border-color: var(--border-subtle) !important;
+
+  &:hover {
+    color: #79c0ff !important;
+    border-color: rgba(121, 192, 255, 0.5) !important;
+  }
+}
+
+.reauthBtnActive {
+  composes: reauthBtn;
+  color: #79c0ff !important;
+  border-color: rgba(121, 192, 255, 0.5) !important;
+  background: rgba(121, 192, 255, 0.08) !important;
+}
+
+.reauthPanel {
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--secondary-bg);
+  animation: fadeIn 0.15s ease;
+}
+
+.reauthForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 380px;
+}
+
+.reauthHint {
+  font-size: 0.68rem;
+  color: var(--secondary-text);
+  opacity: 0.7;
+  line-height: 1.4;
+  margin-top: 0.1rem;
+}
+
+.reauthActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}

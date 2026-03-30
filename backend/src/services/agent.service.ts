@@ -21,6 +21,7 @@ import { WORKSPACE_DIR } from "../utils/commandSafety";
 import UserModel from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
+import { EngagementState } from "./engagement-state";
 
 const MAX_ITERATIONS = 25;
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
@@ -222,6 +223,9 @@ async function buildSystemMessage(
         challengeTxt: session.ctfConfig.activeSolve.challengeTxt,
         files: session.ctfConfig.activeSolve.files,
         challengeDir: `${wsBase}/${safeName}/${session.ctfConfig.activeSolve.safeDir}`,
+        category: session.ctfConfig.activeSolve.category,
+        connectionInfo: session.ctfConfig.activeSolve.connectionInfo,
+        points: session.ctfConfig.activeSolve.points,
         userNotes: session.ctfConfig.activeSolve.userNotes,
       };
     }
@@ -340,6 +344,23 @@ export async function runAgentLoop(params: {
   let lastPromptTokens: number | undefined;
   const newMessages: AgentMessageDoc[] = [];
 
+  const engagementMode = session.ctfConfig?.ctfName ? "ctf" : "pentest";
+  const engagementState = new EngagementState(engagementMode as "pentest" | "ctf");
+  if (engagementMode === "ctf" && session.ctfConfig?.activeSolve) {
+    const solve = session.ctfConfig.activeSolve;
+    engagementState.challengeName = solve.name;
+    engagementState.category = solve.category;
+    engagementState.points = solve.points;
+    engagementState.connectionInfo = solve.connectionInfo;
+  } else if (engagementMode === "ctf" && session.ctfConfig?.solveHistory?.length) {
+    const sh = session.ctfConfig.solveHistory as { challengeName: string; status: string; category?: string }[];
+    const latest = [...sh].reverse().find((r) => r.status === "solving");
+    if (latest?.challengeName) {
+      engagementState.challengeName = latest.challengeName;
+      engagementState.category = latest.category;
+    }
+  }
+
   const executionCtx = buildExecutionContext({
     sessionId,
     agentId: "main",
@@ -348,6 +369,7 @@ export async function runAgentLoop(params: {
     sse,
     userId,
     abortSignal: params.abortSignal,
+    engagementState,
   });
 
   try {
@@ -394,6 +416,7 @@ export async function runAgentLoop(params: {
         const { summaryMessage, preservedMessages } = await summarizeMessages(
           messages,
           { sessionId, userId },
+          engagementState,
         );
         messages = preservedMessages;
 
@@ -408,6 +431,19 @@ export async function runAgentLoop(params: {
         if (shellStatusMsg) {
           messages.push(shellStatusMsg);
           newMessages.push(shellStatusMsg);
+        }
+      }
+
+      // Inject structured engagement state into the system message
+      if (!engagementState.isEmpty() && messages.length > 0 && messages[0].role === "system") {
+        const stateBlock = engagementState.toPromptBlock();
+        const sysContent = messages[0].content ?? "";
+        const markerStart = sysContent.indexOf("<engagement_state");
+        if (markerStart !== -1) {
+          const markerEnd = sysContent.indexOf("</engagement_state>") + "</engagement_state>".length;
+          messages[0] = { ...messages[0], content: sysContent.slice(0, markerStart) + stateBlock + sysContent.slice(markerEnd) };
+        } else {
+          messages[0] = { ...messages[0], content: sysContent + "\n\n" + stateBlock };
         }
       }
 
@@ -509,6 +545,7 @@ export async function runAgentLoop(params: {
         const { preservedMessages } = await summarizeMessages(
           messages,
           { sessionId, userId },
+          engagementState,
         );
         messages = preservedMessages;
         await replaceMessages(sessionId, messages);

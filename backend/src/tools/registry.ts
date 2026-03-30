@@ -19,6 +19,7 @@ import burpCollaborator from "./handlers/burp-collaborator";
 import burpProxyHistory from "./handlers/burp-proxy-history";
 import magnitudeBrowser from "./handlers/magnitude-browser";
 import viewImage from "./handlers/view-image";
+import updateEngagementState from "./handlers/update-engagement-state";
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -92,3 +93,4 @@ toolRegistry.register(burpCollaborator);
 toolRegistry.register(burpProxyHistory);
 toolRegistry.register(magnitudeBrowser);
 toolRegistry.register(viewImage);
+toolRegistry.register(updateEngagementState);

@@ -243,6 +243,9 @@ export const getHistory = async (req: Request, res: Response) => {
       }
     } catch { /* use default */ }
 
+    const latestTokenSnapshot = session.tokenHistory?.[session.tokenHistory.length - 1];
+    const contextTokens = latestTokenSnapshot?.promptTokens ?? 0;
+
     return res.status(200).json({
       messages: session.messages,
       agentState: session.agentState,
@@ -250,7 +253,12 @@ export const getHistory = async (req: Request, res: Response) => {
       pendingConsent: session.pendingConsent ?? null,
       pendingManualExecution: session.pendingManualExecution ?? null,
       shells: session.shells ?? [],
-      totalTokens: session.totalTokens ?? 0,
+      // totalTokens here powers the context-usage widget; use latest prompt tokens
+      // (current window usage), not cumulative lifetime spend.
+      totalTokens: contextTokens,
+      lifetimeTokens: session.totalTokens ?? 0,
+      promptTokens: latestTokenSnapshot?.promptTokens ?? null,
+      completionTokens: latestTokenSnapshot?.completionTokens ?? null,
       contextLimit,
       subagents: (session.subagents ?? []).map((s) => ({
         subagentId: s.subagentId,

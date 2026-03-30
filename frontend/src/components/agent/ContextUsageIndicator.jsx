@@ -38,21 +38,25 @@ function HelpTip({ text }) {
 export default function ContextUsageIndicator({ tokenUsage }) {
   const { totalTokens = 0, contextLimit = 128_000, promptTokens, completionTokens } = tokenUsage || {};
 
-  const pct = useMemo(
-    () => Math.min((totalTokens / contextLimit) * 100, 100),
-    [totalTokens, contextLimit],
-  );
+  // True usage vs model limit (can exceed 100% — do not cap for the label)
+  const usagePct = useMemo(() => {
+    if (!contextLimit || contextLimit <= 0) return 0;
+    return (totalTokens / contextLimit) * 100;
+  }, [totalTokens, contextLimit]);
 
-  const remaining = Math.max(contextLimit - totalTokens, 0);
+  // Donut / bar fill caps at full ring when at or over limit
+  const ringFillPct = Math.min(usagePct, 100);
+
+  const remainingRaw = contextLimit - totalTokens;
 
   const radius = 13;
   const stroke = 2.5;
   const size = (radius + stroke) * 2;
   const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference - (pct / 100) * circumference;
+  const dashOffset = circumference - (ringFillPct / 100) * circumference;
 
   const ringColor =
-    pct >= 85 ? "#ff4d4f" : pct >= 60 ? "#faad14" : "#4a9eff";
+    usagePct >= 100 ? "#ff4d4f" : usagePct >= 85 ? "#ff7875" : usagePct >= 60 ? "#faad14" : "#4a9eff";
 
   return (
     <div className={styles.contextPanel}>
@@ -86,7 +90,7 @@ export default function ContextUsageIndicator({ tokenUsage }) {
           />
         </svg>
         <div className={styles.contextHeaderText}>
-          <span className={styles.contextPct}>{Math.round(pct)}%</span>
+          <span className={styles.contextPct}>{Math.round(usagePct)}%</span>
           <span className={styles.contextSubtitle}>context used</span>
         </div>
       </div>
@@ -94,7 +98,7 @@ export default function ContextUsageIndicator({ tokenUsage }) {
       <div className={styles.contextBar}>
         <div
           className={styles.contextBarFill}
-          style={{ width: `${pct}%`, backgroundColor: ringColor }}
+          style={{ width: `${ringFillPct}%`, backgroundColor: ringColor }}
         />
       </div>
 
@@ -109,10 +113,20 @@ export default function ContextUsageIndicator({ tokenUsage }) {
         </div>
         <div className={styles.contextRow}>
           <span className={styles.contextRowWithHelp}>
-            Remaining
-            <HelpTip text="When the context limit is approached, Copilot will automatically summarize the conversation to free up space. Your session will continue uninterrupted." />
+            {remainingRaw >= 0 ? "Remaining" : "Over limit by"}
+            <HelpTip
+              text={
+                remainingRaw >= 0
+                  ? "When the context limit is approached, Copilot will automatically summarize the conversation to free up space. Your session will continue uninterrupted."
+                  : "Total tokens exceed the model context window until summarization runs. The percentage above reflects actual usage (can go above 100%)."
+              }
+            />
           </span>
-          <span>{formatTokenCount(remaining)}</span>
+          <span>
+            {remainingRaw >= 0
+              ? formatTokenCount(remainingRaw)
+              : formatTokenCount(totalTokens - contextLimit)}
+          </span>
         </div>
         {promptTokens != null && (
           <>

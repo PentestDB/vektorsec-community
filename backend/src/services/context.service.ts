@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { invoke_llm } from "../utils/llm/providers";
 import { getProvider } from "../utils/llm/providers";
 import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
+import { EngagementState } from "./engagement-state";
 
 const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-4o": 128_000,
@@ -55,7 +56,7 @@ export async function shouldSummarize(
   return inputTokens > limit * SUMMARIZE_THRESHOLD;
 }
 
-const SUMMARIZE_SYSTEM_PROMPT = `You are a penetration test engagement summarizer. Your job is to compress a conversation history into a dense summary that preserves all important context for continuing the engagement.
+const FALLBACK_SUMMARIZE_PROMPT = `You are a penetration test engagement summarizer. Your job is to compress a conversation history into a dense summary that preserves all important context for continuing the engagement.
 
 Include in your summary:
 - Target IP(s), hostnames, and network details
@@ -72,9 +73,28 @@ Include in your summary:
 
 Be comprehensive. This summary replaces the full conversation history.`;
 
+function buildSummarizePrompt(state?: EngagementState): string {
+  if (state && !state.isEmpty()) {
+    return `You are summarizing an agent conversation. A structured engagement state is maintained separately and will be preserved across this summarization. Focus your summary on:
+- Reasoning, hypotheses, and analysis NOT captured in the structured state
+- Context about WHY certain approaches were tried
+- Observations that don't fit structured categories
+- Current thinking direction and open questions
+- Active shells and their purposes
+
+Do NOT re-list hosts, ports, credentials, vulnerabilities, flag attempts, or file analyses — those are already tracked in the structured engagement state below:
+
+${state.toPromptBlock()}
+
+Summarize only the reasoning and narrative context around these findings.`;
+  }
+  return FALLBACK_SUMMARIZE_PROMPT;
+}
+
 export async function summarizeMessages(
   messages: AgentMessageDoc[],
   traceContext?: { sessionId?: string; userId?: string },
+  engagementState?: EngagementState,
 ): Promise<{
   summaryMessage: AgentMessageDoc;
   preservedMessages: AgentMessageDoc[];
@@ -109,7 +129,7 @@ export async function summarizeMessages(
 
   const summaryResult = await invoke_llm({
     messages: [
-      { role: "system", content: SUMMARIZE_SYSTEM_PROMPT },
+      { role: "system", content: buildSummarizePrompt(engagementState) },
       { role: "user", content: conversationText },
     ] as OpenAI.Chat.ChatCompletionMessageParam[],
     temperature: 0.3,

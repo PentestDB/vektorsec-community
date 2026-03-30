@@ -20,6 +20,7 @@ export interface AgentPromptConfig {
   currentDay?: string;
   timezone?: string;
   envInfo?: BoxEnvInfo;
+  engagementStateBlock?: string;
   ctfConfig?: {
     ctfName: string;
     workspacePath: string;
@@ -28,9 +29,230 @@ export interface AgentPromptConfig {
       challengeTxt: string;
       files: string[];
       challengeDir: string;
+      category?: string;
+      connectionInfo?: string;
+      points?: number;
       userNotes?: string;
     };
   };
+}
+
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"]);
+const ARCHIVE_EXTENSIONS = new Set([".zip", ".tar", ".gz", ".bz2", ".7z", ".rar", ".xz", ".tar.gz", ".tgz"]);
+const BINARY_EXTENSIONS = new Set([".elf", ".exe", ".bin", ".so", ".dll", ".o", ".out"]);
+
+function getFileExtension(filename: string): string {
+  const idx = filename.lastIndexOf(".");
+  return idx >= 0 ? filename.slice(idx).toLowerCase() : "";
+}
+
+function buildFileHints(files: string[]): string {
+  if (!files.length) return "No attached files in challenge directory.";
+
+  const lines = ["**Files in challenge directory:**"];
+  for (const f of files) {
+    const ext = getFileExtension(f);
+    let hint = "";
+    if (IMAGE_EXTENSIONS.has(ext)) {
+      hint = " — IMAGE: run `view_image` first, then `exiftool`, `steghide`, `zsteg`, `strings`";
+    } else if (ARCHIVE_EXTENSIONS.has(ext)) {
+      hint = " — ARCHIVE: extract and inspect all contents";
+    } else if (BINARY_EXTENSIONS.has(ext) || f === "a.out") {
+      hint = " — BINARY: run `file`, `checksec`, decompile with pyghidra/r2, check for format string/overflow";
+    } else if (ext === ".pcap" || ext === ".pcapng") {
+      hint = " — CAPTURE: analyze with `tshark` or `scapy`, look for leaked credentials/flags in streams";
+    } else if (ext === ".py" || ext === ".js" || ext === ".c" || ext === ".rs" || ext === ".go" || ext === ".java") {
+      hint = " — SOURCE: read carefully for logic flaws, hardcoded secrets, weak crypto";
+    } else if (ext === ".pem" || ext === ".key" || ext === ".crt" || ext === ".pub") {
+      hint = " — CRYPTO MATERIAL: inspect key parameters, check for weak keys or known vulnerabilities";
+    } else if (ext === ".sqlite" || ext === ".db") {
+      hint = " — DATABASE: dump tables with `sqlite3`, look for credentials and flag data";
+    }
+    lines.push(`- ${f}${hint}`);
+  }
+  return lines.join("\n");
+}
+
+function buildCategoryTactics(category: string): string {
+  const cat = (category || "").toLowerCase();
+
+  if (cat === "web" || cat === "web exploitation") {
+    return `**Category tactics (Web):**
+- Enumerate endpoints, parameters, cookies, and hidden paths (robots.txt, .git/, backup files)
+- Test for injection: SQLi, XSS, SSTI, command injection, SSRF, path traversal
+- Check for authentication/authorization flaws: IDOR, JWT weaknesses, session fixation
+- Inspect client-side JS source for hardcoded secrets, API keys, or debug endpoints
+- For blind vulnerabilities, set up a webhook receiver to detect out-of-band callbacks`;
+  }
+
+  if (cat === "crypto" || cat === "cryptography") {
+    return `**Category tactics (Crypto):**
+- Identify the algorithm and mode from source code, ciphertext format, or challenge description
+- Check for: weak/small keys, nonce reuse, ECB mode, padding oracle, hash length extension
+- For RSA: factor small moduli, check for common e/d issues, Wiener's attack, Hastad's broadcast
+- Use sage/sympy for math-heavy challenges, RsaCtfTool for automated RSA attacks
+- For custom ciphers: look for differential/linear patterns, frequency analysis on substitution ciphers`;
+  }
+
+  if (cat === "pwn" || cat === "binary exploitation" || cat === "binary") {
+    return `**Category tactics (Pwn):**
+- Run \`file\` and \`checksec\` on the binary to identify architecture, protections (NX, PIE, canary, RELRO)
+- Decompile with pyghidra or radare2 to find vulnerable functions (gets, printf, strcpy, scanf)
+- Test for buffer overflow, format string, use-after-free, heap exploitation
+- Use pwntools for exploit scripting — construct payloads with ROP chains when NX is enabled
+- If connecting to a remote service, use \`stty raw -echo\` before launching interactive exploits`;
+  }
+
+  if (cat === "reverse" || cat === "reversing" || cat === "re" || cat === "reverse engineering") {
+    return `**Category tactics (Reverse Engineering):**
+- Run \`file\` and \`strings\` first for quick wins — flags, URLs, passwords in plaintext
+- Decompile with pyghidra for full C pseudocode; use radare2/gdb for dynamic analysis
+- For obfuscated binaries: trace syscalls with \`strace\`/\`ltrace\`, set breakpoints on strcmp/memcmp
+- For .NET/Java: use appropriate decompilers (ilspy, jadx)
+- Check for anti-debugging: ptrace checks, timing-based detection, environment checks`;
+  }
+
+  if (cat === "forensics" || cat === "forensic") {
+    return `**Category tactics (Forensics):**
+- Check file types with \`file\` and \`xxd\` — magic bytes may be corrupted or misleading
+- For images: run \`exiftool\` (metadata), \`steghide\` (embedded data), \`zsteg\` (LSB steganography), \`binwalk\` (embedded files)
+- For packet captures: use \`tshark\` to extract streams, look for HTTP objects, DNS exfil, FTP transfers
+- For disk images: mount and examine filesystem, check deleted files, slack space, alternate data streams
+- For memory dumps: use volatility to extract processes, network connections, command history`;
+  }
+
+  if (cat === "misc" || cat === "miscellaneous") {
+    return `**Category tactics (Misc):**
+- Read the description very carefully — misc challenges often hide clues in wording or formatting
+- Check for encoding chains: base64, base32, hex, rot13, URL encoding, nested encodings
+- Consider OSINT, esoteric languages (Brainfuck, Whitespace, Piet), QR codes, steganography
+- If a service is provided, interact thoroughly — try unexpected inputs, edge cases, race conditions`;
+  }
+
+  if (cat === "osint") {
+    return `**Category tactics (OSINT):**
+- Use google_search and web_fetch to find information from public sources
+- Check social media, GitHub profiles, domain registrations, cached pages
+- Look for metadata in provided files (EXIF GPS coords, document author, creation dates)
+- Reverse image search, archive.org lookups, DNS history`;
+  }
+
+  return "";
+}
+
+function buildConnectionHints(connectionInfo: string): string {
+  const conn = connectionInfo.trim();
+  if (!conn) return "";
+
+  if (/^https?:\/\//.test(conn)) {
+    return `> **FIRST ACTION**: Connect to the web service immediately.
+> Use \`run_bash\` with \`curl\` for initial recon, or \`browser_action\` for interactive testing.
+> The flag is on the service — do NOT spend time exploring local files first.
+
+**Service:** \`${conn}\` (Web)`;
+  }
+
+  if (conn.startsWith("nc ") || conn.startsWith("ncat ")) {
+    return `> **FIRST ACTION**: Connect to the TCP service immediately.
+> Each \`run_bash\` call is a fresh process — use a heredoc for multi-line interaction:
+> \`\`\`
+> ${conn} <<'EOF'
+> command1
+> command2
+> EOF
+> \`\`\`
+> Or write a pwntools/socket script via \`run_python_script\` for stateful interaction.
+> The flag is on the service — do NOT spend time exploring local files first.
+
+**Service:** \`${conn}\` (TCP)`;
+  }
+
+  if (conn.startsWith("ssh ")) {
+    return `> **FIRST ACTION**: Connect via SSH immediately.
+> Use \`run_bash\` or \`spawn_shell\` with purpose "ctf-service" for persistent access.
+> Explore the remote filesystem, check for SUID binaries, cron jobs, and privilege escalation paths.
+
+**Service:** \`${conn}\` (SSH)`;
+  }
+
+  return `> **FIRST ACTION**: Connect to the service immediately using the command below.
+> The flag is on the service — do NOT spend time exploring local files first.
+
+**Service:** \`${conn}\``;
+}
+
+function buildCtfBlock(config: AgentPromptConfig): string {
+  const ctf = config.ctfConfig!;
+  const lines: string[] = [];
+
+  lines.push(`<ctf_mode>`);
+  lines.push(`You are solving challenges in CTF "${ctf.ctfName}". Challenge files are synced to ${ctf.workspacePath}.`);
+  lines.push(`Each subdirectory contains a challenge.txt (name, category, points, description) and any attached files.`);
+  lines.push(``);
+  lines.push(`**Operational rules:**`);
+  lines.push(`- Use tools immediately. Do not describe what you would do — execute it.`);
+  lines.push(`- Be creative and thorough: try the obvious path first, then explore systematically.`);
+  lines.push(`- After each tool result, analyze the output and decide the next action — do not pause for confirmation.`);
+  lines.push(`- Ignore placeholder flags like \`flag{placeholder}\`, \`CTF{flag}\`, or \`FLAG{example}\` — only submit real flags.`);
+  lines.push(`- There is no separate \`submit_flag\` tool in this environment. The CTF submission mechanism is: call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to the exact flag string.`);
+  lines.push(`- Calling \`confirm_flag\` persists the flag to the CTF dashboard and triggers backend auto-submit to CTFd (best effort). Never claim submission is unavailable.`);
+  lines.push(`- If the user message contains a flag directly (for example: "Submitted: CTF{...}" or "flag is CTF{...}"), immediately call \`confirm_flag\` with that value before any prose.`);
+  lines.push(`- If an approach is not working after 2-3 attempts, pivot to a different technique.`);
+  lines.push(`- Record every finding with update_engagement_state as you go.`);
+  lines.push(`</ctf_mode>`);
+  lines.push(``);
+
+  if (ctf.activeSolve) {
+    const solve = ctf.activeSolve;
+    const connHints = buildConnectionHints(solve.connectionInfo ?? "");
+    const categoryTactics = buildCategoryTactics(solve.category ?? "");
+    const fileHints = buildFileHints(solve.files);
+
+    lines.push(`<current_challenge>`);
+    lines.push(`**Solving:** "${solve.name}"${solve.points ? ` (${solve.points} pts)` : ""}${solve.category ? ` [${solve.category}]` : ""}`);
+    lines.push(`**Working directory:** ${solve.challengeDir}`);
+    lines.push(`Always cd to this directory before running commands for this challenge.`);
+    lines.push(``);
+
+    if (connHints) {
+      lines.push(connHints);
+      lines.push(``);
+    }
+
+    lines.push(solve.challengeTxt);
+    lines.push(``);
+    lines.push(fileHints);
+
+    if (categoryTactics) {
+      lines.push(``);
+      lines.push(categoryTactics);
+    }
+
+    lines.push(``);
+    lines.push(`**Approach:**`);
+
+    if (connHints) {
+      lines.push(`1. Connect to the service NOW — your first tool call must reach the target.`);
+      lines.push(`2. If distfiles exist, inspect them for source code or config that reveals the vulnerability.`);
+    } else {
+      lines.push(`1. Inspect the distfiles NOW — read source, examine binaries, check file types.`);
+    }
+
+    lines.push(`${connHints ? "3" : "2"}. Identify the vulnerability or puzzle mechanism.`);
+    lines.push(`${connHints ? "4" : "3"}. Develop and execute your exploit or solution.`);
+    lines.push(`${connHints ? "5" : "4"}. Submit the flag immediately when found.`);
+
+    if (solve.userNotes) {
+      lines.push(``);
+      lines.push(`**Additional context from user:**`);
+      lines.push(solve.userNotes);
+    }
+
+    lines.push(`</current_challenge>`);
+    lines.push(``);
+  }
+
+  return lines.join("\n");
 }
 
 export function buildSystemPrompt(config: AgentPromptConfig): string {
@@ -224,31 +446,21 @@ ${burpSection}<guidelines>
 - Destructive system commands (rm -rf /, disk wipes, shutdowns) are blocked and require explicit user approval regardless of auto-run settings.
 </guidelines>
 
-${config.ctfConfig ? `<ctf_mode>
-A CTF ("${config.ctfConfig.ctfName}") is connected. Challenge files are synced to ${config.ctfConfig.workspacePath}.
-Each subdirectory is one challenge containing a challenge.txt (name, category, points, description) and any attached files.
-When the user asks you to work on a challenge, start by reading its challenge.txt and inspecting the files in its directory.
-Flag format is typically CTF{...} — always look for flag patterns in command output, decoded data, and images.
-</ctf_mode>
+${config.ctfConfig ? buildCtfBlock(config) : ""}<state_management>
+You have a structured engagement state that persists across context summarizations. Use the update_engagement_state tool to record findings as you discover them. This ensures no information is lost when conversation history is compressed.
 
-${config.ctfConfig.activeSolve ? `<current_challenge>
-You are currently solving: "${config.ctfConfig.activeSolve.name}"
-Working directory: ${config.ctfConfig.activeSolve.challengeDir}
-Always cd to this directory before running commands for this challenge.
+Record these findings immediately when discovered:
+- Hosts, services, and open ports (pentest) or key discoveries (CTF)
+- Credentials, tokens, and secrets
+- Vulnerabilities with severity and evidence
+- Files created, downloaded, or analyzed
+- Approaches attempted and their outcomes
+- Flag submission attempts and results (CTF)
+${config.ctfConfig ? `
+**CTF — critical:** The moment you obtain or receive a real flag, you MUST call update_engagement_state with action "confirm_flag" and data: { "value": "<the flag>" }. If the current challenge name is not in context, include "challengeName": "<exact challenge title from challenge.txt>" so it appears on the user's CTF dashboard.
+Do not only paste the flag in chat — the tool call is required for persistence and auto-submit.
+Do not state that a submission tool is unavailable: in this system, "confirm_flag" is the submission trigger.` : ""}
 
-${config.ctfConfig.activeSolve.challengeTxt}
-
-${config.ctfConfig.activeSolve.files.length > 0 ? `Files in challenge directory:\n${config.ctfConfig.activeSolve.files.map(f => `- ${f}`).join("\n")}` : "No attached files in challenge directory."}
-${config.ctfConfig.activeSolve.userNotes ? `\nAdditional context from user:\n${config.ctfConfig.activeSolve.userNotes}` : ""}
-</current_challenge>
-
-` : ""}` : ""}<state_tracking>
-After each significant finding, maintain a structured summary in your response:
-- TARGETS: IPs/hostnames with current status
-- PORTS: port/service/version tuples discovered
-- CREDENTIALS: user:pass pairs or tokens found
-- VULNS: vulnerability findings with severity
-- FILES: output files created on disk
-- NEXT: prioritized next steps
-</state_tracking>`;
+The structured state is injected into your context automatically — do not duplicate it in prose. Focus your messages on reasoning, analysis, and next-step planning.
+</state_management>`;
 }

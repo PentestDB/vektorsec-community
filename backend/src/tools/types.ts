@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { ShellInfo, ShellPurpose } from "../services/shell.manager";
+import { EngagementState } from "../services/engagement-state";
 
 export interface ToolResult {
   output: string;
@@ -20,6 +21,7 @@ export interface ExecutionContext {
   getShellInfo: (shellId: string) => ShellInfo | undefined;
   spawnSubagent?: (task: string) => Promise<string>;
   onOutput?: (chunk: string) => void;
+  engagementState?: EngagementState;
 }
 
 export interface ToolDefinition {

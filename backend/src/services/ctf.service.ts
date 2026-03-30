@@ -11,6 +11,7 @@ export interface CTFdChallenge {
   description: string;
   value: number;
   files: string[];
+  connection_info: string;
 }
 
 export interface SyncProgressEvent {
@@ -225,6 +226,7 @@ export async function fetchChallenges(
         description: stripHtml(detail.description || ""),
         value: detail.value ?? ch.value ?? 0,
         files,
+        connection_info: (detail.connection_info || "").trim(),
       });
     } catch (err: any) {
       console.warn(`[CTF] Failed to fetch details for challenge ${ch.id}: ${err.message}`);
@@ -235,6 +237,7 @@ export async function fetchChallenges(
         description: "",
         value: ch.value ?? 0,
         files: [],
+        connection_info: "",
       });
     }
   }
@@ -365,10 +368,12 @@ async function doSync(
   console.log(`[CTF] Sync complete: ${synced} new, ${updated} updated, ${skipped} unchanged`);
 
   const index = challenges.map((ch) => ({
+    id: ch.id,
     name: ch.name,
     category: ch.category,
     value: ch.value,
     safeDir: sanitizeDirName(ch.name),
+    connection_info: ch.connection_info || undefined,
   }));
   const indexJson = JSON.stringify(index, null, 2).replace(/'/g, "'\\''");
   await ssh.exec(`printf '%s' '${indexJson}' > "${ctfDir}/challenges.json"`);
@@ -401,14 +406,251 @@ function extractFileName(filePath: string): string {
 }
 
 function buildChallengeTxt(ch: CTFdChallenge): string {
-  return [
+  const lines = [
     `Challenge: ${ch.name}`,
     `Category: ${ch.category}`,
     `Points: ${ch.value}`,
-    ``,
-    `Description:`,
-    ch.description || "(no description)",
-  ].join("\n");
+  ];
+  if (ch.connection_info) {
+    lines.push(`Connection: ${ch.connection_info}`);
+  }
+  lines.push("", "Description:", ch.description || "(no description)");
+  return lines.join("\n");
+}
+
+export interface CtfdSubmitResult {
+  status: "correct" | "incorrect" | "already_solved" | "unknown";
+  message: string;
+  /** HTTP status from CTFd for the attempt request */
+  httpStatus?: number;
+  /** Parsed JSON body from CTFd (for debugging; do not log secrets elsewhere) */
+  rawData?: unknown;
+}
+
+function isRetryableStatus(status?: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractCtfdMessage(body: unknown, status: number): string {
+  const msg = (body as any)?.data?.message;
+  if (typeof msg === "string" && msg.trim()) return msg.trim();
+
+  if (typeof body === "string" && body.trim()) {
+    const stripped = stripHtml(body).replace(/\s+/g, " ").trim();
+    if (stripped) return stripped.slice(0, 220);
+  }
+
+  return `CTFd returned HTTP ${status}`;
+}
+
+async function postWithRetry(
+  url: string,
+  data: Record<string, any>,
+  config: any,
+  label: string,
+): Promise<any> {
+  const delays = [0, 1000, 2500];
+  let lastRes: any = null;
+
+  for (let i = 0; i < delays.length; i += 1) {
+    if (delays[i] > 0) await sleep(delays[i]);
+
+    const res = await axios.post(url, data, config);
+    lastRes = res;
+
+    if (!isRetryableStatus(res.status)) {
+      return res;
+    }
+
+    console.warn(`[CTF] ${label} got retryable HTTP ${res.status} (attempt ${i + 1}/${delays.length})`);
+  }
+
+  return lastRes;
+}
+
+export async function submitFlagToCtfd(
+  url: string,
+  challengeId: number,
+  flag: string,
+  cookie?: string,
+  token?: string,
+): Promise<CtfdSubmitResult> {
+  const baseURL = url.replace(/\/+$/, "");
+  const payload = { challenge_id: challengeId, submission: flag.trim() };
+
+  const attemptUrl = `${baseURL}/api/v1/challenges/attempt`;
+  const logCtx = { challengeId, attemptUrl, auth: token ? "token" : "session_cookie" };
+
+  if (token) {
+    const res = await postWithRetry(
+      attemptUrl,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        timeout: 30_000,
+        validateStatus: () => true,
+      },
+      "submitFlag(token)",
+    );
+    const status = res.data?.data?.status ?? "unknown";
+    const message = extractCtfdMessage(res.data, res.status);
+    console.log(
+      `[CTF submitFlagToCtfd] token auth req=${JSON.stringify({ ...logCtx, payload })} res=${JSON.stringify({
+        httpStatus: res.status,
+        body: res.data,
+      })}`,
+    );
+    return { status, message, httpStatus: res.status, rawData: res.data };
+  }
+
+  if (!cookie) {
+    console.warn(`[CTF submitFlagToCtfd] no cookie and no token`, logCtx);
+    return { status: "unknown", message: "No auth credentials available" };
+  }
+
+  // Session-cookie auth: need CSRF nonce from the same session
+  const csrfNonce = await fetchCsrfNonce(baseURL, cookie);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Cookie: cookie,
+  };
+  if (csrfNonce) headers["CSRF-Token"] = csrfNonce;
+
+  let res = await postWithRetry(
+    attemptUrl,
+    payload,
+    {
+      headers,
+      timeout: 30_000,
+      validateStatus: () => true, // don't throw on 403
+    },
+    "submitFlag(session)",
+  );
+
+  // Retry once on 403 — CSRF nonce may have gone stale
+  if (res.status === 403 && csrfNonce) {
+    console.warn("[CTF submitFlagToCtfd] 403, retrying with fresh CSRF nonce...");
+    const freshNonce = await fetchCsrfNonce(baseURL, cookie, true);
+    if (freshNonce && freshNonce !== csrfNonce) {
+      headers["CSRF-Token"] = freshNonce;
+      res = await postWithRetry(
+        attemptUrl,
+        payload,
+        {
+          headers,
+          timeout: 30_000,
+          validateStatus: () => true,
+        },
+        "submitFlag(session,csrf-retry)",
+      );
+    }
+  }
+
+  const sessionLog = {
+    ...logCtx,
+    payload,
+    csrfPresent: !!csrfNonce,
+    httpStatus: res.status,
+    body: res.data,
+  };
+  console.log(`[CTF submitFlagToCtfd] session auth ${JSON.stringify(sessionLog)}`);
+
+  if (res.status === 403) {
+    console.error("[CTF submitFlagToCtfd] still 403 after CSRF retry. Cookie may have expired.");
+    return {
+      status: "unknown",
+      message: "CTFd returned 403 — session may have expired. Re-connect CTFd.",
+      httpStatus: res.status,
+      rawData: res.data,
+    };
+  }
+
+  if (res.status >= 400) {
+    return {
+      status: "unknown",
+      message: extractCtfdMessage(res.data, res.status),
+      httpStatus: res.status,
+      rawData: res.data,
+    };
+  }
+
+  const status = res.data?.data?.status ?? "unknown";
+  const message = extractCtfdMessage(res.data, res.status);
+  return { status, message, httpStatus: res.status, rawData: res.data };
+}
+
+async function fetchCsrfNonce(baseURL: string, cookie: string, bustCache = false): Promise<string | null> {
+  try {
+    const cacheBuster = bustCache ? `?_=${Date.now()}` : "";
+    const res = await axios.get(`${baseURL}/challenges${cacheBuster}`, {
+      headers: { Cookie: cookie, "User-Agent": "PentestCopilot/1.0" },
+      timeout: 10_000,
+      maxRedirects: 5,
+    });
+    const match = res.data.match(/csrfNonce':\s*"([A-Fa-f0-9]+)"/);
+    if (!match) console.warn("[CTF] Could not extract csrfNonce from /challenges page");
+    return match ? match[1] : null;
+  } catch (err: any) {
+    console.warn("[CTF] fetchCsrfNonce failed:", err.message);
+    return null;
+  }
+}
+
+export async function fetchSolvedChallengeNames(
+  url: string,
+  cookie?: string,
+  token?: string,
+): Promise<Set<string>> {
+  const baseURL = url.replace(/\/+$/, "");
+  const client = buildClient(baseURL, cookie, token);
+  const delays = [0, 1000, 2500];
+
+  for (let i = 0; i < delays.length; i += 1) {
+    try {
+      if (delays[i] > 0) await sleep(delays[i]);
+
+      const meRes = await client.get("/api/v1/users/me");
+      const userData = meRes.data?.data || {};
+
+      let solvesPath: string;
+      if (userData.team_id) {
+        solvesPath = `/api/v1/teams/${userData.team_id}/solves`;
+      } else if (userData.id) {
+        solvesPath = `/api/v1/users/${userData.id}/solves`;
+      } else {
+        return new Set();
+      }
+
+      const solvesRes = await client.get(solvesPath);
+      const solves: any[] = solvesRes.data?.data || [];
+      return new Set(
+        solves
+          .map((s: any) => s.challenge?.name)
+          .filter(Boolean),
+      );
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const isRetryable = isRetryableStatus(status);
+      const attempt = i + 1;
+      const total = delays.length;
+      console.warn(
+        `[CTF] Failed to fetch solved names (attempt ${attempt}/${total})`,
+        status ? `HTTP ${status}` : err.message,
+      );
+      if (!isRetryable || attempt === total) {
+        return new Set();
+      }
+    }
+  }
+
+  return new Set();
 }
 
 function extractSetCookies(setCookies: string[] | undefined): string {

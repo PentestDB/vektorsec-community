@@ -645,7 +645,7 @@ Use markdown formatting. Be thorough but concise.`,
       return;
     }
 
-    let challenges: Array<{ name: string; category: string; value: number; safeDir: string }> = [];
+    let challenges: Array<{ id?: number; name: string; category: string; value: number; safeDir: string; connection_info?: string }> = [];
     try {
       const raw = await execSSHCommand(`cat "${ctfDir}/challenges.json" 2>/dev/null || echo "[]"`);
       challenges = JSON.parse(raw.trim());
@@ -738,21 +738,44 @@ Use markdown formatting. Be thorough but concise.`,
       files = lsOut.split("\n").map((l) => l.trim()).filter((l) => l && l !== "challenge.txt");
     } catch {}
 
-    await SessionsModel.updateOne(
-      { sessionId },
-      {
-        $set: {
-          "ctfConfig.activeSolve": {
-            name: challenge.name,
-            safeDir: challenge.safeDir,
-            challengeTxt,
-            files,
-            userNotes: userNotes || undefined,
-            setAt: new Date(),
-          },
+    const solveUpdate: any = {
+      $set: {
+        "ctfConfig.activeSolve": {
+          name: challenge.name,
+          safeDir: challenge.safeDir,
+          challengeTxt,
+          files,
+          category: challenge.category || undefined,
+          points: challenge.value || undefined,
+          connectionInfo: challenge.connection_info || undefined,
+          userNotes: userNotes || undefined,
+          setAt: new Date(),
         },
       },
-    );
+    };
+
+    const existingSession = await SessionsModel.findOne({ sessionId })
+      .select("ctfConfig.solveHistory")
+      .lean();
+    const alreadyTracked = (existingSession?.ctfConfig?.solveHistory ?? [])
+      .some((r: any) => r.challengeName === challenge.name);
+
+    if (!alreadyTracked) {
+      solveUpdate.$push = {
+        "ctfConfig.solveHistory": {
+          challengeName: challenge.name,
+          challengeId: challenge.id || undefined,
+          safeDir: challenge.safeDir,
+          category: challenge.category || "",
+          status: "solving",
+          attempts: 0,
+          startedAt: new Date(),
+          submittedToCtfd: false,
+        },
+      };
+    }
+
+    await SessionsModel.updateOne({ sessionId }, solveUpdate);
 
     const lines: string[] = [
       `### Solving: ${challenge.name}`,

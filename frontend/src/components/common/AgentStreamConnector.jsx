@@ -39,6 +39,8 @@ export default function AgentStreamConnector({ sessionId }) {
           setTokenUsage(sessionId, {
             totalTokens: data.totalTokens,
             contextLimit: data.contextLimit ?? 128_000,
+            promptTokens: data.promptTokens ?? undefined,
+            completionTokens: data.completionTokens ?? undefined,
           });
         }
       })

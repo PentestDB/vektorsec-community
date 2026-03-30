@@ -84,8 +84,25 @@ export interface CtfActiveSolveDoc {
   safeDir: string;
   challengeTxt: string;
   files: string[];
+  category?: string;
+  points?: number;
+  connectionInfo?: string;
   userNotes?: string;
   setAt: Date;
+}
+
+export interface CtfSolveRecord {
+  challengeName: string;
+  challengeId?: number;
+  safeDir: string;
+  category: string;
+  status: "solving" | "solved" | "submitted";
+  confirmedFlag?: string;
+  attempts: number;
+  startedAt: Date;
+  solvedAt?: Date;
+  submittedToCtfd: boolean;
+  ctfdResult?: string;
 }
 
 export interface CtfConfigDoc {
@@ -97,6 +114,7 @@ export interface CtfConfigDoc {
   sessionCookie?: string;
   lastSynced?: Date;
   activeSolve?: CtfActiveSolveDoc;
+  solveHistory?: CtfSolveRecord[];
 }
 
 export interface SessionDoc extends mongoose.Document {
@@ -277,10 +295,31 @@ const SessionSchema = new Schema({
           safeDir: { type: String, required: true },
           challengeTxt: { type: String, required: true },
           files: { type: [String], default: [] },
+          category: { type: String },
+          points: { type: Number },
+          connectionInfo: { type: String },
           userNotes: { type: String },
           setAt: { type: Date, default: Date.now },
         },
         default: undefined,
+      },
+      solveHistory: {
+        type: [
+          {
+            challengeName: { type: String, required: true },
+            challengeId: { type: Number },
+            safeDir: { type: String, required: true },
+            category: { type: String, default: "" },
+            status: { type: String, required: true, enum: ["solving", "solved", "submitted"] },
+            confirmedFlag: { type: String },
+            attempts: { type: Number, default: 0 },
+            startedAt: { type: Date, default: Date.now },
+            solvedAt: { type: Date },
+            submittedToCtfd: { type: Boolean, default: false },
+            ctfdResult: { type: String },
+          },
+        ],
+        default: [],
       },
     },
     default: undefined,

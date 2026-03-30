@@ -4,6 +4,7 @@ import { ToolCallData } from "../utils/llm/providers";
 import { ShellManager, ShellPurpose } from "./shell.manager";
 import { SubagentManager } from "./subagent.manager";
 import { SSEWriter } from "./agent.service";
+import { EngagementState } from "./engagement-state";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -43,8 +44,9 @@ export function buildExecutionContext(params: {
   userId?: string;
   onChunk?: (chunk: string) => void;
   abortSignal?: AbortSignal;
+  engagementState?: EngagementState;
 }): ExecutionContext {
-  const { sessionId, agentId, shellManager, subagentManager, sse, userId, onChunk, abortSignal } = params;
+  const { sessionId, agentId, shellManager, subagentManager, sse, userId, onChunk, abortSignal, engagementState } = params;
 
   return {
     sessionId,
@@ -75,6 +77,7 @@ export function buildExecutionContext(params: {
           })
       : undefined,
     onOutput: onChunk,
+    engagementState,
   };
 }
 

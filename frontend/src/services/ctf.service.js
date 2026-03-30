@@ -66,6 +66,20 @@ export const getCtfChallenges = async (sessionId) => {
   return res.data;
 };
 
+export const submitFlagToCtfd = async (sessionId, { challengeName, challengeId, flag }) => {
+  const res = await apiClient.post(`/ctf/${sessionId}/submit-flag`, {
+    challengeName,
+    challengeId,
+    flag,
+  });
+  return res.data;
+};
+
+export const reauthCtf = async (sessionId, body) => {
+  const res = await apiClient.patch(`/ctf/${sessionId}/reauth`, body);
+  return res.data;
+};
+
 export const disconnectCtf = async (sessionId) => {
   const res = await apiClient.post(`/ctf/${sessionId}/disconnect`);
   return res.data;
