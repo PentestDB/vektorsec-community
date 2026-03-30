@@ -96,7 +96,7 @@ export interface CtfSolveRecord {
   challengeId?: number;
   safeDir: string;
   category: string;
-  status: "solving" | "solved" | "submitted";
+  status: "solving" | "flag_found" | "incorrect" | "solved" | "submitted";
   confirmedFlag?: string;
   attempts: number;
   startedAt: Date;
@@ -113,6 +113,7 @@ export interface CtfConfigDoc {
   username?: string;
   sessionCookie?: string;
   lastSynced?: Date;
+  flagFormat?: string;
   activeSolve?: CtfActiveSolveDoc;
   solveHistory?: CtfSolveRecord[];
 }
@@ -289,6 +290,7 @@ const SessionSchema = new Schema({
       username: { type: String },
       sessionCookie: { type: String },
       lastSynced: { type: Date },
+      flagFormat: { type: String },
       activeSolve: {
         type: {
           name: { type: String, required: true },
@@ -310,7 +312,11 @@ const SessionSchema = new Schema({
             challengeId: { type: Number },
             safeDir: { type: String, required: true },
             category: { type: String, default: "" },
-            status: { type: String, required: true, enum: ["solving", "solved", "submitted"] },
+            status: {
+              type: String,
+              required: true,
+              enum: ["solving", "flag_found", "incorrect", "solved", "submitted"],
+            },
             confirmedFlag: { type: String },
             attempts: { type: Number, default: 0 },
             startedAt: { type: Date, default: Date.now },

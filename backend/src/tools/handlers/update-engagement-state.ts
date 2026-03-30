@@ -7,6 +7,16 @@ function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function formatDurationSec(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
+}
+
 const updateEngagementState: ToolDefinition = {
   name: "update_engagement_state",
   description:
@@ -164,7 +174,8 @@ const updateEngagementState: ToolDefinition = {
         }
 
         state.confirmedFlag = flagValue;
-        state.challengeStatus = "solved";
+        // confirm_flag means "candidate flag found", not yet verified correct by CTFd.
+        state.challengeStatus = "flag_found";
 
         const flag = state.confirmedFlag;
         let persistNote = "";
@@ -173,6 +184,7 @@ const updateEngagementState: ToolDefinition = {
         let autoSubmitNote = "";
         let shouldMarkSubmitted = false;
         let ctfdResult = "";
+        let timeToFlagNote = "";
 
         if (ctx.sessionId) {
           try {
@@ -218,7 +230,7 @@ const updateEngagementState: ToolDefinition = {
                     },
                     {
                       $set: {
-                        "ctfConfig.solveHistory.$.status": "solved",
+                        "ctfConfig.solveHistory.$.status": "flag_found",
                         "ctfConfig.solveHistory.$.confirmedFlag": flag,
                         "ctfConfig.solveHistory.$.solvedAt": new Date(),
                         "ctfConfig.solveHistory.$.submittedToCtfd": false,
@@ -240,7 +252,7 @@ const updateEngagementState: ToolDefinition = {
                           challengeId,
                           safeDir,
                           category,
-                          status: "solved",
+                          status: "flag_found",
                           confirmedFlag: flag,
                           attempts: 1,
                           startedAt: cfg.activeSolve?.setAt ?? new Date(),
@@ -253,6 +265,17 @@ const updateEngagementState: ToolDefinition = {
                   );
                 }
                 persistNote = " Saved to CTF dashboard.";
+
+                const solvedAtMs = Date.now();
+                const startMs = existing?.startedAt
+                  ? new Date(existing.startedAt).getTime()
+                  : cfg.activeSolve?.setAt
+                    ? new Date(cfg.activeSolve.setAt).getTime()
+                    : solvedAtMs;
+                const elapsedSec = Math.max(0, Math.round((solvedAtMs - startMs) / 1000));
+                if (elapsedSec > 0) {
+                  timeToFlagNote = ` Time to flag: ${formatDurationSec(elapsedSec)}.`;
+                }
               } else {
                 persistNote =
                   " Not saved to CTF tab — pass data.challengeName (challenge title) or run /solve <name> first.";
@@ -311,7 +334,7 @@ const updateEngagementState: ToolDefinition = {
                     },
                     {
                       $set: {
-                        "ctfConfig.solveHistory.$.status": "submitted",
+                        "ctfConfig.solveHistory.$.status": "solved",
                         "ctfConfig.solveHistory.$.submittedToCtfd": true,
                         "ctfConfig.solveHistory.$.ctfdResult": ctfdResult,
                         ...(resolvedId != null
@@ -321,6 +344,8 @@ const updateEngagementState: ToolDefinition = {
                     },
                   );
                 } else {
+                  const nextStatus =
+                    ctfdResult === "incorrect" ? "incorrect" : "flag_found";
                   await SessionsModel.updateOne(
                     {
                       sessionId: ctx.sessionId,
@@ -328,6 +353,8 @@ const updateEngagementState: ToolDefinition = {
                     },
                     {
                       $set: {
+                        "ctfConfig.solveHistory.$.status": nextStatus,
+                        "ctfConfig.solveHistory.$.submittedToCtfd": false,
                         "ctfConfig.solveHistory.$.ctfdResult": ctfdResult || "unknown",
                       },
                     },
@@ -347,7 +374,7 @@ const updateEngagementState: ToolDefinition = {
         }
 
         return {
-          output: `Flag confirmed: ${flag}.${persistNote}${autoSubmitNote}`,
+          output: `Flag confirmed: ${flag}.${persistNote}${timeToFlagNote}${autoSubmitNote}`,
           exitCode: 0,
         };
       }

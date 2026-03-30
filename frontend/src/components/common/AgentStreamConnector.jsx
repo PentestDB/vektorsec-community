@@ -47,5 +47,29 @@ export default function AgentStreamConnector({ sessionId }) {
       .catch(() => {});
   }, [sessionId, store]);
 
+  useEffect(() => {
+    const onContextCleared = (e) => {
+      if (e.detail?.sessionId !== sessionId) return;
+      const st = store.getState();
+      const s = st.getSession(sessionId);
+      if (s?.controllerRef?.current) {
+        try {
+          s.controllerRef.current.abort();
+        } catch {
+          /* ignore */
+        }
+        s.controllerRef.current = null;
+      }
+      st.setMessages(sessionId, []);
+      st.setAgentState(sessionId, "idle");
+      st.setPendingConsent(sessionId, null);
+      st.setPendingManualExecution(sessionId, null);
+      st.setSubagents(sessionId, []);
+      st.setTokenUsage(sessionId, null);
+    };
+    window.addEventListener("context-cleared", onContextCleared);
+    return () => window.removeEventListener("context-cleared", onContextCleared);
+  }, [sessionId, store]);
+
   return null;
 }

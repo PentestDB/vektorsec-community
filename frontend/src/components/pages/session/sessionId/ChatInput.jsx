@@ -3,6 +3,18 @@ import styles from "@/styles/components/Chat.module.scss";
 import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { getCtfChallenges } from "@/services/ctf.service";
+import { formatDurationSec } from "@/utils/formatDuration";
+
+function challengeStatusBadge(ch) {
+  const raw = (ch.status || "pending").toLowerCase();
+  const map = {
+    pending: { label: "Pending", tone: "pending" },
+    solving: { label: "Solving", tone: "solving" },
+    solved: { label: "Solved", tone: "solved" },
+    submitted: { label: "Submitted", tone: "submitted" },
+  };
+  return map[raw] || map.pending;
+}
 
 const SLASH_COMMANDS = [
   { name: "summarize", description: "Summarize the entire session so far" },
@@ -32,7 +44,7 @@ export default function ChatInput({
 
   const [challengeList, setChallengeList] = useState([]);
   const [challengeSelectedIndex, setChallengeSelectedIndex] = useState(0);
-  const challengeFetchedRef = useRef(null);
+  const solveMenuSessionRef = useRef(null);
 
   const isRunning = agentState === "running";
   const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
@@ -71,9 +83,12 @@ export default function ChatInput({
   const showChallengeMenu = filteredChallenges.length > 0 && isSolveArgMode;
 
   useEffect(() => {
-    if (!isSolveArgMode || !sessionId) return;
-    if (challengeFetchedRef.current === sessionId) return;
-    challengeFetchedRef.current = sessionId;
+    if (!isSolveArgMode || !sessionId) {
+      solveMenuSessionRef.current = null;
+      return;
+    }
+    if (solveMenuSessionRef.current === sessionId) return;
+    solveMenuSessionRef.current = sessionId;
     getCtfChallenges(sessionId)
       .then((data) => setChallengeList(data.challenges || []))
       .catch(() => setChallengeList([]));
@@ -266,20 +281,41 @@ export default function ChatInput({
       {showChallengeMenu && (
         <div className={styles.slashMenu} ref={menuRef}>
           <div className={styles.slashMenuHeader}>Challenges</div>
-          {filteredChallenges.map((ch, i) => (
-            <div
-              key={ch.safeDir}
-              className={`${styles.slashMenuItem} ${i === challengeSelectedIndex ? styles.slashMenuItemActive : ""}`}
-              onMouseEnter={() => setChallengeSelectedIndex(i)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                acceptChallenge(ch, true);
-              }}
-            >
-              <span className={styles.slashMenuCmd}>{ch.name}</span>
-              <span className={styles.slashMenuDesc}>{ch.category} &middot; {ch.value} pts</span>
-            </div>
-          ))}
+          {filteredChallenges.map((ch, i) => {
+            const st = challengeStatusBadge(ch);
+            return (
+              <div
+                key={ch.safeDir}
+                className={`${styles.slashMenuItem} ${styles.slashMenuItemChallenge} ${i === challengeSelectedIndex ? styles.slashMenuItemActive : ""}`}
+                onMouseEnter={() => setChallengeSelectedIndex(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  acceptChallenge(ch, true);
+                }}
+              >
+                <div className={styles.slashChallengeInner}>
+                  <div className={styles.slashChallengeTitleRow}>
+                    <span className={styles.slashMenuCmd}>{ch.name}</span>
+                    <span
+                      className={`${styles.challengeStatusPill} ${styles[`challengeStatus_${st.tone}`]}`}
+                    >
+                      {st.label}
+                    </span>
+                  </div>
+                  <span className={styles.slashMenuDesc}>
+                    {ch.category} &middot; {ch.value} pts
+                    {ch.timeToSolveSec != null &&
+                      (ch.status === "solved" || ch.status === "submitted") && (
+                        <>
+                          {" "}
+                          &middot; {formatDurationSec(ch.timeToSolveSec)} to flag
+                        </>
+                      )}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

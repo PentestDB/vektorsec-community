@@ -184,6 +184,40 @@ export async function verifyToken(url: string, token: string): Promise<string> {
   return $("title").text().trim().replace(/\s*\|.*$/, "") || "CTF";
 }
 
+/**
+ * Try to detect a common flag format pattern from challenge descriptions.
+ * Looks for patterns like "flag format is FLAG{...}", "flags look like CTF{...}", etc.
+ */
+export function detectFlagFormat(challenges: CTFdChallenge[]): string | null {
+  const patterns = [
+    /flag\s*format\s*(?:is|:)\s*[`"']?([A-Za-z0-9_-]+\{[^}]*\})[`"']?/i,
+    /flags?\s+(?:look|are)\s+like\s*[`"']?([A-Za-z0-9_-]+\{[^}]*\})[`"']?/i,
+    /submit\s+(?:in\s+)?(?:the\s+)?format\s*[`"':]\s*([A-Za-z0-9_-]+\{[^}]*\})[`"']?/i,
+    /([A-Za-z0-9_-]{2,})\{[a-zA-Z0-9_.*?!]+\}/,
+  ];
+
+  const prefixCounts = new Map<string, number>();
+
+  for (const ch of challenges) {
+    const text = ch.description || "";
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const prefix = match[1]?.split("{")[0] || match[0]?.split("{")[0];
+        if (prefix && prefix.length >= 2 && prefix.length <= 30) {
+          prefixCounts.set(prefix, (prefixCounts.get(prefix) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  if (prefixCounts.size === 0) return null;
+
+  const sorted = [...prefixCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const bestPrefix = sorted[0][0];
+  return `${bestPrefix}{...}`;
+}
+
 export async function fetchChallenges(
   url: string,
   cookie?: string,
@@ -431,9 +465,6 @@ function isRetryableStatus(status?: number): boolean {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function extractCtfdMessage(body: unknown, status: number): string {
   const msg = (body as any)?.data?.message;

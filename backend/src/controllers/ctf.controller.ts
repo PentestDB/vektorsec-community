@@ -9,9 +9,19 @@ import {
   SyncProgressEvent,
   submitFlagToCtfd,
   fetchSolvedChallengeNames,
+  detectFlagFormat,
 } from "../services/ctf.service";
 import { execSSHCommand } from "../services/ssh.service";
 import { WORKSPACE_DIR } from "../utils/commandSafety";
+
+/** Seconds between startedAt and solvedAt (flag found), or null if unknown. */
+function computeTimeToSolveSec(startedAt: unknown, solvedAt: unknown): number | null {
+  if (!startedAt || !solvedAt) return null;
+  const t0 = new Date(startedAt as string | Date).getTime();
+  const t1 = new Date(solvedAt as string | Date).getTime();
+  if (Number.isNaN(t0) || Number.isNaN(t1) || t1 < t0) return null;
+  return Math.round((t1 - t0) / 1000);
+}
 
 export const connectCtf = async (req: Request, res: Response) => {
   try {
@@ -88,6 +98,7 @@ export const getCtfConfig = async (req: Request, res: Response) => {
       ctfName: session.ctfConfig.ctfName,
       authMethod: session.ctfConfig.authMethod,
       lastSynced: session.ctfConfig.lastSynced || null,
+      flagFormat: session.ctfConfig.flagFormat || null,
     });
   } catch (err: any) {
     console.error("[CTF] getConfig error:", err.message);
@@ -134,9 +145,22 @@ export const syncCtf = async (req: Request, res: Response) => {
       onProgress,
     );
 
+    const updateFields: Record<string, any> = {
+      "ctfConfig.lastSynced": new Date(),
+    };
+
+    const existingFlagFormat = session.ctfConfig.flagFormat;
+    if (!existingFlagFormat) {
+      const detected = detectFlagFormat(challenges);
+      if (detected) {
+        updateFields["ctfConfig.flagFormat"] = detected;
+        console.log(`[CTF] Auto-detected flag format: ${detected}`);
+      }
+    }
+
     await SessionsModel.updateOne(
       { sessionId, uid: userId },
-      { $set: { "ctfConfig.lastSynced": new Date() } },
+      { $set: updateFields },
     );
 
     sendSSE(res, {
@@ -218,6 +242,39 @@ export const disconnectCtf = async (req: Request, res: Response) => {
   }
 };
 
+export const setFlagFormat = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+    const { flagFormat } = req.body;
+
+    const session = await SessionsModel.findOne({ sessionId, uid: userId });
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    if (!session.ctfConfig) {
+      return res.status(400).json({ message: "No CTF connected" });
+    }
+
+    const value = typeof flagFormat === "string" ? flagFormat.trim() : "";
+
+    if (value) {
+      await SessionsModel.updateOne(
+        { sessionId, uid: userId },
+        { $set: { "ctfConfig.flagFormat": value } },
+      );
+    } else {
+      await SessionsModel.updateOne(
+        { sessionId, uid: userId },
+        { $unset: { "ctfConfig.flagFormat": 1 } },
+      );
+    }
+
+    return res.status(200).json({ message: "Flag format updated", flagFormat: value || null });
+  } catch (err: any) {
+    console.error("[CTF] setFlagFormat error:", err.message);
+    return res.status(400).json({ message: "Failed to update flag format" });
+  }
+};
+
 export const getCtfChallenges = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
@@ -271,13 +328,30 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
         status = solve.status;
         flag = solve.confirmedFlag || null;
         submittedToCtfd = solve.submittedToCtfd || false;
+
+        // Legacy correction: older flows could leave status="solved" even when CTFd said incorrect.
+        if (solve.ctfdResult === "incorrect" && !solvedOnCtfd) {
+          status = "incorrect";
+          submittedToCtfd = false;
+        }
       }
 
-      if (solvedOnCtfd && status !== "submitted") {
+      if (solvedOnCtfd && status !== "solved") {
         submittedToCtfd = true;
-        if (status === "pending") status = "submitted";
-        if (status === "solved") status = "submitted";
+        if (status === "pending" || status === "solving" || status === "flag_found" || status === "incorrect") {
+          status = "solved";
+        }
       }
+
+      // Backward compatibility for old persisted value.
+      if (status === "submitted") {
+        status = "solved";
+      }
+
+      const timeToSolveSec =
+        status === "solved"
+          ? computeTimeToSolveSec(solve?.startedAt, solve?.solvedAt)
+          : null;
 
       return {
         id: ch.id,
@@ -290,6 +364,8 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
         submittedToCtfd,
         attempts: solve?.attempts ?? 0,
         solvedAt: solve?.solvedAt ?? null,
+        startedAt: solve?.startedAt ?? null,
+        timeToSolveSec,
       };
     });
 
@@ -435,8 +511,19 @@ export const submitFlag = async (req: Request, res: Response) => {
         { sessionId, uid: userId, "ctfConfig.solveHistory.challengeName": challengeName },
         {
           $set: {
-            "ctfConfig.solveHistory.$.status": "submitted",
+            "ctfConfig.solveHistory.$.status": "solved",
             "ctfConfig.solveHistory.$.submittedToCtfd": true,
+            "ctfConfig.solveHistory.$.ctfdResult": result.status,
+          },
+        },
+      );
+    } else if (result.status === "incorrect") {
+      await SessionsModel.updateOne(
+        { sessionId, uid: userId, "ctfConfig.solveHistory.challengeName": challengeName },
+        {
+          $set: {
+            "ctfConfig.solveHistory.$.status": "incorrect",
+            "ctfConfig.solveHistory.$.submittedToCtfd": false,
             "ctfConfig.solveHistory.$.ctfdResult": result.status,
           },
         },

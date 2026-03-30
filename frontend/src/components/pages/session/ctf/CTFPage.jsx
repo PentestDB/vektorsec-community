@@ -1,17 +1,25 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import { Button, message, Tooltip } from "antd";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Button, message, Tooltip, Input, Select } from "antd";
 import {
   DisconnectOutlined,
   LinkOutlined,
   SyncOutlined,
   CheckCircleFilled,
+  CloseCircleFilled,
+  RobotOutlined,
   ClockCircleOutlined,
   SendOutlined,
   LoadingOutlined,
   TrophyFilled,
   KeyOutlined,
+  PlayCircleOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  EditOutlined,
+  CheckOutlined,
 } from "@ant-design/icons";
 import { FaFlag } from "react-icons/fa";
 import { useQuery, useMutation, useQueryClient } from "react-query";
@@ -23,8 +31,12 @@ import {
   reauthCtf,
   getCtfChallenges,
   submitFlagToCtfd,
+  setFlagFormat,
 } from "@/services/ctf.service";
 import styles from "@/styles/components/CTF.module.scss";
+import { formatDurationSec } from "@/utils/formatDuration";
+import { clearContext } from "@/services/agent.service";
+import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
 
 function sanitizeDirName(name) {
   return name
@@ -37,6 +49,7 @@ function sanitizeDirName(name) {
 
 const CTFPage = ({ sessionId }) => {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [url, setUrl] = useState("");
   const [authMethod, setAuthMethod] = useState("credentials");
@@ -82,6 +95,103 @@ const CTFPage = ({ sessionId }) => {
   const solvedCount = challenges.filter(
     (c) => c.status === "solved" || c.status === "submitted"
   ).length;
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("default");
+
+  const [editingFlagFormat, setEditingFlagFormat] = useState(false);
+  const [flagFormatDraft, setFlagFormatDraft] = useState("");
+  const [savingFlagFormat, setSavingFlagFormat] = useState(false);
+
+  const handleEditFlagFormat = () => {
+    setFlagFormatDraft(config?.flagFormat || "");
+    setEditingFlagFormat(true);
+  };
+
+  const handleSaveFlagFormat = async () => {
+    setSavingFlagFormat(true);
+    try {
+      await setFlagFormat(sessionId, flagFormatDraft.trim());
+      queryClient.invalidateQueries(["ctf-config", sessionId]);
+      setEditingFlagFormat(false);
+      message.success("Flag format updated");
+    } catch {
+      message.error("Failed to update flag format");
+    } finally {
+      setSavingFlagFormat(false);
+    }
+  };
+
+  const categoryOptions = useMemo(() => {
+    const categories = Array.from(
+      new Set(
+        challenges
+          .map((c) => String(c.category || "").trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    return categories;
+  }, [challenges]);
+
+  const filteredChallenges = useMemo(() => {
+    const search = searchText.trim().toLowerCase();
+
+    const rankByStatus = (status, submittedToCtfd) => {
+      if (submittedToCtfd || status === "solved" || status === "submitted") return 0;
+      if (status === "flag_found") return 1;
+      if (status === "incorrect") return 2;
+      if (status === "solving") return 3;
+      return 4;
+    };
+
+    let list = challenges.filter((c) => {
+      if (search) {
+        const name = String(c.name || "").toLowerCase();
+        const cat = String(c.category || "").toLowerCase();
+        if (!name.includes(search) && !cat.includes(search)) return false;
+      }
+
+      if (statusFilter !== "all") {
+        const normalized =
+          c.submittedToCtfd || c.status === "solved" || c.status === "submitted"
+            ? "solved"
+            : c.status;
+        if (normalized !== statusFilter) return false;
+      }
+
+      if (categoryFilter !== "all") {
+        if (String(c.category || "").toLowerCase() !== categoryFilter) return false;
+      }
+
+      return true;
+    });
+
+    if (sortBy === "name_asc") {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "name_desc") {
+      list = [...list].sort((a, b) => b.name.localeCompare(a.name));
+    } else if (sortBy === "points_desc") {
+      list = [...list].sort((a, b) => (b.value || 0) - (a.value || 0));
+    } else if (sortBy === "points_asc") {
+      list = [...list].sort((a, b) => (a.value || 0) - (b.value || 0));
+    } else if (sortBy === "status") {
+      list = [...list].sort((a, b) => {
+        const byStatus = rankByStatus(a.status, a.submittedToCtfd) - rankByStatus(b.status, b.submittedToCtfd);
+        if (byStatus !== 0) return byStatus;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    return list;
+  }, [challenges, searchText, statusFilter, categoryFilter, sortBy]);
+
+  const resetFilters = useCallback(() => {
+    setSearchText("");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setSortBy("default");
+  }, []);
 
   const [showReauth, setShowReauth] = useState(false);
   const [reauthMethod, setReauthMethod] = useState("token");
@@ -123,6 +233,46 @@ const CTFPage = ({ sessionId }) => {
   };
 
   const [submittingFlag, setSubmittingFlag] = useState(null);
+  const [solveNavigating, setSolveNavigating] = useState(null);
+
+  const openSolveChallengeModal = useCallback(
+    async (ch) => {
+      const confirmed = window.confirm(
+        [
+          "Clear chat and focus this challenge?",
+          "",
+          "This clears your conversation history for this session.",
+          "System prompt and shell sessions stay.",
+          "",
+          "You will switch to the chat tab and /solve will run for this challenge.",
+        ].join("\n")
+      );
+      if (!confirmed) return;
+
+      setSolveNavigating(ch.name);
+      try {
+        await clearContext({ sessionId });
+        window.dispatchEvent(
+          new CustomEvent("context-cleared", { detail: { sessionId } }),
+        );
+        sessionStorage.setItem(
+          PENDING_CTF_SOLVE_KEY,
+          JSON.stringify({ sessionId, challengeName: ch.name }),
+        );
+        message.success("Opening chat…");
+        router.push(`/session/${sessionId}`);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent(PENDING_SOLVE_READY_EVENT));
+        }, 100);
+      } catch {
+        message.error("Failed to clear context");
+        sessionStorage.removeItem(PENDING_CTF_SOLVE_KEY);
+      } finally {
+        setSolveNavigating(null);
+      }
+    },
+    [sessionId, router],
+  );
 
   const handleSubmitFlag = useCallback(async (ch) => {
     setSubmittingFlag(ch.name);
@@ -358,6 +508,39 @@ const CTFPage = ({ sessionId }) => {
               <TrophyFilled /> {solvedCount}/{challenges.length}
             </span>
           )}
+          <span className={styles.flagFormatBadge}>
+            {editingFlagFormat ? (
+              <span className={styles.flagFormatEdit}>
+                <input
+                  className={styles.flagFormatInput}
+                  value={flagFormatDraft}
+                  onChange={(e) => setFlagFormatDraft(e.target.value)}
+                  placeholder="e.g. CTF{...}"
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveFlagFormat()}
+                  autoFocus
+                />
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CheckOutlined />}
+                  loading={savingFlagFormat}
+                  onClick={handleSaveFlagFormat}
+                  className={styles.flagFormatSaveBtn}
+                />
+              </span>
+            ) : (
+              <Tooltip title="Flag format — tells the agent what flags look like. Click to edit.">
+                <span
+                  className={styles.flagFormatDisplay}
+                  onClick={handleEditFlagFormat}
+                >
+                  <FaFlag style={{ fontSize: "0.55rem" }} />{" "}
+                  {config?.flagFormat || "Set flag format"}
+                  <EditOutlined className={styles.flagFormatEditIcon} />
+                </span>
+              </Tooltip>
+            )}
+          </span>
         </div>
         <div className={styles.headerRight}>
           <Button
@@ -491,25 +674,100 @@ const CTFPage = ({ sessionId }) => {
             <LoadingOutlined /> Loading challenges...
           </div>
         ) : challenges.length > 0 ? (
-          <div className={styles.challengeTable}>
-            <div className={styles.tableHeader}>
-              <span className={styles.colName}>Challenge</span>
-              <span className={styles.colCategory}>Category</span>
-              <span className={styles.colPoints}>Pts</span>
-              <span className={styles.colStatus}>Status</span>
-              <span className={styles.colFlag}>Flag</span>
-              <span className={styles.colAction}></span>
-            </div>
-            {challenges.map((ch) => (
-              <ChallengeRow
-                key={ch.safeDir}
-                challenge={ch}
-                isActive={activeSolve?.name === ch.name}
-                submitting={submittingFlag === ch.name}
-                onSubmit={() => handleSubmitFlag(ch)}
+          <>
+            <div className={styles.challengeToolbar}>
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder="Search challenge name or category"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className={styles.searchInput}
               />
-            ))}
-          </div>
+              <Select
+                value={statusFilter}
+                onChange={setStatusFilter}
+                className={styles.filterSelect}
+                popupClassName={styles.filterDropdown}
+                options={[
+                  { value: "all", label: "All status" },
+                  { value: "solving", label: "Solving" },
+                  { value: "flag_found", label: "Copilot found" },
+                  { value: "incorrect", label: "Incorrect" },
+                  { value: "solved", label: "Solved" },
+                  { value: "pending", label: "Pending" },
+                ]}
+              />
+              <Select
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                className={styles.filterSelect}
+                popupClassName={styles.filterDropdown}
+                options={[
+                  { value: "all", label: "All categories" },
+                  ...categoryOptions.map((cat) => ({
+                    value: cat.toLowerCase(),
+                    label: cat,
+                  })),
+                ]}
+              />
+              <Select
+                value={sortBy}
+                onChange={setSortBy}
+                className={styles.filterSelect}
+                popupClassName={styles.filterDropdown}
+                options={[
+                  { value: "default", label: "Default order" },
+                  { value: "status", label: "Status priority" },
+                  { value: "points_desc", label: "Points high → low" },
+                  { value: "points_asc", label: "Points low → high" },
+                  { value: "name_asc", label: "Name A → Z" },
+                  { value: "name_desc", label: "Name Z → A" },
+                ]}
+              />
+              <Button
+                icon={<FilterOutlined />}
+                onClick={resetFilters}
+                size="small"
+                className={styles.resetFiltersBtn}
+              >
+                Reset
+              </Button>
+            </div>
+
+            <div className={styles.filterSummary}>
+              Showing {filteredChallenges.length} / {challenges.length} challenges
+            </div>
+
+            <div className={styles.challengeTable}>
+              <div className={styles.challengeTableInner}>
+                <div className={styles.tableHeader}>
+                  <span className={styles.colName}>Challenge</span>
+                  <span className={styles.colCategory}>Category</span>
+                  <span className={styles.colPoints}>Pts</span>
+                  <span className={styles.colStatus}>Status / time</span>
+                  <span className={styles.colFlag}>Flag</span>
+                  <span className={styles.colAction}>Actions</span>
+                </div>
+                {filteredChallenges.map((ch) => (
+                  <ChallengeRow
+                    key={ch.safeDir}
+                    challenge={ch}
+                    isActive={activeSolve?.name === ch.name}
+                    submitting={submittingFlag === ch.name}
+                    solveLoading={solveNavigating === ch.name}
+                    onSolve={() => openSolveChallengeModal(ch)}
+                    onSubmit={() => handleSubmitFlag(ch)}
+                  />
+                ))}
+              </div>
+            </div>
+            {filteredChallenges.length === 0 && (
+              <div className={styles.helpText}>
+                No challenges match your current search/filters.
+              </div>
+            )}
+          </>
         ) : (
           <div className={styles.helpText}>
             No challenges synced yet. Click <strong>Refresh</strong> to sync
@@ -522,10 +780,24 @@ const CTFPage = ({ sessionId }) => {
 };
 
 const StatusBadge = ({ status, submittedToCtfd }) => {
-  if (submittedToCtfd || status === "submitted") {
+  if (submittedToCtfd || status === "solved" || status === "submitted") {
     return (
-      <span className={`${styles.statusBadge} ${styles.statusSubmitted}`}>
-        <CheckCircleFilled /> Submitted
+      <span className={`${styles.statusBadge} ${styles.statusSolved}`}>
+        <CheckCircleFilled /> Solved
+      </span>
+    );
+  }
+  if (status === "flag_found") {
+    return (
+      <span className={`${styles.statusBadge} ${styles.statusFound}`}>
+        <RobotOutlined /> Copilot found
+      </span>
+    );
+  }
+  if (status === "incorrect") {
+    return (
+      <span className={`${styles.statusBadge} ${styles.statusIncorrect}`}>
+        <CloseCircleFilled /> Incorrect
       </span>
     );
   }
@@ -550,7 +822,11 @@ const StatusBadge = ({ status, submittedToCtfd }) => {
   );
 };
 
-const ChallengeRow = ({ challenge: ch, isActive, submitting, onSubmit }) => {
+const ChallengeRow = ({ challenge: ch, isActive, submitting, solveLoading, onSolve, onSubmit }) => {
+  const showSolveBtn = !(
+    ch.status === "submitted" && ch.submittedToCtfd
+  );
+
   return (
     <div
       className={`${styles.tableRow} ${isActive ? styles.tableRowActive : ""}`}
@@ -563,7 +839,17 @@ const ChallengeRow = ({ challenge: ch, isActive, submitting, onSubmit }) => {
       </span>
       <span className={styles.colPoints}>{ch.value}</span>
       <span className={styles.colStatus}>
-        <StatusBadge status={ch.status} submittedToCtfd={ch.submittedToCtfd} />
+        <span className={styles.statusCell}>
+          <StatusBadge status={ch.status} submittedToCtfd={ch.submittedToCtfd} />
+          {ch.timeToSolveSec != null &&
+            (ch.status === "solved" || ch.status === "submitted") && (
+              <Tooltip title="Time from /solve (or first tracked solve) until flag confirmed">
+                <span className={styles.solveTime}>
+                  {formatDurationSec(ch.timeToSolveSec)}
+                </span>
+              </Tooltip>
+            )}
+        </span>
       </span>
       <span className={styles.colFlag}>
         {ch.flag ? (
@@ -575,18 +861,41 @@ const ChallengeRow = ({ challenge: ch, isActive, submitting, onSubmit }) => {
         )}
       </span>
       <span className={styles.colAction}>
-        {ch.flag && (ch.status === "solved" || ch.status === "submitted" || ch.submittedToCtfd) && (
-          <Button
-            size="small"
-            type={ch.submittedToCtfd ? "default" : "primary"}
-            icon={submitting ? <LoadingOutlined /> : <SendOutlined />}
-            loading={submitting}
-            onClick={onSubmit}
-            className={ch.submittedToCtfd ? styles.resubmitBtn : styles.submitBtn}
-          >
-            {ch.submittedToCtfd ? "Re-submit" : "Submit"}
-          </Button>
-        )}
+        <span className={styles.actionStack}>
+          {showSolveBtn && (
+            <Tooltip title="Clear chat history and run /solve for this challenge (opens chat)">
+              <Button
+                size="small"
+                type="default"
+                icon={solveLoading ? <LoadingOutlined /> : <PlayCircleOutlined />}
+                loading={solveLoading}
+                onClick={onSolve}
+                className={styles.solveFocusBtn}
+              >
+                Solve
+              </Button>
+            </Tooltip>
+          )}
+          {ch.flag &&
+            (ch.status === "flag_found" ||
+              ch.status === "incorrect" ||
+              ch.status === "solved" ||
+              ch.status === "submitted" ||
+              ch.submittedToCtfd) && (
+              <Button
+                size="small"
+                type={ch.submittedToCtfd ? "default" : "primary"}
+                icon={submitting ? <LoadingOutlined /> : <SendOutlined />}
+                loading={submitting}
+                onClick={onSubmit}
+                className={
+                  ch.submittedToCtfd ? styles.resubmitBtn : styles.submitBtn
+                }
+              >
+                {ch.submittedToCtfd ? "Re-submit" : "Submit"}
+              </Button>
+            )}
+        </span>
       </span>
     </div>
   );

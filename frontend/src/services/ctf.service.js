@@ -80,6 +80,11 @@ export const reauthCtf = async (sessionId, body) => {
   return res.data;
 };
 
+export const setFlagFormat = async (sessionId, flagFormat) => {
+  const res = await apiClient.patch(`/ctf/${sessionId}/flag-format`, { flagFormat });
+  return res.data;
+};
+
 export const disconnectCtf = async (sessionId) => {
   const res = await apiClient.post(`/ctf/${sessionId}/disconnect`);
   return res.data;

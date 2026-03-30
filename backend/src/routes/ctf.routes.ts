@@ -8,6 +8,7 @@ import {
   reauthCtf,
   getCtfChallenges,
   submitFlag,
+  setFlagFormat,
 } from "../controllers/ctf.controller";
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.get("/:sessionId/config", [verifySess], getCtfConfig);
 router.get("/:sessionId/challenges", [verifySess], getCtfChallenges);
 router.post("/:sessionId/sync", [verifySess], syncCtf);
 router.post("/:sessionId/submit-flag", [verifySess], submitFlag);
+router.patch("/:sessionId/flag-format", [verifySess], setFlagFormat);
 router.post("/:sessionId/disconnect", [verifySess], disconnectCtf);
 
 export { router as ctfRoutes };

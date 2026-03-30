@@ -24,6 +24,7 @@ export interface AgentPromptConfig {
   ctfConfig?: {
     ctfName: string;
     workspacePath: string;
+    flagFormat?: string;
     activeSolve?: {
       name: string;
       challengeTxt: string;
@@ -188,6 +189,9 @@ function buildCtfBlock(config: AgentPromptConfig): string {
   lines.push(`<ctf_mode>`);
   lines.push(`You are solving challenges in CTF "${ctf.ctfName}". Challenge files are synced to ${ctf.workspacePath}.`);
   lines.push(`Each subdirectory contains a challenge.txt (name, category, points, description) and any attached files.`);
+  if (ctf.flagFormat) {
+    lines.push(`**Flag format for this CTF:** \`${ctf.flagFormat}\` — flags will match this prefix/pattern. When you find a candidate string matching this format, immediately submit it via \`confirm_flag\`.`);
+  }
   lines.push(``);
   lines.push(`**Operational rules:**`);
   lines.push(`- Use tools immediately. Do not describe what you would do — execute it.`);
@@ -459,7 +463,8 @@ Record these findings immediately when discovered:
 ${config.ctfConfig ? `
 **CTF — critical:** The moment you obtain or receive a real flag, you MUST call update_engagement_state with action "confirm_flag" and data: { "value": "<the flag>" }. If the current challenge name is not in context, include "challengeName": "<exact challenge title from challenge.txt>" so it appears on the user's CTF dashboard.
 Do not only paste the flag in chat — the tool call is required for persistence and auto-submit.
-Do not state that a submission tool is unavailable: in this system, "confirm_flag" is the submission trigger.` : ""}
+Do not state that a submission tool is unavailable: in this system, "confirm_flag" is the submission trigger.
+Time-to-flag is recorded from when the user runs \`/solve <challenge>\` (or an equivalent solveHistory start) until \`confirm_flag\` — encourage starting with \`/solve\` so timing is accurate.` : ""}
 
 The structured state is injected into your context automatically — do not duplicate it in prose. Focus your messages on reasoning, analysis, and next-step planning.
 </state_management>`;

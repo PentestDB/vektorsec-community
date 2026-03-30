@@ -848,6 +848,63 @@
   }
 }
 
+.slashMenuItemChallenge {
+  align-items: stretch;
+}
+
+.slashChallengeInner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.slashChallengeTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+
+  .slashMenuCmd {
+    min-width: 0;
+    flex: 1;
+    word-break: break-word;
+  }
+}
+
+.challengeStatusPill {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.challengeStatus_pending {
+  color: var(--secondary-text, #888);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.challengeStatus_solving {
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.12);
+}
+
+.challengeStatus_solved {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.12);
+}
+
+.challengeStatus_submitted {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.12);
+}
+
 .slashMenuCmd {
   font-family: "JetBrains Mono", monospace;
   font-size: 0.82rem;

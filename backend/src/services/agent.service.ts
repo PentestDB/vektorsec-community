@@ -215,6 +215,7 @@ async function buildSystemMessage(
     promptConfig.ctfConfig = {
       ctfName: session.ctfConfig.ctfName,
       workspacePath: `${wsBase}/${safeName}`,
+      flagFormat: session.ctfConfig.flagFormat,
     };
 
     if (session.ctfConfig.activeSolve) {

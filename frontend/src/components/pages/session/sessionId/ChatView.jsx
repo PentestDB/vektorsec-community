@@ -14,6 +14,7 @@ import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
+import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
 
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
@@ -67,6 +68,45 @@ export default function ChatView({ sessionId }) {
       setTimeout(() => scrollToBottom(), 50);
     }
   }, [historyLoaded, scrollToBottom]);
+
+  const flushPendingCtfSolve = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem(PENDING_CTF_SOLVE_KEY);
+    if (!raw) return;
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      sessionStorage.removeItem(PENDING_CTF_SOLVE_KEY);
+      return;
+    }
+    if (payload.sessionId !== sessionId || !payload.challengeName) return;
+    sessionStorage.removeItem(PENDING_CTF_SOLVE_KEY);
+
+    const msg = `/solve "${payload.challengeName}"`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uuidv4(),
+        role: "user",
+        content: msg,
+        isSlashCommand: true,
+        timestamp: new Date(),
+      },
+    ]);
+    startStream({ message: msg, endpoint: "slash-command" });
+  }, [sessionId, startStream, setMessages]);
+
+  useEffect(() => {
+    if (!historyLoaded) return;
+    flushPendingCtfSolve();
+  }, [historyLoaded, flushPendingCtfSolve]);
+
+  useEffect(() => {
+    const onReady = () => flushPendingCtfSolve();
+    window.addEventListener(PENDING_SOLVE_READY_EVENT, onReady);
+    return () => window.removeEventListener(PENDING_SOLVE_READY_EVENT, onReady);
+  }, [flushPendingCtfSolve]);
 
   useEffect(() => {
     if (shouldStickToBottomRef.current) {
