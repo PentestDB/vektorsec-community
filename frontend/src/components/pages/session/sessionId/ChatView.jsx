@@ -10,6 +10,7 @@ import ChatInput from "./ChatInput";
 import SlashCommandResult from "./SlashCommandResult";
 import ManualExecutionBlock from "./ManualExecutionBlock";
 import ConsentBanner from "./ConsentBanner";
+import InstallSuggestionBanner from "./InstallSuggestionBanner";
 import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
@@ -21,8 +22,20 @@ export default function ChatView({ sessionId }) {
   const messagesContainerRef = useRef(null);
   const shouldStickToBottomRef = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [installSuggestions, setInstallSuggestions] = useState([]);
 
   const FAR_UP_THRESHOLD = 250;
+
+  const handleInstallSuggestion = useCallback((suggestion) => {
+    setInstallSuggestions((prev) => {
+      if (prev.some((s) => s.name === suggestion.name)) return prev;
+      return [...prev, suggestion];
+    });
+  }, []);
+
+  const dismissInstallSuggestion = useCallback((name) => {
+    setInstallSuggestions((prev) => prev.filter((s) => s.name !== name));
+  }, []);
 
   const {
     messages,
@@ -40,6 +53,7 @@ export default function ChatView({ sessionId }) {
   } = useAgentStream({
     sessionId,
     onComplete: () => {},
+    onInstallSuggestion: handleInstallSuggestion,
   });
 
   const scrollToBottom = useCallback((behavior = "auto") => {
@@ -284,6 +298,15 @@ export default function ChatView({ sessionId }) {
             onSubmit={handleManualOutput}
           />
         )}
+
+        {installSuggestions.map((suggestion) => (
+          <InstallSuggestionBanner
+            key={suggestion.name}
+            suggestion={suggestion}
+            sessionId={sessionId}
+            onDismiss={() => dismissInstallSuggestion(suggestion.name)}
+          />
+        ))}
 
         <div ref={messagesEndRef} />
       </div>

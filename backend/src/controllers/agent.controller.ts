@@ -12,11 +12,14 @@ import {
   setPaused,
   registerAbortController,
   abortSession,
+  hasActiveController,
 } from "../services/agent.service";
 import { parseSlashCommand, executeSlashCommand, matchCommands, SLASH_COMMANDS } from "../services/slash-commands";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { getProvider } from "../utils/llm/providers";
+import { sessionLifecycle } from "../services/session.lifecycle";
+import { getCapabilityByName } from "../capabilities/registry";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -64,7 +67,11 @@ export const sendMessage = async (req: Request, res: Response) => {
     if (!session) return;
 
     if (session.agentState === "running") {
-      return res.status(409).json({ message: "Agent is already running" });
+      if (hasActiveController(sessionId)) {
+        return res.status(409).json({ message: "Agent is already running" });
+      }
+      console.warn(`[agent] Session ${sessionId} was stuck in "running" state with no active process. Resetting.`);
+      await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
     }
 
     const sse = createSSEWriter(res);
@@ -125,7 +132,11 @@ export const resumeAgent = async (req: Request, res: Response) => {
     if (!session) return;
 
     if (session.agentState === "running") {
-      return res.status(409).json({ message: "Agent is already running" });
+      if (hasActiveController(sessionId)) {
+        return res.status(409).json({ message: "Agent is already running" });
+      }
+      console.warn(`[agent] Session ${sessionId} was stuck in "running" state with no active process. Resetting.`);
+      await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
     }
 
     const sse = createSSEWriter(res);
@@ -465,5 +476,43 @@ export const getUserSessions = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[agent] getUserSessions error:", err);
     return res.status(400).json({ message: "Failed to get sessions" });
+  }
+};
+
+export const installCapability = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId, capabilityName } = req.body;
+
+    if (!sessionId || !capabilityName) {
+      return res.status(400).json({ message: "sessionId and capabilityName are required" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const cap = getCapabilityByName(capabilityName);
+    if (!cap) {
+      return res.status(400).json({ message: `Unknown capability: "${capabilityName}"` });
+    }
+
+    const shellManager = await sessionLifecycle.getShellManager(sessionId);
+    if (!shellManager.isConnected) {
+      try { await shellManager.connect(); } catch {
+        return res.status(500).json({ message: "Cannot connect to attack box" });
+      }
+    }
+
+    const { output, exitCode } = await shellManager.execInShell(cap.installCommand, 120_000);
+
+    return res.status(200).json({
+      success: exitCode === 0,
+      output,
+      exitCode,
+      capability: { name: cap.name, label: cap.label },
+    });
+  } catch (err: any) {
+    console.error("[agent] installCapability error:", err);
+    return res.status(500).json({ message: err.message ?? "Install failed" });
   }
 };

@@ -69,41 +69,49 @@ const updateEngagementState: ToolDefinition = {
 
     switch (action) {
       // ─── Pentest actions ────────────────────────────────────────
-      case "add_host":
+      case "add_host": {
+        const ip = str(data.ip) || "unknown";
         state.hosts.push({
-          ip: data.ip ?? "unknown",
+          ip,
           hostname: data.hostname,
           os: data.os,
           status: data.status ?? "up",
         });
-        return { output: `Host ${data.ip} added.`, exitCode: 0 };
+        return { output: `Host ${ip} added.`, exitCode: 0 };
+      }
 
-      case "add_service":
+      case "add_service": {
+        const host = str(data.host) || "unknown";
+        const port = data.port ?? 0;
+        const service = str(data.service) || "unknown";
         state.services.push({
-          host: data.host ?? "unknown",
-          port: data.port ?? 0,
+          host,
+          port,
           protocol: data.protocol ?? "tcp",
-          service: data.service ?? "unknown",
+          service,
           version: data.version,
           notes: data.notes,
         });
         return {
-          output: `Service ${data.host}:${data.port} (${data.service}) added.`,
+          output: `Service ${host}:${port} (${service}) added.`,
           exitCode: 0,
         };
+      }
 
-      case "add_credential":
+      case "add_credential": {
+        const username = str(data.username) || "(unknown)";
         state.credentials.push({
-          username: data.username ?? "",
+          username,
           secret: data.secret ?? "",
           secretType: data.secretType ?? "password",
           source: data.source ?? "unknown",
           validOn: data.validOn ?? [],
         });
         return {
-          output: `Credential ${data.username} added.`,
+          output: `Credential ${username} added.`,
           exitCode: 0,
         };
+      }
 
       case "add_vulnerability":
         if (!str(data.title)) {
@@ -123,19 +131,22 @@ const updateEngagementState: ToolDefinition = {
           exitCode: 0,
         };
 
-      case "add_shell":
+      case "add_shell": {
+        const shellHost = str(data.host) || "unknown";
+        const shellUser = str(data.user) || "unknown";
         state.shells.push({
           shellId: data.shellId ?? "unknown",
-          host: data.host ?? "unknown",
-          user: data.user ?? "unknown",
+          host: shellHost,
+          user: shellUser,
           privilegeLevel: data.privilegeLevel ?? "user",
           type: data.type ?? "ssh",
           obtainedVia: data.obtainedVia,
         });
         return {
-          output: `Shell on ${data.host} as ${data.user} recorded.`,
+          output: `Shell on ${shellHost} as ${shellUser} recorded.`,
           exitCode: 0,
         };
+      }
 
       case "set_phase":
         state.phase = data.phase ?? state.phase;
@@ -379,23 +390,27 @@ const updateEngagementState: ToolDefinition = {
         };
       }
 
-      case "add_distfile_analysis":
+      case "add_distfile_analysis": {
+        const filename = str(data.filename) || "unknown";
         state.distfiles.push({
-          filename: data.filename ?? "unknown",
+          filename,
           fileType: data.fileType ?? "unknown",
           findings: data.findings ?? "",
         });
         return {
-          output: `Distfile analysis for ${data.filename} recorded.`,
+          output: `Distfile analysis for ${filename} recorded.`,
           exitCode: 0,
         };
+      }
 
-      case "add_key_discovery":
-        state.keyDiscoveries.push(data.discovery ?? data.value ?? "");
+      case "add_key_discovery": {
+        const discovery = str(data.discovery) || str(data.value) || "(empty)";
+        state.keyDiscoveries.push(discovery);
         return {
-          output: `Key discovery recorded: ${data.discovery ?? data.value}`,
+          output: `Key discovery recorded: ${discovery}`,
           exitCode: 0,
         };
+      }
 
       case "set_challenge_status":
         state.challengeStatus = data.status ?? state.challengeStatus;
@@ -405,15 +420,17 @@ const updateEngagementState: ToolDefinition = {
         };
 
       // ─── Shared actions ─────────────────────────────────────────
-      case "add_file":
+      case "add_file": {
+        const filePath = str(data.path) || "unknown";
         state.files.push({
-          path: data.path ?? "unknown",
+          path: filePath,
           description: data.description ?? "",
         });
         return {
-          output: `File ${data.path} recorded.`,
+          output: `File ${filePath} recorded.`,
           exitCode: 0,
         };
+      }
 
       case "log_approach":
         if (!str(data.technique)) {

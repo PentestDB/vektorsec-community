@@ -1,12 +1,33 @@
 import { ToolDefinition } from "../types";
 import { WORKSPACE_DIR } from "../../utils/commandSafety";
+import { findCapabilityForCommand } from "../../capabilities/registry";
+
+const MODULE_NOT_FOUND_PATTERNS = [
+  /No module named ['"]*(\S+?)['"]*\s*$/im,
+  /ModuleNotFoundError: No module named ['"]*(\S+?)['"]*$/im,
+  /ImportError: No module named ['"]*(\S+?)['"]*$/im,
+];
+
+function detectMissingModule(output: string) {
+  for (const pattern of MODULE_NOT_FOUND_PATTERNS) {
+    const match = output.match(pattern);
+    if (match) {
+      const cap = findCapabilityForCommand(match[1]);
+      if (cap) {
+        return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
+      }
+    }
+  }
+  return null;
+}
 
 const runPythonScript: ToolDefinition = {
   name: "run_python_script",
   description:
     "Execute a Python 3 script on the attack box. Use this for custom exploits, " +
     "data parsing, protocol interactions, brute-force logic, or any task requiring Python libraries " +
-    "like requests, socket, struct, pwntools, etc.",
+    "like requests, socket, struct, pwntools, etc. " +
+    "Scripts always run in-memory via stdin. If file_name is provided, the script is also saved to disk for reference.",
   parameters: {
     type: "object",
     properties: {
@@ -16,7 +37,7 @@ const runPythonScript: ToolDefinition = {
       },
       file_name: {
         type: "string",
-        description: "Optional filename to persist the script (e.g. exploit.py). If omitted, script runs in-memory via stdin.",
+        description: "Optional: save the script to this filename for reference (e.g. 'exploit.py'). Must be a plain filename, not a path. The script still runs in-memory regardless.",
       },
     },
     required: ["script"],
@@ -28,22 +49,27 @@ const runPythonScript: ToolDefinition = {
       return { output: "Error: script is required", exitCode: 1 };
     }
 
-    if (file_name) {
-      const writeCmd = `cat > ${WORKSPACE_DIR}/${file_name} << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`;
-      await ctx.runCommand(writeCmd, 10_000);
+    const files: string[] = [];
 
-      const { output, exitCode } = await ctx.runCommand(
-        `cd ${WORKSPACE_DIR} && python3 ${file_name}`,
-        this.timeoutMs,
-      );
-      return { output, exitCode, files: [file_name] };
+    // Persist to disk as a side effect if requested (best-effort, don't block execution)
+    if (file_name) {
+      const safeName = file_name.replace(/^.*[\\/]/, "");
+      if (safeName) {
+        ctx.runCommand(
+          `cat > ${WORKSPACE_DIR}/${safeName} << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
+          10_000,
+        ).catch(() => {});
+        files.push(safeName);
+      }
     }
 
+    // Always run in-memory via stdin — faster and avoids path issues
     const { output, exitCode } = await ctx.runCommand(
       `cd ${WORKSPACE_DIR} && python3 << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
       this.timeoutMs,
     );
-    return { output, exitCode };
+    const suggestion = exitCode !== 0 ? detectMissingModule(output) : null;
+    return { output, exitCode, ...(files.length ? { files } : {}), ...(suggestion ? { installSuggestion: suggestion } : {}) };
   },
 };
 

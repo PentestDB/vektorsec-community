@@ -2,10 +2,18 @@ import OpenAI from "openai";
 import { ShellInfo, ShellPurpose } from "../services/shell.manager";
 import { EngagementState } from "../services/engagement-state";
 
+export interface InstallSuggestion {
+  name: string;
+  label: string;
+  installCommand: string;
+  size: string;
+}
+
 export interface ToolResult {
   output: string;
   exitCode?: number;
   files?: string[];
+  installSuggestion?: InstallSuggestion;
 }
 
 export interface ExecutionContext {

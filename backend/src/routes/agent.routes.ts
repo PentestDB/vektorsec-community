@@ -16,6 +16,7 @@ import {
   getSlashCommands,
   getSessionAgentToolsConfig,
   updateSessionAgentToolsConfig,
+  installCapability,
 } from "../controllers/agent.controller";
 
 const router = express.Router();
@@ -36,5 +37,6 @@ router.post("/manual-output", [verifySess], submitManualOutput);
 router.post("/clear-context", [verifySess], clearContext);
 router.post("/slash-command", [verifySess], handleSlashCommand);
 router.get("/slash-commands", [verifySess], getSlashCommands);
+router.post("/install-capability", [verifySess], installCapability);
 
 export { router as agentRoutes };

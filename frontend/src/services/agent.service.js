@@ -55,6 +55,11 @@ export const submitManualOutput = async ({ sessionId, output }) => {
   return res.data;
 };
 
+export const installCapability = async ({ sessionId, capabilityName }) => {
+  const res = await apiClient.post("/agent/install-capability", { sessionId, capabilityName });
+  return res.data;
+};
+
 export const getSlashCommands = async () => {
   const res = await apiClient.get("/agent/slash-commands");
   return res.data;

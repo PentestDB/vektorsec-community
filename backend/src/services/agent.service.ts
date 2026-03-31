@@ -48,6 +48,11 @@ export function abortSession(sessionId: string): void {
   }
 }
 
+export function hasActiveController(sessionId: string): boolean {
+  const ctrl = abortControllers.get(sessionId);
+  return !!ctrl && !ctrl.signal.aborted;
+}
+
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
 export interface SSEWriter {
@@ -573,6 +578,9 @@ export async function runAgentLoop(params: {
         },
         onConsentRequired(id, name, args, safetyBlock) {
           sse.write("consent_required", { id, name, args, safetyBlock: safetyBlock ?? false });
+        },
+        onInstallSuggestion(suggestion) {
+          sse.write("install_suggestion", suggestion);
         },
       };
 

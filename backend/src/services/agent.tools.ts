@@ -15,6 +15,7 @@ export interface ToolExecutionCallbacks {
   onToolDone: (toolCallId: string, result: ToolResult) => void;
   onToolError: (toolCallId: string, error: string) => void;
   onConsentRequired: (toolCallId: string, toolName: string, args: Record<string, any>, safetyBlock?: boolean) => void;
+  onInstallSuggestion?: (suggestion: { name: string; label: string; installCommand: string; size: string }) => void;
 }
 
 export interface ToolExecutionResult {
@@ -141,6 +142,10 @@ export async function executeToolCall(
 
     const result = await toolDef.execute(args, toolCtx);
     result.output = truncateOutput(result.output);
+
+    if (result.installSuggestion && callbacks.onInstallSuggestion) {
+      callbacks.onInstallSuggestion(result.installSuggestion);
+    }
 
     callbacks.onToolDone(toolCall.id, result);
     return {

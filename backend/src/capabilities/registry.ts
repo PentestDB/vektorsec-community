@@ -1442,6 +1442,21 @@ export function getCapabilityByName(name: string): Capability | undefined {
   return allCapabilities.find((c) => c.name === name);
 }
 
+/**
+ * Find a capability matching a binary name or Python module that failed.
+ * Tries exact name match first, then checks if checkCommand references the name.
+ */
+export function findCapabilityForCommand(missing: string): Capability | undefined {
+  const lower = missing.toLowerCase().replace(/^['"]|['"]$/g, "");
+  const exact = allCapabilities.find((c) => c.name.toLowerCase() === lower);
+  if (exact) return exact;
+
+  return allCapabilities.find((c) => {
+    const check = c.checkCommand.toLowerCase();
+    return check.includes(`which ${lower}`) || check.includes(`import ${lower}`);
+  });
+}
+
 export function getBucketById(id: string): CapabilityBucket | undefined {
   return capabilityBuckets.find((b) => b.id === id);
 }

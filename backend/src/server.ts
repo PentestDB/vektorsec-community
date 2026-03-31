@@ -228,6 +228,21 @@ const initializeApp = async () => {
       } catch (err) {
         console.log(err);
       }
+
+      // Reset any sessions stuck in "running" state from a previous crash/restart
+      try {
+        const { default: SessionsModel } = await import("./models/Sessions/Sessions.model");
+        const result = await SessionsModel.updateMany(
+          { agentState: "running" },
+          { $set: { agentState: "idle" } },
+        );
+        if (result.modifiedCount > 0) {
+          console.log(`[startup] Reset ${result.modifiedCount} session(s) from "running" to "idle"`);
+        }
+      } catch (err) {
+        console.warn("[startup] Failed to reset stale agent sessions:", err);
+      }
+
       console.log(`Express is listening at http://localhost:${port}`);
     });
 

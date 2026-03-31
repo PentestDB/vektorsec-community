@@ -5,7 +5,7 @@ import { useAgentStreamStore } from "@/store/agentStream.store";
 import { useShallow } from "zustand/react/shallow";
 import { notification } from "antd";
 
-export default function useAgentStream({ sessionId, onComplete }) {
+export default function useAgentStream({ sessionId, onComplete, onInstallSuggestion }) {
   const store = useAgentStreamStore;
 
   useEffect(() => {
@@ -366,6 +366,9 @@ export default function useAgentStream({ sessionId, onComplete }) {
           });
           setAgentState("waiting_consent");
         })
+        .onEvent("install_suggestion", (data) => {
+          onInstallSuggestion?.(data);
+        })
         .onEvent("manual_execution_required", (data) => {
           flushAssistant();
           setPendingManualExecution({
@@ -576,7 +579,7 @@ export default function useAgentStream({ sessionId, onComplete }) {
           refs().controllerRef.current = null;
         });
     },
-    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion],
   );
 
   const abort = useCallback(() => {

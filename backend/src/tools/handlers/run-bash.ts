@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { isDangerousCommand, WORKSPACE_DIR } from "../../utils/commandSafety";
+import { findCapabilityForCommand } from "../../capabilities/registry";
 
 const runBash: ToolDefinition = {
   name: "run_bash",
@@ -42,8 +43,48 @@ const runBash: ToolDefinition = {
       files.push(redirectMatch[1] || redirectMatch[2]);
     }
 
-    return { output, exitCode, files };
+    const result: { output: string; exitCode: number; files?: string[]; installSuggestion?: { name: string; label: string; installCommand: string; size: string } } = { output, exitCode, files };
+
+    if (exitCode !== 0) {
+      const suggestion = detectMissingCapability(output, command);
+      if (suggestion) {
+        result.installSuggestion = suggestion;
+      }
+    }
+
+    return result;
   },
 };
+
+const NOT_FOUND_PATTERNS = [
+  /(\S+): (?:command )?not found/i,
+  /bash: (\S+): No such file or directory/i,
+  /No module named ['"]*(\S+?)['"]*\s*$/im,
+  /ModuleNotFoundError: No module named ['"]*(\S+?)['"]*$/im,
+  /ImportError: No module named ['"]*(\S+?)['"]*$/im,
+];
+
+function detectMissingCapability(output: string, command: string): { name: string; label: string; installCommand: string; size: string } | null {
+  for (const pattern of NOT_FOUND_PATTERNS) {
+    const match = output.match(pattern);
+    if (match) {
+      const missingName = match[1];
+      const cap = findCapabilityForCommand(missingName);
+      if (cap) {
+        return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
+      }
+    }
+  }
+
+  const firstWord = command.trim().split(/\s+/)[0];
+  if (firstWord && output.includes("not found")) {
+    const cap = findCapabilityForCommand(firstWord);
+    if (cap) {
+      return { name: cap.name, label: cap.label, installCommand: cap.installCommand, size: cap.size };
+    }
+  }
+
+  return null;
+}
 
 export default runBash;

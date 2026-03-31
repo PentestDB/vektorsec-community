@@ -109,8 +109,18 @@ export async function summarizeMessages(
     };
   }
 
-  const toSummarize = nonSystemMessages.slice(0, -PRESERVE_RECENT_MESSAGES);
-  const toPreserve = nonSystemMessages.slice(-PRESERVE_RECENT_MESSAGES);
+  let splitIndex = nonSystemMessages.length - PRESERVE_RECENT_MESSAGES;
+
+  // Walk the split boundary backwards so we never orphan tool-result messages
+  // from their preceding assistant+tool_calls message. If the first preserved
+  // message is a tool result, pull the boundary back until the matching
+  // assistant message (and any sibling tool results) are also preserved.
+  while (splitIndex > 0 && nonSystemMessages[splitIndex]?.role === "tool") {
+    splitIndex--;
+  }
+
+  const toSummarize = nonSystemMessages.slice(0, splitIndex);
+  const toPreserve = nonSystemMessages.slice(splitIndex);
 
   const conversationText = toSummarize
     .map((m) => {
@@ -168,7 +178,18 @@ export function messagesToOpenAI(
     messages.filter((m) => m.role === "tool" && m.toolCallId).map((m) => m.toolCallId!),
   );
 
-  return messages.map((m) => {
+  // Collect all tool_call IDs present on assistant messages so we can
+  // detect orphaned tool-result messages whose assistant was summarized away.
+  const assistantToolCallIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role === "assistant" && m.toolCalls?.length) {
+      for (const tc of m.toolCalls) {
+        assistantToolCallIds.add(tc.id);
+      }
+    }
+  }
+
+  return messages.flatMap((m) => {
     if (m.role === "assistant" && m.toolCalls?.length) {
       const validToolCalls = m.toolCalls.filter((tc) => toolResponseIds.has(tc.id));
 
@@ -191,10 +212,16 @@ export function messagesToOpenAI(
     }
 
     if (m.role === "tool") {
+      // Drop orphaned tool results whose assistant+tool_calls was removed
+      // (e.g. by summarization). Sending these causes 400 errors on the
+      // OpenAI Responses API ("No tool call found for function call output").
+      if (!m.toolCallId || !assistantToolCallIds.has(m.toolCallId)) {
+        return [];
+      }
       return {
         role: "tool" as const,
         content: m.content ?? "",
-        tool_call_id: m.toolCallId ?? "",
+        tool_call_id: m.toolCallId,
       };
     }
 

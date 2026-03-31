@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import axios from "axios";
 import { observeOpenAI } from "@langfuse/openai";
+import type { LangfuseGeneration } from "@langfuse/tracing";
+import { startObservation } from "@langfuse/tracing";
 import getSecrets from "../getSecrets";
 import { readEnvFile, updateEnvVars } from "../envWriter";
 import { isTracingEnabled } from "../tracing";
@@ -292,6 +294,51 @@ function buildCompletionConfig(
   }
 
   return params;
+}
+
+/**
+ * Same shape as Chat Completions (`messages` + optional `tools`) so Langfuse shows a normal
+ * system → user → assistant transcript instead of Responses API `input` + `instructions` in metadata.
+ */
+function buildLangfuseChatCompletionInput(opts: InvokeOptions): Record<string, unknown> {
+  const input: Record<string, unknown> = { messages: opts.messages };
+  if (opts.tools?.length) {
+    input.tools = opts.tools;
+    input.tool_choice = "auto";
+  }
+  return input;
+}
+
+function buildLangfuseResponsesOutput(params: {
+  content: string | null;
+  reasoning: string | null;
+  toolCalls: ToolCallData[];
+}): unknown {
+  const { content, reasoning, toolCalls } = params;
+  const base: Record<string, unknown> = {
+    role: "assistant",
+    content: content ?? "",
+  };
+  if (reasoning) {
+    base.reasoning_summary = reasoning;
+  }
+  if (toolCalls.length > 0) {
+    base.tool_calls = toolCalls.map((tc) => ({
+      id: tc.id,
+      type: "function",
+      function: { name: tc.name, arguments: tc.arguments },
+    }));
+  }
+  return base;
+}
+
+function usageToLangfuseDetails(usage: OpenAI.Completions.CompletionUsage | undefined): Record<string, number> | undefined {
+  if (!usage) return undefined;
+  return {
+    input: usage.prompt_tokens ?? 0,
+    output: usage.completion_tokens ?? 0,
+    total: usage.total_tokens ?? 0,
+  };
 }
 
 function getClient(config: ProviderConfig, opts: InvokeOptions): OpenAI {
@@ -620,7 +667,9 @@ async function runOpenAIResponsesStream(
   reasoningMode: Exclude<ReasoningMode, "off">,
   start: number,
 ): Promise<InvokeResult> {
-  const client = getClient(config, opts);
+  // Raw client: observeOpenAI maps Responses API params poorly (no `messages` in trace input).
+  // We record a manual generation with Chat Completions–shaped input instead.
+  const rawClient = buildClient(config);
   const { instructions, input } = openaiToResponsesInput(opts.messages);
   const responsesTools = openaiToResponsesTools(opts.tools);
 
@@ -635,7 +684,34 @@ async function runOpenAIResponsesStream(
 
   console.log(`[inference] → openai-responses model=${config.model} reasoning effort=${reasoningMode}`);
 
-  const stream = await client.responses.create(params) as unknown as AsyncIterable<any>;
+  let generation: LangfuseGeneration | undefined;
+  if (isTracingEnabled()) {
+    generation = startObservation(
+      opts.generationName ?? "OpenAI.responses.create",
+      {
+        model: config.model,
+        input: buildLangfuseChatCompletionInput(opts),
+        metadata: {
+          api: "openai.responses",
+          reasoning_effort: reasoningMode,
+        },
+      },
+      { asType: "generation" },
+    ).updateTrace({
+      userId: opts.userId,
+      sessionId: opts.sessionId,
+      tags: opts.tags,
+    });
+  }
+
+  let completionStartTime: Date | undefined;
+  const endGeneration = (attrs: Parameters<LangfuseGeneration["update"]>[0]) => {
+    if (generation) {
+      generation.update(attrs);
+      generation.end();
+      generation = undefined;
+    }
+  };
 
   let contentParts: string[] = [];
   let reasoningParts: string[] = [];
@@ -645,129 +721,157 @@ async function runOpenAIResponsesStream(
   let usage: OpenAI.Completions.CompletionUsage | undefined;
   let model = config.model;
 
-  for await (const event of stream) {
-    if (opts.abortSignal?.aborted) {
-      finishReason = "stop";
-      break;
+  try {
+    const stream = await rawClient.responses.create(params) as unknown as AsyncIterable<any>;
+
+    for await (const event of stream) {
+      if (completionStartTime === undefined) {
+        completionStartTime = new Date();
+      }
+      if (opts.abortSignal?.aborted) {
+        finishReason = "stop";
+        break;
+      }
+
+      switch (event.type) {
+        case "response.output_text.delta": {
+          const text = event.delta as string;
+          if (text) {
+            contentParts.push(text);
+            opts.onDelta({ type: "text", content: text });
+          }
+          break;
+        }
+
+        case "response.reasoning_summary_text.delta": {
+          const text = event.delta as string;
+          if (text) {
+            reasoningParts.push(text);
+            opts.onDelta({ type: "reasoning", content: text });
+          }
+          break;
+        }
+
+        case "response.output_item.added": {
+          const item = event.item;
+          if (item?.type === "function_call") {
+            const idx = toolCallIndex++;
+            toolCallAccumulators.set(item.call_id ?? item.id ?? `tc_${idx}`, {
+              callId: item.call_id ?? item.id ?? `tc_${idx}`,
+              name: item.name ?? "",
+              argParts: [],
+              index: idx,
+            });
+            opts.onDelta({
+              type: "tool_call_start",
+              toolCall: { index: idx, id: item.call_id ?? item.id, name: item.name },
+            });
+          }
+          break;
+        }
+
+        case "response.function_call_arguments.delta": {
+          const delta = event.delta as string;
+          const itemId = event.item_id as string;
+          const acc = toolCallAccumulators.get(itemId)
+            ?? [...toolCallAccumulators.values()].at(-1);
+          if (acc && delta) {
+            acc.argParts.push(delta);
+            opts.onDelta({
+              type: "tool_call_delta",
+              toolCall: { index: acc.index },
+              content: delta,
+            });
+          }
+          break;
+        }
+
+        case "response.function_call_arguments.done": {
+          const itemId = event.item_id as string;
+          const acc = toolCallAccumulators.get(itemId)
+            ?? [...toolCallAccumulators.values()].at(-1);
+          if (acc) {
+            acc.argParts = [event.arguments ?? acc.argParts.join("")];
+          }
+          break;
+        }
+
+        case "response.completed": {
+          const resp = event.response;
+          if (resp?.model) model = resp.model;
+          if (resp?.status === "incomplete") {
+            finishReason = "length";
+          }
+          if (resp?.usage) {
+            usage = {
+              prompt_tokens: resp.usage.input_tokens ?? 0,
+              completion_tokens: resp.usage.output_tokens ?? 0,
+              total_tokens: (resp.usage.input_tokens ?? 0) + (resp.usage.output_tokens ?? 0),
+            };
+          }
+          break;
+        }
+
+        case "response.failed": {
+          const resp = event.response;
+          const errMsg = resp?.error?.message ?? "Unknown Responses API error";
+          console.error(`[inference] Responses API failed: ${errMsg}`);
+          throw new Error(errMsg);
+        }
+      }
     }
 
-    switch (event.type) {
-      case "response.output_text.delta": {
-        const text = event.delta as string;
-        if (text) {
-          contentParts.push(text);
-          opts.onDelta({ type: "text", content: text });
-        }
-        break;
-      }
-
-      case "response.reasoning_summary_text.delta": {
-        const text = event.delta as string;
-        if (text) {
-          reasoningParts.push(text);
-          opts.onDelta({ type: "reasoning", content: text });
-        }
-        break;
-      }
-
-      case "response.output_item.added": {
-        const item = event.item;
-        if (item?.type === "function_call") {
-          const idx = toolCallIndex++;
-          toolCallAccumulators.set(item.call_id ?? item.id ?? `tc_${idx}`, {
-            callId: item.call_id ?? item.id ?? `tc_${idx}`,
-            name: item.name ?? "",
-            argParts: [],
-            index: idx,
-          });
-          opts.onDelta({
-            type: "tool_call_start",
-            toolCall: { index: idx, id: item.call_id ?? item.id, name: item.name },
-          });
-        }
-        break;
-      }
-
-      case "response.function_call_arguments.delta": {
-        const delta = event.delta as string;
-        const itemId = event.item_id as string;
-        const acc = toolCallAccumulators.get(itemId)
-          ?? [...toolCallAccumulators.values()].at(-1);
-        if (acc && delta) {
-          acc.argParts.push(delta);
-          opts.onDelta({
-            type: "tool_call_delta",
-            toolCall: { index: acc.index },
-            content: delta,
-          });
-        }
-        break;
-      }
-
-      case "response.function_call_arguments.done": {
-        const itemId = event.item_id as string;
-        const acc = toolCallAccumulators.get(itemId)
-          ?? [...toolCallAccumulators.values()].at(-1);
-        if (acc) {
-          acc.argParts = [event.arguments ?? acc.argParts.join("")];
-        }
-        break;
-      }
-
-      case "response.completed": {
-        const resp = event.response;
-        if (resp?.model) model = resp.model;
-        if (resp?.status === "incomplete") {
-          finishReason = "length";
-        }
-        if (resp?.usage) {
-          usage = {
-            prompt_tokens: resp.usage.input_tokens ?? 0,
-            completion_tokens: resp.usage.output_tokens ?? 0,
-            total_tokens: (resp.usage.input_tokens ?? 0) + (resp.usage.output_tokens ?? 0),
-          };
-        }
-        break;
-      }
-
-      case "response.failed": {
-        const resp = event.response;
-        const errMsg = resp?.error?.message ?? "Unknown Responses API error";
-        console.error(`[inference] Responses API failed: ${errMsg}`);
-        throw new Error(errMsg);
-      }
+    const toolCalls: ToolCallData[] = [];
+    for (const [, acc] of toolCallAccumulators) {
+      const tc: ToolCallData = {
+        id: acc.callId,
+        name: acc.name,
+        arguments: acc.argParts.join(""),
+      };
+      toolCalls.push(tc);
+      opts.onDelta({ type: "tool_call_done", toolCall: { index: acc.index, ...tc } });
     }
-  }
 
-  const toolCalls: ToolCallData[] = [];
-  for (const [, acc] of toolCallAccumulators) {
-    const tc: ToolCallData = {
-      id: acc.callId,
-      name: acc.name,
-      arguments: acc.argParts.join(""),
+    if (toolCalls.length > 0 && finishReason === "stop") {
+      finishReason = "tool_calls";
+    }
+
+    const elapsed = Date.now() - start;
+    const result: InvokeResult = {
+      content: contentParts.join("") || null,
+      reasoning: reasoningParts.join("") || null,
+      toolCalls,
+      finishReason,
+      usage,
+      model,
+      provider: config.provider,
+      elapsedMs: elapsed,
     };
-    toolCalls.push(tc);
-    opts.onDelta({ type: "tool_call_done", toolCall: { index: acc.index, ...tc } });
+
+    logResponse(config, elapsed, result);
+
+    endGeneration({
+      output: buildLangfuseResponsesOutput({
+        content: result.content,
+        reasoning: result.reasoning,
+        toolCalls: result.toolCalls,
+      }),
+      usageDetails: usageToLangfuseDetails(result.usage),
+      model: result.model,
+      completionStartTime,
+    });
+
+    return result;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    endGeneration({
+      level: "ERROR",
+      statusMessage: msg,
+      usageDetails: usageToLangfuseDetails(usage),
+      model,
+    });
+    throw err;
   }
-
-  if (toolCalls.length > 0 && finishReason === "stop") {
-    finishReason = "tool_calls";
-  }
-
-  const elapsed = Date.now() - start;
-  const result: InvokeResult = {
-    content: contentParts.join("") || null,
-    reasoning: reasoningParts.join("") || null,
-    toolCalls,
-    finishReason,
-    usage,
-    model,
-    provider: config.provider,
-    elapsedMs: elapsed,
-  };
-
-  logResponse(config, elapsed, result);
-  return result;
 }
 
 // ─── invoke_llm_streaming — streaming with tool calls ────────────────
