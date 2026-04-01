@@ -200,7 +200,7 @@ async function buildSystemMessage(
   envInfo?: BoxEnvInfo,
 ): Promise<AgentMessageDoc> {
   const user = await UserModel.findById(userId);
-  const session = await SessionsModel.findOne({ sessionId }).select("ctfConfig").lean();
+  const session = await SessionsModel.findOne({ sessionId }).select("ctfConfig workspaceId").lean();
   const now = new Date();
   const promptConfig: AgentPromptConfig = {
     sessionId,
@@ -212,27 +212,36 @@ async function buildSystemMessage(
     envInfo,
   };
 
-  if (session?.ctfConfig?.ctfName) {
-    const safeName = session.ctfConfig.ctfName
+  let ctfConfig = session?.ctfConfig;
+  if (!ctfConfig?.ctfName && session?.workspaceId) {
+    const WorkspaceModel = (await import("../models/Workspace/Workspace.model")).default;
+    const workspace = await WorkspaceModel.findOne({ workspaceId: session.workspaceId }).select("ctfConfig").lean();
+    if (workspace?.ctfConfig?.ctfName) {
+      ctfConfig = workspace.ctfConfig as any;
+    }
+  }
+
+  if (ctfConfig?.ctfName) {
+    const safeName = ctfConfig.ctfName
       .replace(/[\/\\:*?"<>|]/g, "_")
       .replace(/\s+/g, "_");
     const wsBase = envInfo?.workspacePath ?? "~/pentest-workspace";
     promptConfig.ctfConfig = {
-      ctfName: session.ctfConfig.ctfName,
+      ctfName: ctfConfig.ctfName,
       workspacePath: `${wsBase}/${safeName}`,
-      flagFormat: session.ctfConfig.flagFormat,
+      flagFormat: ctfConfig.flagFormat,
     };
 
-    if (session.ctfConfig.activeSolve) {
+    if (ctfConfig.activeSolve) {
       promptConfig.ctfConfig.activeSolve = {
-        name: session.ctfConfig.activeSolve.name,
-        challengeTxt: session.ctfConfig.activeSolve.challengeTxt,
-        files: session.ctfConfig.activeSolve.files,
-        challengeDir: `${wsBase}/${safeName}/${session.ctfConfig.activeSolve.safeDir}`,
-        category: session.ctfConfig.activeSolve.category,
-        connectionInfo: session.ctfConfig.activeSolve.connectionInfo,
-        points: session.ctfConfig.activeSolve.points,
-        userNotes: session.ctfConfig.activeSolve.userNotes,
+        name: ctfConfig.activeSolve.name,
+        challengeTxt: ctfConfig.activeSolve.challengeTxt,
+        files: ctfConfig.activeSolve.files,
+        challengeDir: `${wsBase}/${safeName}/${ctfConfig.activeSolve.safeDir}`,
+        category: ctfConfig.activeSolve.category,
+        connectionInfo: ctfConfig.activeSolve.connectionInfo,
+        points: ctfConfig.activeSolve.points,
+        userNotes: ctfConfig.activeSolve.userNotes,
       };
     }
   }

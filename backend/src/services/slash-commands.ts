@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel, { AgentMessageDoc } from "../models/Sessions/Sessions.model";
+import WorkspaceModel from "../models/Workspace/Workspace.model";
 import { SSEWriter } from "./agent.service";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "./session.lifecycle";
@@ -586,7 +587,15 @@ Use markdown formatting. Be thorough but concise.`,
       return;
     }
 
-    if (!session.ctfConfig?.ctfName) {
+    let ctfConfig = session.ctfConfig;
+    if (!ctfConfig?.ctfName && session.workspaceId) {
+      const workspace = await WorkspaceModel.findOne({ workspaceId: session.workspaceId }).lean();
+      if (workspace?.ctfConfig?.ctfName) {
+        ctfConfig = workspace.ctfConfig as any;
+      }
+    }
+
+    if (!ctfConfig?.ctfName) {
       sse.write("slash_command_result", {
         command: "solve",
         success: false,
@@ -597,7 +606,7 @@ Use markdown formatting. Be thorough but concise.`,
       return;
     }
 
-    const ctfName = session.ctfConfig.ctfName;
+    const ctfName = ctfConfig.ctfName;
     const safeCTFName = sanitizeDirName(ctfName);
 
     if (args.toLowerCase() === "clear" || args.toLowerCase() === "none") {
@@ -776,6 +785,17 @@ Use markdown formatting. Be thorough but concise.`,
     }
 
     await SessionsModel.updateOne({ sessionId }, solveUpdate);
+
+    if (session.workspaceId) {
+      await WorkspaceModel.updateOne(
+        { workspaceId: session.workspaceId },
+        {
+          $set: {
+            "ctfConfig.activeSolve": solveUpdate.$set["ctfConfig.activeSolve"],
+          },
+        },
+      ).catch(() => {});
+    }
 
     const lines: string[] = [
       `### Solving: ${challenge.name}`,

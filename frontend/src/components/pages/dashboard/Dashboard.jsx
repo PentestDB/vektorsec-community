@@ -1,9 +1,8 @@
 import styles from "@/styles/pages/Dashboard.module.scss";
-import { Input, message, Table, Tooltip, Button, Space } from "antd";
+import { Input, message, Tooltip, Tag } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import {
   SearchOutlined,
-  DeleteOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import { AuthContextProvider } from "@/components/common/auth/AuthContext";
@@ -12,18 +11,23 @@ import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useState, useMemo } from "react";
-import CreateSessionModal from "./CreateSessionModal";
-import { deleteSession, getUserSessions } from "@/services/agent.service";
+import CreateWorkspaceModal from "./CreateWorkspaceModal";
+import { getUserWorkspaces, deleteWorkspace } from "@/services/workspace.service";
 import moment from "moment";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FiPlay, FiTrash } from "react-icons/fi";
+import { FiTrash, FiFolder, FiFlag, FiShield } from "react-icons/fi";
 import Image from "next/image";
 import emptyBox from "@/assets/empty-box.svg";
 import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import { useDispatch } from "react-redux";
 import { useEffect } from "react";
 import { resetSessions } from "@/store/user.slice";
-import { PiCodesandboxLogo } from "react-icons/pi";
+
+const TYPE_CONFIG = {
+  ctf: { label: "CTF", color: "#f59e0b", icon: <FiFlag size={14} /> },
+  pentest: { label: "Pentest", color: "#8b5cf6", icon: <FiShield size={14} /> },
+  general: { label: "General", color: "#6b7280", icon: <FiFolder size={14} /> },
+};
 
 const DashboardPage = () => {
   const router = useRouter();
@@ -36,34 +40,34 @@ const DashboardPage = () => {
 
   const [show, setShow] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
   const dispatch = useDispatch();
 
-  const { data: sessionsData, isLoading } = useQuery(
-    ["get-user-sessions"],
-    getUserSessions,
+  const { data: workspacesData, isLoading } = useQuery(
+    ["get-user-workspaces"],
+    getUserWorkspaces,
     {
       enabled: !!user,
+      refetchInterval: 10000,
     }
   );
 
-  const filteredSessions = useMemo(() => {
-    if (!sessionsData) return [];
+  const filteredWorkspaces = useMemo(() => {
+    if (!workspacesData) return [];
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return sessionsData;
-    return sessionsData.filter(
-      (s) =>
-        (s.name || "").toLowerCase().includes(term) ||
-        (s.description || "").toLowerCase().includes(term) ||
-        (s.sessionId || "").toLowerCase().includes(term)
+    if (!term) return workspacesData;
+    return workspacesData.filter(
+      (w) =>
+        (w.name || "").toLowerCase().includes(term) ||
+        (w.description || "").toLowerCase().includes(term) ||
+        (w.workspaceId || "").toLowerCase().includes(term)
     );
-  }, [sessionsData, searchTerm]);
+  }, [workspacesData, searchTerm]);
 
-  const deleteSessionMutation = useMutation(deleteSession, {
+  const deleteWorkspaceMutation = useMutation(deleteWorkspace, {
     onSuccess: (data) => {
       message.success(data?.message ?? "Workspace deleted successfully!");
-      queryClient.invalidateQueries(["get-user-sessions"]);
+      queryClient.invalidateQueries(["get-user-workspaces"]);
     },
     onError: (error) => {
       message.error(
@@ -72,125 +76,15 @@ const DashboardPage = () => {
     },
   });
 
-  const columns = [
-    {
-      title: "Workspace ID",
-      dataIndex: "sessionId",
-      key: "sessionId",
-      ellipsis: false,
-      render: (text) => (
-        <code className={styles.cellId}>{text || "—"}</code>
-      ),
-    },
-    {
-      title: "Name",
-      dataIndex: "name",
-      key: "name",
-      ellipsis: true,
-      render: (text) => (
-        <span className={styles.cellName}>{text || "—"}</span>
-      ),
-    },
-    {
-      title: "Description",
-      dataIndex: "description",
-      key: "description",
-      ellipsis: true,
-      render: (text) => (
-        <span className={styles.cellDescription}>{text || "—"}</span>
-      ),
-    },
-    {
-      title: "Created",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 110,
-      render: (text) => (
-        <span className={styles.cellDate}>
-          {text ? moment(text).format("MMM D, YYYY") : "—"}
-        </span>
-      ),
-    },
-    {
-      title: "",
-      key: "actions",
-      width: 100,
-      align: "right",
-      render: (_, record) => (
-        <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
-          <Tooltip
-            title={
-              record.boxStatus && record.boxStatus !== "stopped"
-                ? "Exploit Box is running"
-                : "Open workspace"
-            }
-          >
-            <div
-              className={`${styles.btnWrapGreen} ${
-                record.boxStatus && record.boxStatus !== "stopped"
-                  ? styles.activeExploitBox
-                  : ""
-              }`}
-              onClick={() => router.push(`/session/${record.sessionId}`)}
-            >
-              {record.boxStatus && record.boxStatus !== "stopped" ? (
-                <PiCodesandboxLogo className={styles.iconBtn} />
-              ) : (
-                <FiPlay className={styles.iconBtn} />
-              )}
-            </div>
-          </Tooltip>
-
-          <Tooltip title="Delete">
-            <div
-              className={styles.btnWrapRed}
-              onClick={(e) => onDeleteOne(record.sessionId, e)}
-            >
-              <FiTrash className={styles.iconBtn} />
-            </div>
-          </Tooltip>
-        </div>
-      ),
-    },
-  ];
-
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (keys) => setSelectedRowKeys(keys),
-    columnWidth: 48,
-    getCheckboxProps: (record) => ({
-      onClick: (e) => e.stopPropagation(),
-    }),
-  };
-
-  const onDeleteOne = (sessionId, e) => {
+  const onDeleteWorkspace = (workspaceId, e) => {
     e?.stopPropagation?.();
     confirmPopUp({
       title: "Delete workspace?",
-      content: "This workspace will be archived. You can no longer access it.",
+      content: "This workspace and all its sessions will be archived.",
       okText: "Delete",
       cancelText: "Cancel",
       onOk: async () => {
-        await deleteSessionMutation.mutateAsync({ sessionId });
-      },
-    });
-  };
-
-  const onBulkDelete = () => {
-    if (selectedRowKeys.length === 0) return;
-    confirmPopUp({
-      title: `Delete ${selectedRowKeys.length} workspace${selectedRowKeys.length > 1 ? "s" : ""}?`,
-      content:
-        "Selected workspaces will be archived. You will no longer be able to access them.",
-      okText: "Delete",
-      cancelText: "Cancel",
-      onOk: async () => {
-        await Promise.all(
-          selectedRowKeys.map((sessionId) =>
-            deleteSessionMutation.mutateAsync({ sessionId })
-          )
-        );
-        setSelectedRowKeys([]);
+        await deleteWorkspaceMutation.mutateAsync({ workspaceId });
       },
     });
   };
@@ -206,12 +100,6 @@ const DashboardPage = () => {
     }
   }, [launchWorkspace]);
 
-  useEffect(() => {
-    setSelectedRowKeys((prev) =>
-      prev.filter((key) => filteredSessions.some((s) => s.sessionId === key))
-    );
-  }, [filteredSessions]);
-
   if (!user || isLoading) {
     return <Loader />;
   }
@@ -224,97 +112,124 @@ const DashboardPage = () => {
           <div className={styles.headerActions}>
             <Input
               prefix={<SearchOutlined className={styles.searchIcon} />}
-              placeholder="Search by name, description, or ID..."
+              placeholder="Search workspaces..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               allowClear
               className={styles.searchBox}
             />
             <PrimaryButton purple onClick={() => setShow(true)}>
-              <PlusOutlined /> Create Workspace
+              <PlusOutlined /> New Workspace
             </PrimaryButton>
           </div>
         </div>
 
-        <div className={styles.sessionsList}>
-          <div className={styles.tableToolbar}>
-            {selectedRowKeys.length > 0 && (
-              <Space className={styles.bulkActions}>
-                <span className={styles.selectedCount}>
-                  {selectedRowKeys.length} selected
-                </span>
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={onBulkDelete}
-                  className={styles.bulkDeleteBtn}
-                >
-                  Delete selected
-                </Button>
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={() => setSelectedRowKeys([])}
-                  className={styles.clearSelectionBtn}
-                >
-                  Clear selection
-                </Button>
-              </Space>
-            )}
-          </div>
-
-          <div className={styles.sessionsListTable}>
-            {filteredSessions.length === 0 ? (
-              <div className={styles.placeholder}>
-                <Image
-                  src={emptyBox}
-                  alt=""
-                  width={110}
-                  height={110}
-                  className={styles.placeImage}
-                />
-                <h3>
-                  {sessionsData?.length
-                    ? "No workspaces match your search"
-                    : "Create your first workspace"}
-                </h3>
-                <p>
-                  {sessionsData?.length
-                    ? "Try a different search term."
-                    : "Start a new penetration testing session and let the AI assist you."}
-                </p>
-                <PrimaryButton
-                  white
-                  onClick={() => (sessionsData?.length ? setSearchTerm("") : setShow(true))}
-                >
-                  {sessionsData?.length ? "Clear search" : "Create Workspace"}
-                </PrimaryButton>
-              </div>
-            ) : (
-              <Table
-                rowKey="sessionId"
-                size="small"
-                columns={columns}
-                dataSource={filteredSessions}
-                rowSelection={rowSelection}
-                pagination={{
-                  pageSize: 10,
-                  showSizeChanger: true,
-                  showTotal: (total) => `${total} workspace${total !== 1 ? "s" : ""}`,
-                  pageSizeOptions: ["10", "20", "50"],
-                  size: "small",
-                }}
-                onRow={({ sessionId }) => ({
-                  onClick: () => router.push(`/session/${sessionId}`),
-                })}
+        <div className={styles.workspaceGrid}>
+          {filteredWorkspaces.length === 0 ? (
+            <div className={styles.placeholder}>
+              <Image
+                src={emptyBox}
+                alt=""
+                width={110}
+                height={110}
+                className={styles.placeImage}
               />
-            )}
-          </div>
+              <h3>
+                {workspacesData?.length
+                  ? "No workspaces match your search"
+                  : "Create your first workspace"}
+              </h3>
+              <p>
+                {workspacesData?.length
+                  ? "Try a different search term."
+                  : "Organize your pentests and CTF challenges into workspaces."}
+              </p>
+              <PrimaryButton
+                white
+                onClick={() =>
+                  workspacesData?.length ? setSearchTerm("") : setShow(true)
+                }
+              >
+                {workspacesData?.length ? "Clear search" : "Create Workspace"}
+              </PrimaryButton>
+            </div>
+          ) : (
+            <div className={styles.cardGrid}>
+              {filteredWorkspaces.map((workspace) => {
+                const typeConf = TYPE_CONFIG[workspace.type] || TYPE_CONFIG.general;
+                const sessions = workspace.sessions || {};
+                const hasActivity = sessions.running > 0 || sessions.waiting > 0;
+
+                return (
+                  <div
+                    key={workspace.workspaceId}
+                    className={`${styles.workspaceCard} ${hasActivity ? styles.activeCard : ""}`}
+                    onClick={() => router.push(`/workspace/${workspace.workspaceId}`)}
+                  >
+                    <div className={styles.cardHeader}>
+                      <div className={styles.cardTitleRow}>
+                        <span className={styles.cardIcon}>{typeConf.icon}</span>
+                        <h3 className={styles.cardTitle}>{workspace.name}</h3>
+                      </div>
+                      <div className={styles.cardActions} onClick={(e) => e.stopPropagation()}>
+                        <Tooltip title="Delete workspace">
+                          <div
+                            className={styles.deleteBtn}
+                            onClick={(e) => onDeleteWorkspace(workspace.workspaceId, e)}
+                          >
+                            <FiTrash size={13} />
+                          </div>
+                        </Tooltip>
+                      </div>
+                    </div>
+
+                    {workspace.description && (
+                      <p className={styles.cardDescription}>{workspace.description}</p>
+                    )}
+
+                    <div className={styles.cardMeta}>
+                      <Tag
+                        color={typeConf.color}
+                        className={styles.typeTag}
+                      >
+                        {typeConf.label}
+                      </Tag>
+                      <span className={styles.cardDate}>
+                        {moment(workspace.createdAt).format("MMM D, YYYY")}
+                      </span>
+                    </div>
+
+                    <div className={styles.sessionStats}>
+                      <div className={styles.statItem}>
+                        <span className={styles.statCount}>{sessions.total || 0}</span>
+                        <span className={styles.statLabel}>
+                          {sessions.total === 1 ? "session" : "sessions"}
+                        </span>
+                      </div>
+                      {sessions.running > 0 && (
+                        <div className={`${styles.statItem} ${styles.statRunning}`}>
+                          <span className={styles.liveDot} />
+                          <span className={styles.statCount}>{sessions.running}</span>
+                          <span className={styles.statLabel}>running</span>
+                        </div>
+                      )}
+                      {sessions.waiting > 0 && (
+                        <div className={`${styles.statItem} ${styles.statWaiting}`}>
+                          <span className={styles.waitDot} />
+                          <span className={styles.statCount}>{sessions.waiting}</span>
+                          <span className={styles.statLabel}>waiting</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      <CreateSessionModal
+      <CreateWorkspaceModal
         show={show}
         setShow={setShow}
         close={() => setShow(false)}

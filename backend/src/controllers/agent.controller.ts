@@ -20,14 +20,30 @@ import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "../services/session.lifecycle";
 import { getCapabilityByName } from "../capabilities/registry";
+import WorkspaceModel from "../models/Workspace/Workspace.model";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { name, description } = req.body;
+    const { name, description, workspaceId: providedWorkspaceId } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Session name is required" });
+    }
+
+    let workspaceId = providedWorkspaceId;
+
+    if (!workspaceId) {
+      workspaceId = uuidv4();
+      const workspace = new WorkspaceModel({
+        uid: userId,
+        workspaceId,
+        name: name.length > 50 ? name.substring(0, 50) + "..." : name,
+        description: description?.substring(0, 500) ?? "",
+        type: "general",
+        createdAt: new Date(),
+      });
+      await workspace.save();
     }
 
     const sessionId = uuidv4();
@@ -41,13 +57,14 @@ export const createSession = async (req: Request, res: Response) => {
     const session = new SessionsModel({
       uid: userId,
       sessionId,
+      workspaceId,
       name: name.length > 50 ? name.substring(0, 50) + "..." : name,
       description: description?.substring(0, 500) ?? "",
       createdAt: new Date(),
     });
     await session.save();
 
-    return res.status(200).json({ sessionId, message: "Session created" });
+    return res.status(200).json({ sessionId, workspaceId, message: "Session created" });
   } catch (err: any) {
     console.error("[agent] createSession error:", err);
     return res.status(400).json({ message: "Failed to create session" });
@@ -301,14 +318,39 @@ export const getSessionInfo = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    const ctfConfig = session.ctfConfig;
+    const isCTF = !!ctfConfig?.ctfName;
+    let ctf: Record<string, any> | undefined;
+
+    if (isCTF) {
+      const activeSolve = ctfConfig!.activeSolve as any;
+      const solveHistory = (ctfConfig as any)?.solveHistory ?? [];
+      const solve = solveHistory.find(
+        (r: any) => r.challengeName === session.name,
+      );
+
+      ctf = {
+        ctfName: ctfConfig!.ctfName,
+        category: activeSolve?.category || solve?.category || null,
+        points: activeSolve?.points ?? solve?.points ?? null,
+        status: solve?.status || "pending",
+        flag: solve?.confirmedFlag || null,
+        submittedToCtfd: solve?.submittedToCtfd || false,
+        flagFormat: ctfConfig!.flagFormat || null,
+      };
+    }
+
     return res.status(200).json({
       sessionId: session.sessionId,
+      workspaceId: session.workspaceId,
       name: session.name,
       description: session.description,
       agentState: session.agentState,
       createdAt: session.createdAt,
       totalTokens: session.totalTokens,
       messageCount: session.messages.length,
+      isCTF,
+      ...(ctf ? { ctf } : {}),
     });
   } catch (err: any) {
     console.error("[agent] getSessionInfo error:", err);
@@ -469,7 +511,7 @@ export const getUserSessions = async (req: Request, res: Response) => {
       uid: user._id,
       status: { $ne: "archived" },
     })
-      .select("sessionId name description createdAt agentState totalTokens")
+      .select("sessionId workspaceId name description createdAt agentState totalTokens")
       .sort({ createdAt: -1 });
 
     return res.status(200).json(sessions);

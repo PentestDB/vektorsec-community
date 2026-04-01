@@ -1,5 +1,4 @@
-import { App } from "antd";
-import { AiOutlineDoubleLeft } from "react-icons/ai";
+import { App, Tooltip } from "antd";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
 import vpn from "@/assets/sidebar/vpn.svg";
@@ -19,10 +18,11 @@ import { FiMonitor } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { TbRadar, TbWorldWww } from "react-icons/tb";
 import { FaFlag } from "react-icons/fa";
+import { HiOutlineChevronLeft } from "react-icons/hi";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
 
-const Sidebar = ({ sessionId }) => {
+const Sidebar = ({ sessionId, workspaceId }) => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
@@ -120,6 +120,10 @@ const Sidebar = ({ sessionId }) => {
     router.push(`/session/${sessionId}/ctf`);
   };
 
+  const exitTarget = workspaceId
+    ? `/workspace/${workspaceId}`
+    : "/dashboard";
+
   const isOnWorkspace = pathname === `/session/${sessionId}`;
   const isOnVPN = pathname?.includes("/vpn");
   const isOnGUI = pathname?.includes("/gui");
@@ -130,15 +134,21 @@ const Sidebar = ({ sessionId }) => {
   return (
     <div className={styles.sidebar}>
       <div className={styles.createNew}>
-        <div
-          className={styles.exitSession}
-          onClick={() => {
-            dispatch(setRecon(false));
-            router.push("/dashboard");
-          }}
-        >
-          <AiOutlineDoubleLeft />
-          Exit Workspace
+        <div className={styles.navRow}>
+          <Tooltip title="All workspaces" placement="right">
+            <button
+              className={styles.navBtn}
+              onClick={() => { dispatch(setRecon(false)); router.push("/dashboard"); }}
+            >
+              <HiOutlineChevronLeft size={12} />
+            </button>
+          </Tooltip>
+          <button
+            className={styles.navLabel}
+            onClick={() => { dispatch(setRecon(false)); router.push(exitTarget); }}
+          >
+            {workspaceId ? "Workspace" : "Dashboard"}
+          </button>
         </div>
 
         <div
@@ -219,7 +229,7 @@ const Sidebar = ({ sessionId }) => {
             className={isOnWorkspace ? styles.activeTab : styles.tab}
           >
             <Image src={quad} width={14} height={14} alt="" />
-            Workspace
+            Session
           </div>
 
           <div

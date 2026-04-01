@@ -1,21 +1,21 @@
 import { apiClient, apiBaseURL } from "@/utils/axios.config";
 
-export const connectCtf = async (sessionId, body) => {
-  const res = await apiClient.post(`/ctf/${sessionId}/connect`, body);
+export const connectCtf = async (workspaceId, body) => {
+  const res = await apiClient.post(`/ctf/${workspaceId}/connect`, body);
   return res.data;
 };
 
-export const getCtfConfig = async (sessionId) => {
-  const res = await apiClient.get(`/ctf/${sessionId}/config`);
+export const getCtfConfig = async (workspaceId) => {
+  const res = await apiClient.get(`/ctf/${workspaceId}/config`);
   return res.data;
 };
 
-export const syncCtfStream = (sessionId, onEvent, onDone, onError) => {
+export const syncCtfStream = (workspaceId, onEvent, onDone, onError) => {
   const controller = new AbortController();
 
   (async () => {
     try {
-      const response = await fetch(`${apiBaseURL}/ctf/${sessionId}/sync`, {
+      const response = await fetch(`${apiBaseURL}/ctf/${workspaceId}/sync`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -61,13 +61,13 @@ export const syncCtfStream = (sessionId, onEvent, onDone, onError) => {
   return () => controller.abort();
 };
 
-export const getCtfChallenges = async (sessionId) => {
-  const res = await apiClient.get(`/ctf/${sessionId}/challenges`);
+export const getCtfChallenges = async (workspaceId) => {
+  const res = await apiClient.get(`/ctf/${workspaceId}/challenges`);
   return res.data;
 };
 
-export const submitFlagToCtfd = async (sessionId, { challengeName, challengeId, flag }) => {
-  const res = await apiClient.post(`/ctf/${sessionId}/submit-flag`, {
+export const submitFlagToCtfd = async (workspaceId, { challengeName, challengeId, flag }) => {
+  const res = await apiClient.post(`/ctf/${workspaceId}/submit-flag`, {
     challengeName,
     challengeId,
     flag,
@@ -75,17 +75,17 @@ export const submitFlagToCtfd = async (sessionId, { challengeName, challengeId, 
   return res.data;
 };
 
-export const reauthCtf = async (sessionId, body) => {
-  const res = await apiClient.patch(`/ctf/${sessionId}/reauth`, body);
+export const reauthCtf = async (workspaceId, body) => {
+  const res = await apiClient.patch(`/ctf/${workspaceId}/reauth`, body);
   return res.data;
 };
 
-export const setFlagFormat = async (sessionId, flagFormat) => {
-  const res = await apiClient.patch(`/ctf/${sessionId}/flag-format`, { flagFormat });
+export const setFlagFormat = async (workspaceId, flagFormat) => {
+  const res = await apiClient.patch(`/ctf/${workspaceId}/flag-format`, { flagFormat });
   return res.data;
 };
 
-export const disconnectCtf = async (sessionId) => {
-  const res = await apiClient.post(`/ctf/${sessionId}/disconnect`);
+export const disconnectCtf = async (workspaceId) => {
+  const res = await apiClient.post(`/ctf/${workspaceId}/disconnect`);
   return res.data;
 };

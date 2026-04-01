@@ -1,9 +1,20 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { connectAgentStream } from "@/services/agent.service";
 import { v4 as uuidv4 } from "uuid";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { useShallow } from "zustand/react/shallow";
 import { notification } from "antd";
+
+const EMPTY_MESSAGES = [];
+const EMPTY_SUBAGENTS = [];
+const DEFAULT_STATE = {
+  messages: EMPTY_MESSAGES,
+  agentState: "idle",
+  pendingConsent: null,
+  pendingManualExecution: null,
+  subagents: EMPTY_SUBAGENTS,
+  tokenUsage: null,
+};
 
 export default function useAgentStream({ sessionId, onComplete, onInstallSuggestion }) {
   const store = useAgentStreamStore;
@@ -16,13 +27,14 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
     useAgentStreamStore(
       useShallow((state) => {
         const s = state.sessions[sessionId];
+        if (!s) return DEFAULT_STATE;
         return {
-          messages: s?.messages ?? [],
-          agentState: s?.agentState ?? "idle",
-          pendingConsent: s?.pendingConsent ?? null,
-          pendingManualExecution: s?.pendingManualExecution ?? null,
-          subagents: s?.subagents ?? [],
-          tokenUsage: s?.tokenUsage ?? null,
+          messages: s.messages ?? EMPTY_MESSAGES,
+          agentState: s.agentState ?? "idle",
+          pendingConsent: s.pendingConsent ?? null,
+          pendingManualExecution: s.pendingManualExecution ?? null,
+          subagents: s.subagents ?? EMPTY_SUBAGENTS,
+          tokenUsage: s.tokenUsage ?? null,
         };
       }),
     );

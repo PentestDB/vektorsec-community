@@ -1,5 +1,8 @@
 import { Response, Request } from "express";
+import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
+import WorkspaceModel from "../models/Workspace/Workspace.model";
+import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
 import {
   loginWithCredentials,
   verifyToken,
@@ -14,7 +17,6 @@ import {
 import { execSSHCommand } from "../services/ssh.service";
 import { WORKSPACE_DIR } from "../utils/commandSafety";
 
-/** Seconds between startedAt and solvedAt (flag found), or null if unknown. */
 function computeTimeToSolveSec(startedAt: unknown, solvedAt: unknown): number | null {
   if (!startedAt || !solvedAt) return null;
   const t0 = new Date(startedAt as string | Date).getTime();
@@ -26,13 +28,13 @@ function computeTimeToSolveSec(startedAt: unknown, solvedAt: unknown): number | 
 export const connectCtf = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
     const { url, username, password, apiToken } = req.body;
 
     if (!url) return res.status(400).json({ message: "CTFd URL is required" });
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId, status: "active" });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
     const cleanUrl = url.replace(/\/+$/, "");
     let ctfName: string;
@@ -53,10 +55,11 @@ export const connectCtf = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Provide either apiToken or username+password" });
     }
 
-    await SessionsModel.updateOne(
-      { sessionId, uid: userId },
+    await WorkspaceModel.updateOne(
+      { workspaceId, uid: userId },
       {
         $set: {
+          type: "ctf",
           ctfConfig: {
             url: cleanUrl,
             ctfName,
@@ -83,22 +86,22 @@ export const connectCtf = async (req: Request, res: Response) => {
 export const getCtfConfig = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
-    if (!session.ctfConfig) {
+    if (!workspace.ctfConfig) {
       return res.status(200).json({ connected: false });
     }
 
     return res.status(200).json({
       connected: true,
-      url: session.ctfConfig.url,
-      ctfName: session.ctfConfig.ctfName,
-      authMethod: session.ctfConfig.authMethod,
-      lastSynced: session.ctfConfig.lastSynced || null,
-      flagFormat: session.ctfConfig.flagFormat || null,
+      url: workspace.ctfConfig.url,
+      ctfName: workspace.ctfConfig.ctfName,
+      authMethod: workspace.ctfConfig.authMethod,
+      lastSynced: workspace.ctfConfig.lastSynced || null,
+      flagFormat: workspace.ctfConfig.flagFormat || null,
     });
   } catch (err: any) {
     console.error("[CTF] getConfig error:", err.message);
@@ -112,14 +115,14 @@ function sendSSE(res: Response, event: SyncProgressEvent) {
 
 export const syncCtf = async (req: Request, res: Response) => {
   const userId = res.locals.userId;
-  const { sessionId } = req.params;
+  const { workspaceId } = req.params;
 
   try {
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) {
-      return res.status(404).json({ message: "Session not found" });
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId });
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
     }
-    if (!session.ctfConfig) {
+    if (!workspace.ctfConfig) {
       return res.status(400).json({ message: "No CTF connected" });
     }
 
@@ -130,7 +133,7 @@ export const syncCtf = async (req: Request, res: Response) => {
       "X-Accel-Buffering": "no",
     });
 
-    const { url, sessionCookie, apiToken, ctfName } = session.ctfConfig;
+    const { url, sessionCookie, apiToken, ctfName } = workspace.ctfConfig;
 
     const onProgress = (event: SyncProgressEvent) => sendSSE(res, event);
 
@@ -149,7 +152,7 @@ export const syncCtf = async (req: Request, res: Response) => {
       "ctfConfig.lastSynced": new Date(),
     };
 
-    const existingFlagFormat = session.ctfConfig.flagFormat;
+    const existingFlagFormat = workspace.ctfConfig.flagFormat;
     if (!existingFlagFormat) {
       const detected = detectFlagFormat(challenges);
       if (detected) {
@@ -158,10 +161,44 @@ export const syncCtf = async (req: Request, res: Response) => {
       }
     }
 
-    await SessionsModel.updateOne(
-      { sessionId, uid: userId },
+    await WorkspaceModel.updateOne(
+      { workspaceId, uid: userId },
       { $set: updateFields },
     );
+
+    // Auto-create sessions per challenge
+    const existingSessions = await SessionsModel.find({
+      workspaceId,
+      status: { $ne: "archived" },
+    }).select("name").lean();
+
+    const existingNames = new Set(existingSessions.map((s) => s.name));
+    const createdSessions: Array<{ name: string; sessionId: string }> = [];
+
+    for (const ch of challenges) {
+      if (!existingNames.has(ch.name)) {
+        const sessionId = uuidv4();
+
+        const archiveHistory = new HistoryArchiveModel({
+          sessionId,
+          history: [],
+        });
+        await archiveHistory.save();
+
+        const freshWorkspace = await WorkspaceModel.findOne({ workspaceId }).lean();
+        const session = new SessionsModel({
+          uid: userId,
+          sessionId,
+          workspaceId,
+          name: ch.name,
+          description: `${ch.category} — ${ch.value} pts`,
+          createdAt: new Date(),
+          ctfConfig: freshWorkspace?.ctfConfig,
+        });
+        await session.save();
+        createdSessions.push({ name: ch.name, sessionId });
+      }
+    }
 
     sendSSE(res, {
       phase: "done",
@@ -186,16 +223,16 @@ export const syncCtf = async (req: Request, res: Response) => {
 export const reauthCtf = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
     const { username, password, apiToken } = req.body;
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
-    if (!session.ctfConfig) {
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+    if (!workspace.ctfConfig) {
       return res.status(400).json({ message: "No CTF connected — connect first" });
     }
 
-    const ctfUrl = session.ctfConfig.url;
+    const ctfUrl = workspace.ctfConfig.url;
     const updateFields: Record<string, any> = {};
 
     if (apiToken) {
@@ -213,7 +250,13 @@ export const reauthCtf = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Provide either apiToken or username+password" });
     }
 
-    await SessionsModel.updateOne({ sessionId, uid: userId }, { $set: updateFields });
+    await WorkspaceModel.updateOne({ workspaceId, uid: userId }, { $set: updateFields });
+
+    // Propagate updated auth to all child sessions
+    await SessionsModel.updateMany(
+      { workspaceId, status: { $ne: "archived" } },
+      { $set: updateFields },
+    );
 
     return res.status(200).json({ message: "Auth updated successfully", authMethod: apiToken ? "token" : "credentials" });
   } catch (err: any) {
@@ -225,13 +268,19 @@ export const reauthCtf = async (req: Request, res: Response) => {
 export const disconnectCtf = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
-    await SessionsModel.updateOne(
-      { sessionId, uid: userId },
+    await WorkspaceModel.updateOne(
+      { workspaceId, uid: userId },
+      { $unset: { ctfConfig: 1 }, $set: { type: "general" } },
+    );
+
+    // Clear ctfConfig from all child sessions
+    await SessionsModel.updateMany(
+      { workspaceId, status: { $ne: "archived" } },
       { $unset: { ctfConfig: 1 } },
     );
 
@@ -245,25 +294,33 @@ export const disconnectCtf = async (req: Request, res: Response) => {
 export const setFlagFormat = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
     const { flagFormat } = req.body;
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
-    if (!session.ctfConfig) {
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+    if (!workspace.ctfConfig) {
       return res.status(400).json({ message: "No CTF connected" });
     }
 
     const value = typeof flagFormat === "string" ? flagFormat.trim() : "";
 
     if (value) {
-      await SessionsModel.updateOne(
-        { sessionId, uid: userId },
+      await WorkspaceModel.updateOne(
+        { workspaceId, uid: userId },
+        { $set: { "ctfConfig.flagFormat": value } },
+      );
+      await SessionsModel.updateMany(
+        { workspaceId, status: { $ne: "archived" } },
         { $set: { "ctfConfig.flagFormat": value } },
       );
     } else {
-      await SessionsModel.updateOne(
-        { sessionId, uid: userId },
+      await WorkspaceModel.updateOne(
+        { workspaceId, uid: userId },
+        { $unset: { "ctfConfig.flagFormat": 1 } },
+      );
+      await SessionsModel.updateMany(
+        { workspaceId, status: { $ne: "archived" } },
         { $unset: { "ctfConfig.flagFormat": 1 } },
       );
     }
@@ -278,17 +335,17 @@ export const setFlagFormat = async (req: Request, res: Response) => {
 export const getCtfChallenges = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId })
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId })
       .select("ctfConfig")
       .lean();
 
-    if (!session?.ctfConfig?.ctfName) {
+    if (!workspace?.ctfConfig?.ctfName) {
       return res.status(200).json({ challenges: [], activeSolve: null });
     }
 
-    const safeCTFName = sanitizeDirName(session.ctfConfig.ctfName);
+    const safeCTFName = sanitizeDirName(workspace.ctfConfig.ctfName);
     let challenges: Array<{
       id?: number; name: string; category: string; value: number;
       safeDir: string; connection_info?: string;
@@ -304,21 +361,34 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
       console.warn("[CTF] Failed to read challenges.json from attack box:", err.message);
     }
 
-    const solveHistory = session.ctfConfig.solveHistory ?? [];
-    const solveMap = new Map(solveHistory.map((r: any) => [r.challengeName, r]));
-
-    // Try to get live solved status from CTFd
     let ctfdSolved: Set<string> = new Set();
     try {
-      const { url, sessionCookie, apiToken } = session.ctfConfig;
+      const { url, sessionCookie, apiToken } = workspace.ctfConfig;
       ctfdSolved = await fetchSolvedChallengeNames(url, sessionCookie, apiToken);
     } catch {
-      // Non-critical — fall back to local data only
+      // Non-critical
+    }
+
+    const sessions = await SessionsModel.find({
+      workspaceId,
+      status: { $ne: "archived" },
+    }).select("sessionId name agentState ctfConfig.solveHistory").lean();
+    const sessionByName = new Map(sessions.map((s) => [s.name, s]));
+
+    const solveMap = new Map<string, any>();
+    for (const s of sessions) {
+      for (const r of (s as any).ctfConfig?.solveHistory ?? []) {
+        const existing = solveMap.get(r.challengeName);
+        if (!existing || (r.solvedAt && (!existing.solvedAt || r.solvedAt > existing.solvedAt))) {
+          solveMap.set(r.challengeName, { ...r, _sessionId: (s as any).sessionId });
+        }
+      }
     }
 
     const enriched = challenges.map((ch) => {
       const solve = solveMap.get(ch.name) as any;
       const solvedOnCtfd = ctfdSolved.has(ch.name);
+      const sessionInfo = sessionByName.get(ch.name);
 
       let status: string = "pending";
       let flag: string | null = null;
@@ -329,7 +399,6 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
         flag = solve.confirmedFlag || null;
         submittedToCtfd = solve.submittedToCtfd || false;
 
-        // Legacy correction: older flows could leave status="solved" even when CTFd said incorrect.
         if (solve.ctfdResult === "incorrect" && !solvedOnCtfd) {
           status = "incorrect";
           submittedToCtfd = false;
@@ -343,7 +412,6 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
         }
       }
 
-      // Backward compatibility for old persisted value.
       if (status === "submitted") {
         status = "solved";
       }
@@ -366,11 +434,13 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
         solvedAt: solve?.solvedAt ?? null,
         startedAt: solve?.startedAt ?? null,
         timeToSolveSec,
+        sessionId: sessionInfo?.sessionId ?? null,
+        agentState: sessionInfo?.agentState ?? null,
       };
     });
 
-    const activeSolve = session.ctfConfig.activeSolve
-      ? { name: session.ctfConfig.activeSolve.name, safeDir: session.ctfConfig.activeSolve.safeDir }
+    const activeSolve = workspace.ctfConfig.activeSolve
+      ? { name: workspace.ctfConfig.activeSolve.name, safeDir: workspace.ctfConfig.activeSolve.safeDir }
       : null;
 
     return res.status(200).json({ challenges: enriched, activeSolve });
@@ -391,11 +461,11 @@ function logSubmitFlag(stage: string, data: Record<string, unknown>) {
 export const submitFlag = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
-    const { sessionId } = req.params;
+    const { workspaceId } = req.params;
     const { challengeName, challengeId, flag } = req.body;
 
     logSubmitFlag("request", {
-      sessionId,
+      workspaceId,
       challengeName,
       challengeIdFromClient: challengeId ?? null,
       flagLength: typeof flag === "string" ? flag.length : 0,
@@ -406,18 +476,18 @@ export const submitFlag = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "challengeName and flag are required" });
     }
 
-    const session = await SessionsModel.findOne({ sessionId, uid: userId });
-    if (!session) return res.status(404).json({ message: "Session not found" });
-    if (!session.ctfConfig) {
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+    if (!workspace.ctfConfig) {
       return res.status(400).json({ message: "No CTF connected" });
     }
 
-    const { url, sessionCookie, apiToken } = session.ctfConfig;
+    const { url, sessionCookie, apiToken } = workspace.ctfConfig;
 
-    logSubmitFlag("session.ctfConfig", {
+    logSubmitFlag("workspace.ctfConfig", {
       ctfdUrl: url,
-      ctfName: session.ctfConfig.ctfName,
-      authMethod: session.ctfConfig.authMethod,
+      ctfName: workspace.ctfConfig.ctfName,
+      authMethod: workspace.ctfConfig.authMethod,
       hasApiToken: !!apiToken,
       hasSessionCookie: !!sessionCookie,
     });
@@ -427,16 +497,15 @@ export const submitFlag = async (req: Request, res: Response) => {
       logSubmitFlag("resolveId.fromClient", { resolvedId, source: "request.body.challengeId" });
     }
 
-    // Strategy 1: look up from local challenges.json on attack box
     if (!resolvedId) {
-      const safeCTFName = sanitizeDirName(session.ctfConfig.ctfName);
+      const safeCTFName = sanitizeDirName(workspace.ctfConfig.ctfName);
       try {
         const home = (await execSSHCommand("echo $HOME")).trim();
         const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
         const indexPath = `${resolvedWs}/${safeCTFName}/challenges.json`;
         const raw = await execSSHCommand(`cat "${indexPath}" 2>/dev/null || echo "[]"`);
-        const challenges = JSON.parse(raw.trim());
-        const match = challenges.find((c: any) => c.name === challengeName);
+        const challs = JSON.parse(raw.trim());
+        const match = challs.find((c: any) => c.name === challengeName);
         if (match?.id) resolvedId = match.id;
         logSubmitFlag("resolveId.challengesJson", {
           strategy: "challenges.json",
@@ -449,7 +518,6 @@ export const submitFlag = async (req: Request, res: Response) => {
       }
     }
 
-    // Strategy 2: query CTFd API directly
     if (!resolvedId) {
       try {
         const client = (await import("axios")).default.create({
@@ -506,28 +574,36 @@ export const submitFlag = async (req: Request, res: Response) => {
 
     const isAccepted = result.status === "correct" || result.status === "already_solved";
 
-    if (isAccepted) {
-      await SessionsModel.updateOne(
-        { sessionId, uid: userId, "ctfConfig.solveHistory.challengeName": challengeName },
-        {
-          $set: {
-            "ctfConfig.solveHistory.$.status": "solved",
-            "ctfConfig.solveHistory.$.submittedToCtfd": true,
-            "ctfConfig.solveHistory.$.ctfdResult": result.status,
+    const session = await SessionsModel.findOne({
+      workspaceId,
+      name: challengeName,
+      status: { $ne: "archived" },
+    }).select("sessionId").lean();
+
+    if (session) {
+      if (isAccepted) {
+        await SessionsModel.updateOne(
+          { sessionId: (session as any).sessionId, "ctfConfig.solveHistory.challengeName": challengeName },
+          {
+            $set: {
+              "ctfConfig.solveHistory.$.status": "solved",
+              "ctfConfig.solveHistory.$.submittedToCtfd": true,
+              "ctfConfig.solveHistory.$.ctfdResult": result.status,
+            },
           },
-        },
-      );
-    } else if (result.status === "incorrect") {
-      await SessionsModel.updateOne(
-        { sessionId, uid: userId, "ctfConfig.solveHistory.challengeName": challengeName },
-        {
-          $set: {
-            "ctfConfig.solveHistory.$.status": "incorrect",
-            "ctfConfig.solveHistory.$.submittedToCtfd": false,
-            "ctfConfig.solveHistory.$.ctfdResult": result.status,
+        );
+      } else if (result.status === "incorrect") {
+        await SessionsModel.updateOne(
+          { sessionId: (session as any).sessionId, "ctfConfig.solveHistory.challengeName": challengeName },
+          {
+            $set: {
+              "ctfConfig.solveHistory.$.status": "incorrect",
+              "ctfConfig.solveHistory.$.submittedToCtfd": false,
+              "ctfConfig.solveHistory.$.ctfdResult": result.status,
+            },
           },
-        },
-      );
+        );
+      }
     }
 
     const payload = {

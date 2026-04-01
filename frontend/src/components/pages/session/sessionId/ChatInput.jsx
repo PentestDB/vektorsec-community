@@ -2,7 +2,9 @@ import React, { useRef, useState, useCallback, useMemo, useEffect } from "react"
 import styles from "@/styles/components/Chat.module.scss";
 import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
+import { useQuery } from "react-query";
 import { getCtfChallenges } from "@/services/ctf.service";
+import { getSessionInfo } from "@/services/agent.service";
 import { formatDurationSec } from "@/utils/formatDuration";
 
 function challengeStatusBadge(ch) {
@@ -42,9 +44,16 @@ export default function ChatInput({
   const textareaRef = useRef(null);
   const menuRef = useRef(null);
 
+  const { data: sessionInfo } = useQuery(
+    ["session-info", sessionId],
+    () => getSessionInfo(sessionId),
+    { enabled: !!sessionId, staleTime: 60000 }
+  );
+
   const [challengeList, setChallengeList] = useState([]);
   const [challengeSelectedIndex, setChallengeSelectedIndex] = useState(0);
   const solveMenuSessionRef = useRef(null);
+  const autoSolvePopulatedRef = useRef(null);
 
   const isRunning = agentState === "running";
   const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
@@ -83,16 +92,29 @@ export default function ChatInput({
   const showChallengeMenu = filteredChallenges.length > 0 && isSolveArgMode;
 
   useEffect(() => {
+    if (
+      sessionInfo?.isCTF &&
+      sessionInfo?.name &&
+      sessionId &&
+      autoSolvePopulatedRef.current !== sessionId
+    ) {
+      autoSolvePopulatedRef.current = sessionId;
+      setValue(`/solve "${sessionInfo.name}" `);
+    }
+  }, [sessionId, sessionInfo?.isCTF, sessionInfo?.name]);
+
+  useEffect(() => {
     if (!isSolveArgMode || !sessionId) {
       solveMenuSessionRef.current = null;
       return;
     }
     if (solveMenuSessionRef.current === sessionId) return;
     solveMenuSessionRef.current = sessionId;
-    getCtfChallenges(sessionId)
+    const scopeId = sessionInfo?.workspaceId || sessionId;
+    getCtfChallenges(scopeId)
       .then((data) => setChallengeList(data.challenges || []))
       .catch(() => setChallengeList([]));
-  }, [isSolveArgMode, sessionId]);
+  }, [isSolveArgMode, sessionId, sessionInfo?.workspaceId]);
 
   useEffect(() => {
     setSelectedIndex(0);

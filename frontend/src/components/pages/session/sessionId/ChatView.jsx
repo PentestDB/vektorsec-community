@@ -16,6 +16,7 @@ import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent } from "@/services/agent.service";
 import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
+import { useQueryClient } from "react-query";
 
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
@@ -23,6 +24,7 @@ export default function ChatView({ sessionId }) {
   const shouldStickToBottomRef = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [installSuggestions, setInstallSuggestions] = useState([]);
+  const queryClient = useQueryClient();
 
   const FAR_UP_THRESHOLD = 250;
 
@@ -36,6 +38,10 @@ export default function ChatView({ sessionId }) {
   const dismissInstallSuggestion = useCallback((name) => {
     setInstallSuggestions((prev) => prev.filter((s) => s.name !== name));
   }, []);
+
+  const handleAgentComplete = useCallback(() => {
+    queryClient.invalidateQueries(["session-info", sessionId]);
+  }, [queryClient, sessionId]);
 
   const {
     messages,
@@ -52,7 +58,7 @@ export default function ChatView({ sessionId }) {
     abort,
   } = useAgentStream({
     sessionId,
-    onComplete: () => {},
+    onComplete: handleAgentComplete,
     onInstallSuggestion: handleInstallSuggestion,
   });
 

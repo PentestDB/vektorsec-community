@@ -4,12 +4,20 @@ import Loader from "@/components/common/loader/Loader";
 import CTFPage from "@/components/pages/session/ctf/CTFPage";
 import { use } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useQuery } from "react-query";
+import { getSessionInfo } from "@/services/agent.service";
 import { updateSessions } from "@/store/user.slice";
 
 const CtfPageRoute = ({ params }) => {
   const { session_id: sessionId } = use(params);
   const { user, sessions } = useSelector((state) => state.user);
   const dispatch = useDispatch();
+
+  const { data: sessionInfo } = useQuery(
+    ["session-info", sessionId],
+    () => getSessionInfo(sessionId),
+    { enabled: !!user && !!sessionId, staleTime: 60000 }
+  );
 
   const ctfSession = sessions.find((session) => session.type === "ctf");
 
@@ -36,7 +44,7 @@ const CtfPageRoute = ({ params }) => {
     return <Loader />;
   }
 
-  return <CTFPage sessionId={sessionId} />;
+  return <CTFPage sessionId={sessionId} workspaceId={sessionInfo?.workspaceId} />;
 };
 
 export default CtfPageRoute;

@@ -510,28 +510,28 @@
 }
 
 .challengeToolbar {
-  margin-top: 0.5rem;
-  margin-bottom: 0.55rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.4rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: stretch;
 }
 
 .searchInput {
-  min-width: 260px;
-  flex: 1 1 300px;
-  max-width: 520px;
-  height: 32px;
+  min-width: 200px;
+  flex: 1 1 260px;
+  max-width: 420px;
+  height: 28px;
 
   &:global(.ant-input-affix-wrapper) {
     background: transparent !important;
     border: 1px solid var(--border-subtle) !important;
     color: var(--primary-text) !important;
-    border-radius: 6px !important;
+    border-radius: 5px !important;
     box-shadow: none !important;
-    height: 32px;
-    padding: 0 10px;
+    height: 28px;
+    padding: 0 8px;
   }
 
   &:global(.ant-input-affix-wrapper:hover) {
@@ -546,8 +546,8 @@
   :global(.ant-input) {
     background: transparent !important;
     color: var(--primary-text) !important;
-    font-size: 0.78rem;
-    line-height: 30px;
+    font-size: 0.72rem;
+    line-height: 26px;
 
     &::placeholder {
       color: var(--secondary-text) !important;
@@ -569,23 +569,23 @@
 }
 
 .filterSelect {
-  min-width: 150px;
-  height: 32px;
+  min-width: 130px;
+  height: 28px;
 
   :global(.ant-select-selector) {
     background: transparent !important;
     border: 1px solid var(--border-subtle) !important;
     color: var(--primary-text) !important;
-    border-radius: 6px !important;
+    border-radius: 5px !important;
     box-shadow: none !important;
-    height: 32px !important;
-    padding: 0 10px !important;
+    height: 28px !important;
+    padding: 0 8px !important;
   }
 
   :global(.ant-select-selection-item) {
     color: var(--primary-text) !important;
-    font-size: 0.78rem;
-    line-height: 30px !important;
+    font-size: 0.72rem;
+    line-height: 26px !important;
   }
 
   :global(.ant-select-arrow) {
@@ -625,9 +625,9 @@
 }
 
 .resetFiltersBtn {
-  font-size: 0.72rem !important;
-  height: 32px !important;
-  border-radius: 6px !important;
+  font-size: 0.68rem !important;
+  height: 28px !important;
+  border-radius: 5px !important;
   color: var(--secondary-text) !important;
   border-color: var(--border-subtle) !important;
   background: transparent !important;
@@ -639,30 +639,30 @@
 }
 
 .filterSummary {
-  margin-bottom: 0.5rem;
-  font-size: 0.72rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.68rem;
   color: var(--secondary-text);
 }
 
 .challengeTable {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: 6px;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
 .challengeTableInner {
-  min-width: 1120px;
+  min-width: 0;
 }
 
 .tableHeader {
   display: grid;
-  grid-template-columns: minmax(260px, 2.2fr) 140px 70px 160px minmax(220px, 1.3fr) 140px;
-  gap: 0.7rem;
-  padding: 0.6rem 1rem;
+  grid-template-columns: 2.5fr 1.2fr 0.5fr 1.4fr 1.8fr 1.2fr;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
   background: var(--secondary-bg);
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -671,12 +671,12 @@
 
 .tableRow {
   display: grid;
-  grid-template-columns: minmax(260px, 2.2fr) 140px 70px 160px minmax(220px, 1.3fr) 140px;
-  gap: 0.7rem;
-  padding: 0.55rem 1rem;
+  grid-template-columns: 2.5fr 1.2fr 0.5fr 1.4fr 1.8fr 1.2fr;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
   align-items: center;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   transition: background 0.1s;
 
   &:last-child {
@@ -745,9 +745,9 @@
 
 .actionStack {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
   min-width: 0;
 }
 

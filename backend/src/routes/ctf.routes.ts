@@ -13,13 +13,13 @@ import {
 
 const router = express.Router();
 
-router.post("/:sessionId/connect", [verifySess], connectCtf);
-router.patch("/:sessionId/reauth", [verifySess], reauthCtf);
-router.get("/:sessionId/config", [verifySess], getCtfConfig);
-router.get("/:sessionId/challenges", [verifySess], getCtfChallenges);
-router.post("/:sessionId/sync", [verifySess], syncCtf);
-router.post("/:sessionId/submit-flag", [verifySess], submitFlag);
-router.patch("/:sessionId/flag-format", [verifySess], setFlagFormat);
-router.post("/:sessionId/disconnect", [verifySess], disconnectCtf);
+router.post("/:workspaceId/connect", [verifySess], connectCtf);
+router.patch("/:workspaceId/reauth", [verifySess], reauthCtf);
+router.get("/:workspaceId/config", [verifySess], getCtfConfig);
+router.get("/:workspaceId/challenges", [verifySess], getCtfChallenges);
+router.post("/:workspaceId/sync", [verifySess], syncCtf);
+router.post("/:workspaceId/submit-flag", [verifySess], submitFlag);
+router.patch("/:workspaceId/flag-format", [verifySess], setFlagFormat);
+router.post("/:workspaceId/disconnect", [verifySess], disconnectCtf);
 
 export { router as ctfRoutes };

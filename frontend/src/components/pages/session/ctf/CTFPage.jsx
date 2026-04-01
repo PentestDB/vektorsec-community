@@ -1,23 +1,15 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button, message, Tooltip, Input, Select } from "antd";
+import { Button, message, Tooltip } from "antd";
 import {
   DisconnectOutlined,
   LinkOutlined,
   SyncOutlined,
-  CheckCircleFilled,
-  CloseCircleFilled,
-  RobotOutlined,
-  ClockCircleOutlined,
-  SendOutlined,
   LoadingOutlined,
   TrophyFilled,
   KeyOutlined,
-  PlayCircleOutlined,
-  SearchOutlined,
-  FilterOutlined,
   EditOutlined,
   CheckOutlined,
 } from "@ant-design/icons";
@@ -34,8 +26,8 @@ import {
   setFlagFormat,
 } from "@/services/ctf.service";
 import styles from "@/styles/components/CTF.module.scss";
-import { formatDurationSec } from "@/utils/formatDuration";
 import { clearContext } from "@/services/agent.service";
+import ChallengeTable from "@/components/common/ChallengeTable";
 import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
 
 function sanitizeDirName(name) {
@@ -47,7 +39,8 @@ function sanitizeDirName(name) {
     .substring(0, 200);
 }
 
-const CTFPage = ({ sessionId }) => {
+const CTFPage = ({ sessionId, workspaceId }) => {
+  const ctfScopeId = workspaceId || sessionId;
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -73,8 +66,8 @@ const CTFPage = ({ sessionId }) => {
     data: config,
     isLoading: configLoading,
   } = useQuery(
-    ["ctf-config", sessionId],
-    () => getCtfConfig(sessionId),
+    ["ctf-config", ctfScopeId],
+    () => getCtfConfig(ctfScopeId),
     { refetchOnWindowFocus: false, retry: 1 }
   );
 
@@ -85,8 +78,8 @@ const CTFPage = ({ sessionId }) => {
     isLoading: challengesLoading,
     refetch: refetchChallenges,
   } = useQuery(
-    ["ctf-challenges", sessionId],
-    () => getCtfChallenges(sessionId),
+    ["ctf-challenges", ctfScopeId],
+    () => getCtfChallenges(ctfScopeId),
     { refetchOnWindowFocus: false, retry: 1, refetchInterval: 15_000, enabled: isConnected }
   );
 
@@ -95,11 +88,6 @@ const CTFPage = ({ sessionId }) => {
   const solvedCount = challenges.filter(
     (c) => c.status === "solved" || c.status === "submitted"
   ).length;
-  const [searchText, setSearchText] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("default");
-
   const [editingFlagFormat, setEditingFlagFormat] = useState(false);
   const [flagFormatDraft, setFlagFormatDraft] = useState("");
   const [savingFlagFormat, setSavingFlagFormat] = useState(false);
@@ -112,8 +100,8 @@ const CTFPage = ({ sessionId }) => {
   const handleSaveFlagFormat = async () => {
     setSavingFlagFormat(true);
     try {
-      await setFlagFormat(sessionId, flagFormatDraft.trim());
-      queryClient.invalidateQueries(["ctf-config", sessionId]);
+      await setFlagFormat(ctfScopeId, flagFormatDraft.trim());
+      queryClient.invalidateQueries(["ctf-config", ctfScopeId]);
       setEditingFlagFormat(false);
       message.success("Flag format updated");
     } catch {
@@ -123,76 +111,6 @@ const CTFPage = ({ sessionId }) => {
     }
   };
 
-  const categoryOptions = useMemo(() => {
-    const categories = Array.from(
-      new Set(
-        challenges
-          .map((c) => String(c.category || "").trim())
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b));
-    return categories;
-  }, [challenges]);
-
-  const filteredChallenges = useMemo(() => {
-    const search = searchText.trim().toLowerCase();
-
-    const rankByStatus = (status, submittedToCtfd) => {
-      if (submittedToCtfd || status === "solved" || status === "submitted") return 0;
-      if (status === "flag_found") return 1;
-      if (status === "incorrect") return 2;
-      if (status === "solving") return 3;
-      return 4;
-    };
-
-    let list = challenges.filter((c) => {
-      if (search) {
-        const name = String(c.name || "").toLowerCase();
-        const cat = String(c.category || "").toLowerCase();
-        if (!name.includes(search) && !cat.includes(search)) return false;
-      }
-
-      if (statusFilter !== "all") {
-        const normalized =
-          c.submittedToCtfd || c.status === "solved" || c.status === "submitted"
-            ? "solved"
-            : c.status;
-        if (normalized !== statusFilter) return false;
-      }
-
-      if (categoryFilter !== "all") {
-        if (String(c.category || "").toLowerCase() !== categoryFilter) return false;
-      }
-
-      return true;
-    });
-
-    if (sortBy === "name_asc") {
-      list = [...list].sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortBy === "name_desc") {
-      list = [...list].sort((a, b) => b.name.localeCompare(a.name));
-    } else if (sortBy === "points_desc") {
-      list = [...list].sort((a, b) => (b.value || 0) - (a.value || 0));
-    } else if (sortBy === "points_asc") {
-      list = [...list].sort((a, b) => (a.value || 0) - (b.value || 0));
-    } else if (sortBy === "status") {
-      list = [...list].sort((a, b) => {
-        const byStatus = rankByStatus(a.status, a.submittedToCtfd) - rankByStatus(b.status, b.submittedToCtfd);
-        if (byStatus !== 0) return byStatus;
-        return a.name.localeCompare(b.name);
-      });
-    }
-
-    return list;
-  }, [challenges, searchText, statusFilter, categoryFilter, sortBy]);
-
-  const resetFilters = useCallback(() => {
-    setSearchText("");
-    setStatusFilter("all");
-    setCategoryFilter("all");
-    setSortBy("default");
-  }, []);
-
   const [showReauth, setShowReauth] = useState(false);
   const [reauthMethod, setReauthMethod] = useState("token");
   const [reauthToken, setReauthToken] = useState("");
@@ -200,7 +118,7 @@ const CTFPage = ({ sessionId }) => {
   const [reauthPassword, setReauthPassword] = useState("");
 
   const reauthMutation = useMutation(
-    (body) => reauthCtf(sessionId, body),
+    (body) => reauthCtf(ctfScopeId, body),
     {
       onSuccess: (data) => {
         message.success(data.message || "Auth updated");
@@ -208,7 +126,7 @@ const CTFPage = ({ sessionId }) => {
         setReauthToken("");
         setReauthUsername("");
         setReauthPassword("");
-        queryClient.invalidateQueries(["ctf-config", sessionId]);
+        queryClient.invalidateQueries(["ctf-config", ctfScopeId]);
       },
       onError: (err) => {
         message.error(err?.response?.data?.message || "Re-authentication failed");
@@ -277,7 +195,7 @@ const CTFPage = ({ sessionId }) => {
   const handleSubmitFlag = useCallback(async (ch) => {
     setSubmittingFlag(ch.name);
     try {
-      const result = await submitFlagToCtfd(sessionId, {
+      const result = await submitFlagToCtfd(ctfScopeId, {
         challengeName: ch.name,
         challengeId: ch.id,
         flag: ch.flag,
@@ -302,14 +220,14 @@ const CTFPage = ({ sessionId }) => {
     setSyncError(null);
 
     const abort = syncCtfStream(
-      sessionId,
+      ctfScopeId,
       (event) => {
         if (event.phase === "done") {
           setSyncResult(event);
           setSyncProgress(null);
           setSyncing(false);
-          queryClient.invalidateQueries(["ctf-config", sessionId]);
-          queryClient.invalidateQueries(["ctf-challenges", sessionId]);
+          queryClient.invalidateQueries(["ctf-config", ctfScopeId]);
+          queryClient.invalidateQueries(["ctf-challenges", ctfScopeId]);
           message.success("Sync complete");
         } else if (event.phase === "error") {
           setSyncError(event.detail || "Sync failed");
@@ -335,11 +253,11 @@ const CTFPage = ({ sessionId }) => {
   }, [sessionId, queryClient]);
 
   const connectMutation = useMutation(
-    (body) => connectCtf(sessionId, body),
+    (body) => connectCtf(ctfScopeId, body),
     {
       onSuccess: (data) => {
         message.success(`Connected to ${data.ctfName}`);
-        queryClient.invalidateQueries(["ctf-config", sessionId]);
+        queryClient.invalidateQueries(["ctf-config", ctfScopeId]);
         startSync();
       },
       onError: (err) => {
@@ -350,13 +268,13 @@ const CTFPage = ({ sessionId }) => {
   );
 
   const disconnectMutation = useMutation(
-    () => disconnectCtf(sessionId),
+    () => disconnectCtf(ctfScopeId),
     {
       onSuccess: () => {
         setSyncResult(null);
         setSyncError(null);
         setSyncProgress(null);
-        queryClient.invalidateQueries(["ctf-config", sessionId]);
+        queryClient.invalidateQueries(["ctf-config", ctfScopeId]);
         message.success("Disconnected from CTF");
       },
       onError: () => {
@@ -674,100 +592,14 @@ const CTFPage = ({ sessionId }) => {
             <LoadingOutlined /> Loading challenges...
           </div>
         ) : challenges.length > 0 ? (
-          <>
-            <div className={styles.challengeToolbar}>
-              <Input
-                allowClear
-                prefix={<SearchOutlined />}
-                placeholder="Search challenge name or category"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                className={styles.searchInput}
-              />
-              <Select
-                value={statusFilter}
-                onChange={setStatusFilter}
-                className={styles.filterSelect}
-                popupClassName={styles.filterDropdown}
-                options={[
-                  { value: "all", label: "All status" },
-                  { value: "solving", label: "Solving" },
-                  { value: "flag_found", label: "Copilot found" },
-                  { value: "incorrect", label: "Incorrect" },
-                  { value: "solved", label: "Solved" },
-                  { value: "pending", label: "Pending" },
-                ]}
-              />
-              <Select
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                className={styles.filterSelect}
-                popupClassName={styles.filterDropdown}
-                options={[
-                  { value: "all", label: "All categories" },
-                  ...categoryOptions.map((cat) => ({
-                    value: cat.toLowerCase(),
-                    label: cat,
-                  })),
-                ]}
-              />
-              <Select
-                value={sortBy}
-                onChange={setSortBy}
-                className={styles.filterSelect}
-                popupClassName={styles.filterDropdown}
-                options={[
-                  { value: "default", label: "Default order" },
-                  { value: "status", label: "Status priority" },
-                  { value: "points_desc", label: "Points high → low" },
-                  { value: "points_asc", label: "Points low → high" },
-                  { value: "name_asc", label: "Name A → Z" },
-                  { value: "name_desc", label: "Name Z → A" },
-                ]}
-              />
-              <Button
-                icon={<FilterOutlined />}
-                onClick={resetFilters}
-                size="small"
-                className={styles.resetFiltersBtn}
-              >
-                Reset
-              </Button>
-            </div>
-
-            <div className={styles.filterSummary}>
-              Showing {filteredChallenges.length} / {challenges.length} challenges
-            </div>
-
-            <div className={styles.challengeTable}>
-              <div className={styles.challengeTableInner}>
-                <div className={styles.tableHeader}>
-                  <span className={styles.colName}>Challenge</span>
-                  <span className={styles.colCategory}>Category</span>
-                  <span className={styles.colPoints}>Pts</span>
-                  <span className={styles.colStatus}>Status / time</span>
-                  <span className={styles.colFlag}>Flag</span>
-                  <span className={styles.colAction}>Actions</span>
-                </div>
-                {filteredChallenges.map((ch) => (
-                  <ChallengeRow
-                    key={ch.safeDir}
-                    challenge={ch}
-                    isActive={activeSolve?.name === ch.name}
-                    submitting={submittingFlag === ch.name}
-                    solveLoading={solveNavigating === ch.name}
-                    onSolve={() => openSolveChallengeModal(ch)}
-                    onSubmit={() => handleSubmitFlag(ch)}
-                  />
-                ))}
-              </div>
-            </div>
-            {filteredChallenges.length === 0 && (
-              <div className={styles.helpText}>
-                No challenges match your current search/filters.
-              </div>
-            )}
-          </>
+          <ChallengeTable
+              challenges={challenges}
+              activeSolveName={activeSolve?.name}
+              submittingFlag={submittingFlag}
+              solveNavigating={solveNavigating}
+              onSolve={openSolveChallengeModal}
+              onSubmit={handleSubmitFlag}
+            />
         ) : (
           <div className={styles.helpText}>
             No challenges synced yet. Click <strong>Refresh</strong> to sync
@@ -775,128 +607,6 @@ const CTFPage = ({ sessionId }) => {
           </div>
         )}
       </div>
-    </div>
-  );
-};
-
-const StatusBadge = ({ status, submittedToCtfd }) => {
-  if (submittedToCtfd || status === "solved" || status === "submitted") {
-    return (
-      <span className={`${styles.statusBadge} ${styles.statusSolved}`}>
-        <CheckCircleFilled /> Solved
-      </span>
-    );
-  }
-  if (status === "flag_found") {
-    return (
-      <span className={`${styles.statusBadge} ${styles.statusFound}`}>
-        <RobotOutlined /> Copilot found
-      </span>
-    );
-  }
-  if (status === "incorrect") {
-    return (
-      <span className={`${styles.statusBadge} ${styles.statusIncorrect}`}>
-        <CloseCircleFilled /> Incorrect
-      </span>
-    );
-  }
-  if (status === "solved") {
-    return (
-      <span className={`${styles.statusBadge} ${styles.statusSolved}`}>
-        <FaFlag style={{ fontSize: "0.6rem" }} /> Solved
-      </span>
-    );
-  }
-  if (status === "solving") {
-    return (
-      <span className={`${styles.statusBadge} ${styles.statusSolving}`}>
-        <ClockCircleOutlined /> Solving
-      </span>
-    );
-  }
-  return (
-    <span className={`${styles.statusBadge} ${styles.statusPending}`}>
-      Pending
-    </span>
-  );
-};
-
-const ChallengeRow = ({ challenge: ch, isActive, submitting, solveLoading, onSolve, onSubmit }) => {
-  const showSolveBtn = !(
-    ch.status === "submitted" && ch.submittedToCtfd
-  );
-
-  return (
-    <div
-      className={`${styles.tableRow} ${isActive ? styles.tableRowActive : ""}`}
-    >
-      <span className={styles.colName}>
-        <span className={styles.challengeName}>{ch.name}</span>
-      </span>
-      <span className={styles.colCategory}>
-        <span className={styles.categoryTag}>{ch.category}</span>
-      </span>
-      <span className={styles.colPoints}>{ch.value}</span>
-      <span className={styles.colStatus}>
-        <span className={styles.statusCell}>
-          <StatusBadge status={ch.status} submittedToCtfd={ch.submittedToCtfd} />
-          {ch.timeToSolveSec != null &&
-            (ch.status === "solved" || ch.status === "submitted") && (
-              <Tooltip title="Time from /solve (or first tracked solve) until flag confirmed">
-                <span className={styles.solveTime}>
-                  {formatDurationSec(ch.timeToSolveSec)}
-                </span>
-              </Tooltip>
-            )}
-        </span>
-      </span>
-      <span className={styles.colFlag}>
-        {ch.flag ? (
-          <Tooltip title={ch.flag}>
-            <code className={styles.flagValue}>{ch.flag}</code>
-          </Tooltip>
-        ) : (
-          <span className={styles.noFlag}>—</span>
-        )}
-      </span>
-      <span className={styles.colAction}>
-        <span className={styles.actionStack}>
-          {showSolveBtn && (
-            <Tooltip title="Clear chat history and run /solve for this challenge (opens chat)">
-              <Button
-                size="small"
-                type="default"
-                icon={solveLoading ? <LoadingOutlined /> : <PlayCircleOutlined />}
-                loading={solveLoading}
-                onClick={onSolve}
-                className={styles.solveFocusBtn}
-              >
-                Solve
-              </Button>
-            </Tooltip>
-          )}
-          {ch.flag &&
-            (ch.status === "flag_found" ||
-              ch.status === "incorrect" ||
-              ch.status === "solved" ||
-              ch.status === "submitted" ||
-              ch.submittedToCtfd) && (
-              <Button
-                size="small"
-                type={ch.submittedToCtfd ? "default" : "primary"}
-                icon={submitting ? <LoadingOutlined /> : <SendOutlined />}
-                loading={submitting}
-                onClick={onSubmit}
-                className={
-                  ch.submittedToCtfd ? styles.resubmitBtn : styles.submitBtn
-                }
-              >
-                {ch.submittedToCtfd ? "Re-submit" : "Submit"}
-              </Button>
-            )}
-        </span>
-      </span>
     </div>
   );
 };

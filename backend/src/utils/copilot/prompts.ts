@@ -20,7 +20,6 @@ export interface AgentPromptConfig {
   currentDay?: string;
   timezone?: string;
   envInfo?: BoxEnvInfo;
-  engagementStateBlock?: string;
   ctfConfig?: {
     ctfName: string;
     workspacePath: string;
@@ -39,7 +38,7 @@ export interface AgentPromptConfig {
 }
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"]);
-const ARCHIVE_EXTENSIONS = new Set([".zip", ".tar", ".gz", ".bz2", ".7z", ".rar", ".xz", ".tar.gz", ".tgz"]);
+const ARCHIVE_EXTENSIONS = new Set([".zip", ".tar", ".gz", ".bz2", ".7z", ".rar", ".xz", ".tgz"]);
 const BINARY_EXTENSIONS = new Set([".elf", ".exe", ".bin", ".so", ".dll", ".o", ".out"]);
 
 function getFileExtension(filename: string): string {
@@ -113,6 +112,15 @@ function buildCategoryTactics(category: string): string {
 - Check for anti-debugging: ptrace checks, timing-based detection, environment checks`;
   }
 
+  if (cat === "stego" || cat === "steganography") {
+    return `**Category tactics (Steganography):**
+- Check file types with \`file\` and \`xxd\` — magic bytes may be corrupted or appended
+- For images: run \`exiftool\` (metadata), \`steghide\` (embedded data with passphrase), \`zsteg\` (LSB steganography on PNG/BMP), \`stegsolve\` (visual plane analysis)
+- Use \`binwalk\` to detect embedded files or appended data after the image EOF
+- Check for LSB encoding in audio files with \`stegolsb\` or spectrograms via \`sox\`/\`audacity\`
+- Try common passphrases (empty string, challenge name, challenge description keywords) for password-protected steghide`;
+  }
+
   if (cat === "forensics" || cat === "forensic") {
     return `**Category tactics (Forensics):**
 - Check file types with \`file\` and \`xxd\` — magic bytes may be corrupted or misleading
@@ -132,7 +140,7 @@ function buildCategoryTactics(category: string): string {
 
   if (cat === "osint") {
     return `**Category tactics (OSINT):**
-- Use google_search and web_fetch to find information from public sources
+- Use google_search for discovery and \`run_bash\` with \`curl\` to fetch pages from public sources
 - Check social media, GitHub profiles, domain registrations, cached pages
 - Look for metadata in provided files (EXIF GPS coords, document author, creation dates)
 - Reverse image search, archive.org lookups, DNS history`;
@@ -141,13 +149,13 @@ function buildCategoryTactics(category: string): string {
   return "";
 }
 
-function buildConnectionHints(connectionInfo: string): string {
+function buildConnectionHints(connectionInfo: string, browserAvailable = false): string {
   const conn = connectionInfo.trim();
   if (!conn) return "";
 
   if (/^https?:\/\//.test(conn)) {
     return `> **FIRST ACTION**: Connect to the web service immediately.
-> Use \`run_bash\` with \`curl\` for initial recon, or \`browser_action\` for interactive testing.
+> Use \`run_bash\` with \`curl\` for initial recon${browserAvailable ? ", or \\`browser_action\\` for interactive testing" : ""}.
 > The flag is on the service — do NOT spend time exploring local files first.
 
 **Service:** \`${conn}\` (Web)`;
@@ -182,7 +190,7 @@ function buildConnectionHints(connectionInfo: string): string {
 **Service:** \`${conn}\``;
 }
 
-function buildCtfBlock(config: AgentPromptConfig): string {
+function buildCtfBlock(config: AgentPromptConfig, browserAvailable: boolean): string {
   const ctf = config.ctfConfig!;
   const lines: string[] = [];
 
@@ -190,17 +198,15 @@ function buildCtfBlock(config: AgentPromptConfig): string {
   lines.push(`You are solving challenges in CTF "${ctf.ctfName}". Challenge files are synced to ${ctf.workspacePath}.`);
   lines.push(`Each subdirectory contains a challenge.txt (name, category, points, description) and any attached files.`);
   if (ctf.flagFormat) {
-    lines.push(`**Flag format for this CTF:** \`${ctf.flagFormat}\` — flags will match this prefix/pattern. When you find a candidate string matching this format, immediately submit it via \`confirm_flag\`.`);
+    lines.push(`**Flag format for this CTF:** \`${ctf.flagFormat}\` — flags will match this prefix/pattern. When you find a candidate string matching this format, immediately submit it via \`update_engagement_state\` with action \`confirm_flag\`.`);
   }
   lines.push(``);
   lines.push(`**Operational rules:**`);
-  lines.push(`- Use tools immediately. Do not describe what you would do — execute it.`);
   lines.push(`- Be creative and thorough: try the obvious path first, then explore systematically.`);
-  lines.push(`- After each tool result, analyze the output and decide the next action — do not pause for confirmation.`);
   lines.push(`- Ignore placeholder flags like \`flag{placeholder}\`, \`CTF{flag}\`, or \`FLAG{example}\` — only submit real flags.`);
   lines.push(`- There is no separate \`submit_flag\` tool in this environment. The CTF submission mechanism is: call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to the exact flag string.`);
-  lines.push(`- Calling \`confirm_flag\` persists the flag to the CTF dashboard and triggers backend auto-submit to CTFd (best effort). Never claim submission is unavailable.`);
-  lines.push(`- If the user message contains a flag directly (for example: "Submitted: CTF{...}" or "flag is CTF{...}"), immediately call \`confirm_flag\` with that value before any prose.`);
+  lines.push(`- This persists the flag to the CTF dashboard and triggers backend auto-submit to CTFd (best effort). Never claim submission is unavailable.`);
+  lines.push(`- If the user message contains a flag directly (for example: "Submitted: CTF{...}" or "flag is CTF{...}"), immediately call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to that flag before any prose.`);
   lines.push(`- If an approach is not working after 2-3 attempts, pivot to a different technique.`);
   lines.push(`- Record every finding with update_engagement_state as you go.`);
   lines.push(`</ctf_mode>`);
@@ -208,7 +214,7 @@ function buildCtfBlock(config: AgentPromptConfig): string {
 
   if (ctf.activeSolve) {
     const solve = ctf.activeSolve;
-    const connHints = buildConnectionHints(solve.connectionInfo ?? "");
+    const connHints = buildConnectionHints(solve.connectionInfo ?? "", browserAvailable);
     const categoryTactics = buildCategoryTactics(solve.category ?? "");
     const fileHints = buildFileHints(solve.files);
 
@@ -313,6 +319,19 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
 - Tools auto-normalize \\r\\n line endings and recalculate Content-Length.
 - Preserve all original headers (Host, Cookie, Authorization, etc.) unless intentionally testing without them.`;
 
+  const burpTestingSteps = `**Test with Repeater**: Use send_to_burp_repeater to replay and modify captured requests with crafted payloads:
+   - Logical vulnerability testing (IDOR, privilege escalation, business logic flaws)
+   - Injection testing (SQLi, XSS, SSTI, command injection)
+   - Authentication/authorization bypass attempts
+   - Header manipulation and parameter tampering
+
+**Brute-force with Intruder**: Use send_to_burp_intruder when you need to test many payloads:
+   - Credential brute-forcing (username/password lists)
+   - Fuzzing parameter values with wordlists
+   - Enumerating valid IDs, tokens, or paths
+
+**Out-of-band testing**: Use burp_collaborator to detect blind vulnerabilities where no direct response is visible.`;
+
   let burpSection = "";
 
   if (burpConfigured && browserConfigured) {
@@ -337,20 +356,9 @@ When the user asks you to test a web application feature or functionality:
 
 4. **Retrieve and analyze requests**: Use search_burp_proxy_history with action "get" to pull full request/response details for interesting entries — look for endpoints with parameters, tokens, session identifiers, or state-changing operations.
 
-5. **Test with Repeater**: Use send_to_burp_repeater to replay and modify captured requests with crafted payloads:
-   - Logical vulnerability testing (IDOR, privilege escalation, business logic flaws)
-   - Injection testing (SQLi, XSS, SSTI, command injection)
-   - Authentication/authorization bypass attempts
-   - Header manipulation and parameter tampering
+5. ${burpTestingSteps}
 
-6. **Brute-force with Intruder**: Use send_to_burp_intruder when you need to test many payloads against a captured request:
-   - Credential brute-forcing (username/password lists)
-   - Fuzzing parameter values with wordlists
-   - Enumerating valid IDs, tokens, or paths
-
-7. **Out-of-band testing**: Use burp_collaborator to detect blind vulnerabilities where no direct response is visible.
-
-8. **Iterate**: Use browser_action again to explore additional flows, authenticate as different users, or reach deeper application states — then repeat the analyze-and-test cycle on the new traffic.
+6. **Iterate**: Use browser_action again to explore additional flows, authenticate as different users, or reach deeper application states — then repeat the analyze-and-test cycle on the new traffic.
 
 ## Key Principles
 - **Browser-first discovery**: Prefer using browser_action to generate traffic rather than manually constructing initial requests. The browser handles JavaScript rendering, CSRF tokens, cookies, and complex multi-step flows automatically.
@@ -375,22 +383,9 @@ When testing a web application with Burp configured:
 
 3. **Retrieve details**: Use search_burp_proxy_history with action "get" to fetch the full request/response for target entries. This gives you the exact headers, cookies, and body to work with.
 
-4. **Test with Repeater**: Use send_to_burp_repeater to send modified versions of the request with custom payloads. This is ideal for:
-   - Logical vulnerability testing (IDOR, privilege escalation, business logic flaws)
-   - Injection testing with specific crafted payloads (SQLi, XSS, SSTI, command injection)
-   - Authentication/authorization bypass attempts
-   - Header manipulation and parameter tampering
-   - Analyzing how the server responds to each crafted request
+4. ${burpTestingSteps}
 
-5. **Brute-force with Intruder**: Use send_to_burp_intruder when you need to test many payloads:
-   - Credential brute-forcing (username/password lists)
-   - Fuzzing parameter values with wordlists
-   - Enumerating valid IDs, tokens, or paths
-   - Testing large payload sets across multiple insertion points
-
-6. **Out-of-band testing**: Use burp_collaborator to detect blind vulnerabilities where no direct response is visible.
-
-7. **Iterate**: Based on findings, deepen testing on promising vectors. Report findings with severity, evidence, and reproduction steps.
+5. **Iterate**: Based on findings, deepen testing on promising vectors. Report findings with severity, evidence, and reproduction steps.
 
 ${burpRequestFormatting}
 </burp_integration>\n`;
@@ -450,7 +445,7 @@ ${burpSection}<guidelines>
 - Destructive system commands (rm -rf /, disk wipes, shutdowns) are blocked and require explicit user approval regardless of auto-run settings.
 </guidelines>
 
-${config.ctfConfig ? buildCtfBlock(config) : ""}<state_management>
+${config.ctfConfig ? buildCtfBlock(config, browserConfigured) : ""}<state_management>
 You have a structured engagement state that persists across context summarizations. Use the update_engagement_state tool to record findings as you discover them. This ensures no information is lost when conversation history is compressed.
 
 Record these findings immediately when discovered:
@@ -463,8 +458,8 @@ Record these findings immediately when discovered:
 ${config.ctfConfig ? `
 **CTF — critical:** The moment you obtain or receive a real flag, you MUST call update_engagement_state with action "confirm_flag" and data: { "value": "<the flag>" }. If the current challenge name is not in context, include "challengeName": "<exact challenge title from challenge.txt>" so it appears on the user's CTF dashboard.
 Do not only paste the flag in chat — the tool call is required for persistence and auto-submit.
-Do not state that a submission tool is unavailable: in this system, "confirm_flag" is the submission trigger.
-Time-to-flag is recorded from when the user runs \`/solve <challenge>\` (or an equivalent solveHistory start) until \`confirm_flag\` — encourage starting with \`/solve\` so timing is accurate.` : ""}
+Do not state that a submission tool is unavailable — \`update_engagement_state\` with action \`confirm_flag\` is the submission mechanism.
+Time-to-flag is recorded from when the user runs \`/solve <challenge>\` (or an equivalent solveHistory start) until the \`confirm_flag\` action is called — encourage starting with \`/solve\` so timing is accurate.` : ""}
 
 The structured state is injected into your context automatically — do not duplicate it in prose. Focus your messages on reasoning, analysis, and next-step planning.
 </state_management>`;

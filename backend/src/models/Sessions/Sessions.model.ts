@@ -121,6 +121,7 @@ export interface CtfConfigDoc {
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
+  workspaceId: string;
   name: string;
   description: string;
   boxId?: mongoose.Types.ObjectId;
@@ -217,6 +218,7 @@ const SubagentSchema = new Schema(
 const SessionSchema = new Schema({
   uid: { type: mongoose.Types.ObjectId, required: true },
   sessionId: { type: String, required: true, unique: true },
+  workspaceId: { type: String, default: "" },
   name: { type: String, required: true },
   description: { type: String, default: "" },
   boxId: { type: mongoose.Types.ObjectId },
@@ -331,6 +333,8 @@ const SessionSchema = new Schema({
     default: undefined,
   },
 });
+
+SessionSchema.index({ workspaceId: 1, status: 1 });
 
 export { AgentMessageSchema };
 export default mongoose.model<SessionDoc>("Session", SessionSchema);

@@ -1,0 +1,409 @@
+@import "../_variables";
+
+.container {
+  background: var(--primary-bg);
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: var(--primary-bg);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 0.25rem 0.5rem;
+  color: var(--secondary-text);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: var(--border-default);
+    color: var(--primary-text);
+  }
+}
+
+.headerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary-text);
+    letter-spacing: -0.03em;
+  }
+}
+
+.typeBadge {
+  font-size: 0.6rem !important;
+  font-weight: 700;
+  padding: 0 0.4rem !important;
+  border-radius: 4px !important;
+  line-height: 1.7 !important;
+  border: none !important;
+  letter-spacing: 0.06em;
+}
+
+.description {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--secondary-text);
+  line-height: 1.3;
+  max-width: 36rem;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.compactBtn {
+  height: 1.6rem !important;
+  min-height: unset !important;
+  padding: 0 0.5rem !important;
+  font-size: 0.68rem !important;
+  border-radius: 5px !important;
+  gap: 0.25rem !important;
+}
+
+.disconnectBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 5px;
+  border: 1px solid var(--border-subtle);
+  background: none;
+  color: var(--secondary-text);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-size: 0.75rem;
+
+  &:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: rgba(255, 62, 62, 0.05);
+  }
+}
+
+.ctfBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.45rem 1.5rem;
+  background: rgba(245, 158, 11, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.72rem;
+  flex-wrap: wrap;
+}
+
+.ctfName {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.ctfUrl {
+  color: var(--secondary-text);
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+}
+
+.flagFormat {
+  background: rgba(153, 51, 255, 0.08);
+  color: var(--primary-purple);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+}
+
+.lastSync {
+  color: var(--secondary-text);
+  font-size: 0.7rem;
+}
+
+.syncStatusInline {
+  color: var(--primary-purple);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.content {
+  padding: 1rem 1.5rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+
+  h2 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-text);
+    letter-spacing: -0.02em;
+  }
+}
+
+.sessionCount {
+  font-size: 0.68rem;
+  color: var(--secondary-text);
+  background: var(--surface-hover);
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+}
+
+.emptyState {
+  display: flex;
+  justify-content: center;
+  padding: 3rem 0;
+
+  :global(.ant-empty-description) {
+    color: var(--secondary-text) !important;
+  }
+}
+
+// Session action button (delete) for extra actions in ChallengeTable
+.sessionActionBtn {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--secondary-text);
+  cursor: pointer;
+  transition: all 0.1s;
+
+  &:hover {
+    color: var(--danger);
+    background: rgba(255, 62, 62, 0.08);
+  }
+}
+
+// Non-CTF session table
+.sessionTable {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sessionTableHeader {
+  display: grid;
+  grid-template-columns: minmax(280px, 3fr) 100px 120px 140px;
+  gap: 0.7rem;
+  padding: 0.6rem 1rem;
+  background: var(--secondary-bg);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-text);
+}
+
+.sessionTableRow {
+  display: grid;
+  grid-template-columns: minmax(280px, 3fr) 100px 120px 140px;
+  gap: 0.7rem;
+  padding: 0.55rem 1rem;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+  transition: background 0.1s;
+  cursor: pointer;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.sessionTableRowRunning {
+  background: rgba(16, 202, 0, 0.03);
+  border-left: 2px solid rgba(16, 202, 0, 0.5);
+
+  &:hover {
+    background: rgba(16, 202, 0, 0.06);
+  }
+}
+
+.sessionNameCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow: hidden;
+}
+
+.sessionNameInner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.sessionNameText {
+  font-weight: 500;
+  color: var(--primary-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionDescInline {
+  font-size: 0.68rem;
+  color: var(--secondary-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 1.1rem;
+}
+
+.stateDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agentStateBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.agentState_running {
+  color: var(--bugbase-green);
+  background: var(--bugbase-green-100);
+}
+
+.agentState_idle {
+  color: var(--secondary-text);
+  background: var(--surface-hover);
+}
+
+.agentState_paused {
+  color: var(--yellow);
+  background: var(--yellow-700);
+}
+
+.agentState_waiting_consent,
+.agentState_waiting_manual_execution {
+  color: var(--orange);
+  background: var(--orange-700);
+}
+
+.sessionDateCol {
+  font-size: 0.72rem;
+  color: var(--secondary-text);
+}
+
+.sessionActionCol {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.openBtn {
+  font-size: 0.68rem !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  border-radius: 4px !important;
+  color: #79c0ff !important;
+  border-color: rgba(121, 192, 255, 0.45) !important;
+  background: rgba(121, 192, 255, 0.08) !important;
+
+  &:hover {
+    border-color: #79c0ff !important;
+    background: rgba(121, 192, 255, 0.14) !important;
+  }
+}
+
+.formWrap {
+  padding-top: 1rem;
+
+  :global(.ant-form-item-label > label) {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--primary-text) !important;
+  }
+
+  :global(.ant-input),
+  :global(.ant-input-password input) {
+    min-height: 2.2rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    background: var(--surface-hover) !important;
+    border: 1px solid var(--border-subtle);
+    color: var(--primary-text);
+    font-size: 0.85rem;
+
+    &:hover,
+    &:focus {
+      border-color: var(--border-default);
+    }
+  }
+
+  :global(.ant-input::placeholder) {
+    color: var(--secondary-text);
+  }
+
+  :global(.ant-input-affix-wrapper) {
+    background: var(--surface-hover) !important;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+  }
+}
+
+.syncStatusBox {
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  background: rgba(153, 51, 255, 0.06);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  color: var(--secondary-text);
+}
