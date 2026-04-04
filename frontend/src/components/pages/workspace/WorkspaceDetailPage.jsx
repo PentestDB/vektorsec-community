@@ -8,14 +8,18 @@ import {
   LinkOutlined,
   DisconnectOutlined,
   PlayCircleOutlined,
+  TrophyFilled,
+  ClockCircleOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { getWorkspaceDetail, createSessionInWorkspace } from "@/services/workspace.service";
 import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd } from "@/services/ctf.service";
 import { deleteSession } from "@/services/agent.service";
+import { formatDurationSec } from "@/utils/formatDuration";
 import moment from "moment";
 import { useRouter } from "next/navigation";
 import { FiTrash, FiFlag, FiKey, FiLock } from "react-icons/fi";
@@ -42,6 +46,10 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   const [ctfAuthMethod, setCtfAuthMethod] = useState("token");
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState("");
+  const [syncProgress, setSyncProgress] = useState(null);
+  const [syncResult, setSyncResult] = useState(null);
+  const [syncError, setSyncError] = useState(null);
+  const syncAbortRef = useRef(null);
   const [newSessionForm] = Form.useForm();
 
   const { data: workspace, isLoading } = useQuery(
@@ -141,37 +149,42 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     }
   };
 
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      setSyncStatus("Syncing...");
+  const handleSync = useCallback(() => {
+    setSyncing(true);
+    setSyncProgress(null);
+    setSyncResult(null);
+    setSyncError(null);
 
-      await new Promise((resolve, reject) => {
-        syncCtfStream(
-          workspaceId,
-          (event) => {
-            if (event.phase === "done") {
-              setSyncStatus(`Synced ${event.total} challenges`);
-            } else if (event.phase === "error") {
-              reject(new Error(event.detail));
-            }
-          },
-          resolve,
-          reject,
-        );
-      });
+    const abort = syncCtfStream(
+      workspaceId,
+      (event) => {
+        if (event.phase === "done") {
+          setSyncResult(event);
+          setSyncProgress(null);
+          setSyncing(false);
+          queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+          queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
+          message.success("Challenges synced!");
+        } else if (event.phase === "error") {
+          setSyncError(event.detail || "Sync failed");
+          setSyncProgress(null);
+          setSyncing(false);
+          message.error(event.detail || "Sync failed");
+        } else {
+          setSyncProgress(event);
+        }
+      },
+      () => { setSyncing(false); },
+      (err) => {
+        setSyncError(err?.message || "Sync failed");
+        setSyncProgress(null);
+        setSyncing(false);
+        message.error(err?.message || "Sync failed");
+      },
+    );
 
-      queryClient.invalidateQueries(["workspace-detail", workspaceId]);
-      queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
-      message.success("Challenges synced!");
-      setSyncStatus("");
-    } catch (err) {
-      message.error(err?.message || "Sync failed");
-      setSyncStatus("");
-    } finally {
-      setSyncing(false);
-    }
-  };
+    syncAbortRef.current = abort;
+  }, [workspaceId, queryClient]);
 
   const [submittingFlag, setSubmittingFlag] = useState(null);
 
@@ -180,6 +193,17 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   const isCTF = workspace?.type === "ctf";
   const ctfConnected = workspace?.ctf?.connected;
   const sessions = workspace?.sessions || [];
+
+  const solvedCount = challenges.filter(
+    (c) => c.status === "solved" || c.status === "submitted",
+  ).length;
+
+  const solvedWithTime = challenges.filter(
+    (c) => (c.status === "solved" || c.status === "submitted") && c.timeToSolveSec != null,
+  );
+  const totalSolveTimeSec = solvedWithTime.reduce((acc, c) => acc + c.timeToSolveSec, 0);
+  const avgSolveTimeSec =
+    solvedWithTime.length > 0 ? Math.round(totalSolveTimeSec / solvedWithTime.length) : null;
 
   const sessionsByName = useMemo(() => {
     const map = {};
@@ -271,28 +295,58 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
               }>
                 {workspace.type?.toUpperCase()}
               </Tag>
+              {isCTF && ctfConnected && challenges.length > 0 && (
+                <span className={styles.scoreBadge}>
+                  <TrophyFilled /> {solvedCount}/{challenges.length}
+                </span>
+              )}
+              {isCTF && ctfConnected && solvedWithTime.length > 0 && (
+                <span className={styles.statBadge}>
+                  <ClockCircleOutlined /> {formatDurationSec(totalSolveTimeSec)} total
+                </span>
+              )}
+              {isCTF && ctfConnected && avgSolveTimeSec != null && (
+                <span className={styles.statBadge}>
+                  ⌀ {formatDurationSec(avgSolveTimeSec)} / challenge
+                </span>
+              )}
             </div>
-            {workspace.description && (
+            {isCTF && ctfConnected ? (
+              <p className={styles.ctfSubtitle}>
+                <FiFlag size={11} />
+                {workspace.ctf.ctfName && <span className={styles.ctfSubtitleName}>{workspace.ctf.ctfName}</span>}
+                {workspace.ctf.url && <span className={styles.ctfSubtitleUrl}>{workspace.ctf.url}</span>}
+                {workspace.ctf.flagFormat && <code className={styles.flagFormat}>{workspace.ctf.flagFormat}</code>}
+                {workspace.ctf.lastSynced && (
+                  <span>Synced {moment(workspace.ctf.lastSynced).fromNow()}</span>
+                )}
+                {syncStatus && <span className={styles.syncStatusInline}>{syncStatus}</span>}
+              </p>
+            ) : workspace.description ? (
               <p className={styles.description}>{workspace.description}</p>
-            )}
+            ) : null}
           </div>
         </div>
         <div className={styles.headerRight}>
           {isCTF && ctfConnected && (
             <>
-              <PrimaryButton
-                white
+              <Button
+                icon={<SyncOutlined spin={syncing} />}
                 onClick={handleSync}
-                loading={syncing}
-                className={styles.compactBtn}
+                disabled={syncing}
+                size="small"
+                className={styles.syncBtn}
               >
-                <SyncOutlined /> Sync Challenges
-              </PrimaryButton>
-              <Tooltip title="Disconnect CTF">
-                <button className={styles.disconnectBtn} onClick={handleDisconnect}>
-                  <DisconnectOutlined />
-                </button>
-              </Tooltip>
+                {syncing ? "Syncing..." : "Sync Challenges"}
+              </Button>
+              <Button
+                icon={<DisconnectOutlined />}
+                onClick={handleDisconnect}
+                size="small"
+                className={styles.disconnectBtn}
+              >
+                Disconnect
+              </Button>
             </>
           )}
           {isCTF && !ctfConnected && (
@@ -310,24 +364,6 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         </div>
       </div>
 
-      {isCTF && ctfConnected && (
-        <div className={styles.ctfBar}>
-          <span className={styles.ctfName}>
-            <FiFlag size={13} /> {workspace.ctf.ctfName}
-          </span>
-          <span className={styles.ctfUrl}>{workspace.ctf.url}</span>
-          {workspace.ctf.flagFormat && (
-            <code className={styles.flagFormat}>{workspace.ctf.flagFormat}</code>
-          )}
-          {workspace.ctf.lastSynced && (
-            <span className={styles.lastSync}>
-              Synced {moment(workspace.ctf.lastSynced).fromNow()}
-            </span>
-          )}
-          {syncStatus && <span className={styles.syncStatusInline}>{syncStatus}</span>}
-        </div>
-      )}
-
       <div className={styles.content}>
         <div className={styles.sectionHeader}>
           <h2>{isCTF && ctfConnected ? "Challenges" : "Sessions"}</h2>
@@ -339,9 +375,19 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           </span>
         </div>
 
+        {isCTF && ctfConnected && syncing && syncProgress && (
+          <SyncProgressPanel progress={syncProgress} styles={styles} />
+        )}
+        {isCTF && ctfConnected && !syncing && syncResult && (
+          <SyncResultPanel result={syncResult} styles={styles} />
+        )}
+        {isCTF && ctfConnected && !syncing && syncError && (
+          <div className={styles.syncError}>{syncError}</div>
+        )}
+
         {isCTF && ctfConnected && challengesLoading ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: "3rem 0" }}>
-            <Spin size="small" />
+          <div className={styles.challengeListLoading}>
+            <LoadingOutlined /> Loading challenges...
           </div>
         ) : isCTF && ctfConnected && challenges.length > 0 ? (
           <ChallengeTable
@@ -514,6 +560,56 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           </Form>
         </div>
       </ModalComponent>
+    </div>
+  );
+};
+
+const SyncProgressPanel = ({ progress, styles }) => {
+  const { phase, current, total, name, action } = progress;
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  const phaseLabel = phase === "fetch" ? "Fetching challenges" : "Syncing to workspace";
+  const actionIcon =
+    action === "new" ? "+" : action === "updated" ? "~" : action === "skipped" ? "-" : "";
+  const actionClass =
+    action === "new" ? styles.actionNew :
+    action === "updated" ? styles.actionUpdated :
+    action === "skipped" ? styles.actionSkipped : "";
+
+  return (
+    <div className={styles.progressPanel}>
+      <div className={styles.progressHeader}>
+        <span className={styles.progressPhase}>{phaseLabel}</span>
+        <span className={styles.progressCount}>{current}/{total}</span>
+      </div>
+      <div className={styles.progressBarTrack}>
+        <div className={styles.progressBarFill} style={{ width: `${pct}%` }} />
+      </div>
+      {name && (
+        <div className={styles.progressCurrent}>
+          {actionIcon && (
+            <span className={`${styles.progressAction} ${actionClass}`}>{actionIcon}</span>
+          )}
+          <span className={styles.progressName}>{name}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SyncResultPanel = ({ result, styles }) => {
+  const parts = [];
+  if (result.synced > 0) parts.push(`${result.synced} new`);
+  if (result.updated > 0) parts.push(`${result.updated} updated`);
+  if (result.skipped > 0) parts.push(`${result.skipped} unchanged`);
+
+  return (
+    <div className={styles.syncSuccess}>
+      <span className={styles.resultSummary}>
+        {result.total} challenge{result.total !== 1 ? "s" : ""} processed
+      </span>
+      {parts.length > 0 && (
+        <span className={styles.resultBreakdown}>{parts.join(" · ")}</span>
+      )}
     </div>
   );
 };

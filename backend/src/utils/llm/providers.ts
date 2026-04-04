@@ -97,10 +97,10 @@ async function maybeRefreshOAuthToken(): Promise<string | null> {
 async function loadProviderConfig(): Promise<ProviderConfig> {
   const env = readEnvFile();
 
-  const provider = env.MODEL_PROVIDER || (await getSecrets("MODEL_PROVIDER")) || "openai";
-  const apiKey = env.MODEL_API_KEY || (await getSecrets("MODEL_API_KEY"));
-  const model = env.MODEL || (await getSecrets("MODEL"));
-  const baseURL = env.MODEL_BASE_PATH || (await getSecrets("MODEL_BASE_PATH"));
+  const provider = env.ORCHESTRATOR_PROVIDER || (await getSecrets("ORCHESTRATOR_PROVIDER")) || "openai";
+  const apiKey = env.ORCHESTRATOR_API_KEY || (await getSecrets("ORCHESTRATOR_API_KEY"));
+  const model = env.ORCHESTRATOR_MODEL || (await getSecrets("ORCHESTRATOR_MODEL"));
+  const baseURL = env.ORCHESTRATOR_BASE_URL || (await getSecrets("ORCHESTRATOR_BASE_URL"));
 
   if (provider === "anthropic") {
     const oauthToken = await maybeRefreshOAuthToken();
@@ -108,7 +108,7 @@ async function loadProviderConfig(): Promise<ProviderConfig> {
       return {
         provider: "anthropic",
         apiKey: "",
-        model: model || "claude-sonnet-4-20250514",
+        model: model || "claude-sonnet-4-6",
         baseURL: baseURL || undefined,
         authMethod: "oauth",
         oauthAccessToken: oauthToken,
@@ -123,6 +123,23 @@ async function loadProviderConfig(): Promise<ProviderConfig> {
     baseURL: baseURL || undefined,
     authMethod: "api_key",
   };
+}
+
+// ─── Model ID normalization ──────────────────────────────────────────
+
+const MODEL_ALIASES: Record<string, string> = {
+  "claude-sonnet-4.6": "claude-sonnet-4-6",
+  "claude-opus-4.6": "claude-opus-4-6",
+  "claude-haiku-4.5": "claude-haiku-4-5",
+  "claude-sonnet-4.5": "claude-sonnet-4-5",
+  "claude-opus-4.5": "claude-opus-4-5",
+  "claude-opus-4.1": "claude-opus-4-1",
+};
+
+export function normalizeModelId(model: string): string {
+  if (!model) return model;
+  const lower = model.trim();
+  return MODEL_ALIASES[lower] ?? lower;
 }
 
 // ─── Provider cache ──────────────────────────────────────────────────
@@ -145,6 +162,81 @@ export async function getProvider(): Promise<ProviderConfig> {
 export function clearProviderCache(): void {
   cachedProvider = null;
   cacheTimestamp = 0;
+  userProviderCache.clear();
+}
+
+// ─── Per-user model config ───────────────────────────────────────────
+
+import type { ModelPresetDoc } from "../../models/User/User.model";
+import { readSwarmModelsFromEnv } from "../swarmModelEnv";
+
+const userProviderCache = new Map<string, { config: ProviderConfig; ts: number }>();
+
+export interface UserModelsResult {
+  orchestrator: ModelPresetDoc;
+  racers: ModelPresetDoc[];
+  all: ModelPresetDoc[];
+}
+
+export async function getUserModels(_userId: string): Promise<UserModelsResult> {
+  const env = readEnvFile();
+  const models: ModelPresetDoc[] = readSwarmModelsFromEnv(env);
+
+  if (models.length === 0) {
+    const envConfig = await getProvider();
+    const fallback: ModelPresetDoc = {
+      label: envConfig.model,
+      provider: envConfig.provider,
+      model: envConfig.model,
+      apiKey: envConfig.apiKey,
+      isOrchestrator: true,
+    };
+    return { orchestrator: fallback, racers: [], all: [fallback] };
+  }
+
+  const orchestratorIdx = models.findIndex((m) => m.isOrchestrator);
+  const orchestrator = orchestratorIdx >= 0 ? models[orchestratorIdx] : models[0];
+  const racers = models.filter((m) => m !== orchestrator);
+
+  return { orchestrator, racers, all: models };
+}
+
+export async function presetToProviderConfig(preset: ModelPresetDoc): Promise<ProviderConfig> {
+  const envConfig = await getProvider();
+  const model = normalizeModelId(preset.model);
+
+  if (preset.provider === "anthropic" && !preset.apiKey) {
+    const oauthToken = await maybeRefreshOAuthToken();
+    if (oauthToken) {
+      return {
+        provider: "anthropic",
+        apiKey: "",
+        model,
+        baseURL: preset.baseURL || undefined,
+        authMethod: "oauth",
+        oauthAccessToken: oauthToken,
+      };
+    }
+  }
+
+  return {
+    provider: preset.provider as ProviderType,
+    model,
+    apiKey: preset.apiKey || envConfig.apiKey,
+    baseURL: preset.baseURL || undefined,
+    authMethod: "api_key",
+  };
+}
+
+export async function getProviderForUser(userId: string): Promise<ProviderConfig> {
+  const cached = userProviderCache.get(userId);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.config;
+
+  const { orchestrator } = await getUserModels(userId);
+  const config = await presetToProviderConfig(orchestrator);
+
+  userProviderCache.set(userId, { config, ts: Date.now() });
+  return config;
 }
 
 // ─── Shared types ────────────────────────────────────────────────────
@@ -169,6 +261,7 @@ export interface InvokeOptions {
   userId?: string;
   tags?: string[];
   generationName?: string;
+  providerOverride?: ProviderConfig;
 }
 
 export interface InvokeResult {
@@ -357,7 +450,7 @@ function getClient(config: ProviderConfig, opts: InvokeOptions): OpenAI {
 // ─── invoke_llm — non-streaming (kept for summarization, simple calls) ───
 
 export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
-  const config = await getProvider();
+  const config = opts.providerOverride ?? await getProvider();
   const client = getClient(config, opts);
   const requestedTemp = clampTemperature(config.model, opts.temperature ?? 0.75);
   const start = Date.now();
@@ -877,7 +970,7 @@ async function runOpenAIResponsesStream(
 // ─── invoke_llm_streaming — streaming with tool calls ────────────────
 
 export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promise<InvokeResult> {
-  const config = await getProvider();
+  const config = opts.providerOverride ?? await getProvider();
   const reasoningMode = opts.reasoningMode ?? "medium";
   const start = Date.now();
 

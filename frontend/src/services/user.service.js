@@ -164,3 +164,16 @@ export const updateAgentToolsConfig = async (body) => {
   return res.data;
 };
 
+export const getSwarmModels = async () => {
+  const res = await apiClient.get("/user/get-swarm-models");
+  return res.data;
+};
+
+export const updateSwarmModels = async (body) => {
+  const res = await apiClient.post("/user/update-swarm-models", body);
+  return res.data;
+};
+
+export const getModels = getSwarmModels;
+export const updateModels = updateSwarmModels;
+

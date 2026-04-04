@@ -7,12 +7,14 @@ import { notification } from "antd";
 
 const EMPTY_MESSAGES = [];
 const EMPTY_SUBAGENTS = [];
+const EMPTY_SWARMS = [];
 const DEFAULT_STATE = {
   messages: EMPTY_MESSAGES,
   agentState: "idle",
   pendingConsent: null,
   pendingManualExecution: null,
   subagents: EMPTY_SUBAGENTS,
+  swarms: EMPTY_SWARMS,
   tokenUsage: null,
 };
 
@@ -23,7 +25,7 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
     store.getState().getOrCreate(sessionId);
   }, [sessionId, store]);
 
-  const { messages, agentState, pendingConsent, pendingManualExecution, subagents, tokenUsage } =
+  const { messages, agentState, pendingConsent, pendingManualExecution, subagents, swarms, tokenUsage } =
     useAgentStreamStore(
       useShallow((state) => {
         const s = state.sessions[sessionId];
@@ -34,6 +36,7 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
           pendingConsent: s.pendingConsent ?? null,
           pendingManualExecution: s.pendingManualExecution ?? null,
           subagents: s.subagents ?? EMPTY_SUBAGENTS,
+          swarms: s.swarms ?? EMPTY_SWARMS,
           tokenUsage: s.tokenUsage ?? null,
         };
       }),
@@ -66,6 +69,11 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
 
   const setSubagents = useCallback(
     (val) => store.getState().setSubagents(sessionId, val),
+    [sessionId, store],
+  );
+
+  const setSwarms = useCallback(
+    (val) => store.getState().setSwarms(sessionId, val),
     [sessionId, store],
   );
 
@@ -417,11 +425,13 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
           ]);
         })
         .onEvent("subagent_progress", (data) => {
+          const MAX_THINKING = 20_000;
           setSubagents((prev) =>
             prev.map((s) => {
               if (s.subagentId !== data.subagentId) return s;
               if (data.type === "thinking") {
-                return { ...s, thinkingContent: s.thinkingContent + data.content };
+                const full = s.thinkingContent + data.content;
+                return { ...s, thinkingContent: full.length > MAX_THINKING ? full.slice(-MAX_THINKING) : full };
               }
               if (data.type === "tool_start" || data.type === "tool_done" || data.type === "tool_call_start") {
                 return { ...s, toolCalls: [...s.toolCalls, { type: data.type, content: data.content }] };
@@ -467,6 +477,248 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
             prev.map((m) =>
               m.id === `subagent_${data.subagentId}`
                 ? { ...m, status: "failed", error: data.error }
+                : m,
+            ),
+          );
+        })
+        .onEvent("swarm_spawned", (data) => {
+          setSwarms((prev) => {
+            const nextSwarm = {
+              swarmId: data.swarmId,
+              goal: data.goal,
+              winCondition: data.winCondition,
+              status: "running",
+              agents: data.agents.map((a) => ({
+                agentId: a.agentId,
+                task: a.task,
+                model: a.model,
+                status: "running",
+                thinkingContent: "",
+                toolCalls: [],
+                messages: [],
+              })),
+              findings: [],
+              createdAt: new Date(),
+            };
+            const existingIdx = prev.findIndex((sw) => sw.swarmId === data.swarmId);
+            if (existingIdx === -1) return [...prev, nextSwarm];
+            return prev.map((sw) => (sw.swarmId === data.swarmId ? { ...sw, ...nextSwarm } : sw));
+          });
+          setMessages((prev) => {
+            const nextSwarmMsg = {
+              id: `swarm_${data.swarmId}`,
+              role: "swarm",
+              swarmId: data.swarmId,
+              goal: data.goal,
+              winCondition: data.winCondition,
+              agents: data.agents,
+              status: "running",
+              content: "",
+              timestamp: new Date(),
+            };
+            const existingIdx = prev.findIndex((m) => m.id === `swarm_${data.swarmId}`);
+            if (existingIdx === -1) return [...prev, nextSwarmMsg];
+            return prev.map((m) => (m.id === `swarm_${data.swarmId}` ? { ...m, ...nextSwarmMsg } : m));
+          });
+        })
+        .onEvent("swarm_agent_progress", (data) => {
+          // Buffer all racer progress events and flush on the next animation frame
+          // to avoid O(N) Zustand clones per SSE chunk.
+          const r2 = refs();
+          r2.swarmProgressBufferRef.current.push(data);
+          if (!r2.swarmProgressRafRef.current) {
+            r2.swarmProgressRafRef.current = requestAnimationFrame(() => {
+              const batch = r2.swarmProgressBufferRef.current;
+              r2.swarmProgressBufferRef.current = [];
+              r2.swarmProgressRafRef.current = null;
+              if (batch.length === 0) return;
+              // Cap strings to avoid unbounded memory growth.
+              const MAX_OUTPUT = 32_000;   // 32 KB per live tool call
+              const MAX_THINKING = 20_000; // 20 KB per thinking block
+              setSwarms((prev) =>
+                prev.map((sw) => {
+                  const events = batch.filter((d) => d.swarmId === sw.swarmId);
+                  if (events.length === 0) return sw;
+                  return {
+                    ...sw,
+                    agents: sw.agents.map((a) => {
+                      const agentEvents = events.filter((d) => d.agentId === a.agentId);
+                      if (agentEvents.length === 0) return a;
+
+                      let updated = a;
+                      for (const data of agentEvents) {
+                        const msgs = [...(updated.messages || [])];
+
+                        if (data.type === "thinking" || data.type === "reasoning") {
+                          const last = msgs[msgs.length - 1];
+                          if (last && last.type === "thinking") {
+                            const next = last.content + data.content;
+                            msgs[msgs.length - 1] = { ...last, content: next.length > MAX_THINKING ? next.slice(-MAX_THINKING) : next };
+                          } else {
+                            msgs.push({ type: "thinking", content: data.content });
+                          }
+                          const full = (updated.thinkingContent || "") + data.content;
+                          updated = { ...updated, thinkingContent: full.length > MAX_THINKING ? full.slice(-MAX_THINKING) : full, messages: msgs };
+                          continue;
+                        }
+
+                        if (data.type === "assistant_text") {
+                          const last = msgs[msgs.length - 1];
+                          if (last && last.type === "assistant") {
+                            msgs[msgs.length - 1] = { ...last, content: last.content + data.content };
+                          } else {
+                            msgs.push({ type: "assistant", content: data.content });
+                          }
+                          updated = { ...updated, messages: msgs };
+                          continue;
+                        }
+
+                        if (data.type === "tool_start") {
+                          try {
+                            const parsed = JSON.parse(data.content);
+                            msgs.push({ type: "tool", name: parsed.name, args: parsed.args, status: "running", output: "" });
+                            updated = { ...updated, toolCalls: [...updated.toolCalls, { name: parsed.name, args: parsed.args, status: "running" }], messages: msgs };
+                          } catch { /* ignore */ }
+                          continue;
+                        }
+
+                        if (data.type === "tool_done") {
+                          try {
+                            const parsed = JSON.parse(data.content);
+                            const updatedCalls = [...updated.toolCalls];
+                            const idx = updatedCalls.findLastIndex((tc) => tc.name === parsed.name && tc.status === "running");
+                            if (idx >= 0) {
+                              updatedCalls[idx] = { ...updatedCalls[idx], status: "done", output: parsed.output || "", exitCode: parsed.exitCode };
+                            }
+                            const msgIdx = msgs.findLastIndex((m) => m.type === "tool" && m.name === parsed.name && m.status === "running");
+                            if (msgIdx >= 0) {
+                              msgs[msgIdx] = { ...msgs[msgIdx], status: "done", output: parsed.output || msgs[msgIdx].output || "", exitCode: parsed.exitCode };
+                            }
+                            updated = { ...updated, toolCalls: updatedCalls, messages: msgs };
+                          } catch { /* ignore */ }
+                          continue;
+                        }
+
+                        if (data.type === "tool_output") {
+                          const updatedCalls = [...updated.toolCalls];
+                          if (updatedCalls.length > 0) {
+                            const last = updatedCalls[updatedCalls.length - 1];
+                            const next = (last.output || "") + data.content;
+                            updatedCalls[updatedCalls.length - 1] = { ...last, output: next.length > MAX_OUTPUT ? next.slice(-MAX_OUTPUT) : next };
+                          }
+                          const msgIdx = msgs.findLastIndex((m) => m.type === "tool" && m.status === "running");
+                          if (msgIdx >= 0) {
+                            const next = (msgs[msgIdx].output || "") + data.content;
+                            msgs[msgIdx] = { ...msgs[msgIdx], output: next.length > MAX_OUTPUT ? next.slice(-MAX_OUTPUT) : next };
+                          }
+                          updated = { ...updated, toolCalls: updatedCalls, messages: msgs };
+                          continue;
+                        }
+
+                        if (data.type === "tool_call_start" || data.type === "tool_call_ready") {
+                          updated = { ...updated, toolCalls: [...updated.toolCalls, { type: data.type, content: data.content }] };
+                          continue;
+                        }
+                      }
+                      return updated;
+                    }),
+                  };
+                }),
+              );
+            });
+          }
+
+          // Racer chat is rendered separately in RacerChatView; do not mirror into orchestrator messages.
+        })
+        .onEvent("swarm_finding", (data) => {
+          setSwarms((prev) =>
+            prev.map((sw) => {
+              if (sw.swarmId !== data.swarmId) return sw;
+              return {
+                ...sw,
+                findings: [
+                  ...sw.findings,
+                  { agentId: data.agentId, finding: data.finding, isSuccess: data.isSuccess },
+                ],
+              };
+            }),
+          );
+        })
+        .onEvent("swarm_agent_completed", (data) => {
+          setSwarms((prev) =>
+            prev.map((sw) => {
+              if (sw.swarmId !== data.swarmId) return sw;
+              return {
+                ...sw,
+                ...(data.isWinner ? { winner: data.agentId } : {}),
+                agents: sw.agents.map((a) =>
+                  a.agentId === data.agentId
+                    ? { ...a, status: data.status, result: data.result }
+                    : a,
+                ),
+              };
+            }),
+          );
+        })
+        .onEvent("swarm_agent_token_usage", (data) => {
+          setSwarms((prev) =>
+            prev.map((sw) => {
+              if (sw.swarmId !== data.swarmId) return sw;
+              return {
+                ...sw,
+                agents: sw.agents.map((a) =>
+                  a.agentId === data.agentId
+                    ? {
+                      ...a,
+                      tokenUsage: {
+                        totalTokens: data.totalTokens,
+                        promptTokens: data.promptTokens,
+                        completionTokens: data.completionTokens,
+                        contextLimit: data.contextLimit,
+                        iteration: data.iteration,
+                        maxIterations: data.maxIterations,
+                      },
+                    }
+                    : a,
+                ),
+              };
+            }),
+          );
+        })
+        .onEvent("swarm_paused", (data) => {
+          setSwarms((prev) =>
+            prev.map((sw) => {
+              if (sw.swarmId !== data.swarmId) return sw;
+              return {
+                ...sw,
+                status: "paused",
+                agents: sw.agents.map((a) =>
+                  a.status === "running" ? { ...a, status: "paused" } : a,
+                ),
+              };
+            }),
+          );
+        })
+        .onEvent("swarm_completed", (data) => {
+          setSwarms((prev) =>
+            prev.map((sw) => {
+              if (sw.swarmId !== data.swarmId) return sw;
+              return {
+                ...sw,
+                status: data.status,
+                winner: data.winner,
+                agents: sw.agents.map((a) =>
+                  a.status === "running"
+                    ? { ...a, status: "cancelled" }
+                    : a,
+                ),
+              };
+            }),
+          );
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === `swarm_${data.swarmId}`
+                ? { ...m, status: data.status, winner: data.winner, result: data.summary }
                 : m,
             ),
           );
@@ -551,6 +803,8 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
             promptTokens: data.promptTokens,
             completionTokens: data.completionTokens,
             contextLimit: data.contextLimit,
+            iteration: data.iteration,
+            maxIterations: data.maxIterations,
           });
         })
         .onEvent("summary_done", () => {})
@@ -579,11 +833,23 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
         })
         .onEvent("done", () => {
           flushAssistant();
+          const r2 = refs();
+          if (r2.swarmProgressRafRef.current) {
+            cancelAnimationFrame(r2.swarmProgressRafRef.current);
+            r2.swarmProgressRafRef.current = null;
+            r2.swarmProgressBufferRef.current = [];
+          }
           setAgentState("idle");
           onComplete?.();
         })
         .onEvent("_stream_end", () => {
           flushAssistant();
+          const r2 = refs();
+          if (r2.swarmProgressRafRef.current) {
+            cancelAnimationFrame(r2.swarmProgressRafRef.current);
+            r2.swarmProgressRafRef.current = null;
+            r2.swarmProgressBufferRef.current = [];
+          }
           setAgentState((prev) => {
             if (prev === "running") return "idle";
             return prev;
@@ -591,7 +857,7 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
           refs().controllerRef.current = null;
         });
     },
-    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setSwarms, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion],
   );
 
   const abort = useCallback(() => {
@@ -602,8 +868,8 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
   }, [refs, flushAssistant, setAgentState]);
 
   const loadHistory = useCallback(
-    (historyMessages, historySubagents) => {
-      store.getState().loadHistory(sessionId, historyMessages, historySubagents);
+    (historyMessages, historySubagents, historySwarms) => {
+      store.getState().loadHistory(sessionId, historyMessages, historySubagents, historySwarms);
     },
     [sessionId, store],
   );
@@ -619,6 +885,8 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
     setPendingManualExecution,
     subagents,
     setSubagents,
+    swarms,
+    setSwarms,
     tokenUsage,
     setTokenUsage,
     startStream,

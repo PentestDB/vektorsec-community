@@ -3,23 +3,26 @@
 .chatContainer {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 0%;
   height: 100%;
   min-height: 0;
+  max-height: 100%;
   overflow: hidden;
   position: relative;
   background: var(--bg-primary, #0a0a0a);
 }
 
 .messagesArea {
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.5rem 2rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -32,6 +35,10 @@
   &::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
+  }
+
+  @media (max-width: 768px) {
+    padding: 1rem 1rem 1.5rem;
   }
 }
 
@@ -66,6 +73,12 @@
     border-color: rgba(142, 53, 255, 0.6);
     transform: translateX(-50%) scale(1.03);
     box-shadow: 0 4px 16px rgba(142, 53, 255, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    bottom: 5.5rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 10px;
   }
 }
 
@@ -103,6 +116,7 @@
   flex-direction: column;
   width: 100%;
   min-width: 0;
+  flex-shrink: 0;
   animation: fadeIn 0.2s ease;
 }
 
@@ -124,11 +138,13 @@
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .assistantMessage {
   align-self: flex-start;
   max-width: 100%;
+  min-width: 0;
   color: var(--primary-text, #e0e0e0);
   font-size: 0.875rem;
   line-height: 1.7;
@@ -321,10 +337,10 @@
 
 .toolCallBlock {
   width: 100%;
+  min-width: 0;
   margin: 0.25rem 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  overflow: hidden;
   background: rgba(0, 0, 0, 0.3);
 }
 
@@ -1008,6 +1024,8 @@
 
 .slashCommandResult {
   width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
   margin: 0.35rem 0;
   border: 1px solid rgba(74, 158, 255, 0.15);
   border-radius: 10px;
@@ -1286,6 +1304,10 @@
   padding: 1rem 2rem 1.5rem;
   border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   background: var(--bg-primary, #0a0a0a);
+
+  @media (max-width: 768px) {
+    padding: 0.75rem 1rem 1rem;
+  }
 }
 
 .inputWrapper {

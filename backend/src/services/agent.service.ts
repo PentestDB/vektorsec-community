@@ -5,8 +5,15 @@ import SessionsModel, {
   AgentMessageDoc,
   AgentState,
 } from "../models/Sessions/Sessions.model";
-import { invoke_llm_streaming, ToolCallData, ReasoningMode, getProvider } from "../utils/llm/providers";
-import { readEnvFile } from "../utils/envWriter";
+import {
+  invoke_llm_streaming,
+  ToolCallData,
+  ReasoningMode,
+  getUserModels,
+  presetToProviderConfig,
+  ProviderConfig,
+} from "../utils/llm/providers";
+
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { toolRegistry } from "../tools/registry";
 import {
@@ -21,10 +28,12 @@ import { WORKSPACE_DIR } from "../utils/commandSafety";
 import UserModel from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
+import { SwarmManager, CtfSwarmContext, SwarmResult } from "./swarm.manager";
 import { EngagementState } from "./engagement-state";
 
 const MAX_ITERATIONS = 25;
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
+const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
 
 // ─── Abort controller registry (for immediate pause) ───────────────────
 
@@ -153,6 +162,10 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-4": 8_192,
   "gpt-3.5-turbo": 16_385,
   "gpt-5-nano": 128_000,
+  "claude-sonnet-4-6": 1_000_000,
+  "claude-opus-4-6": 1_000_000,
+  "claude-haiku-4-5": 200_000,
+  "claude-sonnet-4-5": 200_000,
   "claude-sonnet-4-20250514": 200_000,
   "claude-3-5-sonnet-20241022": 200_000,
   "claude-3-opus-20240229": 200_000,
@@ -194,11 +207,11 @@ function buildShellStatusMessage(shellManager: ShellManager, turnIndex: number):
 
 // ─── Build system message for a session ──────────────────────────────
 
-async function buildSystemMessage(
+async function buildAgentPromptConfig(
   sessionId: string,
   userId: string,
   envInfo?: BoxEnvInfo,
-): Promise<AgentMessageDoc> {
+): Promise<AgentPromptConfig> {
   const user = await UserModel.findById(userId);
   const session = await SessionsModel.findOne({ sessionId }).select("ctfConfig workspaceId").lean();
   const now = new Date();
@@ -246,11 +259,20 @@ async function buildSystemMessage(
     }
   }
 
+  return promptConfig;
+}
+
+async function buildSystemMessage(
+  sessionId: string,
+  userId: string,
+  envInfo?: BoxEnvInfo,
+): Promise<AgentMessageDoc> {
+  const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
   return {
     id: `sys_${sessionId}`,
     role: "system",
     content: buildSystemPrompt(promptConfig),
-    timestamp: now,
+    timestamp: new Date(),
     turnIndex: 0,
   };
 }
@@ -283,6 +305,132 @@ export function buildTraceTags(
   const uniqueTools = [...new Set(trailingTools)];
   tags.push(...uniqueTools);
   return { tags, phase: "analyze" };
+}
+
+function buildRacerOrchestratorMessage(
+  turnIndex: number,
+  roster: Array<{ agentId: string; modelLabel: string }>,
+  sessionContext?: { sessionId?: string; ctfName?: string; challengeName?: string },
+  depthInfo?: { iteration: number; maxIterations: number; racerMaxIterations: number },
+): AgentMessageDoc {
+  const rosterBlock = roster.length > 0
+    ? roster.map((r) => `- Racer ${r.modelLabel} (${r.agentId})`).join("\n")
+    : "- (no racers registered yet)";
+
+  const ctfLine = sessionContext?.ctfName
+    ? `\nCTF: ${sessionContext.ctfName}${sessionContext.challengeName ? ` — Challenge: ${sessionContext.challengeName}` : ""}`
+    : "";
+
+  return {
+    id: RACER_ORCHESTRATOR_PROMPT_ID,
+    role: "system",
+    content: `<role>
+You are the Pentest Copilot orchestrator. You coordinate racer agents — you do NOT solve tasks yourself.
+</role>
+${ctfLine ? `\n<context>${ctfLine}\nSession: ${sessionContext?.sessionId ?? "unknown"}\n</context>\n` : ""}
+<roster>
+${rosterBlock}
+</roster>
+
+<tools>
+You have EXACTLY these tools: get_solve_status, bump_racer, broadcast, read_racer_trace, wait
+
+MANDATORY: You MUST call at least one tool every turn. NEVER produce a text-only response.
+If you have nothing specific to do, call wait(seconds=30).
+</tools>
+
+<workflow>
+Phase 1 — INITIAL (iterations 1-2):
+  1. Call get_solve_status to see the initial state.
+  2. Call wait(seconds=30) to let racers start working. Do NOT bump or read traces yet.
+
+Phase 2 — MONITORING (iterations 3+):
+  Loop: wait(seconds=30) → get_solve_status → DECIDE:
+    - If a racer's iteration >= 8 with no findings → read_racer_trace, then consider bump_racer.
+    - If a racer reported a SUCCESS finding → present result to user immediately.
+    - If all racers completed → summarize results and stop.
+    - Otherwise → wait(seconds=30) again. Patience is critical.
+
+WHEN TO BUMP (and ONLY when):
+  - A racer has used 8+ iterations without ANY findings or progress.
+  - A racer is clearly stuck in a loop (repeating the same approach).
+  - Cross-racer intel would meaningfully change a racer's direction.
+  Do NOT bump racers that are making steady progress. Do NOT bump before iteration 5.
+
+WHEN NOT TO BUMP:
+  - Racer is on iteration 1-5 (let it explore independently first).
+  - Racer is actively running tools and making progress.
+  - You just want to "encourage" or provide generic advice.
+</workflow>
+
+<depth>
+${depthInfo ? `Orchestrator iteration ${depthInfo.iteration}/${depthInfo.maxIterations}. Racers have ${depthInfo.racerMaxIterations} iterations each.` : ""}
+YOUR iterations are precious. Every LLM call costs money and time.
+- Prefer long waits (20-30s) over short ones.
+- Most turns should be: wait → get_solve_status → wait again.
+- Only ~20% of your turns should involve bump_racer or broadcast.
+</depth>
+
+<rules>
+CRITICAL:
+- NEVER produce a text-only response. Always call a tool.
+- NEVER solve tasks yourself — no exploit commands, scans, or scripts.
+- You are NOT a racer — do not count yourself in the racer list.
+- Refer to racers by their exact model names from the roster.
+- NEVER rename racers as "Racer A", "Racer B", etc.
+- When a racer succeeds, credit it clearly: "Racer {model_name} found the flag: ..."
+- When all racers complete, summarize and stop.
+</rules>`,
+    timestamp: new Date(),
+    turnIndex,
+    isSummary: false,
+  };
+}
+
+function upsertRacerOrchestratorPrompt(
+  messages: AgentMessageDoc[],
+  turnIndex: number,
+  roster: Array<{ agentId: string; modelLabel: string }>,
+  sessionContext?: { sessionId?: string; ctfName?: string; challengeName?: string },
+  depthInfo?: { iteration: number; maxIterations: number; racerMaxIterations: number },
+): boolean {
+  const idx = messages.findIndex((m) => m.id === RACER_ORCHESTRATOR_PROMPT_ID);
+  const prompt = buildRacerOrchestratorMessage(turnIndex, roster, sessionContext, depthInfo);
+  if (idx === -1) {
+    messages.push(prompt);
+    return true;
+  }
+  messages[idx] = prompt;
+  return false;
+}
+
+function appendSwarmResultMessages(
+  messages: AgentMessageDoc[],
+  newMessages: AgentMessageDoc[],
+  sr: SwarmResult,
+  turnIndex: number,
+): void {
+  for (const ar of sr.agentResults ?? []) {
+    const racerTranscriptMsg: AgentMessageDoc = {
+      id: uuidv4(),
+      role: "assistant",
+      content: `**[Racer ${ar.modelLabel}]** ${ar.status}${sr.winner === ar.agentId ? " (winner)" : ""}\n\n${ar.result || "(no result)"}`,
+      timestamp: new Date(),
+      turnIndex,
+    };
+    messages.push(racerTranscriptMsg);
+    newMessages.push(racerTranscriptMsg);
+  }
+
+  const swarmSummaryMsg: AgentMessageDoc = {
+    id: uuidv4(),
+    role: "user",
+    content: `[Swarm ${sr.swarmId} completed (${sr.status})${sr.winner ? ` — Winner: ${sr.winner}` : ""}]\n\n${sr.summary}`,
+    timestamp: new Date(),
+    turnIndex,
+  };
+  messages.push(swarmSummaryMsg);
+  newMessages.push(swarmSummaryMsg);
 }
 
 // ─── Core agent loop ─────────────────────────────────────────────────
@@ -353,11 +501,120 @@ export async function runAgentLoop(params: {
 
   const subagentManager = new SubagentManager(sessionId, shellManager);
   subagentManager.envInfo = envInfo;
+  const swarmManager = new SwarmManager(sessionId, shellManager);
+  swarmManager.envInfo = envInfo;
   const spawnedSubagentIds: string[] = [];
+  const spawnedSwarmIds: string[] = [];
   const turnIndex = session.turnIndex;
   let iteration = 0;
   let lastPromptTokens: number | undefined;
   const newMessages: AgentMessageDoc[] = [];
+
+  // ─── Resolve user model config for orchestrator + auto-spawn racers ──
+  const userModels = await getUserModels(userId);
+  const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
+  const orchestratorReasoningMode: ReasoningMode =
+    (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
+
+  // Resume paused swarms first, or auto-spawn new racers
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+  const hasActiveSwarms = (session.swarms ?? []).some((sw: any) => sw.status === "running");
+  const hasPausedSwarms = (session.swarms ?? []).some((sw: any) => sw.status === "paused");
+  const hasCompletedSwarms = (session.swarms ?? []).some(
+    (sw: any) => sw.status === "completed" || sw.status === "timed_out",
+  );
+
+  let ctfSwarmContext: CtfSwarmContext | undefined;
+  const sessionCtf = session.ctfConfig;
+  if (sessionCtf?.activeSolve) {
+    const solve = sessionCtf.activeSolve;
+    const safeName = (sessionCtf.ctfName || "")
+      .replace(/[\/\\:*?"<>|]/g, "_")
+      .replace(/\s+/g, "_");
+    const wsBase = envInfo?.workspacePath ?? "~/pentest-workspace";
+    ctfSwarmContext = {
+      challengeName: solve.name,
+      category: solve.category,
+      points: solve.points,
+      challengeTxt: solve.challengeTxt ?? "",
+      files: solve.files ?? [],
+      connectionInfo: solve.connectionInfo,
+      challengeDir: `${wsBase}/${safeName}/${solve.safeDir}`,
+      flagFormat: sessionCtf.flagFormat,
+      userNotes: solve.userNotes,
+    };
+  }
+
+  if (hasPausedSwarms) {
+    try {
+      const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
+      const resumedIds = await swarmManager.resumePausedSwarms({
+        sse,
+        userId,
+        agentPromptConfig: racerPromptConfig,
+        ctfContext: ctfSwarmContext,
+      });
+      spawnedSwarmIds.push(...resumedIds);
+    } catch (err: any) {
+      console.warn(`[agent] Resume paused swarms failed: ${err.message}`);
+    }
+  } else if (userModels.racers.length > 0 && lastUserMsg?.content && !hasActiveSwarms && hasCompletedSwarms) {
+    // Racers already ran — continue them with the new user guidance rather than spawning fresh ones.
+    // Each racer re-activates from its prior message history with the new guidance appended.
+    try {
+      const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
+      const continuedIds = await swarmManager.continueCompletedSwarms({
+        newGuidance: lastUserMsg.content,
+        sse,
+        userId,
+        agentPromptConfig: racerPromptConfig,
+        ctfContext: ctfSwarmContext,
+      });
+      spawnedSwarmIds.push(...continuedIds);
+    } catch (err: any) {
+      console.warn(`[agent] Continue racers failed: ${err.message}`);
+    }
+  } else if (userModels.racers.length > 0 && lastUserMsg?.content && !hasActiveSwarms) {
+    try {
+      const racerPresets = userModels.racers.map((r) => ({
+        label: r.label,
+        provider: r.provider,
+        model: r.model,
+        apiKey: r.apiKey,
+        baseURL: r.baseURL,
+        reasoningMode: r.reasoningMode,
+      }));
+
+      const swarmGoal = ctfSwarmContext
+        ? `Solve CTF challenge "${ctfSwarmContext.challengeName}" and find the flag.`
+        : lastUserMsg.content;
+
+      const swarmTask = ctfSwarmContext
+        ? `Solve the CTF challenge "${ctfSwarmContext.challengeName}". Find the flag and report it.`
+        : lastUserMsg.content!;
+
+      const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
+      const swarmId = await swarmManager.spawn({
+        goal: swarmGoal,
+        agentSpecs: racerPresets.map((rp) => ({
+          task: swarmTask,
+          context: ctfSwarmContext
+            ? `You are racing to solve this CTF challenge. Model: ${rp.label}.`
+            : `You are racing to solve the user's request. Model: ${rp.label}.`,
+        })),
+        winCondition: "first_success",
+        timeoutMs: 15 * 60 * 1000,
+        sse,
+        userId,
+        modelPresets: racerPresets,
+        ctfContext: ctfSwarmContext,
+        agentPromptConfig: racerPromptConfig,
+      });
+      spawnedSwarmIds.push(swarmId);
+    } catch (err: any) {
+      console.warn(`[agent] Auto-spawn racers failed: ${err.message}`);
+    }
+  }
 
   const engagementMode = session.ctfConfig?.ctfName ? "ctf" : "pentest";
   const engagementState = new EngagementState(engagementMode as "pentest" | "ctf");
@@ -379,8 +636,10 @@ export async function runAgentLoop(params: {
   const executionCtx = buildExecutionContext({
     sessionId,
     agentId: "main",
+    agentRole: "main",
     shellManager,
     subagentManager,
+    swarmManager,
     sse,
     userId,
     abortSignal: params.abortSignal,
@@ -425,6 +684,20 @@ export async function runAgentLoop(params: {
         }
       }
 
+      // Collect completed swarm results and inject into messages
+      if (spawnedSwarmIds.length > 0) {
+        const completedSwarmIds = spawnedSwarmIds.filter((id) => !swarmManager.isRunning(id));
+        if (completedSwarmIds.length > 0) {
+          const swarmResults = await swarmManager.waitFor(completedSwarmIds);
+          for (const sr of swarmResults) {
+            appendSwarmResultMessages(messages, newMessages, sr, turnIndex);
+          }
+          for (const id of completedSwarmIds) {
+            spawnedSwarmIds.splice(spawnedSwarmIds.indexOf(id), 1);
+          }
+        }
+      }
+
       if (await shouldSummarize(messages, lastPromptTokens)) {
         sse.write("summarizing", { message: "Context approaching limit, summarizing..." });
 
@@ -462,27 +735,51 @@ export async function runAgentLoop(params: {
         }
       }
 
+      const hasActiveRacers =
+        spawnedSwarmIds.length > 0 && spawnedSwarmIds.some((id) => swarmManager.isRunning(id));
+      const racerOrchestratorMode = hasActiveRacers;
+      if (racerOrchestratorMode) {
+        const roster = swarmManager.getActiveRoster(spawnedSwarmIds);
+        const sessionCtfInfo = session.ctfConfig;
+        const inserted = upsertRacerOrchestratorPrompt(messages, turnIndex, roster, {
+          sessionId,
+          ctfName: sessionCtfInfo?.ctfName,
+          challengeName: sessionCtfInfo?.activeSolve?.name,
+        }, {
+          iteration,
+          maxIterations: MAX_ITERATIONS,
+          racerMaxIterations: swarmManager.getMaxIterations(),
+        });
+        if (inserted) {
+          newMessages.push(messages[messages.length - 1]);
+        }
+      }
+
       const openaiMessages = messagesToOpenAI(messages);
       const unconfiguredTools = getUnconfiguredToolNames();
-      const tools = toolRegistry.toOpenAISchemas({
-        disabledTools: disabledAgentTools,
-        unconfiguredTools,
-      });
-
-      const env = readEnvFile();
-      const reasoningMode = (env.REASONING_MODE || "medium") as ReasoningMode;
+      const tools = racerOrchestratorMode
+        ? toolRegistry.toOpenAISchemas({ agentRole: "orchestrator" })
+        : toolRegistry.toOpenAISchemas({
+          disabledTools: disabledAgentTools,
+          unconfiguredTools,
+        });
 
       let assistantContent = "";
       let assistantReasoning = "";
       let assistantToolCalls: ToolCallData[] = [];
 
-      const { tags: traceTags, phase } = buildTraceTags("agent", messages);
+      const { tags: traceTags, phase } = buildTraceTags("agent", messages, [
+        `session_id:${sessionId}`,
+        `workspace_id:${session.workspaceId ?? "unknown"}`,
+        racerOrchestratorMode ? "agent_role:racer_orchestrator" : "agent_role:main_orchestrator",
+      ]);
 
       const result = await invoke_llm_streaming({
         messages: openaiMessages,
         tools,
         temperature: 0.7,
-        reasoningMode,
+        reasoningMode: orchestratorReasoningMode,
+        providerOverride: orchestratorConfig,
         sessionId,
         userId: session.uid.toString(),
         tags: traceTags,
@@ -533,13 +830,14 @@ export async function runAgentLoop(params: {
           result.usage.total_tokens ?? 0,
         );
 
-        const config = await getProvider();
-        const contextLimit = getModelContextLimit(config.model);
+        const contextLimit = getModelContextLimit(orchestratorConfig.model);
         sse.write("token_usage", {
           totalTokens: lastPromptTokens,
           promptTokens: lastPromptTokens,
           completionTokens: result.usage.completion_tokens ?? 0,
           contextLimit,
+          iteration,
+          maxIterations: MAX_ITERATIONS,
         });
       }
 
@@ -569,6 +867,40 @@ export async function runAgentLoop(params: {
       }
 
       if (result.finishReason === "stop" || assistantToolCalls.length === 0) {
+        if (hasActiveRacers) {
+          const completedSwarmIds = spawnedSwarmIds.filter((id) => !swarmManager.isRunning(id));
+          if (completedSwarmIds.length > 0) {
+            const swarmResults = await swarmManager.waitFor(completedSwarmIds);
+            for (const sr of swarmResults) {
+              appendSwarmResultMessages(messages, newMessages, sr, turnIndex);
+            }
+            for (const id of completedSwarmIds) {
+              spawnedSwarmIds.splice(spawnedSwarmIds.indexOf(id), 1);
+            }
+          }
+
+          // Orchestrator produced text but no tool calls — inject a nudge so the
+          // next LLM call sees it should use tools, and auto-wait to avoid a
+          // tight loop that burns iterations.
+          const nudge: AgentMessageDoc = {
+            id: `orch_nudge_${Date.now()}`,
+            role: "user",
+            content:
+              "[System] You produced text without calling any tools. As orchestrator you MUST " +
+              "call a tool every turn. Use `wait` to pause, `get_solve_status` to check progress, " +
+              "or `read_racer_trace` to inspect a racer. Do NOT generate text-only responses.",
+            timestamp: new Date(),
+            turnIndex,
+            isSummary: false,
+          };
+          messages.push(nudge);
+          newMessages.push(nudge);
+
+          // Auto-wait 15s to avoid burning iterations when the LLM is looping
+          await new Promise((resolve) => setTimeout(resolve, 15_000));
+
+          continue;
+        }
         break;
       }
 
@@ -602,12 +934,18 @@ export async function runAgentLoop(params: {
         disableSafetyProtections,
       );
 
-      // Track spawned subagents
+      // Track spawned subagents and swarms
       for (const tr of toolResults) {
         if (tr.toolName === "spawn_subagent" && tr.result.output.includes("subagent_id:")) {
           const match = tr.result.output.match(/subagent_id:\s*(\S+)/);
           if (match) {
             spawnedSubagentIds.push(match[1]);
+          }
+        }
+        if (tr.toolName === "spawn_swarm" && tr.result.output.includes("swarm_id:")) {
+          const match = tr.result.output.match(/swarm_id:\s*(\S+)/);
+          if (match) {
+            spawnedSwarmIds.push(match[1]);
           }
         }
       }
@@ -695,6 +1033,16 @@ export async function runAgentLoop(params: {
         }
         spawnedSubagentIds.length = 0;
       }
+
+      // If swarms are running and the agent only spawned swarms this iteration,
+      // wait for them to complete before the next iteration
+      if (spawnedSwarmIds.length > 0 && assistantToolCalls.every((tc) => tc.name === "spawn_swarm" || tc.name === "spawn_subagent")) {
+        const swarmResults = await swarmManager.waitFor([...spawnedSwarmIds]);
+        for (const sr of swarmResults) {
+          appendSwarmResultMessages(messages, newMessages, sr, turnIndex);
+        }
+        spawnedSwarmIds.length = 0;
+      }
     }
 
     if (iteration >= MAX_ITERATIONS) {
@@ -717,6 +1065,18 @@ export async function runAgentLoop(params: {
       }
     }
 
+    if (spawnedSwarmIds.length > 0) {
+      if (params.abortSignal?.aborted) {
+        await swarmManager.pauseAll();
+      } else {
+        await swarmManager.cancelAll();
+      }
+      const swarmResults = await swarmManager.waitFor([...spawnedSwarmIds]);
+      for (const sr of swarmResults) {
+        appendSwarmResultMessages(messages, newMessages, sr, session.turnIndex);
+      }
+    }
+
     await appendMessages(sessionId, newMessages);
 
     if (params.abortSignal?.aborted) {
@@ -733,6 +1093,11 @@ export async function runAgentLoop(params: {
     await appendMessages(sessionId, newMessages);
     const isAbort = err?.name === "AbortError" || params.abortSignal?.aborted;
     await subagentManager.cancelAll();
+    if (isAbort) {
+      await swarmManager.pauseAll();
+    } else {
+      await swarmManager.cancelAll();
+    }
     await setAgentState(sessionId, isAbort ? "paused" : "idle");
     if (isAbort) {
       sse.write("paused", { message: "Agent paused by user" });

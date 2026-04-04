@@ -80,7 +80,7 @@ const SessionMainPage = ({ session_id }) => {
         id="session-split-container"
         style={{
           display: "flex",
-          flex: 1,
+          flex: "1 1 0%",
           minHeight: 0,
           overflow: "hidden",
           position: "relative",
@@ -88,7 +88,7 @@ const SessionMainPage = ({ session_id }) => {
       >
         {/* Agent Chat Panel */}
         <div style={{
-          flex: 1,
+          flex: "1 1 0%",
           minWidth: 0,
           minHeight: 0,
           overflow: "hidden",
@@ -116,7 +116,7 @@ const SessionMainPage = ({ session_id }) => {
         {/* Shell Panel */}
         <div style={{
           width: `${shellPanelWidth}%`,
-          minWidth: 250,
+          minWidth: 200,
           minHeight: 0,
           overflow: "hidden",
           flexShrink: 0,

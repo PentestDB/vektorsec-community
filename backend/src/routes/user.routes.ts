@@ -33,6 +33,8 @@ import {
   getBrowserAgentVNC,
   getAgentToolsConfig,
   updateAgentToolsConfig,
+  getSwarmModels,
+  updateSwarmModels,
 } from "../controllers/user.controller";
 import { uploadImageMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -86,5 +88,8 @@ router.get("/get-browser-agent-vnc", [verifySess], getBrowserAgentVNC);
 
 router.get("/get-agent-tools-config", [verifySess], getAgentToolsConfig);
 router.post("/update-agent-tools-config", [verifySess], updateAgentToolsConfig);
+
+router.get("/get-swarm-models", [verifySess], getSwarmModels);
+router.post("/update-swarm-models", [verifySess], updateSwarmModels);
 
 export { router as userRoutes };

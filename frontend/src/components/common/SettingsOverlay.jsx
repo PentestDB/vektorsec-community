@@ -29,6 +29,7 @@ const TABS = [
   {
     key: "models",
     label: "Models",
+    description: "Configure orchestrator and racer models for parallel agent sessions.",
     icon: TbBrain,
     component: ModelsPage,
   },

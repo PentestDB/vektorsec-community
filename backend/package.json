@@ -45,7 +45,6 @@
     "bcrypt": "5.1.1",
     "burp-rpc": "1.0.6",
     "cheerio": "1.2.0",
-    "cloudflare": "2.9.1",
     "connect-redis": "7.1.1",
     "cookie-parser": "1.4.7",
     "cors": "2.8.6",
@@ -59,12 +58,12 @@
     "googleapis": "120.0.0",
     "http": "0.0.1-security",
     "magnitude-core": "0.3.1",
-    "patchright": "1.58.2",
     "moment": "2.30.1",
     "mongoose": "7.8.9",
     "multer": "1.4.5-lts.2",
     "node-fetch": "2.7.0",
     "openai": "4.104.0",
+    "patchright": "1.58.2",
     "redis": "4.7.1",
     "socket.io": "4.8.3",
     "socket.io-client": "4.8.3",
@@ -98,5 +97,25 @@
     "nodemon": "3.1.14",
     "prettier": "3.8.1",
     "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "underscore": "1.13.8",
+      "tar": "7.5.11",
+      "flatted": "3.4.2",
+      "undici@7": "7.24.0",
+      "socket.io-parser@4": "4.2.6",
+      "path-to-regexp@0": "0.1.13",
+      "node-forge": "1.4.0",
+      "lodash@4": "4.18.1",
+      "cookie@0": "0.7.0",
+      "yaml@2": "2.8.3",
+      "minimatch@9": "9.0.7",
+      "picomatch@2": "2.3.2",
+      "picomatch@4": "4.0.4",
+      "brace-expansion@1": "1.1.13",
+      "brace-expansion@2": "2.0.3",
+      "brace-expansion@5": "5.0.5"
+    }
   }
 }

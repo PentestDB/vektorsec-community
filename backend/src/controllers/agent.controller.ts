@@ -263,6 +263,8 @@ export const getHistory = async (req: Request, res: Response) => {
       const MODEL_LIMITS: Record<string, number> = {
         "gpt-4o": 128_000, "gpt-4o-mini": 128_000, "gpt-4-turbo": 128_000,
         "gpt-4": 8_192, "gpt-3.5-turbo": 16_385, "gpt-5-nano": 128_000,
+        "claude-sonnet-4-6": 1_000_000, "claude-opus-4-6": 1_000_000,
+        "claude-haiku-4-5": 200_000, "claude-sonnet-4-5": 200_000,
         "claude-sonnet-4-20250514": 200_000, "claude-3-5-sonnet-20241022": 200_000,
         "claude-3-opus-20240229": 200_000, "claude-3-haiku-20240307": 200_000,
       };
@@ -297,6 +299,27 @@ export const getHistory = async (req: Request, res: Response) => {
         shells: s.shells,
         createdAt: s.createdAt,
         completedAt: s.completedAt,
+      })),
+      swarms: (session.swarms ?? []).map((sw) => ({
+        swarmId: sw.swarmId,
+        goal: sw.goal,
+        winCondition: sw.winCondition,
+        status: sw.status,
+        winner: sw.winner,
+        findings: sw.findings,
+        createdAt: sw.createdAt,
+        completedAt: sw.completedAt,
+        agents: (sw.agents ?? []).map((a) => ({
+          agentId: a.agentId,
+          task: a.task,
+          model: a.modelLabel,
+          modelLabel: a.modelLabel,
+          status: a.status,
+          result: a.result,
+          messages: a.messages,
+          createdAt: a.createdAt,
+          completedAt: a.completedAt,
+        })),
       })),
       connectionState: session.connectionState ?? { sshConnected: false },
     });
@@ -388,6 +411,8 @@ export const clearContext = async (req: Request, res: Response) => {
     const session = await SessionsModel.findOne({ sessionId });
     if (!session) return res.status(404).json({ message: "Session not found" });
 
+    abortSession(sessionId);
+
     const systemMsg = session.messages?.find((m: any) => m.role === "system" && !m.isSummary);
 
     await SessionsModel.updateOne(
@@ -396,9 +421,15 @@ export const clearContext = async (req: Request, res: Response) => {
         $set: {
           messages: systemMsg ? [systemMsg] : [],
           subagents: [],
+          swarms: [],
           agentState: "idle",
           pendingConsent: null,
           pendingManualExecution: null,
+          turnIndex: 0,
+          totalTokens: 0,
+          tokenHistory: [],
+          "ctfConfig.activeSolve": null,
+          "ctfConfig.solveHistory": [],
         },
       },
     );

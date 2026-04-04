@@ -2,6 +2,7 @@ import { ToolDefinition } from "../types";
 
 const spawnSubagent: ToolDefinition = {
   name: "spawn_subagent",
+  allowedRoles: ["main", "swarm_agent"],
   description:
     "Launch a parallel subagent to work on a specific task independently. The subagent " +
     "gets its own conversation context, can spawn shells, run commands, and use all tools. " +
@@ -21,6 +22,7 @@ const spawnSubagent: ToolDefinition = {
     },
     required: ["task"],
   },
+  timeoutMs: 30_000,
   async execute(args, ctx) {
     const { task } = args;
     if (!task) return { output: "Error: task is required", exitCode: 1 };

@@ -62,6 +62,35 @@
   }
 }
 
+.scoreBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  letter-spacing: 0.01em;
+}
+
+.statBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.08);
+  border: 1px solid rgba(121, 192, 255, 0.2);
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  letter-spacing: 0.01em;
+  font-family: ui-monospace, monospace;
+}
+
 .typeBadge {
   font-size: 0.6rem !important;
   font-weight: 700;
@@ -80,6 +109,40 @@
   max-width: 36rem;
 }
 
+.ctfSubtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--secondary-text);
+  flex-wrap: wrap;
+}
+
+.ctfSubtitleName {
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.ctfSubtitleUrl {
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+}
+
+.flagFormat {
+  background: rgba(153, 51, 255, 0.08);
+  color: var(--primary-purple);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+}
+
+.syncStatusInline {
+  color: var(--primary-purple);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
 .headerRight {
   display: flex;
   align-items: center;
@@ -96,69 +159,43 @@
   gap: 0.25rem !important;
 }
 
-.disconnectBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 5px;
-  border: 1px solid var(--border-subtle);
-  background: none;
-  color: var(--secondary-text);
-  cursor: pointer;
-  transition: all 0.12s;
-  font-size: 0.75rem;
+.syncBtn {
+  font-size: 0.72rem !important;
+  height: 1.6rem !important;
+  border-radius: 5px !important;
+  padding: 0 0.6rem !important;
+  color: #7ee787 !important;
+  border-color: rgba(126, 231, 135, 0.4) !important;
+  background: rgba(126, 231, 135, 0.08) !important;
 
-  &:hover {
-    border-color: var(--danger);
-    color: var(--danger);
-    background: rgba(255, 62, 62, 0.05);
+  &:hover:not(:disabled) {
+    color: #a3f0ac !important;
+    border-color: rgba(126, 231, 135, 0.7) !important;
+    background: rgba(126, 231, 135, 0.14) !important;
+  }
+
+  &:disabled {
+    opacity: 0.55;
   }
 }
 
-.ctfBar {
-  display: flex;
+.disconnectBtn {
+  display: inline-flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.45rem 1.5rem;
-  background: rgba(245, 158, 11, 0.04);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.72rem;
-  flex-wrap: wrap;
-}
+  gap: 0.25rem;
+  height: 1.6rem !important;
+  border-radius: 5px !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.72rem !important;
+  color: var(--danger) !important;
+  border-color: rgba(255, 62, 62, 0.4) !important;
+  background: rgba(255, 62, 62, 0.06) !important;
 
-.ctfName {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-weight: 600;
-  color: var(--primary-text);
-}
-
-.ctfUrl {
-  color: var(--secondary-text);
-  font-family: ui-monospace, monospace;
-  font-size: 0.7rem;
-}
-
-.flagFormat {
-  background: rgba(153, 51, 255, 0.08);
-  color: var(--primary-purple);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-}
-
-.lastSync {
-  color: var(--secondary-text);
-  font-size: 0.7rem;
-}
-
-.syncStatusInline {
-  color: var(--primary-purple);
-  font-size: 0.7rem;
-  font-weight: 500;
+  &:hover {
+    color: #ff6b6b !important;
+    border-color: rgba(255, 62, 62, 0.7) !important;
+    background: rgba(255, 62, 62, 0.12) !important;
+  }
 }
 
 .content {
@@ -406,4 +443,146 @@
   border: 1px solid var(--border-subtle);
   font-size: 0.8rem;
   color: var(--secondary-text);
+}
+
+// Sync progress panel (matches CTF page style)
+
+.challengeListLoading {
+  padding: 1.5rem 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--secondary-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.progressPanel {
+  margin-bottom: 1rem;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.85rem 1.1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.progressPhase {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--primary-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.progressCount {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--secondary-text);
+  font-family: ui-monospace, monospace;
+}
+
+.progressBarTrack {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.progressBarFill {
+  height: 100%;
+  border-radius: 2px;
+  background: #7ee787;
+  transition: width 0.25s ease;
+  min-width: 0;
+}
+
+.progressCurrent {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.progressAction {
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.actionNew {
+  color: #7ee787;
+  background: rgba(126, 231, 135, 0.15);
+}
+
+.actionUpdated {
+  color: #79c0ff;
+  background: rgba(121, 192, 255, 0.15);
+}
+
+.actionSkipped {
+  color: var(--secondary-text);
+  background: var(--border-subtle);
+}
+
+.progressName {
+  font-size: 0.75rem;
+  color: var(--primary-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.syncSuccess {
+  margin-bottom: 1rem;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  background: rgba(126, 231, 135, 0.08);
+  border: 1px solid rgba(126, 231, 135, 0.2);
+  color: #7ee787;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.resultSummary {
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.resultBreakdown {
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.syncError {
+  margin-bottom: 1rem;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+  font-size: 0.78rem;
 }

@@ -3,19 +3,21 @@
 .sessionPage {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
 .sessionMainArea {
-  flex: 1;
+  flex: 1 1 0%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
 }
 
 .sessionContent {
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -107,15 +109,30 @@
 .sidebar {
   background: var(--primary-bg);
   height: 100vh;
+  height: 100dvh;
   border-right: 1px solid var(--border-subtle);
 
   width: 220px;
   min-width: 220px;
+  flex-shrink: 0;
   padding: 0.75rem;
+  overflow-y: auto;
+  overflow-x: hidden;
 
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+
+  @media (max-width: 1024px) {
+    width: 180px;
+    min-width: 180px;
+  }
+
+  @media (max-width: 768px) {
+    width: 56px;
+    min-width: 56px;
+    padding: 0.5rem 0.35rem;
+  }
 
   .createNew {
     .navRow {
@@ -369,6 +386,34 @@
       @extend .tab;
       background-color: var(--surface-active);
       color: var(--primary-text);
+    }
+
+    .racerSection {
+      margin: 0.15rem 0;
+      padding: 0.15rem 0;
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .racerHeader {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--secondary-text);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+
+      .racerBadge {
+        font-size: 0.55rem;
+        color: #484f58;
+        padding: 0.05rem 0.3rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+        font-weight: 500;
+      }
     }
   }
 

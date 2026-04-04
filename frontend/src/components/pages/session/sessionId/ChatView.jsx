@@ -53,6 +53,7 @@ export default function ChatView({ sessionId }) {
     pendingManualExecution,
     setPendingManualExecution,
     subagents,
+    setSwarms,
     setTokenUsage,
     startStream,
     abort,
@@ -141,12 +142,13 @@ export default function ChatView({ sessionId }) {
       setAgentState("idle");
       setPendingConsent(null);
       setPendingManualExecution(null);
+      setSwarms([]);
       setTokenUsage(null);
       abort();
     };
     window.addEventListener("context-cleared", handleContextCleared);
     return () => window.removeEventListener("context-cleared", handleContextCleared);
-  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setTokenUsage, abort]);
+  }, [sessionId, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSwarms, setTokenUsage, abort]);
 
   const [burpAttachment, setBurpAttachment] = useState(null);
 
@@ -209,15 +211,28 @@ export default function ChatView({ sessionId }) {
   const handlePause = useCallback(async () => {
     try {
       await pauseAgent({ sessionId });
-      abort();
+      // Immediately mark all running swarm agents as paused in local state
+      // (the server will also emit swarm_paused SSE, but the stream is about to close)
+      setSwarms((prev) =>
+        prev.map((sw) => ({
+          ...sw,
+          status: sw.status === "running" ? "paused" : sw.status,
+          agents: sw.agents.map((a) =>
+            a.status === "running" ? { ...a, status: "paused" } : a,
+          ),
+        })),
+      );
+      abort(); // disconnects SSE, internally sets agentState("idle")
+      setAgentState("paused"); // override to "paused" so resume flow works
     } catch (err) {
       notification.error({
         message: "Failed to pause",
         description: err?.response?.data?.message ?? "Something went wrong",
       });
       abort();
+      setAgentState("paused");
     }
-  }, [sessionId, abort]);
+  }, [sessionId, abort, setSwarms, setAgentState]);
 
   const handleConsent = useCallback(
     (approved) => {
@@ -283,6 +298,9 @@ export default function ChatView({ sessionId }) {
         {messages.map((msg) => {
           if (msg.role === "subagent") {
             return <SubagentBlock key={msg.id} message={msg} />;
+          }
+          if (msg.role === "swarm") {
+            return null;
           }
           if (msg.role === "slash_command_result") {
             return <SlashCommandResult key={msg.id} message={msg} />;

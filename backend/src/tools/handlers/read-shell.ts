@@ -20,6 +20,7 @@ const readShell: ToolDefinition = {
     },
     required: ["shell_id"],
   },
+  timeoutMs: 30_000,
   async execute(args, ctx) {
     const { shell_id, last_n_lines } = args;
     if (!shell_id) return { output: "Error: shell_id is required", exitCode: 1 };

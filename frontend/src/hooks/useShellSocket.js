@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const WS_BASE = process.env.NEXT_PUBLIC_BACKEND_URI?.replace(/^http/, "ws") ?? "ws://localhost:8080";
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
+const RECONNECT_MAX_ATTEMPTS = 10;
 
 export default function useShellSocket({ sessionId, onError }) {
   const [shells, setShells] = useState([]);
@@ -73,6 +74,7 @@ export default function useShellSocket({ sessionId, onError }) {
 
   const scheduleReconnect = useCallback(() => {
     if (reconnectTimer.current) return;
+    if (reconnectAttempt.current >= RECONNECT_MAX_ATTEMPTS) return;
     const delay = Math.min(
       RECONNECT_BASE_MS * Math.pow(2, reconnectAttempt.current),
       RECONNECT_MAX_MS,

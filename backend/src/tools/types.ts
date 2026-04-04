@@ -16,9 +16,12 @@ export interface ToolResult {
   installSuggestion?: InstallSuggestion;
 }
 
+export type AgentRole = "main" | "swarm_agent" | "subagent" | "orchestrator";
+
 export interface ExecutionContext {
   sessionId: string;
   agentId: string;
+  agentRole: AgentRole;
   runCommand: (command: string, timeoutMs?: number) => Promise<{ output: string; exitCode: number }>;
   spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) => Promise<string>;
   writeToShell: (shellId: string, data: string) => Promise<void>;
@@ -28,6 +31,19 @@ export interface ExecutionContext {
   listShells: () => ShellInfo[];
   getShellInfo: (shellId: string) => ShellInfo | undefined;
   spawnSubagent?: (task: string) => Promise<string>;
+  spawnSwarm?: (params: {
+    goal: string;
+    agents: Array<{ task: string; context?: string }>;
+    winCondition?: string;
+    timeoutMinutes?: number;
+  }) => Promise<string>;
+  reportFinding?: (finding: string, isSuccess?: boolean) => void;
+  checkFindings?: () => string;
+  getSwarmStatus?: () => any[];
+  bumpRacer?: (racerId: string, insights: string) => string;
+  broadcastToRacers?: (message: string) => string;
+  readRacerTrace?: (racerId: string, lastN: number) => any[];
+  waitForRacers?: (seconds: number) => Promise<void>;
   onOutput?: (chunk: string) => void;
   engagementState?: EngagementState;
 }
@@ -38,6 +54,7 @@ export interface ToolDefinition {
   parameters: Record<string, any>;
   requiresConsent?: boolean;
   timeoutMs?: number;
+  allowedRoles?: AgentRole[];
   shouldRequireConsent?: (args: Record<string, any>, ctx: ExecutionContext) => boolean;
   execute: (args: Record<string, any>, ctx: ExecutionContext) => Promise<ToolResult>;
 }

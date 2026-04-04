@@ -5,6 +5,12 @@ import axios from "axios";
 import moment from "moment";
 import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
 import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
+import { clearProviderCache } from "../utils/llm/providers";
+import {
+  buildSwarmModelEnvUpdates,
+  normalizeSwarmModelsInput,
+  readSwarmModelsFromEnv,
+} from "../utils/swarmModelEnv";
 
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
@@ -149,6 +155,44 @@ export const updateAgentToolsConfig = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Unified Models ──────────────────────────────────────────────────
+
+export const getSwarmModels = async (req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    return res.status(200).json({
+      models: readSwarmModelsFromEnv(env),
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get models" });
+  }
+};
+
+export const updateSwarmModels = async (req: Request, res: Response) => {
+  try {
+    const { models } = req.body;
+
+    if (!Array.isArray(models)) {
+      return res.status(400).json({ message: "models must be an array" });
+    }
+
+    const normalized = normalizeSwarmModelsInput(models);
+    if (models.length > 0 && normalized.length !== models.length) {
+      return res.status(400).json({ message: "Each model must have label, provider, and model fields" });
+    }
+
+    const updates = buildSwarmModelEnvUpdates(normalized);
+    updateEnvVars(updates);
+    clearProviderCache();
+
+    return res.status(200).json({ message: "Models updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update models" });
+  }
+};
+
 // ─── Capabilities ────────────────────────────────────────────────────
 
 import {
@@ -237,10 +281,10 @@ export const detectCapabilities = async (req: Request, res: Response) => {
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
 
 const MODEL_ENV_KEYS = {
-  provider: "MODEL_PROVIDER",
-  model: "MODEL",
-  apiKey: "MODEL_API_KEY",
-  baseURL: "MODEL_BASE_PATH",
+  provider: "ORCHESTRATOR_PROVIDER",
+  model: "ORCHESTRATOR_MODEL",
+  apiKey: "ORCHESTRATOR_API_KEY",
+  baseURL: "ORCHESTRATOR_BASE_URL",
 };
 
 export const getModelConfig = async (_req: Request, res: Response) => {
@@ -260,7 +304,7 @@ export const getModelConfig = async (_req: Request, res: Response) => {
     const isOAuth = provider === "anthropic" && oauthConnected;
     const configured = !!(model && (apiKey || isOAuth));
 
-    const reasoningMode = env.REASONING_MODE || "off";
+    const reasoningMode = env.ORCHESTRATOR_REASONING_MODE || "off";
 
     return res.status(200).json({
       provider,
@@ -309,7 +353,7 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       [MODEL_ENV_KEYS.model]: model,
       [MODEL_ENV_KEYS.apiKey]: isApiKeyMasked && existingKey ? existingKey : (apiKey || ""),
       [MODEL_ENV_KEYS.baseURL]: baseURL || "",
-      ...(reasoningMode !== undefined ? { REASONING_MODE: reasoningMode } : {}),
+      ...(reasoningMode !== undefined ? { ORCHESTRATOR_REASONING_MODE: reasoningMode } : {}),
     };
 
     updateEnvVars(updates);
@@ -331,7 +375,7 @@ export const deleteModelConfig = async (req: Request, res: Response) => {
       [MODEL_ENV_KEYS.model]: "gpt-4o",
       [MODEL_ENV_KEYS.apiKey]: "",
       [MODEL_ENV_KEYS.baseURL]: "",
-      REASONING_MODE: "off",
+      ORCHESTRATOR_REASONING_MODE: "off",
     });
 
     const { clearProviderCache } = await import("../utils/llm/providers");

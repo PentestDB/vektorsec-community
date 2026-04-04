@@ -9,6 +9,7 @@ const listShells: ToolDefinition = {
     type: "object",
     properties: {},
   },
+  timeoutMs: 10_000,
   async execute(_args, ctx) {
     const shells = ctx.listShells();
     if (shells.length === 0) {

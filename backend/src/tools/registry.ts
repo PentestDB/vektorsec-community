@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ToolDefinition, toolToOpenAISchema } from "./types";
+import { ToolDefinition, toolToOpenAISchema, AgentRole } from "./types";
 
 import runBash from "./handlers/run-bash";
 import runPythonScript from "./handlers/run-python-script";
@@ -12,6 +12,9 @@ import readShell from "./handlers/read-shell";
 import listShells from "./handlers/list-shells";
 import closeShell from "./handlers/close-shell";
 import spawnSubagent from "./handlers/spawn-subagent";
+import spawnSwarm from "./handlers/spawn-swarm";
+import reportFinding from "./handlers/report-finding";
+import checkFindings from "./handlers/check-findings";
 import sendToBurp from "./handlers/send-to-burp";
 import burpIntruder from "./handlers/burp-intruder";
 import burpCollaborator from "./handlers/burp-collaborator";
@@ -20,6 +23,11 @@ import burpProxyHistory from "./handlers/burp-proxy-history";
 import magnitudeBrowser from "./handlers/magnitude-browser";
 import viewImage from "./handlers/view-image";
 import updateEngagementState from "./handlers/update-engagement-state";
+import getSolveStatus from "./handlers/get-solve-status";
+import bumpRacer from "./handlers/bump-racer";
+import broadcastToRacers from "./handlers/broadcast-to-racers";
+import readRacerTrace from "./handlers/read-racer-trace";
+import waitForRacers from "./handlers/wait-for-racers";
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -46,11 +54,19 @@ class ToolRegistry {
 
   toOpenAISchemas(opts?: {
     excludeSubagent?: boolean;
+    agentRole?: AgentRole;
     disabledTools?: string[];
     unconfiguredTools?: string[];
   }): OpenAI.Chat.ChatCompletionTool[] {
     let tools = this.getAll();
-    if (opts?.excludeSubagent) {
+    if (opts?.agentRole) {
+      tools = tools.filter((t) => {
+        if (!t.allowedRoles) {
+          return opts.agentRole !== "orchestrator";
+        }
+        return t.allowedRoles.includes(opts.agentRole!);
+      });
+    } else if (opts?.excludeSubagent) {
       tools = tools.filter((t) => t.name !== "spawn_subagent");
     }
     if (opts?.disabledTools?.length) {
@@ -86,6 +102,9 @@ toolRegistry.register(readShell);
 toolRegistry.register(listShells);
 toolRegistry.register(closeShell);
 toolRegistry.register(spawnSubagent);
+toolRegistry.register(spawnSwarm);
+toolRegistry.register(reportFinding);
+toolRegistry.register(checkFindings);
 toolRegistry.register(sendToBurp);
 toolRegistry.register(burpIntruder);
 toolRegistry.register(burpCollaborator);
@@ -94,3 +113,8 @@ toolRegistry.register(burpProxyHistory);
 toolRegistry.register(magnitudeBrowser);
 toolRegistry.register(viewImage);
 toolRegistry.register(updateEngagementState);
+toolRegistry.register(getSolveStatus);
+toolRegistry.register(bumpRacer);
+toolRegistry.register(broadcastToRacers);
+toolRegistry.register(readRacerTrace);
+toolRegistry.register(waitForRacers);

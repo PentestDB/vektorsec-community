@@ -2,6 +2,16 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 const Schema = mongoose.Schema;
 
+export interface ModelPresetDoc {
+  label: string;
+  provider: string;
+  model: string;
+  apiKey?: string;
+  baseURL?: string;
+  reasoningMode?: string;
+  isOrchestrator?: boolean;
+}
+
 export interface UserDoc extends mongoose.Document {
   email: string;
   name: string;
@@ -28,6 +38,7 @@ export interface UserDoc extends mongoose.Document {
     installedCapabilities: string[];
     requireConsentForAllTools?: boolean;
     disableSafetyProtections?: boolean;
+    models?: ModelPresetDoc[];
   };
   referredBy: mongoose.Types.ObjectId;
   workingIndustry: string;
@@ -92,6 +103,20 @@ const UserSchema = new Schema({
     },
     disabledAgentTools: {
       type: [{ type: String }],
+      default: [],
+    },
+    models: {
+      type: [
+        {
+          label: { type: String, required: true },
+          provider: { type: String, required: true },
+          model: { type: String, required: true },
+          apiKey: { type: String },
+          baseURL: { type: String },
+          reasoningMode: { type: String, enum: ["off", "low", "medium", "high"], default: "off" },
+          isOrchestrator: { type: Boolean, default: false },
+        },
+      ],
       default: [],
     },
   },

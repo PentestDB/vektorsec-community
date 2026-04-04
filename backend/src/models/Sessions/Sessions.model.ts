@@ -59,7 +59,7 @@ export interface ShellDoc {
   closedAt?: Date;
 }
 
-export type SubagentStatus = "running" | "completed" | "failed" | "cancelled";
+export type SubagentStatus = "running" | "completed" | "failed" | "cancelled" | "paused";
 
 export interface SubagentDoc {
   subagentId: string;
@@ -69,6 +69,46 @@ export interface SubagentDoc {
   result?: string;
   messages: AgentMessageDoc[];
   shells: string[];
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export type SwarmWinCondition = "first_success" | "all_complete";
+export type SwarmStatus = "running" | "completed" | "cancelled" | "timed_out" | "paused";
+
+export interface SwarmAgentDoc {
+  agentId: string;
+  task: string;
+  modelLabel: string;
+  modelSpec: {
+    provider: string;
+    model: string;
+  };
+  status: SubagentStatus;
+  result?: string;
+  messages: AgentMessageDoc[];
+  subagents: SubagentDoc[];
+  shells: string[];
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export interface SwarmFindingDoc {
+  agentId: string;
+  content: string;
+  isSuccess: boolean;
+  timestamp: Date;
+}
+
+export interface SwarmDoc {
+  swarmId: string;
+  goal: string;
+  winCondition: SwarmWinCondition;
+  status: SwarmStatus;
+  agents: SwarmAgentDoc[];
+  findings: SwarmFindingDoc[];
+  winner?: string;
+  timeoutMs?: number;
   createdAt: Date;
   completedAt?: Date;
 }
@@ -141,6 +181,7 @@ export interface SessionDoc extends mongoose.Document {
   }>;
   shells: ShellDoc[];
   subagents: SubagentDoc[];
+  swarms: SwarmDoc[];
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
   ctfConfig?: CtfConfigDoc;
@@ -215,6 +256,55 @@ const SubagentSchema = new Schema(
   { _id: false },
 );
 
+const SwarmAgentSchema = new Schema(
+  {
+    agentId: { type: String, required: true },
+    task: { type: String, required: true },
+    modelLabel: { type: String, required: true },
+    modelSpec: {
+      type: {
+        provider: { type: String, required: true },
+        model: { type: String, required: true },
+      },
+      required: true,
+    },
+    status: { type: String, default: "running", enum: ["running", "completed", "failed", "cancelled"] },
+    result: { type: String },
+    messages: { type: [SubagentMessageSchema], default: [] },
+    subagents: { type: [SubagentSchema], default: [] },
+    shells: { type: [String], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    completedAt: { type: Date },
+  },
+  { _id: false },
+);
+
+const SwarmFindingSchema = new Schema(
+  {
+    agentId: { type: String, required: true },
+    content: { type: String, required: true },
+    isSuccess: { type: Boolean, default: false },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const SwarmSchema = new Schema(
+  {
+    swarmId: { type: String, required: true },
+    goal: { type: String, required: true },
+    winCondition: { type: String, required: true, enum: ["first_success", "all_complete"] },
+    status: { type: String, default: "running", enum: ["running", "completed", "cancelled", "timed_out"] },
+    agents: { type: [SwarmAgentSchema], default: [] },
+    findings: { type: [SwarmFindingSchema], default: [] },
+    winner: { type: String },
+    timeoutMs: { type: Number },
+    createdAt: { type: Date, default: Date.now },
+    completedAt: { type: Date },
+  },
+  { _id: false },
+);
+
 const SessionSchema = new Schema({
   uid: { type: mongoose.Types.ObjectId, required: true },
   sessionId: { type: String, required: true, unique: true },
@@ -271,6 +361,7 @@ const SessionSchema = new Schema({
   },
   shells: { type: [ShellSchema], default: [] },
   subagents: { type: [SubagentSchema], default: [] },
+  swarms: { type: [SwarmSchema], default: [] },
   connectionState: {
     type: {
       sshConnected: { type: Boolean, default: false },

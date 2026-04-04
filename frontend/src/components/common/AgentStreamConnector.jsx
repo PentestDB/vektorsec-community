@@ -4,6 +4,50 @@ import { useEffect, useRef } from "react";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import { getSessionHistory } from "@/services/agent.service";
 
+function convertDbMessagesToStreamFormat(dbMessages) {
+  const entries = [];
+  for (const m of dbMessages) {
+    if (m.role === "assistant") {
+      if (m.reasoning) {
+        entries.push({ type: "thinking", content: m.reasoning });
+      }
+      if (m.content) {
+        entries.push({ type: "assistant", content: m.content });
+      }
+      if (m.toolCalls?.length) {
+        for (const tc of m.toolCalls) {
+          entries.push({
+            type: "tool",
+            name: tc.name,
+            args: tc.arguments,
+            status: "done",
+            output: "",
+            toolCallId: tc.id,
+          });
+        }
+      }
+    } else if (m.role === "tool") {
+      const existing = entries.findLast(
+        (e) => e.type === "tool" && e.toolCallId === m.toolCallId,
+      );
+      if (existing) {
+        existing.output = m.content || "";
+        existing.status = "done";
+      } else {
+        entries.push({
+          type: "tool",
+          name: m.toolName || "unknown",
+          args: "{}",
+          status: "done",
+          output: m.content || "",
+          toolCallId: m.toolCallId,
+        });
+      }
+    }
+  }
+  return entries;
+}
+
 export default function AgentStreamConnector({ sessionId }) {
   const store = useAgentStreamStore;
   const initRef = useRef(null);
@@ -24,7 +68,16 @@ export default function AgentStreamConnector({ sessionId }) {
         const { loadHistory, setAgentState, setPendingConsent, setPendingManualExecution, setTokenUsage } =
           store.getState();
         if (data.messages) {
-          loadHistory(sessionId, data.messages, data.subagents);
+          const restoredSwarms = (data.swarms || []).map((sw) => ({
+            ...sw,
+            agents: (sw.agents || []).map((a) => ({
+              ...a,
+              thinkingContent: "",
+              toolCalls: [],
+              messages: convertDbMessagesToStreamFormat(a.messages || []),
+            })),
+          }));
+          loadHistory(sessionId, data.messages, data.subagents, restoredSwarms);
         }
         if (data.agentState) {
           setAgentState(sessionId, data.agentState);
@@ -65,6 +118,7 @@ export default function AgentStreamConnector({ sessionId }) {
       st.setPendingConsent(sessionId, null);
       st.setPendingManualExecution(sessionId, null);
       st.setSubagents(sessionId, []);
+      st.setSwarms(sessionId, []);
       st.setTokenUsage(sessionId, null);
     };
     window.addEventListener("context-cleared", onContextCleared);

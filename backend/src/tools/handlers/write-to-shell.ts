@@ -21,6 +21,7 @@ const writeToShell: ToolDefinition = {
     },
     required: ["shell_id", "input"],
   },
+  timeoutMs: 30_000,
   shouldRequireConsent(args, ctx) {
     const shellInfo = ctx.getShellInfo(args.shell_id);
     if (!shellInfo || shellInfo.purpose === "reverse-shell" || shellInfo.purpose === "listener") {

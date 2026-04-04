@@ -14,6 +14,21 @@ const MAX_SUBAGENT_ITERATIONS = 15;
 const MAX_SUBAGENT_WALL_CLOCK_MS = 10 * 60 * 1000; // 10 minutes
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
+const DEFAULT_TOOL_TIMEOUT_MS = 60_000;
+
+function executeWithTimeout(
+  toolDef: import("../tools/types").ToolDefinition,
+  args: Record<string, any>,
+  ctx: import("../tools/types").ExecutionContext,
+): Promise<ToolResult> {
+  const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
+  return Promise.race([
+    toolDef.execute(args, ctx),
+    new Promise<ToolResult>((_, reject) =>
+      setTimeout(() => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)), timeoutMs),
+    ),
+  ]);
+}
 
 export interface SubagentResult {
   subagentId: string;
@@ -182,6 +197,7 @@ export class SubagentManager extends EventEmitter {
     const buildCtx = (onChunk?: (chunk: string) => void): ExecutionContext => ({
       sessionId: this.sessionId,
       agentId: subagentId,
+      agentRole: "subagent",
       runCommand: (cmd, timeoutMs) =>
         this.shellManager.execInShell(cmd, timeoutMs, onChunk, abortSignal),
       spawnShell: async (label, type, purpose) => {
@@ -237,7 +253,12 @@ export class SubagentManager extends EventEmitter {
         let assistantContent = "";
         let assistantToolCalls: ToolCallData[] = [];
 
-        const { tags: traceTags, phase } = buildTraceTags("subagent", messages, [subagentId]);
+        const { tags: traceTags, phase } = buildTraceTags("subagent", messages, [
+          `session_id:${this.sessionId}`,
+          `workspace_id:${session?.workspaceId ?? "unknown"}`,
+          "agent_role:subagent",
+          `subagent_id:${subagentId}`,
+        ]);
 
         const result = await invoke_llm_streaming({
           messages: openaiMessages,
@@ -359,7 +380,7 @@ export class SubagentManager extends EventEmitter {
           });
 
           try {
-            const toolResult = await toolDef.execute(args, ctx);
+            const toolResult = await executeWithTimeout(toolDef, args, ctx);
             toolResult.output = truncateOutput(toolResult.output);
 
             sse.write("subagent_progress", {

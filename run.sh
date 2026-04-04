@@ -80,7 +80,7 @@ show_commands() {
     echo -e "   ${BOLD}Commands:${NC}"
     echo -e "     ${CYAN}start${NC}        Guided start: choose normal or developer mode"
     echo -e "     ${CYAN}start -q${NC}     Quick start: skip prompts, use existing config"
-    echo -e "     ${CYAN}config${NC}       Update model keys, Google search, tracing, or exploit box settings"
+    echo -e "     ${CYAN}config${NC}       Update model keys, orchestrator, racers, Google search, tracing, or exploit box settings"
     echo -e "     ${CYAN}dev${NC}          Start directly in developer mode"
     echo -e "     ${CYAN}dev -q${NC}       Quick dev start: skip prompts"
     echo -e "     ${CYAN}stop${NC}         Stop all containers"
@@ -435,7 +435,7 @@ select_launch_mode() {
 
 is_model_configured() {
     local key
-    key=$(get_env "$DYNAMIC_ENV" "MODEL_API_KEY")
+    key=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_API_KEY")
     [[ -n "$key" ]]
 }
 
@@ -458,19 +458,50 @@ is_exploit_box_configured() {
     [[ -n "$host" ]]
 }
 
+is_orchestrator_configured() {
+    local key
+    key=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_API_KEY")
+    [[ -n "$key" ]]
+}
+
+is_racers_configured() {
+    local key
+    key=$(get_env "$DYNAMIC_ENV" "RACER_1_API_KEY")
+    [[ -n "$key" ]]
+}
+
 show_current_config_summary() {
     section "Current Configuration"
     echo
 
-    # Model
-    local provider model key
-    provider=$(get_env "$DYNAMIC_ENV" "MODEL_PROVIDER")
-    model=$(get_env "$DYNAMIC_ENV" "MODEL")
-    key=$(get_env "$DYNAMIC_ENV" "MODEL_API_KEY")
-    if [[ -n "$key" ]]; then
-        echo -e "   ${GREEN}●${NC} Model: ${BOLD}${provider:-openai}${NC} / ${model:-gpt-4o}  (key: $(mask_key "$key"))"
+    # Model (orchestrator)
+    local orch_name orch_provider orch_model orch_key
+    orch_name=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_NAME")
+    orch_provider=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_PROVIDER")
+    orch_model=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_MODEL")
+    orch_key=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_API_KEY")
+    if [[ -n "$orch_key" ]]; then
+        echo -e "   ${GREEN}●${NC} Model: ${BOLD}${orch_name:-${orch_provider}/${orch_model}}${NC}  ${DIM}${orch_provider}/${orch_model}${NC}  (key: $(mask_key "$orch_key"))"
     else
         echo -e "   ${RED}●${NC} Model: ${BOLD}not configured${NC}  ${YELLOW}← required${NC}"
+    fi
+
+    # Racers
+    local racer_count=0
+    local racer_names=()
+    for i in $(seq 1 8); do
+        local rname rkey
+        rname=$(get_env "$DYNAMIC_ENV" "RACER_${i}_NAME")
+        rkey=$(get_env "$DYNAMIC_ENV" "RACER_${i}_API_KEY")
+        if [[ -n "$rkey" ]]; then
+            racer_count=$((racer_count + 1))
+            racer_names+=("${rname:-Racer $i}")
+        fi
+    done
+    if [[ $racer_count -gt 0 ]]; then
+        echo -e "   ${GREEN}●${NC} Racers: ${BOLD}${racer_count}${NC} configured  ${DIM}(${racer_names[*]})${NC}"
+    else
+        echo -e "   ${DIM}○${NC} Racers: none configured  ${DIM}(optional)${NC}"
     fi
 
     # Google
@@ -535,6 +566,17 @@ configure_required_startup_smart() {
         hint "Google Search enables web search during pentesting. (optional, set up later via Settings UI)"
         if confirm "Configure Google Search API now?" "n"; then
             configure_google_search
+        else
+            info "Skipped — configure anytime via Settings UI or ./run.sh config"
+        fi
+    fi
+
+    # Orchestrator — optional, skip-friendly
+    if ! is_racers_configured; then
+        echo
+        hint "Racers are parallel agents that compete on the same task. (optional)"
+        if confirm "Configure racers now?" "n"; then
+            configure_racers
         else
             info "Skipped — configure anytime via Settings UI or ./run.sh config"
         fi
@@ -656,49 +698,176 @@ configure_static_full() {
 
 # ── Config options ─────────────────────────────────────────
 configure_model_keys() {
-    section "Model API Keys"
+    configure_orchestrator
+}
+
+configure_orchestrator() {
+    section "Orchestrator Model"
+    hint "The orchestrator drives high-level planning and swarm coordination."
+    hint "Leave the API key blank to fall back to the main model."
     hint "You can change this anytime via the Settings UI (no restart needed)."
     ensure_env_defaults
-    local cur
-    cur=$(get_env "$DYNAMIC_ENV" "MODEL_PROVIDER")
     echo
+
+    local cur_name cur_provider cur_model cur_key cur_base cur_reasoning
+    cur_name=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_NAME")
+    cur_provider=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_PROVIDER")
+    cur_model=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_MODEL")
+    cur_key=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_API_KEY")
+    cur_base=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_BASE_URL")
+    cur_reasoning=$(get_env "$DYNAMIC_ENV" "ORCHESTRATOR_REASONING_MODE")
+
+    prompt_input "Display name [${cur_name:-Orchestrator}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_NAME" "${val:-${cur_name:-Orchestrator}}"
+
     echo -e "   ${BOLD}Providers:${NC} openai, anthropic, openai-compatible"
-    prompt_input "Provider [${cur:-openai}]:"
+    prompt_input "Provider [${cur_provider:-openai}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_PROVIDER" "$val"
-    local model_provider="${val:-${cur:-openai}}"
+    local orch_provider="${val:-${cur_provider:-openai}}"
+    set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_PROVIDER" "$orch_provider"
 
-    cur=$(get_env "$DYNAMIC_ENV" "MODEL")
-    prompt_input "Model name [${cur:-gpt-4o}]:"
+    prompt_input "Model name [${cur_model:-}]:"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL" "$val"
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_MODEL" "$val"
 
-    if [[ "$model_provider" == "anthropic" ]]; then
-        echo
-        echo -e "   ${BOLD}1)${NC} API Key   ${BOLD}2)${NC} Connect Claude Account (OAuth)"
-        prompt_input "Choose [1/2]:"
-        read -r auth_choice
-        if [[ "$auth_choice" == "2" ]]; then
-            configure_claude_oauth
-        else
-            prompt_input "API key:"
-            read -r val
-            [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_API_KEY" "$val"
-        fi
+    if [[ -n "$cur_key" ]]; then
+        prompt_input "API key [$(mask_key "$cur_key")]:"
     else
         prompt_input "API key:"
-        read -r val
-        [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_API_KEY" "$val"
     fi
-
-    prompt_input "Base URL override (Enter to skip):"
     read -r val
-    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "MODEL_BASE_PATH" "$val"
-    info "Model API keys saved"
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_API_KEY" "$val"
+
+    prompt_input "Base URL override (Enter to skip) [${cur_base:-}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_BASE_URL" "${val:-${cur_base:-}}"
+
+    echo -e "   ${BOLD}Reasoning mode:${NC} off, low, medium, high"
+    prompt_input "Reasoning mode [${cur_reasoning:-off}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_REASONING_MODE" "${val:-${cur_reasoning:-off}}"
+
+    info "Orchestrator model saved"
+}
+
+configure_single_racer() {
+    local idx="$1"
+    local cur_name cur_provider cur_model cur_key cur_base cur_reasoning
+    cur_name=$(get_env "$DYNAMIC_ENV" "RACER_${idx}_NAME")
+    cur_provider=$(get_env "$DYNAMIC_ENV" "RACER_${idx}_PROVIDER")
+    cur_model=$(get_env "$DYNAMIC_ENV" "RACER_${idx}_MODEL")
+    cur_key=$(get_env "$DYNAMIC_ENV" "RACER_${idx}_API_KEY")
+    cur_base=$(get_env "$DYNAMIC_ENV" "RACER_${idx}_BASE_URL")
+    cur_reasoning=$(get_env "$DYNAMIC_ENV" "RACER_${idx}_REASONING_MODE")
+
+    echo
+    echo -e "   ${CYAN}${BOLD}── Racer ${idx} ──${NC}"
+
+    prompt_input "Display name [${cur_name:-Racer ${idx}}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_NAME" "${val:-${cur_name:-Racer ${idx}}}"
+
+    echo -e "   ${BOLD}Providers:${NC} openai, anthropic, openai-compatible"
+    prompt_input "Provider [${cur_provider:-openai}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_PROVIDER" "${val:-${cur_provider:-openai}}"
+
+    prompt_input "Model name [${cur_model:-}]:"
+    read -r val
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "RACER_${idx}_MODEL" "$val"
+
+    if [[ -n "$cur_key" ]]; then
+        prompt_input "API key [$(mask_key "$cur_key")]:"
+    else
+        prompt_input "API key:"
+    fi
+    read -r val
+    [[ -n "$val" ]] && set_env_var "$DYNAMIC_ENV" "RACER_${idx}_API_KEY" "$val"
+
+    prompt_input "Base URL override (Enter to skip) [${cur_base:-}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_BASE_URL" "${val:-${cur_base:-}}"
+
+    echo -e "   ${BOLD}Reasoning mode:${NC} off, low, medium, high"
+    prompt_input "Reasoning mode [${cur_reasoning:-off}]:"
+    read -r val
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_REASONING_MODE" "${val:-${cur_reasoning:-off}}"
+
+    info "Racer ${idx} saved"
+}
+
+clear_racer() {
+    local idx="$1"
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_NAME" ""
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_PROVIDER" ""
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_MODEL" ""
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_API_KEY" ""
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_BASE_URL" ""
+    set_env_var "$DYNAMIC_ENV" "RACER_${idx}_REASONING_MODE" "off"
+    info "Racer ${idx} cleared"
+}
+
+configure_racers() {
+    section "Racers Configuration"
+    hint "Racers are parallel agent instances that compete on the same task. Up to 8 supported."
+    hint "You can change this anytime via the Settings UI (no restart needed)."
+    ensure_env_defaults
+    echo
+
+    # Show existing racers
+    local has_any=false
+    for i in $(seq 1 8); do
+        local rname rprovider rmodel rkey
+        rname=$(get_env "$DYNAMIC_ENV" "RACER_${i}_NAME")
+        rprovider=$(get_env "$DYNAMIC_ENV" "RACER_${i}_PROVIDER")
+        rmodel=$(get_env "$DYNAMIC_ENV" "RACER_${i}_MODEL")
+        rkey=$(get_env "$DYNAMIC_ENV" "RACER_${i}_API_KEY")
+        if [[ -n "$rkey" ]]; then
+            echo -e "   ${GREEN}●${NC} Racer ${i}: ${BOLD}${rname:-Racer $i}${NC}  ${DIM}${rprovider}/${rmodel}  (key: $(mask_key "$rkey"))${NC}"
+            has_any=true
+        fi
+    done
+    [[ "$has_any" == false ]] && echo -e "   ${DIM}No racers configured yet.${NC}"
+    echo
+
+    # Edit existing racers
+    for i in $(seq 1 8); do
+        local rkey rname
+        rkey=$(get_env "$DYNAMIC_ENV" "RACER_${i}_API_KEY")
+        rname=$(get_env "$DYNAMIC_ENV" "RACER_${i}_NAME")
+        if [[ -n "$rkey" ]]; then
+            echo -e "   ${BOLD}Racer ${i}:${NC} ${rname:-Racer $i}"
+            echo -e "   ${BOLD}1)${NC} Edit   ${BOLD}2)${NC} Delete   ${BOLD}3)${NC} Keep"
+            prompt_input "Choose [1/2/3]:"
+            read -r rchoice
+            case "$rchoice" in
+                1) configure_single_racer "$i" ;;
+                2) clear_racer "$i" ;;
+                *) info "Keeping Racer ${i}" ;;
+            esac
+        fi
+    done
+
+    # Add new racers
+    echo
+    hint "Add new racers (leave empty or press Ctrl-C to stop)"
+    for i in $(seq 1 8); do
+        local rkey
+        rkey=$(get_env "$DYNAMIC_ENV" "RACER_${i}_API_KEY")
+        [[ -n "$rkey" ]] && continue   # slot already occupied
+
+        echo
+        if ! confirm "Add Racer ${i}?" "n"; then
+            break
+        fi
+        configure_single_racer "$i"
+    done
+
+    info "Racers configuration saved"
 }
 
 configure_google_search() {
-    section "Google Search"
     hint "Optional. You can set this up later via the Settings UI."
     ensure_env_defaults
     local cur_key cur_cx key_status
@@ -782,7 +951,7 @@ configure_claude_oauth() {
     set_env_var "$DYNAMIC_ENV" "ANTHROPIC_OAUTH_ACCESS_TOKEN"  "$access_token"
     set_env_var "$DYNAMIC_ENV" "ANTHROPIC_OAUTH_REFRESH_TOKEN" "$refresh_token"
     set_env_var "$DYNAMIC_ENV" "ANTHROPIC_OAUTH_EXPIRES_AT"    "$expires_at"
-    set_env_var "$DYNAMIC_ENV" "MODEL_API_KEY" ""
+    set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_API_KEY" ""
     info "Claude account connected via OAuth"
 }
 
@@ -972,6 +1141,39 @@ configure_external_ssh() {
             ;;
     esac
     info "Exploit box configured"
+}
+
+# ── Rebuild prompt (normal Docker mode only) ─────────────
+prompt_rebuild_normal() {
+    echo
+    section "Rebuild Containers?"
+    hint "Rebuild if you've pulled updates or changed code. Skip for a normal restart."
+    echo
+    echo -e "   ${BOLD}1)${NC} No rebuild  ${DIM}(default — fastest start)${NC}"
+    echo -e "   ${BOLD}2)${NC} Rebuild backend"
+    echo -e "   ${BOLD}3)${NC} Rebuild frontend"
+    echo -e "   ${BOLD}4)${NC} Rebuild both"
+    echo
+    prompt_input "Choose [1/2/3/4, Enter = 1]:"
+    read -r rebuild_choice
+
+    case "$rebuild_choice" in
+        2)
+            info "Rebuilding backend..."
+            compose build backend
+            ;;
+        3)
+            info "Rebuilding frontend..."
+            compose build frontend
+            ;;
+        4)
+            info "Rebuilding backend and frontend..."
+            compose build backend frontend
+            ;;
+        *)
+            info "Skipping rebuild"
+            ;;
+    esac
 }
 
 # ── Compose wrapper ───────────────────────────────────────
@@ -1164,6 +1366,10 @@ cmd_start() {
         NEED_SSH_KEY_MOUNT=true
     fi
 
+    if [[ "$QUICK_MODE" != true && "${DEV_MODE:-false}" != true ]]; then
+        prompt_rebuild_normal
+    fi
+
     launch
 }
 
@@ -1179,30 +1385,35 @@ cmd_config() {
 
     section "Configuration"
     echo
-    echo -e "   ${BOLD}1)${NC} Model API keys           ${DIM}(changeable at runtime via Settings UI)${NC}"
-    echo -e "   ${BOLD}2)${NC} Google search             ${DIM}(changeable at runtime via Settings UI)${NC}"
-    echo -e "   ${BOLD}3)${NC} Langfuse tracing          ${DIM}(requires container restart)${NC}"
-    echo -e "   ${BOLD}4)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
-    echo -e "   ${BOLD}5)${NC} All of the above"
+    echo -e "   ${BOLD}1)${NC} Model / Orchestrator     ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}2)${NC} Racers                   ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}3)${NC} Google search             ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}4)${NC} Langfuse tracing          ${DIM}(requires container restart)${NC}"
+    echo -e "   ${BOLD}5)${NC} Exploit box               ${DIM}(changeable at runtime via Settings UI)${NC}"
+    echo -e "   ${BOLD}6)${NC} All of the above"
     if [[ "${DEV_MODE:-false}" == true ]]; then
-        echo -e "   ${BOLD}6)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
+        echo -e "   ${BOLD}7)${NC} Server / Database / CORS  ${DIM}(requires process restart)${NC}"
     fi
     echo
-    prompt_input "Choose [1-${DEV_MODE:+6}${DEV_MODE:-5}]:"
+    local max_choice=6
+    [[ "${DEV_MODE:-false}" == true ]] && max_choice=7
+    prompt_input "Choose [1-${max_choice}]:"
     read -r choice
 
     case "$choice" in
-        1) configure_model_keys ;;
-        2) configure_google_search ;;
-        3) configure_langfuse ;;
-        4) configure_exploit_box ;;
-        5)
-            configure_model_keys
+        1) configure_orchestrator ;;
+        2) configure_racers ;;
+        3) configure_google_search ;;
+        4) configure_langfuse ;;
+        5) configure_exploit_box ;;
+        6)
+            configure_orchestrator
+            configure_racers
             configure_google_search
             configure_langfuse
             configure_exploit_box
             ;;
-        6)
+        7)
             if [[ "${DEV_MODE:-false}" == true ]]; then
                 configure_static_full
             else

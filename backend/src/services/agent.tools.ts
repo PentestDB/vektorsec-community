@@ -1,13 +1,30 @@
 import { toolRegistry } from "../tools/registry";
-import { ExecutionContext, ToolResult } from "../tools/types";
+import { ExecutionContext, ToolResult, AgentRole } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
 import { ShellManager, ShellPurpose } from "./shell.manager";
 import { SubagentManager } from "./subagent.manager";
+import { SwarmManager } from "./swarm.manager";
 import { SSEWriter } from "./agent.service";
 import { EngagementState } from "./engagement-state";
+import { SwarmWinCondition } from "../models/Sessions/Sessions.model";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
+const DEFAULT_TOOL_TIMEOUT_MS = 60_000; // 1 min hard cap if no timeoutMs on the definition
+
+function executeWithTimeout(
+  toolDef: import("../tools/types").ToolDefinition,
+  args: Record<string, any>,
+  ctx: ExecutionContext,
+): Promise<ToolResult> {
+  const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
+  return Promise.race([
+    toolDef.execute(args, ctx),
+    new Promise<ToolResult>((_, reject) =>
+      setTimeout(() => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)), timeoutMs),
+    ),
+  ]);
+}
 
 export interface ToolExecutionCallbacks {
   onToolStart: (toolCallId: string, toolName: string, args: Record<string, any>) => void;
@@ -39,19 +56,26 @@ function truncateOutput(output: string): string {
 export function buildExecutionContext(params: {
   sessionId: string;
   agentId: string;
+  agentRole?: AgentRole;
   shellManager: ShellManager;
   subagentManager?: SubagentManager;
+  swarmManager?: SwarmManager;
   sse?: SSEWriter;
   userId?: string;
   onChunk?: (chunk: string) => void;
   abortSignal?: AbortSignal;
   engagementState?: EngagementState;
 }): ExecutionContext {
-  const { sessionId, agentId, shellManager, subagentManager, sse, userId, onChunk, abortSignal, engagementState } = params;
+  const {
+    sessionId, agentId, shellManager, subagentManager, swarmManager,
+    sse, userId, onChunk, abortSignal, engagementState,
+  } = params;
+  const agentRole = params.agentRole ?? "main";
 
   return {
     sessionId,
     agentId,
+    agentRole,
     runCommand: (command: string, timeoutMs?: number) =>
       shellManager.execInShell(command, timeoutMs, onChunk, abortSignal),
     spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) =>
@@ -77,6 +101,35 @@ export function buildExecutionContext(params: {
             userId,
           })
       : undefined,
+    spawnSwarm: swarmManager && sse && userId
+      ? (swarmParams) =>
+          swarmManager.spawn({
+            goal: swarmParams.goal,
+            agentSpecs: swarmParams.agents,
+            winCondition: (swarmParams.winCondition as SwarmWinCondition) || "all_complete",
+            timeoutMs: swarmParams.timeoutMinutes ? swarmParams.timeoutMinutes * 60 * 1000 : undefined,
+            sse,
+            userId,
+          })
+      : undefined,
+    checkFindings: swarmManager
+      ? () => swarmManager.checkAllFindings()
+      : undefined,
+    getSwarmStatus: swarmManager
+      ? () => swarmManager.getSwarmStatus(swarmManager.getRunningSwarmIds())
+      : undefined,
+    bumpRacer: swarmManager
+      ? (racerId: string, insights: string) => swarmManager.bumpAgent(racerId, insights)
+      : undefined,
+    broadcastToRacers: swarmManager
+      ? (message: string) => swarmManager.broadcastToAll(swarmManager.getRunningSwarmIds(), message)
+      : undefined,
+    readRacerTrace: swarmManager
+      ? (racerId: string, lastN: number) => swarmManager.getAgentMessages(racerId, lastN)
+      : undefined,
+    waitForRacers: async (seconds: number) => {
+      await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+    },
     onOutput: onChunk,
     engagementState,
   };
@@ -140,7 +193,7 @@ export async function executeToolCall(
       onOutput: (chunk) => callbacks.onToolOutput(toolCall.id, chunk),
     };
 
-    const result = await toolDef.execute(args, toolCtx);
+    const result = await executeWithTimeout(toolDef, args, toolCtx);
     result.output = truncateOutput(result.output);
 
     if (result.installSuggestion && callbacks.onInstallSuggestion) {
@@ -203,7 +256,7 @@ export async function executeConsentedTool(
       onOutput: (chunk) => callbacks.onToolOutput(toolCallId, chunk),
     };
 
-    const result = await toolDef.execute(args, toolCtx);
+    const result = await executeWithTimeout(toolDef, args, toolCtx);
     result.output = truncateOutput(result.output);
 
     callbacks.onToolDone(toolCallId, result);

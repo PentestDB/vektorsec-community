@@ -32,6 +32,7 @@ const spawnShell: ToolDefinition = {
     },
     required: ["label"],
   },
+  timeoutMs: 30_000,
   async execute(args, ctx) {
     const label = args.label;
     if (!label) return { output: "Error: label is required", exitCode: 1 };

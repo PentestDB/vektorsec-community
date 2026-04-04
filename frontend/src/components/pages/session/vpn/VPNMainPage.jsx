@@ -10,16 +10,18 @@ import {
   disconnectAllVPNConnections,
   getVPNStatus,
 } from "@/services/copilot.service";
+import { getSSHConfig } from "@/services/user.service";
 import { FiUpload, FiTrash2, FiWifi, FiWifiOff } from "react-icons/fi";
 import { MdOutlineVpnLock } from "react-icons/md";
-import { useSelector } from "react-redux";
 import { useState } from "react";
 import styles from "@/styles/components/VPN.module.scss";
 
 const VPNMainPage = ({ sessionId }) => {
   const queryClient = useQueryClient();
-  const { status } = useSelector((state) => state.user);
-  const vpnConnections = useSelector((state) => state.vpn.connections) ?? [];
+
+  const { data: sshConfigData } = useQuery("ssh-config", getSSHConfig, {
+    refetchInterval: 30000,
+  });
   const [uploading, setUploading] = useState(false);
   const [activeConnectProfile, setActiveConnectProfile] = useState(null);
 
@@ -29,11 +31,13 @@ const VPNMainPage = ({ sessionId }) => {
     { refetchInterval: 15000 }
   );
 
-  useQuery(
+  const { data: vpnStatusData } = useQuery(
     ["check-vpn-status", sessionId],
     () => getVPNStatus({ session_id: sessionId }),
     { refetchInterval: 5000 }
   );
+
+  const vpnConnections = vpnStatusData?.connections ?? [];
 
   const uploadMutation = useMutation(uploadVPNProfile, {
     onSuccess: (data) => {
@@ -112,7 +116,7 @@ const VPNMainPage = ({ sessionId }) => {
     },
   };
 
-  const boxRunning = status === "running";
+  const boxRunning = !!(sshConfigData?.configured);
 
   return (
     <div className={styles.vpnContainer}>
@@ -315,7 +319,7 @@ const VPNMainPage = ({ sessionId }) => {
 
         {!boxRunning && (
           <div className={styles.warningBanner}>
-            Exploit box must be running to connect or disconnect VPN profiles.
+            No exploit box configured. Set up SSH in Settings to connect or disconnect VPN profiles.
           </div>
         )}
       </div>

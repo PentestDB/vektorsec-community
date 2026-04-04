@@ -36,7 +36,7 @@ function HelpTip({ text }) {
 }
 
 export default function ContextUsageIndicator({ tokenUsage }) {
-  const { totalTokens = 0, contextLimit = 128_000, promptTokens, completionTokens } = tokenUsage || {};
+  const { totalTokens = 0, contextLimit = 128_000, promptTokens, completionTokens, iteration, maxIterations } = tokenUsage || {};
 
   // True usage vs model limit (can exceed 100% — do not cap for the label)
   const usagePct = useMemo(() => {
@@ -128,6 +128,15 @@ export default function ContextUsageIndicator({ tokenUsage }) {
               : formatTokenCount(totalTokens - contextLimit)}
           </span>
         </div>
+        {iteration != null && maxIterations != null && (
+          <>
+            <div className={styles.contextDivider} />
+            <div className={styles.contextRow}>
+              <span>Depth</span>
+              <span>{iteration} / {maxIterations}</span>
+            </div>
+          </>
+        )}
         {promptTokens != null && (
           <>
             <div className={styles.contextDivider} />

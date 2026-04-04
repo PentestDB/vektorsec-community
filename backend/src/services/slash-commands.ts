@@ -138,6 +138,10 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-4-turbo": 128_000,
   "gpt-4": 8_192,
   "gpt-3.5-turbo": 16_385,
+  "claude-sonnet-4-6": 1_000_000,
+  "claude-opus-4-6": 1_000_000,
+  "claude-haiku-4-5": 200_000,
+  "claude-sonnet-4-5": 200_000,
   "claude-sonnet-4-20250514": 200_000,
   "claude-3-5-sonnet-20241022": 200_000,
   "claude-3-opus-20240229": 200_000,
@@ -314,7 +318,13 @@ const commandHandlers: Record<string, CommandHandler> = {
       temperature: 0.3,
       sessionId,
       userId,
-      tags: ["slash-command", "summarize"],
+      tags: [
+        "slash-command",
+        "summarize",
+        `session_id:${sessionId}`,
+        `workspace_id:${session.workspaceId ?? "unknown"}`,
+        "agent_role:slash_command",
+      ],
       generationName: "slash-summarize",
       onDelta(delta) {
         if (delta.type === "text" && delta.content) {

@@ -61,7 +61,7 @@ const PROVIDER_META = {
 
 const FALLBACK_PROVIDERS = [
   { value: "openai", label: "OpenAI", models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1", "o3-mini"] },
-  { value: "anthropic", label: "Anthropic (Claude)", models: ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"] },
+  { value: "anthropic", label: "Anthropic (Claude)", models: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-sonnet-4-5"] },
 ];
 
 const OPENAI_COMPATIBLE_ENTRY = {
@@ -79,10 +79,21 @@ function buildProviders(catalog) {
   }
   const providers = catalog.providers.map((cp) => {
     const meta = PROVIDER_META[cp.id] || {};
+    let catalogModels = cp.models.map((m) => m.modelId);
+    if (cp.id === "anthropic") {
+      catalogModels = catalogModels.map((id) => id.replace(/(\d+)\.(\d+)/g, "$1-$2"));
+    }
+    const fb = FALLBACK_PROVIDERS.find((f) => f.value === cp.id);
+    const base = fb?.models || [];
+    const seen = new Set(base);
+    const merged = [...base];
+    for (const id of catalogModels) {
+      if (!seen.has(id)) { merged.push(id); seen.add(id); }
+    }
     return {
       value: cp.id,
       label: meta.label || cp.name,
-      models: cp.models.map((m) => m.modelId),
+      models: merged,
       placeholder: meta.placeholder || "API key",
       keyURL: meta.keyURL || null,
       keyLabel: meta.keyLabel || null,

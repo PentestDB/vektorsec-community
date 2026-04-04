@@ -1,4 +1,5 @@
-import { create } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
+import { shallow } from "zustand/vanilla/shallow";
 
 function createSessionState() {
   return {
@@ -7,6 +8,8 @@ function createSessionState() {
     pendingConsent: null,
     pendingManualExecution: null,
     subagents: [],
+    swarms: [],
+    sidebarExpanded: true,
     historyLoaded: false,
     tokenUsage: null,
 
@@ -21,10 +24,12 @@ function createSessionState() {
     reasoningRafRef: { current: null },
     slashStreamRef: { current: null },
     toolNameMapRef: { current: {} },
+    swarmProgressBufferRef: { current: [] },
+    swarmProgressRafRef: { current: null },
   };
 }
 
-export const useAgentStreamStore = create((set, get) => ({
+export const useAgentStreamStore = createWithEqualityFn((set, get) => ({
   sessions: {},
 
   getOrCreate: (sessionId) => {
@@ -115,6 +120,36 @@ export const useAgentStreamStore = create((set, get) => ({
     });
   },
 
+  setSwarms: (sessionId, swarmsOrUpdater) => {
+    set((state) => {
+      const s = state.sessions[sessionId];
+      if (!s) return state;
+      const newSwarms =
+        typeof swarmsOrUpdater === "function"
+          ? swarmsOrUpdater(s.swarms)
+          : swarmsOrUpdater;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...s, swarms: newSwarms },
+        },
+      };
+    });
+  },
+
+  setSidebarExpanded: (sessionId, expanded) => {
+    set((state) => {
+      const s = state.sessions[sessionId];
+      if (!s) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: { ...s, sidebarExpanded: expanded },
+        },
+      };
+    });
+  },
+
   setTokenUsage: (sessionId, tokenUsage) => {
     set((state) => {
       const s = state.sessions[sessionId];
@@ -141,7 +176,7 @@ export const useAgentStreamStore = create((set, get) => ({
     });
   },
 
-  loadHistory: (sessionId, historyMessages, historySubagents) => {
+  loadHistory: (sessionId, historyMessages, historySubagents, historySwarms) => {
     set((state) => {
       const s = state.sessions[sessionId];
       if (!s) return state;
@@ -152,6 +187,7 @@ export const useAgentStreamStore = create((set, get) => ({
             ...s,
             messages: historyMessages.map((m) => ({ ...m, streaming: false })),
             subagents: historySubagents || s.subagents,
+            swarms: historySwarms || s.swarms,
             historyLoaded: true,
           },
         },
@@ -171,4 +207,4 @@ export const useAgentStreamStore = create((set, get) => ({
       return { sessions: rest };
     });
   },
-}));
+}), shallow);

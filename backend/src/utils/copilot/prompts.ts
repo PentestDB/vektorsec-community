@@ -46,7 +46,7 @@ function getFileExtension(filename: string): string {
   return idx >= 0 ? filename.slice(idx).toLowerCase() : "";
 }
 
-function buildFileHints(files: string[]): string {
+export function buildFileHints(files: string[]): string {
   if (!files.length) return "No attached files in challenge directory.";
 
   const lines = ["**Files in challenge directory:**"];
@@ -73,7 +73,7 @@ function buildFileHints(files: string[]): string {
   return lines.join("\n");
 }
 
-function buildCategoryTactics(category: string): string {
+export function buildCategoryTactics(category: string): string {
   const cat = (category || "").toLowerCase();
 
   if (cat === "web" || cat === "web exploitation") {
@@ -149,7 +149,7 @@ function buildCategoryTactics(category: string): string {
   return "";
 }
 
-function buildConnectionHints(connectionInfo: string, browserAvailable = false): string {
+export function buildConnectionHints(connectionInfo: string, browserAvailable = false): string {
   const conn = connectionInfo.trim();
   if (!conn) return "";
 
