@@ -1180,7 +1180,12 @@ prompt_rebuild_normal() {
 compose() {
     local args=()
     [[ -n "${COMPOSE_FILE:-}" ]] && args+=(-f "$COMPOSE_FILE")
-    [[ -f "$COMPOSE_OVERRIDE" ]] && args+=(-f "$COMPOSE_OVERRIDE")
+    # Override often patches `backend` (extra_hosts, ssh-keys). docker-compose.dev.yml
+    # has no backend service; merging would create backend with only those keys and fail:
+    # "service backend has neither an image nor a build context specified".
+    if [[ -f "$COMPOSE_OVERRIDE" ]] && [[ "$(basename "${COMPOSE_FILE:-}")" != "docker-compose.dev.yml" ]]; then
+        args+=(-f "$COMPOSE_OVERRIDE")
+    fi
     $COMPOSE_CMD "${args[@]}" "$@"
 }
 
