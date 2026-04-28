@@ -29,6 +29,16 @@ Pentest Copilot performing an auth bypass in [OWASP Juice Shop](https://owasp.or
 
 Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=bugbasesecurity%2Fpentest-copilot&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## What It Does
 
 - **Agentic execution** - the AI runs commands directly on the attack box, reads output, decides next steps, and loops. Up to 25 iterations per turn, no manual nudging required.
