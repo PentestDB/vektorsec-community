@@ -721,7 +721,7 @@ configure_orchestrator() {
     read -r val
     set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_NAME" "${val:-${cur_name:-Orchestrator}}"
 
-    echo -e "   ${BOLD}Providers:${NC} openai, anthropic, openai-compatible"
+    echo -e "   ${BOLD}Providers:${NC} openai, anthropic, minimax, openrouter, openai-compatible"
     prompt_input "Provider [${cur_provider:-openai}]:"
     read -r val
     local orch_provider="${val:-${cur_provider:-openai}}"
@@ -743,7 +743,7 @@ configure_orchestrator() {
     read -r val
     set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_BASE_URL" "${val:-${cur_base:-}}"
 
-    echo -e "   ${BOLD}Reasoning mode:${NC} off, low, medium, high"
+    echo -e "   ${BOLD}Reasoning mode:${NC} off, low, medium, high, xhigh"
     prompt_input "Reasoning mode [${cur_reasoning:-off}]:"
     read -r val
     set_env_var "$DYNAMIC_ENV" "ORCHESTRATOR_REASONING_MODE" "${val:-${cur_reasoning:-off}}"
@@ -768,7 +768,7 @@ configure_single_racer() {
     read -r val
     set_env_var "$DYNAMIC_ENV" "RACER_${idx}_NAME" "${val:-${cur_name:-Racer ${idx}}}"
 
-    echo -e "   ${BOLD}Providers:${NC} openai, anthropic, openai-compatible"
+    echo -e "   ${BOLD}Providers:${NC} openai, anthropic, minimax, openrouter, openai-compatible"
     prompt_input "Provider [${cur_provider:-openai}]:"
     read -r val
     set_env_var "$DYNAMIC_ENV" "RACER_${idx}_PROVIDER" "${val:-${cur_provider:-openai}}"
@@ -789,7 +789,7 @@ configure_single_racer() {
     read -r val
     set_env_var "$DYNAMIC_ENV" "RACER_${idx}_BASE_URL" "${val:-${cur_base:-}}"
 
-    echo -e "   ${BOLD}Reasoning mode:${NC} off, low, medium, high"
+    echo -e "   ${BOLD}Reasoning mode:${NC} off, low, medium, high, xhigh"
     prompt_input "Reasoning mode [${cur_reasoning:-off}]:"
     read -r val
     set_env_var "$DYNAMIC_ENV" "RACER_${idx}_REASONING_MODE" "${val:-${cur_reasoning:-off}}"
@@ -1494,6 +1494,7 @@ cmd_logs() {
 format_status_icon() {
     local status="$1"
     case "$status" in
+        *Up*)       echo -e "${GREEN}●${NC}" ;;
         *healthy*)  echo -e "${GREEN}●${NC}" ;;
         *running*)  echo -e "${GREEN}●${NC}" ;;
         *exited*|*dead*) echo -e "${RED}●${NC}" ;;
@@ -1529,7 +1530,7 @@ cmd_status() {
 
         port_summary=""
         if [[ -n "$ports" ]]; then
-            port_summary=$(echo "$ports" | grep -oP '0\.0\.0\.0:\K[0-9]+' | sort -n | paste -sd', ' -)
+            port_summary=$(echo "$ports" | tr ',' '\n' | sed -nE 's/.*0\.0\.0\.0:([0-9]+)->.*/\1/p' | sort -n | paste -sd', ' -)
         fi
 
         printf "   %b  ${BOLD}%-12s${NC} %-20s" "$icon" "$service" "$uptime"

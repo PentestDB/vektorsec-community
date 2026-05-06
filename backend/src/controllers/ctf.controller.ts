@@ -173,31 +173,33 @@ export const syncCtf = async (req: Request, res: Response) => {
     }).select("name").lean();
 
     const existingNames = new Set(existingSessions.map((s) => s.name));
-    const createdSessions: Array<{ name: string; sessionId: string }> = [];
+    const freshWorkspace = await WorkspaceModel.findOne({ workspaceId }).lean();
+    const sessionsToCreate = challenges
+      .filter((ch) => !existingNames.has(ch.name))
+      .map((ch) => ({
+        challenge: ch,
+        sessionId: uuidv4(),
+      }));
 
-    for (const ch of challenges) {
-      if (!existingNames.has(ch.name)) {
-        const sessionId = uuidv4();
-
-        const archiveHistory = new HistoryArchiveModel({
+    if (sessionsToCreate.length > 0) {
+      const createdAt = new Date();
+      await HistoryArchiveModel.insertMany(
+        sessionsToCreate.map(({ sessionId }) => ({
           sessionId,
           history: [],
-        });
-        await archiveHistory.save();
-
-        const freshWorkspace = await WorkspaceModel.findOne({ workspaceId }).lean();
-        const session = new SessionsModel({
+        })),
+      );
+      await SessionsModel.insertMany(
+        sessionsToCreate.map(({ challenge: ch, sessionId }) => ({
           uid: userId,
           sessionId,
           workspaceId,
           name: ch.name,
           description: `${ch.category} — ${ch.value} pts`,
-          createdAt: new Date(),
+          createdAt,
           ctfConfig: freshWorkspace?.ctfConfig,
-        });
-        await session.save();
-        createdSessions.push({ name: ch.name, sessionId });
-      }
+        })),
+      );
     }
 
     sendSSE(res, {

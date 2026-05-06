@@ -8,7 +8,7 @@ import getSecrets from "../getSecrets";
 import { readEnvFile, updateEnvVars } from "../envWriter";
 import { isTracingEnabled } from "../tracing";
 
-export type ProviderType = "openai" | "anthropic" | "openai-compatible";
+export type ProviderType = "openai" | "anthropic" | "minimax" | "openrouter" | "openai-compatible";
 
 export interface ProviderConfig {
   provider: ProviderType;
@@ -22,6 +22,8 @@ export interface ProviderConfig {
 const PROVIDER_DEFAULTS: Record<ProviderType, { baseURL: string }> = {
   openai: { baseURL: "https://api.openai.com/v1" },
   anthropic: { baseURL: "https://api.anthropic.com/v1/" },
+  minimax: { baseURL: "https://api.minimax.io/v1" },
+  openrouter: { baseURL: "https://openrouter.ai/api/v1" },
   "openai-compatible": { baseURL: "" },
 };
 
@@ -108,7 +110,7 @@ async function loadProviderConfig(): Promise<ProviderConfig> {
       return {
         provider: "anthropic",
         apiKey: "",
-        model: model || "claude-sonnet-4-6",
+        model: model || "claude-opus-4-7",
         baseURL: baseURL || undefined,
         authMethod: "oauth",
         oauthAccessToken: oauthToken,
@@ -119,7 +121,7 @@ async function loadProviderConfig(): Promise<ProviderConfig> {
   return {
     provider: provider as ProviderType,
     apiKey,
-    model: model || "gpt-4o",
+    model: model || "gpt-5.5",
     baseURL: baseURL || undefined,
     authMethod: "api_key",
   };
@@ -128,12 +130,23 @@ async function loadProviderConfig(): Promise<ProviderConfig> {
 // ─── Model ID normalization ──────────────────────────────────────────
 
 const MODEL_ALIASES: Record<string, string> = {
+  "gpt-5.5-latest": "gpt-5.5",
+  "gpt-5.4-latest": "gpt-5.4",
+  "claude-opus-4.7": "claude-opus-4-7",
+  "claude-mythos": "claude-mythos-preview",
   "claude-sonnet-4.6": "claude-sonnet-4-6",
   "claude-opus-4.6": "claude-opus-4-6",
   "claude-haiku-4.5": "claude-haiku-4-5",
   "claude-sonnet-4.5": "claude-sonnet-4-5",
   "claude-opus-4.5": "claude-opus-4-5",
   "claude-opus-4.1": "claude-opus-4-1",
+  "minimax-m2.7": "MiniMax-M2.7",
+  "minimax-m2.7-highspeed": "MiniMax-M2.7-highspeed",
+  "minimax-m2.5": "MiniMax-M2.5",
+  "minimax-m2.5-highspeed": "MiniMax-M2.5-highspeed",
+  "minimax-m2.1": "MiniMax-M2.1",
+  "minimax-m2.1-highspeed": "MiniMax-M2.1-highspeed",
+  "minimax-m2": "MiniMax-M2",
 };
 
 export function normalizeModelId(model: string): string {
@@ -249,7 +262,7 @@ export interface ToolCallData {
 
 export type FinishReason = "stop" | "tool_calls" | "length" | "content_filter" | "error";
 
-export type ReasoningMode = "off" | "low" | "medium" | "high";
+export type ReasoningMode = "off" | "low" | "medium" | "high" | "xhigh";
 
 export interface InvokeOptions {
   messages: Array<OpenAI.Chat.ChatCompletionMessageParam>;
@@ -294,6 +307,7 @@ const ANTHROPIC_BUDGET_TOKENS: Record<Exclude<ReasoningMode, "off">, number> = {
   low: 4096,
   medium: 10000,
   high: 32000,
+  xhigh: 48000,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -569,7 +583,7 @@ async function runAnthropicThinkingStream(
 
   const params: Anthropic.MessageCreateParamsStreaming = {
     model: config.model,
-    max_tokens: 16384,
+    max_tokens: Math.min(64000, Math.max(16384, budgetTokens + 4096)),
     stream: true,
     thinking: { type: "enabled", budget_tokens: budgetTokens },
     messages,
@@ -993,7 +1007,7 @@ export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promis
   const runStream = async (temp: number): Promise<InvokeResult> => {
     const params = buildCompletionConfig(config, opts, temp, true);
 
-    if (reasoningMode !== "off" && config.provider === "openai-compatible") {
+    if (reasoningMode !== "off" && (config.provider === "openai-compatible" || config.provider === "openrouter")) {
       params.reasoning_effort = reasoningMode;
     }
 

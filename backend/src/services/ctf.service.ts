@@ -4,6 +4,9 @@ import { Client as SSHClient } from "ssh2";
 import { buildSSHConfig } from "../utils/sshConfig";
 import { WORKSPACE_DIR } from "../utils/commandSafety";
 
+const CHALLENGE_DETAIL_CONCURRENCY = 8;
+const CHALLENGE_SYNC_CONCURRENCY = 4;
+
 export interface CTFdChallenge {
   id: number;
   name: string;
@@ -234,17 +237,10 @@ export async function fetchChallenges(
   const rawChallenges: any[] = listRes.data.data || [];
   const challenges: CTFdChallenge[] = [];
   const total = rawChallenges.length;
-  console.log(`[CTF] Found ${total} challenges, fetching details...`);
+  console.log(`[CTF] Found ${total} challenges, fetching details with concurrency ${CHALLENGE_DETAIL_CONCURRENCY}...`);
 
-  for (let i = 0; i < rawChallenges.length; i++) {
-    const ch = rawChallenges[i];
-    onProgress?.({
-      phase: "fetch",
-      current: i + 1,
-      total,
-      name: ch.name,
-    });
-
+  let completed = 0;
+  const results = await mapLimit(rawChallenges, CHALLENGE_DETAIL_CONCURRENCY, async (ch: any) => {
     try {
       const detailRes = await client.get(`/api/v1/challenges/${ch.id}`);
       const detail = detailRes.data?.data || {};
@@ -253,7 +249,7 @@ export async function fetchChallenges(
         .map((f: any) => (typeof f === "string" ? f : f.location || ""))
         .filter(Boolean);
 
-      challenges.push({
+      return {
         id: ch.id,
         name: detail.name || ch.name,
         category: detail.category || ch.category || "Uncategorized",
@@ -261,10 +257,10 @@ export async function fetchChallenges(
         value: detail.value ?? ch.value ?? 0,
         files,
         connection_info: (detail.connection_info || "").trim(),
-      });
+      };
     } catch (err: any) {
       console.warn(`[CTF] Failed to fetch details for challenge ${ch.id}: ${err.message}`);
-      challenges.push({
+      return {
         id: ch.id,
         name: ch.name,
         category: ch.category || "Uncategorized",
@@ -272,10 +268,19 @@ export async function fetchChallenges(
         value: ch.value ?? 0,
         files: [],
         connection_info: "",
+      };
+    } finally {
+      completed++;
+      onProgress?.({
+        phase: "fetch",
+        current: completed,
+        total,
+        name: ch.name,
       });
     }
-  }
+  });
 
+  challenges.push(...results);
   return challenges;
 }
 
@@ -288,13 +293,42 @@ export async function syncToWorkspace(
   onProgress?: ProgressCallback,
 ): Promise<{ synced: number; updated: number; skipped: number }> {
   const ssh = new SSHSession();
-  await ssh.connect();
+  try {
+    await ssh.connect();
+  } catch (err: any) {
+    throw new Error(
+      `Exploit box SSH is not reachable. Configure Settings > SSH or start the built-in Kali container. ` +
+      `Current target: ${process.env.SSH_HOST || "localhost"}:${process.env.SSH_PORT || "4242"}. ` +
+      `${err?.code ? `(${err.code})` : ""}`,
+    );
+  }
 
   try {
     return await doSync(ssh, ctfName, challenges, ctfdBaseURL, cookie, token, onProgress);
   } finally {
     ssh.close();
   }
+}
+
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(limit, 1), items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex++;
+        results[index] = await worker(items[index], index);
+      }
+    }),
+  );
+
+  return results;
 }
 
 async function doSync(
@@ -325,79 +359,29 @@ async function doSync(
 
   const curlAuth = buildCurlAuth(cookie, token);
 
-  let synced = 0;
-  let updated = 0;
-  let skipped = 0;
   const total = challenges.length;
+  console.log(`[CTF] Syncing challenge files with concurrency ${CHALLENGE_SYNC_CONCURRENCY}...`);
 
-  for (let i = 0; i < challenges.length; i++) {
-    const ch = challenges[i];
-    const safeName = sanitizeDirName(ch.name);
-    const challengeDir = `${ctfDir}/${safeName}`;
-    const isExisting = existingDirs.has(safeName);
-
-    if (isExisting) {
-      let didUpdate = false;
-
-      const challengeTxt = buildChallengeTxt(ch);
-      const oldContent = await ssh.exec(
-        `cat "${challengeDir}/challenge.txt" 2>/dev/null || echo ""`,
-      );
-
-      if (oldContent.trim() !== challengeTxt.trim()) {
-        await writeChallengeTxt(ssh, challengeDir, challengeTxt);
-        didUpdate = true;
+  let completed = 0;
+  const actions = await mapLimit(challenges, CHALLENGE_SYNC_CONCURRENCY, async (ch) => {
+    const workerSsh = new SSHSession();
+    await workerSsh.connect();
+    try {
+      const action = await syncChallenge(workerSsh, ch, ctfDir, baseURL, curlAuth, existingDirs);
+      completed++;
+      onProgress?.({ phase: "sync", current: completed, total, name: ch.name, action });
+      if (completed === 1 || completed % 10 === 0 || completed === total) {
+        console.log(`[CTF] Progress: ${completed}/${total} challenges processed`);
       }
-
-      if (ch.files.length > 0) {
-        const existingFilesRaw = await ssh.exec(
-          `ls -1 "${challengeDir}" 2>/dev/null || true`,
-        );
-        const existingFiles = new Set(
-          existingFilesRaw.split("\n").map((l) => l.trim()).filter(Boolean),
-        );
-
-        for (const filePath of ch.files) {
-          const fileName = extractFileName(filePath);
-          if (existingFiles.has(fileName)) continue;
-
-          const fileUrl = resolveFileUrl(filePath, baseURL);
-          await ssh.exec(
-            `curl -sS -L --retry 3 --max-time 120 ${curlAuth} -o '${shellEscape(`${challengeDir}/${fileName}`)}' '${shellEscape(fileUrl)}'`,
-          );
-          didUpdate = true;
-        }
-      }
-
-      if (didUpdate) {
-        updated++;
-        onProgress?.({ phase: "sync", current: i + 1, total, name: ch.name, action: "updated" });
-      } else {
-        skipped++;
-        onProgress?.({ phase: "sync", current: i + 1, total, name: ch.name, action: "skipped" });
-      }
-    } else {
-      const challengeTxt = buildChallengeTxt(ch);
-
-      await ssh.exec(`mkdir -p "${challengeDir}"`);
-      await writeChallengeTxt(ssh, challengeDir, challengeTxt);
-
-      for (const filePath of ch.files) {
-        const fileName = extractFileName(filePath);
-        const fileUrl = resolveFileUrl(filePath, baseURL);
-        await ssh.exec(
-          `curl -sS -L --retry 3 --max-time 120 ${curlAuth} -o '${shellEscape(`${challengeDir}/${fileName}`)}' '${shellEscape(fileUrl)}'`,
-        );
-      }
-
-      synced++;
-      onProgress?.({ phase: "sync", current: i + 1, total, name: ch.name, action: "new" });
+      return action;
+    } finally {
+      workerSsh.close();
     }
+  });
 
-    if (i % 10 === 0) {
-      console.log(`[CTF] Progress: ${i + 1}/${total} challenges processed`);
-    }
-  }
+  const synced = actions.filter((action) => action === "new").length;
+  const updated = actions.filter((action) => action === "updated").length;
+  const skipped = actions.filter((action) => action === "skipped").length;
 
   console.log(`[CTF] Sync complete: ${synced} new, ${updated} updated, ${skipped} unchanged`);
 
@@ -416,9 +400,78 @@ async function doSync(
   return { synced, updated, skipped };
 }
 
+async function syncChallenge(
+  ssh: SSHSession,
+  ch: CTFdChallenge,
+  ctfDir: string,
+  baseURL: string,
+  curlAuth: string,
+  existingDirs: Set<string>,
+): Promise<"new" | "updated" | "skipped"> {
+  const safeName = sanitizeDirName(ch.name);
+  const challengeDir = `${ctfDir}/${safeName}`;
+  const isExisting = existingDirs.has(safeName);
+
+  if (!isExisting) {
+    const challengeTxt = buildChallengeTxt(ch);
+    await ssh.exec(`mkdir -p "${challengeDir}"`);
+    await writeChallengeTxt(ssh, challengeDir, challengeTxt);
+
+    for (const filePath of ch.files) {
+      await downloadChallengeFile(ssh, challengeDir, filePath, baseURL, curlAuth);
+    }
+
+    return "new";
+  }
+
+  let didUpdate = false;
+  const challengeTxt = buildChallengeTxt(ch);
+  const oldContent = await ssh.exec(
+    `cat "${challengeDir}/challenge.txt" 2>/dev/null || echo ""`,
+  );
+
+  if (oldContent.trim() !== challengeTxt.trim()) {
+    await writeChallengeTxt(ssh, challengeDir, challengeTxt);
+    didUpdate = true;
+  }
+
+  if (ch.files.length > 0) {
+    const existingFilesRaw = await ssh.exec(
+      `ls -1 "${challengeDir}" 2>/dev/null || true`,
+    );
+    const existingFiles = new Set(
+      existingFilesRaw.split("\n").map((l) => l.trim()).filter(Boolean),
+    );
+
+    for (const filePath of ch.files) {
+      const fileName = extractFileName(filePath);
+      if (existingFiles.has(fileName)) continue;
+
+      await downloadChallengeFile(ssh, challengeDir, filePath, baseURL, curlAuth);
+      didUpdate = true;
+    }
+  }
+
+  return didUpdate ? "updated" : "skipped";
+}
+
 async function writeChallengeTxt(ssh: SSHSession, challengeDir: string, content: string): Promise<void> {
   const escaped = content.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
   await ssh.exec(`printf '%s' '${escaped}' > "${challengeDir}/challenge.txt"`);
+}
+
+async function downloadChallengeFile(
+  ssh: SSHSession,
+  challengeDir: string,
+  filePath: string,
+  baseURL: string,
+  curlAuth: string,
+): Promise<void> {
+  const fileName = extractFileName(filePath);
+  const fileUrl = resolveFileUrl(filePath, baseURL);
+  await ssh.exec(
+    `curl -sS -L --retry 3 --max-time 120 ${curlAuth} -o '${shellEscape(`${challengeDir}/${fileName}`)}' '${shellEscape(fileUrl)}'`,
+  );
 }
 
 function buildCurlAuth(cookie?: string, token?: string): string {

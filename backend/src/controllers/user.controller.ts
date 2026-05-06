@@ -336,13 +336,13 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "API key is required" });
     }
 
-    const validProviders = ["openai", "anthropic", "openai-compatible"];
+    const validProviders = ["openai", "anthropic", "minimax", "openrouter", "openai-compatible"];
     if (!validProviders.includes(provider)) {
       return res.status(400).json({ message: `Invalid provider. Must be one of: ${validProviders.join(", ")}` });
     }
 
-    if (reasoningMode && !["off", "low", "medium", "high"].includes(reasoningMode)) {
-      return res.status(400).json({ message: "Invalid reasoning mode. Must be one of: off, low, medium, high" });
+    if (reasoningMode && !["off", "low", "medium", "high", "xhigh"].includes(reasoningMode)) {
+      return res.status(400).json({ message: "Invalid reasoning mode. Must be one of: off, low, medium, high, xhigh" });
     }
 
     const isApiKeyMasked = apiKey?.includes("•");
@@ -372,7 +372,7 @@ export const deleteModelConfig = async (req: Request, res: Response) => {
   try {
     updateEnvVars({
       [MODEL_ENV_KEYS.provider]: "openai",
-      [MODEL_ENV_KEYS.model]: "gpt-4o",
+      [MODEL_ENV_KEYS.model]: "gpt-5.5",
       [MODEL_ENV_KEYS.apiKey]: "",
       [MODEL_ENV_KEYS.baseURL]: "",
       ORCHESTRATOR_REASONING_MODE: "off",
@@ -1529,9 +1529,11 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     }
 
     const provider = env.MAGNITUDE_MODEL_PROVIDER || "openai";
-    const model = env.MAGNITUDE_MODEL || "gpt-4o";
+    const model = env.MAGNITUDE_MODEL || "gpt-5.5";
     const apiKey = env.MAGNITUDE_MODEL_API_KEY || "";
-    const baseURL = env.MAGNITUDE_MODEL_BASE_URL || "";
+    const baseURL = env.MAGNITUDE_MODEL_BASE_URL
+      || (provider === "minimax" ? "https://api.minimax.io/v1" : "")
+      || (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "");
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
     const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
@@ -1548,6 +1550,8 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
       anthropic: "anthropic",
       openai: "openai",
       google: "google-ai",
+      minimax: "openai-generic",
+      openrouter: "openai-generic",
       "openai-compatible": "openai-generic",
     };
     const magnitudeLlmProvider = PROVIDER_MAP[provider] || "openai";

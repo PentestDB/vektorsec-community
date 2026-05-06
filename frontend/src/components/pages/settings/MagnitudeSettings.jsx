@@ -45,6 +45,18 @@ const PROVIDER_META = {
     keyURL: "https://console.anthropic.com/settings/keys",
     keyLabel: "Get Claude API Key",
   },
+  minimax: {
+    label: "MiniMax",
+    placeholder: "MiniMax API key",
+    keyURL: "https://platform.minimax.io/user-center/basic-information/interface-key",
+    keyLabel: "Get MiniMax API Key",
+  },
+  openrouter: {
+    label: "OpenRouter",
+    placeholder: "sk-or-v1-...",
+    keyURL: "https://openrouter.ai/settings/keys",
+    keyLabel: "Get OpenRouter API Key",
+  },
   google: {
     label: "Google",
     placeholder: "AI...",
@@ -60,8 +72,10 @@ const PROVIDER_META = {
 };
 
 const FALLBACK_PROVIDERS = [
-  { value: "openai", label: "OpenAI", models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1", "o3-mini"] },
-  { value: "anthropic", label: "Anthropic (Claude)", models: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-sonnet-4-5"] },
+  { value: "openai", label: "OpenAI", models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4.1", "gpt-4.1-mini"] },
+  { value: "anthropic", label: "Anthropic (Claude)", models: ["claude-opus-4-7", "claude-mythos-preview", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-5"] },
+  { value: "minimax", label: "MiniMax", models: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"] },
+  { value: "openrouter", label: "OpenRouter", models: ["minimax/minimax-m2.7", "minimax/minimax-m2.7-highspeed", "anthropic/claude-opus-4.7", "anthropic/claude-mythos-preview", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5", "openai/gpt-5.4"] },
 ];
 
 const OPENAI_COMPATIBLE_ENTRY = {

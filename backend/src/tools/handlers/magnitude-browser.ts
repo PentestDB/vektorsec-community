@@ -52,9 +52,11 @@ const magnitudeBrowser: ToolDefinition = {
     }
 
     const provider = env.MAGNITUDE_MODEL_PROVIDER || "openai";
-    const model = env.MAGNITUDE_MODEL || "gpt-4o";
+    const model = env.MAGNITUDE_MODEL || "gpt-5.5";
     const apiKey = env.MAGNITUDE_MODEL_API_KEY || "";
-    const baseURL = env.MAGNITUDE_MODEL_BASE_URL || "";
+    const baseURL = env.MAGNITUDE_MODEL_BASE_URL
+      || (provider === "minimax" ? "https://api.minimax.io/v1" : "")
+      || (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "");
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
     const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
@@ -74,6 +76,8 @@ const magnitudeBrowser: ToolDefinition = {
       anthropic: "anthropic",
       openai: "openai",
       google: "google-ai",
+      minimax: "openai-generic",
+      openrouter: "openai-generic",
       "openai-compatible": "openai-generic",
     };
     const magnitudeLlmProvider = PROVIDER_MAP[provider] || "openai";

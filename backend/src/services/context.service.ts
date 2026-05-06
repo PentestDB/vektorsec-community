@@ -5,6 +5,15 @@ import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
 
 const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  "gpt-5.5": 1_000_000,
+  "gpt-5.4": 1_000_000,
+  "gpt-5.4-mini": 400_000,
+  "gpt-5.4-nano": 400_000,
+  "gpt-5.3-codex": 400_000,
+  "gpt-5.3-codex-spark": 400_000,
+  "gpt-5.2": 400_000,
+  "gpt-4.1": 1_000_000,
+  "gpt-4.1-mini": 1_000_000,
   "gpt-4o": 128_000,
   "gpt-4o-mini": 128_000,
   "gpt-4-turbo": 128_000,
@@ -12,6 +21,8 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "gpt-4": 8_192,
   "gpt-3.5-turbo": 16_385,
   "gpt-5-nano": 128_000,
+  "claude-opus-4-7": 1_000_000,
+  "claude-mythos-preview": 1_000_000,
   "claude-sonnet-4-6": 1_000_000,
   "claude-opus-4-6": 1_000_000,
   "claude-haiku-4-5": 200_000,
@@ -20,6 +31,7 @@ const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "claude-3-5-sonnet-20241022": 200_000,
   "claude-3-opus-20240229": 200_000,
   "claude-3-haiku-20240307": 200_000,
+  "MiniMax-M2": 204_800,
 };
 
 const DEFAULT_CONTEXT_LIMIT = 128_000;

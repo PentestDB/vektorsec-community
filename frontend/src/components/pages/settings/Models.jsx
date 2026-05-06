@@ -45,6 +45,8 @@ import {
 const PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic (Claude)" },
+  { value: "minimax", label: "MiniMax" },
+  { value: "openrouter", label: "OpenRouter" },
   { value: "google", label: "Google" },
   { value: "mistralai", label: "Mistral AI" },
   { value: "openai-compatible", label: "OpenAI-Compatible" },
@@ -55,6 +57,7 @@ const REASONING_OPTIONS = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
+  { value: "xhigh", label: "XHigh" },
 ];
 
 const REASONING_META = {
@@ -62,18 +65,23 @@ const REASONING_META = {
   low: { color: "#52c41a", bg: "rgba(82, 196, 26, 0.1)", border: "1px solid rgba(82, 196, 26, 0.25)" },
   medium: { color: "#faad14", bg: "rgba(250, 173, 20, 0.12)", border: "1px solid rgba(250, 173, 20, 0.3)" },
   high: { color: "#ff7875", bg: "rgba(255, 120, 117, 0.14)", border: "1px solid rgba(255, 120, 117, 0.32)" },
+  xhigh: { color: "#ff4d4f", bg: "rgba(255, 77, 79, 0.16)", border: "1px solid rgba(255, 77, 79, 0.38)" },
 };
 
 const PROVIDER_META = {
   openai: { keyURL: "https://platform.openai.com/api-keys", keyLabel: "Get OpenAI API Key" },
   anthropic: { keyURL: "https://console.anthropic.com/settings/keys", keyLabel: "Get Claude API Key" },
+  minimax: { keyURL: "https://platform.minimax.io/user-center/basic-information/interface-key", keyLabel: "Get MiniMax API Key" },
+  openrouter: { keyURL: "https://openrouter.ai/settings/keys", keyLabel: "Get OpenRouter API Key" },
   google: { keyURL: "https://aistudio.google.com/apikey", keyLabel: "Get Google AI API Key" },
   mistralai: { keyURL: "https://console.mistral.ai/api-keys", keyLabel: "Get Mistral API Key" },
 };
 
 const FALLBACK_MODELS = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-5-nano", "o1", "o3-mini", "o4-mini"],
-  anthropic: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-sonnet-4-5", "claude-sonnet-4-20250514"],
+  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2", "gpt-4.1", "gpt-4.1-mini"],
+  anthropic: ["claude-opus-4-7", "claude-mythos-preview", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-sonnet-4-5"],
+  minimax: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"],
+  openrouter: ["minimax/minimax-m2.7", "minimax/minimax-m2.7-highspeed", "anthropic/claude-opus-4.7", "anthropic/claude-mythos-preview", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5", "openai/gpt-5.4"],
   google: ["gemini-2.0-flash", "gemini-2.0-pro"],
   mistralai: ["mistral-large-latest", "mistral-medium-latest"],
 };
@@ -271,7 +279,7 @@ const ModelEditCard = ({ model, index, onSave, onCancel, modelSuggestions }) => 
           <Col span={10}>
             <Form.Item label="Model" style={{ marginBottom: 12 }}>
               <AutoComplete
-                placeholder="e.g. gpt-4o"
+                placeholder="e.g. gpt-5.5"
                 value={draft.model}
                 onChange={(val) => setDraft({ ...draft, model: val })}
                 options={(modelSuggestions[draft.provider] || []).map((m) => ({ value: m, label: m }))}
@@ -556,7 +564,7 @@ const ModelsPage = () => {
                   <Col span={10}>
                     <Form.Item label="Model" style={{ marginBottom: 12 }}>
                       <AutoComplete
-                        placeholder="e.g. gpt-4o"
+                        placeholder="e.g. gpt-5.5"
                         value={newModel.model}
                         onChange={(val) => setNewModel({ ...newModel, model: val })}
                         options={(modelSuggestions[newModel.provider] || []).map((m) => ({ value: m, label: m }))}

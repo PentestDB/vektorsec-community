@@ -113,7 +113,7 @@ const UserSchema = new Schema({
           model: { type: String, required: true },
           apiKey: { type: String },
           baseURL: { type: String },
-          reasoningMode: { type: String, enum: ["off", "low", "medium", "high"], default: "off" },
+          reasoningMode: { type: String, enum: ["off", "low", "medium", "high", "xhigh"], default: "off" },
           isOrchestrator: { type: Boolean, default: false },
         },
       ],

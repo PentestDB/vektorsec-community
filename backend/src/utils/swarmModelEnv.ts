@@ -1,4 +1,4 @@
-export type SwarmReasoningMode = "off" | "low" | "medium" | "high";
+export type SwarmReasoningMode = "off" | "low" | "medium" | "high" | "xhigh";
 
 export interface SwarmModelPreset {
   label: string;
@@ -11,14 +11,25 @@ export interface SwarmModelPreset {
 }
 
 const MAX_RACERS = 8;
-const VALID_REASONING: Set<string> = new Set(["off", "low", "medium", "high"]);
+const VALID_REASONING: Set<string> = new Set(["off", "low", "medium", "high", "xhigh"]);
 const MODEL_ALIASES: Record<string, string> = {
+  "gpt-5.5-latest": "gpt-5.5",
+  "gpt-5.4-latest": "gpt-5.4",
+  "claude-opus-4.7": "claude-opus-4-7",
+  "claude-mythos": "claude-mythos-preview",
   "claude-sonnet-4.6": "claude-sonnet-4-6",
   "claude-opus-4.6": "claude-opus-4-6",
   "claude-haiku-4.5": "claude-haiku-4-5",
   "claude-sonnet-4.5": "claude-sonnet-4-5",
   "claude-opus-4.5": "claude-opus-4-5",
   "claude-opus-4.1": "claude-opus-4-1",
+  "minimax-m2.7": "MiniMax-M2.7",
+  "minimax-m2.7-highspeed": "MiniMax-M2.7-highspeed",
+  "minimax-m2.5": "MiniMax-M2.5",
+  "minimax-m2.5-highspeed": "MiniMax-M2.5-highspeed",
+  "minimax-m2.1": "MiniMax-M2.1",
+  "minimax-m2.1-highspeed": "MiniMax-M2.1-highspeed",
+  "minimax-m2": "MiniMax-M2",
 };
 
 function asString(value: unknown): string {
