@@ -10,6 +10,12 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 
+/** Escape a string for use inside single-quoted sh -c "..." so brew/apt etc. from .zprofile are available. */
+function escapeForLoginShell(command: string): string {
+  const escaped = command.replace(/'/g, "'\\''");
+  return `$SHELL -l -c '${escaped}'`;
+}
+
 export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
 
 export interface ShellInfo {
@@ -248,7 +254,7 @@ export class ShellManager extends EventEmitter {
       }
 
       if (shell.type === "pty" && shell.purpose === "exploit-box") {
-        const cmd = `mkdir -p ${WORKSPACE_DIR} && cd ${WORKSPACE_DIR} && exec $SHELL`;
+        const cmd = `mkdir -p ${WORKSPACE_DIR} && cd ${WORKSPACE_DIR} && exec $SHELL -l`;
         this.sshConnection.exec(cmd, { pty: { term: "xterm-256color", cols: 200, rows: 50 } }, (err, channel) => {
           if (err) return reject(err);
           this.wireChannel(shell, channel);
@@ -398,7 +404,8 @@ export class ShellManager extends EventEmitter {
       }
       abortSignal?.addEventListener("abort", onAbort);
 
-      this.sshConnection.exec(command, (err, stream) => {
+      const wrappedCommand = escapeForLoginShell(command);
+      this.sshConnection.exec(wrappedCommand, (err, stream) => {
         if (err) {
           abortSignal?.removeEventListener("abort", onAbort);
           return reject(err);

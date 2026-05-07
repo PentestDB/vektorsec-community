@@ -6,6 +6,8 @@ export interface Capability {
   description: string;
   usageHint?: string;
   installCommand: string;
+  /** macOS (Darwin) install command. Uses brew when not set. */
+  installCommandDarwin?: string;
   checkCommand: string;
   size: string;
 }
@@ -46,6 +48,7 @@ Write and run Python scripts for any complex logic. Use chepy for encoding/decod
       label: "GCC / G++",
       description: "Compile C/C++ exploits, challenge sources, helper programs.",
       installCommand: "apt install -y build-essential",
+      installCommandDarwin: "brew install gcc",
       checkCommand: "which gcc",
       size: "150 MB",
     },
@@ -86,6 +89,7 @@ Write and run Python scripts for any complex logic. Use chepy for encoding/decod
       label: "Netcat",
       description: "Raw TCP/UDP connections. Connect to challenge servers.",
       installCommand: "apt install -y netcat-openbsd",
+      installCommandDarwin: "brew install netcat",
       checkCommand: "which nc",
       size: "1 MB",
     },
@@ -1079,6 +1083,7 @@ Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP)`,
       description: "DNS lookups and zone transfers.",
       usageHint: "dig @<dns_server> <domain> ANY",
       installCommand: "apt install -y dnsutils",
+      installCommandDarwin: "brew install bind",
       checkCommand: "which dig",
       size: "5 MB",
     },
@@ -1113,6 +1118,7 @@ Python: paramiko (SSH), dnspython (DNS), impacket (SMB/Kerberos/LDAP)`,
         "Metasploit payload generator. Create reverse shells, meterpreter payloads, and encoded shellcode in various formats.",
       usageHint: "msfvenom -p linux/x64/shell_reverse_tcp LHOST=<ip> LPORT=<port> -f elf -o shell.elf",
       installCommand: "apt install -y metasploit-framework",
+      installCommandDarwin: "brew install metasploit",
       checkCommand: "which msfvenom",
       size: "500 MB",
     },
@@ -1455,6 +1461,28 @@ export function findCapabilityForCommand(missing: string): Capability | undefine
     const check = c.checkCommand.toLowerCase();
     return check.includes(`which ${lower}`) || check.includes(`import ${lower}`);
   });
+}
+
+/**
+ * Returns the install command for the given capability and OS.
+ * On macOS (Darwin), uses installCommandDarwin if set, otherwise falls back to brew install.
+ */
+export function getInstallCommandForOS(cap: Capability, isDarwin: boolean): string {
+  if (isDarwin) {
+    if (cap.installCommandDarwin) return cap.installCommandDarwin;
+    // pip/gem install commands work on both; apt commands need brew
+    if (cap.installCommand.startsWith("apt ") || cap.installCommand.startsWith("apt-get ")) {
+      return `brew install ${cap.name}`;
+    }
+    // Go-only install (no apt fallback) needs go first
+    if (
+      cap.installCommand.trimStart().startsWith("go install ") &&
+      !cap.installCommand.includes("apt ")
+    ) {
+      return `brew install go && ${cap.installCommand}`;
+    }
+  }
+  return cap.installCommand;
 }
 
 export function getBucketById(id: string): CapabilityBucket | undefined {
