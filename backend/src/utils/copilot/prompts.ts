@@ -4,6 +4,7 @@ import {
   getActiveBucketIds,
 } from "../../capabilities/registry";
 import { readEnvFile } from "../envWriter";
+import { getAssignedModels } from "../modelRegistryStore";
 
 export interface BoxEnvInfo {
   user: string;
@@ -37,9 +38,34 @@ export interface AgentPromptConfig {
   };
 }
 
-const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"]);
-const ARCHIVE_EXTENSIONS = new Set([".zip", ".tar", ".gz", ".bz2", ".7z", ".rar", ".xz", ".tgz"]);
-const BINARY_EXTENSIONS = new Set([".elf", ".exe", ".bin", ".so", ".dll", ".o", ".out"]);
+const IMAGE_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".bmp",
+  ".tiff",
+  ".webp",
+]);
+const ARCHIVE_EXTENSIONS = new Set([
+  ".zip",
+  ".tar",
+  ".gz",
+  ".bz2",
+  ".7z",
+  ".rar",
+  ".xz",
+  ".tgz",
+]);
+const BINARY_EXTENSIONS = new Set([
+  ".elf",
+  ".exe",
+  ".bin",
+  ".so",
+  ".dll",
+  ".o",
+  ".out",
+]);
 
 function getFileExtension(filename: string): string {
   const idx = filename.lastIndexOf(".");
@@ -54,19 +80,37 @@ export function buildFileHints(files: string[]): string {
     const ext = getFileExtension(f);
     let hint = "";
     if (IMAGE_EXTENSIONS.has(ext)) {
-      hint = " — IMAGE: run `view_image` first, then `exiftool`, `steghide`, `zsteg`, `strings`";
+      hint =
+        " — IMAGE: run `view_image` first, then `exiftool`, `steghide`, `zsteg`, `strings`";
     } else if (ARCHIVE_EXTENSIONS.has(ext)) {
       hint = " — ARCHIVE: extract and inspect all contents";
     } else if (BINARY_EXTENSIONS.has(ext) || f === "a.out") {
-      hint = " — BINARY: run `file`, `checksec`, decompile with pyghidra/r2, check for format string/overflow";
+      hint =
+        " — BINARY: run `file`, `checksec`, decompile with pyghidra/r2, check for format string/overflow";
     } else if (ext === ".pcap" || ext === ".pcapng") {
-      hint = " — CAPTURE: analyze with `tshark` or `scapy`, look for leaked credentials/flags in streams";
-    } else if (ext === ".py" || ext === ".js" || ext === ".c" || ext === ".rs" || ext === ".go" || ext === ".java") {
-      hint = " — SOURCE: read carefully for logic flaws, hardcoded secrets, weak crypto";
-    } else if (ext === ".pem" || ext === ".key" || ext === ".crt" || ext === ".pub") {
-      hint = " — CRYPTO MATERIAL: inspect key parameters, check for weak keys or known vulnerabilities";
+      hint =
+        " — CAPTURE: analyze with `tshark` or `scapy`, look for leaked credentials/flags in streams";
+    } else if (
+      ext === ".py" ||
+      ext === ".js" ||
+      ext === ".c" ||
+      ext === ".rs" ||
+      ext === ".go" ||
+      ext === ".java"
+    ) {
+      hint =
+        " — SOURCE: read carefully for logic flaws, hardcoded secrets, weak crypto";
+    } else if (
+      ext === ".pem" ||
+      ext === ".key" ||
+      ext === ".crt" ||
+      ext === ".pub"
+    ) {
+      hint =
+        " — CRYPTO MATERIAL: inspect key parameters, check for weak keys or known vulnerabilities";
     } else if (ext === ".sqlite" || ext === ".db") {
-      hint = " — DATABASE: dump tables with `sqlite3`, look for credentials and flag data";
+      hint =
+        " — DATABASE: dump tables with `sqlite3`, look for credentials and flag data";
     }
     lines.push(`- ${f}${hint}`);
   }
@@ -103,7 +147,12 @@ export function buildCategoryTactics(category: string): string {
 - If connecting to a remote service, use \`stty raw -echo\` before launching interactive exploits`;
   }
 
-  if (cat === "reverse" || cat === "reversing" || cat === "re" || cat === "reverse engineering") {
+  if (
+    cat === "reverse" ||
+    cat === "reversing" ||
+    cat === "re" ||
+    cat === "reverse engineering"
+  ) {
     return `**Category tactics (Reverse Engineering):**
 - Run \`file\` and \`strings\` first for quick wins — flags, URLs, passwords in plaintext
 - Decompile with pyghidra for full C pseudocode; use radare2/gdb for dynamic analysis
@@ -149,7 +198,10 @@ export function buildCategoryTactics(category: string): string {
   return "";
 }
 
-export function buildConnectionHints(connectionInfo: string, browserAvailable = false): string {
+export function buildConnectionHints(
+  connectionInfo: string,
+  browserAvailable = false,
+): string {
   const conn = connectionInfo.trim();
   if (!conn) return "";
 
@@ -190,38 +242,66 @@ export function buildConnectionHints(connectionInfo: string, browserAvailable = 
 **Service:** \`${conn}\``;
 }
 
-function buildCtfBlock(config: AgentPromptConfig, browserAvailable: boolean): string {
+function buildCtfBlock(
+  config: AgentPromptConfig,
+  browserAvailable: boolean,
+): string {
   const ctf = config.ctfConfig!;
   const lines: string[] = [];
 
   lines.push(`<ctf_mode>`);
-  lines.push(`You are solving challenges in CTF "${ctf.ctfName}". Challenge files are synced to ${ctf.workspacePath}.`);
-  lines.push(`Each subdirectory contains a challenge.txt (name, category, points, description) and any attached files.`);
+  lines.push(
+    `You are solving challenges in CTF "${ctf.ctfName}". Challenge files are synced to ${ctf.workspacePath}.`,
+  );
+  lines.push(
+    `Each subdirectory contains a challenge.txt (name, category, points, description) and any attached files.`,
+  );
   if (ctf.flagFormat) {
-    lines.push(`**Flag format for this CTF:** \`${ctf.flagFormat}\` — flags will match this prefix/pattern. When you find a candidate string matching this format, immediately submit it via \`update_engagement_state\` with action \`confirm_flag\`.`);
+    lines.push(
+      `**Flag format for this CTF:** \`${ctf.flagFormat}\` — flags will match this prefix/pattern. When you find a candidate string matching this format, immediately submit it via \`update_engagement_state\` with action \`confirm_flag\`.`,
+    );
   }
   lines.push(``);
   lines.push(`**Operational rules:**`);
-  lines.push(`- Be creative and thorough: try the obvious path first, then explore systematically.`);
-  lines.push(`- Ignore placeholder flags like \`flag{placeholder}\`, \`CTF{flag}\`, or \`FLAG{example}\` — only submit real flags.`);
-  lines.push(`- There is no separate \`submit_flag\` tool in this environment. The CTF submission mechanism is: call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to the exact flag string.`);
-  lines.push(`- This persists the flag to the CTF dashboard and triggers backend auto-submit to CTFd (best effort). Never claim submission is unavailable.`);
-  lines.push(`- If the user message contains a flag directly (for example: "Submitted: CTF{...}" or "flag is CTF{...}"), immediately call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to that flag before any prose.`);
-  lines.push(`- If an approach is not working after 2-3 attempts, pivot to a different technique.`);
+  lines.push(
+    `- Be creative and thorough: try the obvious path first, then explore systematically.`,
+  );
+  lines.push(
+    `- Ignore placeholder flags like \`flag{placeholder}\`, \`CTF{flag}\`, or \`FLAG{example}\` — only submit real flags.`,
+  );
+  lines.push(
+    `- There is no separate \`submit_flag\` tool in this environment. The CTF submission mechanism is: call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to the exact flag string.`,
+  );
+  lines.push(
+    `- This persists the flag to the CTF dashboard and triggers backend auto-submit to CTFd (best effort). Never claim submission is unavailable.`,
+  );
+  lines.push(
+    `- If the user message contains a flag directly (for example: "Submitted: CTF{...}" or "flag is CTF{...}"), immediately call \`update_engagement_state\` with action \`confirm_flag\` and data.value set to that flag before any prose.`,
+  );
+  lines.push(
+    `- If an approach is not working after 2-3 attempts, pivot to a different technique.`,
+  );
   lines.push(`- Record every finding with update_engagement_state as you go.`);
   lines.push(`</ctf_mode>`);
   lines.push(``);
 
   if (ctf.activeSolve) {
     const solve = ctf.activeSolve;
-    const connHints = buildConnectionHints(solve.connectionInfo ?? "", browserAvailable);
+    const connHints = buildConnectionHints(
+      solve.connectionInfo ?? "",
+      browserAvailable,
+    );
     const categoryTactics = buildCategoryTactics(solve.category ?? "");
     const fileHints = buildFileHints(solve.files);
 
     lines.push(`<current_challenge>`);
-    lines.push(`**Solving:** "${solve.name}"${solve.points ? ` (${solve.points} pts)` : ""}${solve.category ? ` [${solve.category}]` : ""}`);
+    lines.push(
+      `**Solving:** "${solve.name}"${solve.points ? ` (${solve.points} pts)` : ""}${solve.category ? ` [${solve.category}]` : ""}`,
+    );
     lines.push(`**Working directory:** ${solve.challengeDir}`);
-    lines.push(`Always cd to this directory before running commands for this challenge.`);
+    lines.push(
+      `Always cd to this directory before running commands for this challenge.`,
+    );
     lines.push(``);
 
     if (connHints) {
@@ -242,15 +322,27 @@ function buildCtfBlock(config: AgentPromptConfig, browserAvailable: boolean): st
     lines.push(`**Approach:**`);
 
     if (connHints) {
-      lines.push(`1. Connect to the service NOW — your first tool call must reach the target.`);
-      lines.push(`2. If distfiles exist, inspect them for source code or config that reveals the vulnerability.`);
+      lines.push(
+        `1. Connect to the service NOW — your first tool call must reach the target.`,
+      );
+      lines.push(
+        `2. If distfiles exist, inspect them for source code or config that reveals the vulnerability.`,
+      );
     } else {
-      lines.push(`1. Inspect the distfiles NOW — read source, examine binaries, check file types.`);
+      lines.push(
+        `1. Inspect the distfiles NOW — read source, examine binaries, check file types.`,
+      );
     }
 
-    lines.push(`${connHints ? "3" : "2"}. Identify the vulnerability or puzzle mechanism.`);
-    lines.push(`${connHints ? "4" : "3"}. Develop and execute your exploit or solution.`);
-    lines.push(`${connHints ? "5" : "4"}. Submit the flag immediately when found.`);
+    lines.push(
+      `${connHints ? "3" : "2"}. Identify the vulnerability or puzzle mechanism.`,
+    );
+    lines.push(
+      `${connHints ? "4" : "3"}. Develop and execute your exploit or solution.`,
+    );
+    lines.push(
+      `${connHints ? "5" : "4"}. Submit the flag immediately when found.`,
+    );
 
     if (solve.userNotes) {
       lines.push(``);
@@ -287,7 +379,8 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
     : "";
 
   const activeBuckets = new Set(getActiveBucketIds(installed));
-  const hasNetworkOrCrypto = activeBuckets.has("network") || activeBuckets.has("crypto");
+  const hasNetworkOrCrypto =
+    activeBuckets.has("network") || activeBuckets.has("crypto");
 
   const wordlistSection = hasNetworkOrCrypto
     ? `\n- Wordlists at /usr/share/wordlists:
@@ -299,7 +392,7 @@ export function buildSystemPrompt(config: AgentPromptConfig): string {
   const env = readEnvFile();
   const burpConfigured = !!env.BURP_RPC_HOST;
   const browserConfigured =
-    env.MAGNITUDE_ENABLED === "true" && !!env.MAGNITUDE_MODEL_API_KEY;
+    env.MAGNITUDE_ENABLED === "true" && !!getAssignedModels().browser?.apiKey;
 
   const burpToolDescriptions = `**search_burp_proxy_history** — Search and browse HTTP traffic captured by Burp's proxy.
   - Use action "search" with filters (search text, methods, status codes, hide_assets) to discover endpoints.
@@ -393,9 +486,15 @@ ${burpRequestFormatting}
 
   const now = new Date();
   const date = config.currentDate ?? now.toISOString().split("T")[0];
-  const day = config.currentDay ?? now.toLocaleDateString("en-US", { weekday: "long" });
-  const tz = config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const time = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const day =
+    config.currentDay ?? now.toLocaleDateString("en-US", { weekday: "long" });
+  const tz =
+    config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const time = now.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 
   const ei = config.envInfo;
   const boxDesc = ei ? `${ei.os} attack box` : "attack box";
@@ -455,11 +554,15 @@ Record these findings immediately when discovered:
 - Files created, downloaded, or analyzed
 - Approaches attempted and their outcomes
 - Flag submission attempts and results (CTF)
-${config.ctfConfig ? `
+${
+  config.ctfConfig
+    ? `
 **CTF — critical:** The moment you obtain or receive a real flag, you MUST call update_engagement_state with action "confirm_flag" and data: { "value": "<the flag>" }. If the current challenge name is not in context, include "challengeName": "<exact challenge title from challenge.txt>" so it appears on the user's CTF dashboard.
 Do not only paste the flag in chat — the tool call is required for persistence and auto-submit.
 Do not state that a submission tool is unavailable — \`update_engagement_state\` with action \`confirm_flag\` is the submission mechanism.
-Time-to-flag is recorded from when the user runs \`/solve <challenge>\` (or an equivalent solveHistory start) until the \`confirm_flag\` action is called — encourage starting with \`/solve\` so timing is accurate.` : ""}
+Time-to-flag is recorded from when the user runs \`/solve <challenge>\` (or an equivalent solveHistory start) until the \`confirm_flag\` action is called — encourage starting with \`/solve\` so timing is accurate.`
+    : ""
+}
 
 The structured state is injected into your context automatically — do not duplicate it in prose. Focus your messages on reasoning, analysis, and next-step planning.
 </state_management>`;

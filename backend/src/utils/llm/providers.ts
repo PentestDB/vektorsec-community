@@ -4,11 +4,16 @@ import axios from "axios";
 import { observeOpenAI } from "@langfuse/openai";
 import type { LangfuseGeneration } from "@langfuse/tracing";
 import { startObservation } from "@langfuse/tracing";
-import getSecrets from "../getSecrets";
 import { readEnvFile, updateEnvVars } from "../envWriter";
 import { isTracingEnabled } from "../tracing";
 
-export type ProviderType = "openai" | "anthropic" | "minimax" | "openrouter" | "ollama" | "openai-compatible";
+export type ProviderType =
+  | "openai"
+  | "anthropic"
+  | "anthropic-compatible"
+  | "openrouter"
+  | "ollama"
+  | "openai-compatible";
 
 export interface ProviderConfig {
   provider: ProviderType;
@@ -22,16 +27,32 @@ export interface ProviderConfig {
 const PROVIDER_DEFAULTS: Record<ProviderType, { baseURL: string }> = {
   openai: { baseURL: "https://api.openai.com/v1" },
   anthropic: { baseURL: "https://api.anthropic.com/v1/" },
-  minimax: { baseURL: "https://api.minimax.io/v1" },
+  "anthropic-compatible": { baseURL: "" },
   openrouter: { baseURL: "https://openrouter.ai/api/v1" },
   ollama: { baseURL: "http://localhost:11434/v1" },
   "openai-compatible": { baseURL: "" },
 };
 
-function buildClient(config: ProviderConfig): OpenAI {
-  const baseURL = config.baseURL || PROVIDER_DEFAULTS[config.provider]?.baseURL;
+function isAnthropicApiProvider(provider: ProviderType): boolean {
+  return provider === "anthropic" || provider === "anthropic-compatible";
+}
 
-  const isOAuth = config.provider === "anthropic" && config.authMethod === "oauth" && config.oauthAccessToken;
+function defaultBaseURLForProvider(
+  provider: ProviderType,
+  baseURL?: string,
+): string | undefined {
+  if (baseURL) return baseURL;
+  if (provider === "anthropic-compatible") return undefined;
+  return PROVIDER_DEFAULTS[provider]?.baseURL || undefined;
+}
+
+function buildClient(config: ProviderConfig): OpenAI {
+  const baseURL = defaultBaseURLForProvider(config.provider, config.baseURL);
+
+  const isOAuth =
+    config.provider === "anthropic" &&
+    config.authMethod === "oauth" &&
+    config.oauthAccessToken;
   const isKeylessLocal = config.provider === "ollama" && !config.apiKey;
 
   const clientOpts: ConstructorParameters<typeof OpenAI>[0] = {
@@ -42,12 +63,12 @@ function buildClient(config: ProviderConfig): OpenAI {
     clientOpts.baseURL = baseURL;
   }
 
-  if (config.provider === "anthropic") {
+  if (isAnthropicApiProvider(config.provider)) {
     if (isOAuth) {
       clientOpts.defaultHeaders = {
         "anthropic-version": "2023-06-01",
         "anthropic-beta": "oauth-2025-04-20",
-        "Authorization": `Bearer ${config.oauthAccessToken}`,
+        Authorization: `Bearer ${config.oauthAccessToken}`,
       };
     } else {
       clientOpts.defaultHeaders = {
@@ -60,7 +81,19 @@ function buildClient(config: ProviderConfig): OpenAI {
   return new OpenAI(clientOpts);
 }
 
-const ANTHROPIC_OAUTH_TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
+function buildAnthropicClient(config: ProviderConfig): Anthropic {
+  const clientOptions: ConstructorParameters<typeof Anthropic>[0] = {
+    apiKey: config.authMethod === "oauth" ? undefined : config.apiKey,
+    ...(config.authMethod === "oauth"
+      ? { authToken: config.oauthAccessToken }
+      : {}),
+    ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+  };
+  return new Anthropic(clientOptions);
+}
+
+const ANTHROPIC_OAUTH_TOKEN_URL =
+  "https://console.anthropic.com/v1/oauth/token";
 const ANTHROPIC_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
 async function maybeRefreshOAuthToken(): Promise<string | null> {
@@ -82,14 +115,16 @@ async function maybeRefreshOAuthToken(): Promise<string | null> {
         refresh_token: refreshToken,
         client_id: ANTHROPIC_OAUTH_CLIENT_ID,
       }).toString(),
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
     );
 
     const { access_token, refresh_token, expires_in } = response.data;
     updateEnvVars({
       ANTHROPIC_OAUTH_ACCESS_TOKEN: access_token,
       ANTHROPIC_OAUTH_REFRESH_TOKEN: refresh_token || refreshToken,
-      ANTHROPIC_OAUTH_EXPIRES_AT: String(Math.floor(Date.now() / 1000) + (expires_in || 3600)),
+      ANTHROPIC_OAUTH_EXPIRES_AT: String(
+        Math.floor(Date.now() / 1000) + (expires_in || 3600),
+      ),
     });
     return access_token;
   } catch (err) {
@@ -99,32 +134,16 @@ async function maybeRefreshOAuthToken(): Promise<string | null> {
 }
 
 async function loadProviderConfig(): Promise<ProviderConfig> {
-  const env = readEnvFile();
-
-  const provider = env.ORCHESTRATOR_PROVIDER || (await getSecrets("ORCHESTRATOR_PROVIDER")) || "openai";
-  const apiKey = env.ORCHESTRATOR_API_KEY || (await getSecrets("ORCHESTRATOR_API_KEY"));
-  const model = env.ORCHESTRATOR_MODEL || (await getSecrets("ORCHESTRATOR_MODEL"));
-  const baseURL = env.ORCHESTRATOR_BASE_URL || (await getSecrets("ORCHESTRATOR_BASE_URL"));
-
-  if (provider === "anthropic") {
-    const oauthToken = await maybeRefreshOAuthToken();
-    if (oauthToken) {
-      return {
-        provider: "anthropic",
-        apiKey: "",
-        model: model || "claude-opus-4-7",
-        baseURL: baseURL || undefined,
-        authMethod: "oauth",
-        oauthAccessToken: oauthToken,
-      };
-    }
+  const registry = getAssignedModels();
+  if (registry.orchestrator) {
+    return await presetToProviderConfig(registry.orchestrator);
   }
 
   return {
-    provider: provider as ProviderType,
-    apiKey,
-    model: model || "gpt-5.5",
-    baseURL: baseURL || undefined,
+    provider: "openai",
+    apiKey: "",
+    model: "gpt-5.5",
+    baseURL: undefined,
     authMethod: "api_key",
   };
 }
@@ -142,13 +161,6 @@ const MODEL_ALIASES: Record<string, string> = {
   "claude-sonnet-4.5": "claude-sonnet-4-5",
   "claude-opus-4.5": "claude-opus-4-5",
   "claude-opus-4.1": "claude-opus-4-1",
-  "minimax-m2.7": "MiniMax-M2.7",
-  "minimax-m2.7-highspeed": "MiniMax-M2.7-highspeed",
-  "minimax-m2.5": "MiniMax-M2.5",
-  "minimax-m2.5-highspeed": "MiniMax-M2.5-highspeed",
-  "minimax-m2.1": "MiniMax-M2.1",
-  "minimax-m2.1-highspeed": "MiniMax-M2.1-highspeed",
-  "minimax-m2": "MiniMax-M2",
 };
 
 export function normalizeModelId(model: string): string {
@@ -182,42 +194,46 @@ export function clearProviderCache(): void {
 
 // ─── Per-user model config ───────────────────────────────────────────
 
-import type { ModelPresetDoc } from "../../models/User/User.model";
-import { readSwarmModelsFromEnv } from "../swarmModelEnv";
+import { getAssignedModels, ModelPreset } from "../modelRegistryStore";
 
-const userProviderCache = new Map<string, { config: ProviderConfig; ts: number }>();
+const userProviderCache = new Map<
+  string,
+  { config: ProviderConfig; ts: number }
+>();
 
 export interface UserModelsResult {
-  orchestrator: ModelPresetDoc;
-  racers: ModelPresetDoc[];
-  all: ModelPresetDoc[];
+  orchestrator: ModelPreset;
+  racers: ModelPreset[];
+  all: ModelPreset[];
 }
 
-export async function getUserModels(_userId: string): Promise<UserModelsResult> {
-  const env = readEnvFile();
-  const models: ModelPresetDoc[] = readSwarmModelsFromEnv(env);
+export async function getUserModels(
+  _userId: string,
+): Promise<UserModelsResult> {
+  const registry = getAssignedModels();
 
-  if (models.length === 0) {
+  if (!registry.orchestrator) {
     const envConfig = await getProvider();
-    const fallback: ModelPresetDoc = {
+    const fallback: ModelPreset = {
+      id: "default",
       label: envConfig.model,
       provider: envConfig.provider,
       model: envConfig.model,
       apiKey: envConfig.apiKey,
-      isOrchestrator: true,
     };
     return { orchestrator: fallback, racers: [], all: [fallback] };
   }
 
-  const orchestratorIdx = models.findIndex((m) => m.isOrchestrator);
-  const orchestrator = orchestratorIdx >= 0 ? models[orchestratorIdx] : models[0];
-  const racers = models.filter((m) => m !== orchestrator);
-
-  return { orchestrator, racers, all: models };
+  return {
+    orchestrator: registry.orchestrator,
+    racers: registry.racers,
+    all: registry.all,
+  };
 }
 
-export async function presetToProviderConfig(preset: ModelPresetDoc): Promise<ProviderConfig> {
-  const envConfig = await getProvider();
+export async function presetToProviderConfig(
+  preset: ModelPreset,
+): Promise<ProviderConfig> {
   const model = normalizeModelId(preset.model);
 
   if (preset.provider === "anthropic" && !preset.apiKey) {
@@ -240,13 +256,15 @@ export async function presetToProviderConfig(preset: ModelPresetDoc): Promise<Pr
   return {
     provider: providerType,
     model,
-    apiKey: preset.apiKey || (isKeyless ? "" : envConfig.apiKey),
+    apiKey: preset.apiKey || "",
     baseURL: preset.baseURL || undefined,
     authMethod: "api_key",
   };
 }
 
-export async function getProviderForUser(userId: string): Promise<ProviderConfig> {
+export async function getProviderForUser(
+  userId: string,
+): Promise<ProviderConfig> {
   const cached = userProviderCache.get(userId);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.config;
 
@@ -265,7 +283,12 @@ export interface ToolCallData {
   arguments: string;
 }
 
-export type FinishReason = "stop" | "tool_calls" | "length" | "content_filter" | "error";
+export type FinishReason =
+  | "stop"
+  | "tool_calls"
+  | "length"
+  | "content_filter"
+  | "error";
 
 export type ReasoningMode = "off" | "low" | "medium" | "high" | "xhigh";
 
@@ -296,7 +319,12 @@ export interface InvokeResult {
 // ─── Streaming types ─────────────────────────────────────────────────
 
 export interface StreamDelta {
-  type: "text" | "reasoning" | "tool_call_start" | "tool_call_delta" | "tool_call_done";
+  type:
+    | "text"
+    | "reasoning"
+    | "tool_call_start"
+    | "tool_call_delta"
+    | "tool_call_done";
   content?: string;
   toolCall?: Partial<ToolCallData> & { index?: number };
 }
@@ -323,9 +351,7 @@ function maskSecret(s: string | undefined): string {
   return s.slice(0, 6) + "…" + s.slice(-4);
 }
 
-const FIXED_TEMPERATURE_MODELS = new Set([
-  "gpt-5-nano",
-]);
+const FIXED_TEMPERATURE_MODELS = new Set(["gpt-5-nano"]);
 
 function clampTemperature(model: string, requested: number): number {
   for (const m of FIXED_TEMPERATURE_MODELS) {
@@ -342,7 +368,9 @@ function normalizeFinishReason(raw: string | null | undefined): FinishReason {
   return "stop";
 }
 
-function extractToolCalls(message: OpenAI.Chat.ChatCompletionMessage): ToolCallData[] {
+function extractToolCalls(
+  message: OpenAI.Chat.ChatCompletionMessage,
+): ToolCallData[] {
   if (!message.tool_calls?.length) return [];
   return message.tool_calls.map((tc) => ({
     id: tc.id,
@@ -351,7 +379,11 @@ function extractToolCalls(message: OpenAI.Chat.ChatCompletionMessage): ToolCallD
   }));
 }
 
-function logRequest(config: ProviderConfig, opts: InvokeOptions, streaming: boolean) {
+function logRequest(
+  config: ProviderConfig,
+  opts: InvokeOptions,
+  streaming: boolean,
+) {
   const msgCount = opts.messages.length;
   const lastRole = opts.messages[msgCount - 1]?.role ?? "?";
   const totalChars = opts.messages.reduce((n, m) => {
@@ -361,21 +393,25 @@ function logRequest(config: ProviderConfig, opts: InvokeOptions, streaming: bool
 
   console.log(
     `[inference] → provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
-    ` key=${maskSecret(config.authMethod === "oauth" ? config.oauthAccessToken : config.apiKey)}` +
-    ` baseURL=${config.baseURL ?? "(default)"}` +
-    ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars}` +
-    ` tools=${opts.tools?.length ?? 0} stream=${streaming}` +
-    ` fmt=${opts.format ?? "text"}`
+      ` key=${maskSecret(config.authMethod === "oauth" ? config.oauthAccessToken : config.apiKey)}` +
+      ` baseURL=${config.baseURL ?? "(default)"}` +
+      ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars}` +
+      ` tools=${opts.tools?.length ?? 0} stream=${streaming}` +
+      ` fmt=${opts.format ?? "text"}`,
   );
 }
 
-function logResponse(config: ProviderConfig, elapsed: number, result: InvokeResult) {
+function logResponse(
+  config: ProviderConfig,
+  elapsed: number,
+  result: InvokeResult,
+) {
   console.log(
     `[inference] ← ${elapsed}ms provider=${config.provider} model=${result.model}` +
-    ` tokens=${result.usage?.prompt_tokens ?? "?"}→${result.usage?.completion_tokens ?? "?"}` +
-    ` (total ${result.usage?.total_tokens ?? "?"})` +
-    ` | finish=${result.finishReason} toolCalls=${result.toolCalls.length}` +
-    ` content=${result.content ? result.content.length + " chars" : "null"}`
+      ` tokens=${result.usage?.prompt_tokens ?? "?"}→${result.usage?.completion_tokens ?? "?"}` +
+      ` (total ${result.usage?.total_tokens ?? "?"})` +
+      ` | finish=${result.finishReason} toolCalls=${result.toolCalls.length}` +
+      ` content=${result.content ? result.content.length + " chars" : "null"}`,
   );
 }
 
@@ -401,18 +437,93 @@ function buildCompletionConfig(
     params.tool_choice = "auto";
   }
 
-  if (opts.format === "json" && !opts.tools?.length && config.provider !== "anthropic") {
+  if (
+    opts.format === "json" &&
+    !opts.tools?.length &&
+    config.provider !== "anthropic"
+  ) {
     params.response_format = { type: "json_object" };
   }
 
   return params;
 }
 
+function anthropicBlocksToResult(
+  response: Anthropic.Message,
+  config: ProviderConfig,
+  elapsed: number,
+): InvokeResult {
+  const contentParts: string[] = [];
+  const reasoningParts: string[] = [];
+  const toolCalls: ToolCallData[] = [];
+
+  for (const block of response.content) {
+    if (block.type === "text") {
+      contentParts.push(block.text);
+    } else if (block.type === "thinking") {
+      reasoningParts.push(block.thinking);
+    } else if (block.type === "tool_use") {
+      toolCalls.push({
+        id: block.id,
+        name: block.name,
+        arguments: JSON.stringify(block.input ?? {}),
+      });
+    }
+  }
+
+  return {
+    content: contentParts.join("") || null,
+    reasoning: reasoningParts.join("") || null,
+    toolCalls,
+    finishReason: normalizeFinishReason(response.stop_reason),
+    usage: response.usage
+      ? {
+          prompt_tokens: response.usage.input_tokens ?? 0,
+          completion_tokens: response.usage.output_tokens ?? 0,
+          total_tokens:
+            (response.usage.input_tokens ?? 0) +
+            (response.usage.output_tokens ?? 0),
+        }
+      : undefined,
+    model: response.model ?? config.model,
+    provider: config.provider,
+    elapsedMs: elapsed,
+  };
+}
+
+async function runAnthropicMessage(
+  config: ProviderConfig,
+  opts: InvokeOptions,
+  start: number,
+): Promise<InvokeResult> {
+  const client = buildAnthropicClient(config);
+  const { system, messages } = openaiToAnthropicMessages(opts.messages);
+  const anthropicTools = openaiToAnthropicTools(opts.tools);
+
+  const response = await client.messages.create({
+    model: config.model,
+    max_tokens: 8192,
+    temperature: clampTemperature(config.model, opts.temperature ?? 0.75),
+    messages,
+    ...(system ? { system } : {}),
+    ...(anthropicTools
+      ? { tools: anthropicTools, tool_choice: { type: "auto" } }
+      : {}),
+  });
+
+  const elapsed = Date.now() - start;
+  const result = anthropicBlocksToResult(response, config, elapsed);
+  logResponse(config, elapsed, result);
+  return result;
+}
+
 /**
  * Same shape as Chat Completions (`messages` + optional `tools`) so Langfuse shows a normal
  * system → user → assistant transcript instead of Responses API `input` + `instructions` in metadata.
  */
-function buildLangfuseChatCompletionInput(opts: InvokeOptions): Record<string, unknown> {
+function buildLangfuseChatCompletionInput(
+  opts: InvokeOptions,
+): Record<string, unknown> {
   const input: Record<string, unknown> = { messages: opts.messages };
   if (opts.tools?.length) {
     input.tools = opts.tools;
@@ -444,7 +555,9 @@ function buildLangfuseResponsesOutput(params: {
   return base;
 }
 
-function usageToLangfuseDetails(usage: OpenAI.Completions.CompletionUsage | undefined): Record<string, number> | undefined {
+function usageToLangfuseDetails(
+  usage: OpenAI.Completions.CompletionUsage | undefined,
+): Record<string, number> | undefined {
   if (!usage) return undefined;
   return {
     input: usage.prompt_tokens ?? 0,
@@ -469,16 +582,26 @@ function getClient(config: ProviderConfig, opts: InvokeOptions): OpenAI {
 // ─── invoke_llm — non-streaming (kept for summarization, simple calls) ───
 
 export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
-  const config = opts.providerOverride ?? await getProvider();
-  const client = getClient(config, opts);
-  const requestedTemp = clampTemperature(config.model, opts.temperature ?? 0.75);
+  const config = opts.providerOverride ?? (await getProvider());
+  const requestedTemp = clampTemperature(
+    config.model,
+    opts.temperature ?? 0.75,
+  );
   const start = Date.now();
 
   logRequest(config, opts, false);
 
+  if (isAnthropicApiProvider(config.provider)) {
+    return await runAnthropicMessage(config, opts, start);
+  }
+
+  const client = getClient(config, opts);
+
   const tryCompletion = async (temp: number): Promise<InvokeResult> => {
     const params = buildCompletionConfig(config, opts, temp, false);
-    const response = await client.chat.completions.create(params) as OpenAI.Chat.ChatCompletion;
+    const response = (await client.chat.completions.create(
+      params,
+    )) as OpenAI.Chat.ChatCompletion;
     const elapsed = Date.now() - start;
     const message = response.choices[0]?.message;
 
@@ -506,14 +629,16 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
       requestedTemp !== 1;
 
     if (isTempUnsupported) {
-      console.warn(`[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`);
+      console.warn(
+        `[inference] Model ${config.model} does not support temperature=${requestedTemp}, retrying with temperature=1`,
+      );
       return await tryCompletion(1);
     }
 
     const elapsed = Date.now() - start;
     console.error(
       `[inference] ✗ ${elapsed}ms provider=${config.provider} model=${config.model}` +
-      ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`
+        ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`,
     );
     throw err;
   }
@@ -533,18 +658,38 @@ function openaiToAnthropicMessages(
       continue;
     }
     if (m.role === "user") {
-      out.push({ role: "user", content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) });
+      out.push({
+        role: "user",
+        content:
+          typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+      });
       continue;
     }
     if (m.role === "assistant") {
       const am = m as OpenAI.Chat.ChatCompletionAssistantMessageParam;
       const blocks: Anthropic.ContentBlockParam[] = [];
-      if (am.content) blocks.push({ type: "text", text: typeof am.content === "string" ? am.content : JSON.stringify(am.content) });
+      if (am.content)
+        blocks.push({
+          type: "text",
+          text:
+            typeof am.content === "string"
+              ? am.content
+              : JSON.stringify(am.content),
+        });
       if (am.tool_calls) {
         for (const tc of am.tool_calls) {
           let input: Record<string, unknown> = {};
-          try { input = JSON.parse(tc.function.arguments); } catch { /* ignore */ }
-          blocks.push({ type: "tool_use", id: tc.id, name: tc.function.name, input });
+          try {
+            input = JSON.parse(tc.function.arguments);
+          } catch {
+            /* ignore */
+          }
+          blocks.push({
+            type: "tool_use",
+            id: tc.id,
+            name: tc.function.name,
+            input,
+          });
         }
       }
       if (blocks.length) out.push({ role: "assistant", content: blocks });
@@ -554,7 +699,16 @@ function openaiToAnthropicMessages(
       const tm = m as OpenAI.Chat.ChatCompletionToolMessageParam;
       out.push({
         role: "user",
-        content: [{ type: "tool_result", tool_use_id: tm.tool_call_id, content: typeof tm.content === "string" ? tm.content : JSON.stringify(tm.content) }],
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: tm.tool_call_id,
+            content:
+              typeof tm.content === "string"
+                ? tm.content
+                : JSON.stringify(tm.content),
+          },
+        ],
       });
     }
   }
@@ -562,47 +716,66 @@ function openaiToAnthropicMessages(
   return { system: system.trim(), messages: out };
 }
 
-function openaiToAnthropicTools(tools?: OpenAI.Chat.ChatCompletionTool[]): Anthropic.Tool[] | undefined {
+function openaiToAnthropicTools(
+  tools?: OpenAI.Chat.ChatCompletionTool[],
+): Anthropic.Tool[] | undefined {
   if (!tools?.length) return undefined;
   return tools.map((t) => ({
     name: t.function.name,
     description: t.function.description ?? "",
-    input_schema: (t.function.parameters ?? { type: "object", properties: {} }) as Anthropic.Tool.InputSchema,
+    input_schema: (t.function.parameters ?? {
+      type: "object",
+      properties: {},
+    }) as Anthropic.Tool.InputSchema,
   }));
 }
 
 async function runAnthropicThinkingStream(
   config: ProviderConfig,
   opts: StreamingInvokeOptions,
-  budgetTokens: number,
+  budgetTokens: number | null,
   start: number,
 ): Promise<InvokeResult> {
-  const apiKey = config.authMethod === "oauth" ? (config.oauthAccessToken ?? "") : config.apiKey;
-  const client = new Anthropic({
-    apiKey: config.authMethod === "oauth" ? undefined : apiKey,
-    ...(config.authMethod === "oauth" ? { authToken: config.oauthAccessToken } : {}),
-  });
+  const client = buildAnthropicClient(config);
 
   const { system, messages } = openaiToAnthropicMessages(opts.messages);
   const anthropicTools = openaiToAnthropicTools(opts.tools);
 
   const params: Anthropic.MessageCreateParamsStreaming = {
     model: config.model,
-    max_tokens: Math.min(64000, Math.max(16384, budgetTokens + 4096)),
+    max_tokens: budgetTokens
+      ? Math.min(64000, Math.max(16384, budgetTokens + 4096))
+      : 8192,
     stream: true,
-    thinking: { type: "enabled", budget_tokens: budgetTokens },
     messages,
     ...(system ? { system } : {}),
-    ...(anthropicTools ? { tools: anthropicTools } : {}),
+    ...(!budgetTokens
+      ? {
+          temperature: clampTemperature(config.model, opts.temperature ?? 0.75),
+        }
+      : {}),
+    ...(budgetTokens
+      ? { thinking: { type: "enabled", budget_tokens: budgetTokens } as const }
+      : {}),
+    ...(anthropicTools
+      ? { tools: anthropicTools, tool_choice: { type: "auto" } as const }
+      : {}),
   };
 
-  console.log(`[inference] → anthropic-native model=${config.model} thinking budget=${budgetTokens}`);
+  console.log(
+    budgetTokens
+      ? `[inference] → anthropic-native model=${config.model} thinking budget=${budgetTokens}`
+      : `[inference] → anthropic-native model=${config.model}`,
+  );
 
   const stream = client.messages.stream(params);
 
   let contentParts: string[] = [];
   let reasoningParts: string[] = [];
-  let toolCallAccumulators: Map<string, { id: string; name: string; argParts: string[] }> = new Map();
+  let toolCallAccumulators: Map<
+    string,
+    { id: string; name: string; argParts: string[] }
+  > = new Map();
   let finishReason: FinishReason = "stop";
   let usage: OpenAI.Completions.CompletionUsage | undefined;
 
@@ -624,8 +797,11 @@ async function runAnthropicThinkingStream(
       }
       if (delta.type === "input_json_delta" && delta.partial_json) {
         const currentBlockIdx = event.index;
-        const acc = [...toolCallAccumulators.values()].find((_, i) => i === currentBlockIdx - (reasoningParts.length > 0 ? 2 : 1))
-          ?? [...toolCallAccumulators.values()].at(-1);
+        const acc =
+          [...toolCallAccumulators.values()].find(
+            (_, i) =>
+              i === currentBlockIdx - (reasoningParts.length > 0 ? 2 : 1),
+          ) ?? [...toolCallAccumulators.values()].at(-1);
         if (acc) {
           acc.argParts.push(delta.partial_json);
           opts.onDelta({
@@ -641,7 +817,11 @@ async function runAnthropicThinkingStream(
       const block = (event as any).content_block;
       if (block?.type === "tool_use") {
         const idx = toolCallAccumulators.size;
-        toolCallAccumulators.set(block.id, { id: block.id, name: block.name, argParts: [] });
+        toolCallAccumulators.set(block.id, {
+          id: block.id,
+          name: block.name,
+          argParts: [],
+        });
         opts.onDelta({
           type: "tool_call_start",
           toolCall: { index: idx, id: block.id, name: block.name },
@@ -679,7 +859,11 @@ async function runAnthropicThinkingStream(
   const toolCalls: ToolCallData[] = [];
   let idx = 0;
   for (const [, acc] of toolCallAccumulators) {
-    const tc: ToolCallData = { id: acc.id, name: acc.name, arguments: acc.argParts.join("") };
+    const tc: ToolCallData = {
+      id: acc.id,
+      name: acc.name,
+      arguments: acc.argParts.join(""),
+    };
     toolCalls.push(tc);
     opts.onDelta({ type: "tool_call_done", toolCall: { index: idx++, ...tc } });
   }
@@ -720,7 +904,8 @@ function openaiToResponsesInput(
     if (m.role === "user") {
       input.push({
         role: "user",
-        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+        content:
+          typeof m.content === "string" ? m.content : JSON.stringify(m.content),
       });
       continue;
     }
@@ -730,7 +915,10 @@ function openaiToResponsesInput(
         if (am.content) {
           input.push({
             role: "assistant",
-            content: typeof am.content === "string" ? am.content : JSON.stringify(am.content),
+            content:
+              typeof am.content === "string"
+                ? am.content
+                : JSON.stringify(am.content),
           });
         }
         for (const tc of am.tool_calls) {
@@ -744,7 +932,10 @@ function openaiToResponsesInput(
       } else {
         input.push({
           role: "assistant",
-          content: typeof am.content === "string" ? am.content : JSON.stringify(am.content ?? ""),
+          content:
+            typeof am.content === "string"
+              ? am.content
+              : JSON.stringify(am.content ?? ""),
         });
       }
       continue;
@@ -754,7 +945,10 @@ function openaiToResponsesInput(
       input.push({
         type: "function_call_output",
         call_id: tm.tool_call_id,
-        output: typeof tm.content === "string" ? tm.content : JSON.stringify(tm.content),
+        output:
+          typeof tm.content === "string"
+            ? tm.content
+            : JSON.stringify(tm.content),
       });
     }
   }
@@ -762,7 +956,9 @@ function openaiToResponsesInput(
   return { instructions: instructions.trim(), input };
 }
 
-function openaiToResponsesTools(tools?: OpenAI.Chat.ChatCompletionTool[]): any[] | undefined {
+function openaiToResponsesTools(
+  tools?: OpenAI.Chat.ChatCompletionTool[],
+): any[] | undefined {
   if (!tools?.length) return undefined;
   return tools.map((t) => ({
     type: "function",
@@ -794,7 +990,9 @@ async function runOpenAIResponsesStream(
     ...(responsesTools ? { tools: responsesTools, tool_choice: "auto" } : {}),
   };
 
-  console.log(`[inference] → openai-responses model=${config.model} reasoning effort=${reasoningMode}`);
+  console.log(
+    `[inference] → openai-responses model=${config.model} reasoning effort=${reasoningMode}`,
+  );
 
   let generation: LangfuseGeneration | undefined;
   if (isTracingEnabled()) {
@@ -817,7 +1015,9 @@ async function runOpenAIResponsesStream(
   }
 
   let completionStartTime: Date | undefined;
-  const endGeneration = (attrs: Parameters<LangfuseGeneration["update"]>[0]) => {
+  const endGeneration = (
+    attrs: Parameters<LangfuseGeneration["update"]>[0],
+  ) => {
     if (generation) {
       generation.update(attrs);
       generation.end();
@@ -827,14 +1027,19 @@ async function runOpenAIResponsesStream(
 
   let contentParts: string[] = [];
   let reasoningParts: string[] = [];
-  let toolCallAccumulators: Map<string, { callId: string; name: string; argParts: string[]; index: number }> = new Map();
+  let toolCallAccumulators: Map<
+    string,
+    { callId: string; name: string; argParts: string[]; index: number }
+  > = new Map();
   let toolCallIndex = 0;
   let finishReason: FinishReason = "stop";
   let usage: OpenAI.Completions.CompletionUsage | undefined;
   let model = config.model;
 
   try {
-    const stream = await rawClient.responses.create(params) as unknown as AsyncIterable<any>;
+    const stream = (await rawClient.responses.create(
+      params,
+    )) as unknown as AsyncIterable<any>;
 
     for await (const event of stream) {
       if (completionStartTime === undefined) {
@@ -876,7 +1081,11 @@ async function runOpenAIResponsesStream(
             });
             opts.onDelta({
               type: "tool_call_start",
-              toolCall: { index: idx, id: item.call_id ?? item.id, name: item.name },
+              toolCall: {
+                index: idx,
+                id: item.call_id ?? item.id,
+                name: item.name,
+              },
             });
           }
           break;
@@ -885,8 +1094,9 @@ async function runOpenAIResponsesStream(
         case "response.function_call_arguments.delta": {
           const delta = event.delta as string;
           const itemId = event.item_id as string;
-          const acc = toolCallAccumulators.get(itemId)
-            ?? [...toolCallAccumulators.values()].at(-1);
+          const acc =
+            toolCallAccumulators.get(itemId) ??
+            [...toolCallAccumulators.values()].at(-1);
           if (acc && delta) {
             acc.argParts.push(delta);
             opts.onDelta({
@@ -900,8 +1110,9 @@ async function runOpenAIResponsesStream(
 
         case "response.function_call_arguments.done": {
           const itemId = event.item_id as string;
-          const acc = toolCallAccumulators.get(itemId)
-            ?? [...toolCallAccumulators.values()].at(-1);
+          const acc =
+            toolCallAccumulators.get(itemId) ??
+            [...toolCallAccumulators.values()].at(-1);
           if (acc) {
             acc.argParts = [event.arguments ?? acc.argParts.join("")];
           }
@@ -918,7 +1129,9 @@ async function runOpenAIResponsesStream(
             usage = {
               prompt_tokens: resp.usage.input_tokens ?? 0,
               completion_tokens: resp.usage.output_tokens ?? 0,
-              total_tokens: (resp.usage.input_tokens ?? 0) + (resp.usage.output_tokens ?? 0),
+              total_tokens:
+                (resp.usage.input_tokens ?? 0) +
+                (resp.usage.output_tokens ?? 0),
             };
           }
           break;
@@ -941,7 +1154,10 @@ async function runOpenAIResponsesStream(
         arguments: acc.argParts.join(""),
       };
       toolCalls.push(tc);
-      opts.onDelta({ type: "tool_call_done", toolCall: { index: acc.index, ...tc } });
+      opts.onDelta({
+        type: "tool_call_done",
+        toolCall: { index: acc.index, ...tc },
+      });
     }
 
     if (toolCalls.length > 0 && finishReason === "stop") {
@@ -988,13 +1204,16 @@ async function runOpenAIResponsesStream(
 
 // ─── invoke_llm_streaming — streaming with tool calls ────────────────
 
-export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promise<InvokeResult> {
-  const config = opts.providerOverride ?? await getProvider();
+export async function invoke_llm_streaming(
+  opts: StreamingInvokeOptions,
+): Promise<InvokeResult> {
+  const config = opts.providerOverride ?? (await getProvider());
   const reasoningMode = opts.reasoningMode ?? "medium";
   const start = Date.now();
 
-  if (reasoningMode !== "off" && config.provider === "anthropic") {
-    const budget = ANTHROPIC_BUDGET_TOKENS[reasoningMode];
+  if (isAnthropicApiProvider(config.provider)) {
+    const budget =
+      reasoningMode !== "off" ? ANTHROPIC_BUDGET_TOKENS[reasoningMode] : null;
     logRequest(config, opts, true);
     return await runAnthropicThinkingStream(config, opts, budget, start);
   }
@@ -1005,22 +1224,35 @@ export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promis
   }
 
   const client = getClient(config, opts);
-  const requestedTemp = clampTemperature(config.model, opts.temperature ?? 0.75);
+  const requestedTemp = clampTemperature(
+    config.model,
+    opts.temperature ?? 0.75,
+  );
 
   logRequest(config, opts, true);
 
   const runStream = async (temp: number): Promise<InvokeResult> => {
     const params = buildCompletionConfig(config, opts, temp, true);
 
-    if (reasoningMode !== "off" && (config.provider === "openai-compatible" || config.provider === "openrouter" || config.provider === "ollama")) {
+    if (
+      reasoningMode !== "off" &&
+      (config.provider === "openai-compatible" ||
+        config.provider === "openrouter" ||
+        config.provider === "ollama")
+    ) {
       params.reasoning_effort = reasoningMode;
     }
 
-    const stream = await client.chat.completions.create(params) as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+    const stream = (await client.chat.completions.create(
+      params,
+    )) as unknown as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
 
     let contentParts: string[] = [];
     let reasoningParts: string[] = [];
-    let toolCallAccumulators: Map<number, { id: string; name: string; argParts: string[] }> = new Map();
+    let toolCallAccumulators: Map<
+      number,
+      { id: string; name: string; argParts: string[] }
+    > = new Map();
     let finishReason: FinishReason = "stop";
     let usage: OpenAI.Completions.CompletionUsage | undefined;
     let model = config.model;
@@ -1045,9 +1277,12 @@ export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promis
 
       const d = delta as Record<string, unknown>;
       const reasoningContent =
-        (typeof d.reasoning_content === "string" ? d.reasoning_content : null) ??
+        (typeof d.reasoning_content === "string"
+          ? d.reasoning_content
+          : null) ??
         (typeof d.reasoning_text === "string" ? d.reasoning_text : null) ??
-        (d.reasoning_text && typeof (d.reasoning_text as { text?: string }).text === "string"
+        (d.reasoning_text &&
+        typeof (d.reasoning_text as { text?: string }).text === "string"
           ? (d.reasoning_text as { text: string }).text
           : null) ??
         (typeof d.reasoning === "string" ? d.reasoning : null);
@@ -1142,14 +1377,16 @@ export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promis
       (err?.message?.includes("tool") || err?.code === "unsupported_parameter");
 
     if (isToolsUnsupported) {
-      console.warn(`[inference] Provider does not support native tool calling, falling back to JSON-in-prompt`);
+      console.warn(
+        `[inference] Provider does not support native tool calling, falling back to JSON-in-prompt`,
+      );
       return await invoke_llm_json_fallback(opts, config, start);
     }
 
     const elapsed = Date.now() - start;
     console.error(
       `[inference] ✗ ${elapsed}ms stream provider=${config.provider} model=${config.model}` +
-      ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`
+        ` | ${err?.status ?? "?"} ${err?.code ?? err?.type ?? err?.message ?? "unknown error"}`,
     );
     throw err;
   }
@@ -1157,11 +1394,15 @@ export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promis
 
 // ─── JSON-in-prompt fallback for providers without native tool calling ───
 
-function buildToolDescriptionPrompt(tools: OpenAI.Chat.ChatCompletionTool[]): string {
-  const descriptions = tools.map((t) => {
-    const fn = t.function;
-    return `- **${fn.name}**: ${fn.description}\n  Parameters: ${JSON.stringify(fn.parameters)}`;
-  }).join("\n");
+function buildToolDescriptionPrompt(
+  tools: OpenAI.Chat.ChatCompletionTool[],
+): string {
+  const descriptions = tools
+    .map((t) => {
+      const fn = t.function;
+      return `- **${fn.name}**: ${fn.description}\n  Parameters: ${JSON.stringify(fn.parameters)}`;
+    })
+    .join("\n");
 
   return `You have access to the following tools. To use a tool, respond with a JSON object containing "tool_calls" array. Each element should have "name" (tool name) and "arguments" (object with the tool parameters). If you don't need to use a tool, respond normally without the tool_calls field.
 
@@ -1201,7 +1442,9 @@ async function invoke_llm_json_fallback(
     temperature: opts.temperature ?? 0.75,
   };
 
-  const response = await client.chat.completions.create(params) as OpenAI.Chat.ChatCompletion;
+  const response = (await client.chat.completions.create(
+    params,
+  )) as OpenAI.Chat.ChatCompletion;
   const elapsed = Date.now() - startTime;
   const rawContent = response.choices[0]?.message?.content ?? "";
 

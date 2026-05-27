@@ -5,6 +5,7 @@ import Loader from "@/components/common/loader/Loader";
 import Sidebar from "@/components/common/Sidebar";
 import HeaderLinks from "@/components/common/HeaderLinks";
 import AgentStreamConnector from "@/components/common/AgentStreamConnector";
+import ModelSetupGate from "@/components/common/ModelSetupGate";
 import React, { use } from "react";
 import { useSelector } from "react-redux";
 import { useQuery } from "react-query";
@@ -27,16 +28,21 @@ const SessionLayout = ({ children, params }) => {
 
   return (
     <AuthContextProvider>
-      <AgentStreamConnector sessionId={session_id} />
-      <div className={styles.sessionPage}>
-        <Sidebar sessionId={session_id} workspaceId={sessionInfo?.workspaceId} />
-        <div className={styles.sessionMainArea}>
-          <HeaderLinks sessionId={session_id} sessionInfo={sessionInfo} />
-          <div className={styles.sessionContent}>
-            {children}
+      <ModelSetupGate>
+        <AgentStreamConnector sessionId={session_id} />
+        <div className={styles.sessionPage}>
+          <Sidebar
+            sessionId={session_id}
+            workspaceId={sessionInfo?.workspaceId}
+          />
+          <div className={styles.sessionMainArea}>
+            <HeaderLinks sessionId={session_id} sessionInfo={sessionInfo} />
+            <div className={styles.sessionContent}>
+              {children}
+            </div>
           </div>
         </div>
-      </div>
+      </ModelSetupGate>
     </AuthContextProvider>
   );
 };

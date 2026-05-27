@@ -192,6 +192,62 @@
   }
 }
 
+.modelSetupGate {
+  min-height: 100vh;
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.modelSetupPanel {
+  width: min(100%, 34rem);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--secondary-bg);
+  padding: 1.5rem;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+
+  h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.25;
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+
+  p {
+    margin: 0.75rem 0 0;
+    color: var(--secondary-text);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+}
+
+.modelSetupEyebrow {
+  margin-bottom: 0.5rem;
+  color: var(--secondary-text);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.modelSetupAlert {
+  margin-top: 1rem;
+  border-radius: 6px;
+}
+
+.modelSetupActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
 .headerLinkWrapper {
   height: 3.2rem;
   flex-shrink: 0;

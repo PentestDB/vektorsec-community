@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { readEnvFile, updateEnvVars } from "../utils/envWriter";
 import {
   buildMcpConfigTemplate,
   buildMcpEndpoint,
@@ -38,6 +39,7 @@ function serializeToken(token: {
 export async function getMcpConfig(req: Request, res: Response) {
   try {
     const user = res.locals.user;
+    const env = readEnvFile();
     const baseUrl = resolveBackendBaseUrl(req);
     const token = await ensureDefaultMcpToken(user);
     const activeTokens = listActiveMcpTokens(user);
@@ -47,11 +49,40 @@ export async function getMcpConfig(req: Request, res: Response) {
       token: token.token,
       configTemplate: buildMcpConfigTemplate(baseUrl, token.token),
       envTemplate: buildMcpEnvTemplate(baseUrl, token.token),
+      safety: {
+        allowDangerousMcp: env.PENTEST_MCP_ALLOW_DANGEROUS === "1",
+        maxOutputChars: Number(env.PENTEST_MCP_MAX_OUTPUT_CHARS || 60000),
+      },
       tokens: activeTokens.map(serializeToken),
     });
   } catch (error) {
     console.error("[mcp] getMcpConfig error:", error);
     return res.status(400).json({ message: "Failed to load MCP config" });
+  }
+}
+
+export async function updateMcpSafety(req: Request, res: Response) {
+  try {
+    const { allowDangerousMcp } = req.body || {};
+    if (typeof allowDangerousMcp !== "boolean") {
+      return res
+        .status(400)
+        .json({ message: "allowDangerousMcp must be a boolean" });
+    }
+
+    updateEnvVars({
+      PENTEST_MCP_ALLOW_DANGEROUS: allowDangerousMcp ? "1" : "0",
+    });
+
+    return res.status(200).json({
+      message: allowDangerousMcp
+        ? "MCP dangerous tools enabled"
+        : "MCP dangerous tools disabled",
+      safety: { allowDangerousMcp },
+    });
+  } catch (error) {
+    console.error("[mcp] updateMcpSafety error:", error);
+    return res.status(400).json({ message: "Failed to update MCP safety" });
   }
 }
 

@@ -4,7 +4,9 @@ import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { Client as SSHClient } from "ssh2";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import SessionsModel from "../models/Sessions/Sessions.model";
+import SessionsModel, {
+  AgentMessageDoc,
+} from "../models/Sessions/Sessions.model";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
 import { UserDoc } from "../models/User/User.model";
@@ -15,26 +17,33 @@ import { ToolResult } from "../tools/types";
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
 import { buildSSHConfig } from "../utils/sshConfig";
 import { execSSHCommand } from "./ssh.service";
-import { getVncDisplay, getVncRfbPort, getWebsockifyPort, KALI_DATA_DIR } from "../config/constants";
-import { abortSession, hasActiveController, setPaused } from "./agent.service";
+import { KALI_DATA_DIR } from "../config/constants";
+import {
+  readModelRegistry,
+  writeModelRegistry,
+} from "../utils/modelRegistryStore";
+import { getMagnitudeModelIssue } from "../utils/magnitudeLlm";
+import {
+  abortSession,
+  hasActiveController,
+  initAndRun,
+  registerAbortController,
+  setPaused,
+  SSEWriter,
+} from "./agent.service";
 
 const SERVER_NAME = "pentest-copilot";
 const SERVER_VERSION = "1.0.0";
-const ALLOW_DANGEROUS = process.env.PENTEST_MCP_ALLOW_DANGEROUS === "1";
-const MAX_OUTPUT_CHARS = parseInt(process.env.PENTEST_MCP_MAX_OUTPUT_CHARS || "60000", 10);
 const VPN_DIR = path.join(KALI_DATA_DIR, "vpn-profiles");
-const PROVIDER_MAP: Record<string, string> = {
-  anthropic: "anthropic",
-  openai: "openai",
-  google: "google-ai",
-  minimax: "openai-generic",
-  openrouter: "openai-generic",
-  "openai-compatible": "openai-generic",
-};
 
 const operationLocks = new Map<string, Promise<unknown>>();
 
-type HealthStatus = "ready" | "misconfigured" | "missing" | "unreachable" | "degraded";
+type HealthStatus =
+  | "ready"
+  | "misconfigured"
+  | "missing"
+  | "unreachable"
+  | "degraded";
 
 interface HealthCheckResult {
   component: string;
@@ -45,10 +54,64 @@ interface HealthCheckResult {
   nextAction: string;
 }
 
-function textResult(text: string, structuredContent?: Record<string, unknown>) {
-  return structuredContent
-    ? { content: [{ type: "text", text }], structuredContent }
-    : { content: [{ type: "text", text }] };
+type McpToolHandler = (
+  args: any,
+) => Promise<ReturnType<typeof textResult>> | ReturnType<typeof textResult>;
+
+function textResult(
+  text: string,
+  structuredContent?: Record<string, unknown>,
+  isError = false,
+) {
+  return {
+    content: [{ type: "text", text }],
+    ...(structuredContent ? { structuredContent } : {}),
+    ...(isError ? { isError: true } : {}),
+  };
+}
+
+function registerMcpTool(
+  server: McpServer,
+  user: UserDoc,
+  name: string,
+  config: { description: string; inputSchema: Record<string, z.ZodTypeAny> },
+  handler: McpToolHandler,
+) {
+  server.registerTool(
+    name,
+    config as any,
+    (async (args: any) => {
+      const startedAt = new Date();
+      try {
+        const result = await handler(args);
+        await safeRecordMcpActivity(user, {
+          args,
+          result,
+          toolName: name,
+          startedAt,
+          status: "success",
+        });
+        return result;
+      } catch (error: any) {
+        await safeRecordMcpActivity(user, {
+          args,
+          error: error?.message || String(error),
+          toolName: name,
+          startedAt,
+          status: "error",
+        });
+        throw error;
+      }
+    }) as any,
+  );
+}
+
+function allowDangerousMcpTools(): boolean {
+  return process.env.PENTEST_MCP_ALLOW_DANGEROUS === "1";
+}
+
+function maxOutputChars(): number {
+  return parseInt(process.env.PENTEST_MCP_MAX_OUTPUT_CHARS || "60000", 10);
 }
 
 function formatToolResult(result: ToolResult): string {
@@ -66,18 +129,171 @@ function formatToolResult(result: ToolResult): string {
 }
 
 function truncate(output: string): string {
-  if (output.length <= MAX_OUTPUT_CHARS) return output;
-  const half = Math.floor(MAX_OUTPUT_CHARS / 2);
-  return `${output.slice(0, half)}\n\n... [truncated ${output.length - MAX_OUTPUT_CHARS} chars] ...\n\n${output.slice(-half)}`;
+  const limit = maxOutputChars();
+  if (output.length <= limit) return output;
+  const half = Math.floor(limit / 2);
+  return `${output.slice(0, half)}\n\n... [truncated ${output.length - limit} chars] ...\n\n${output.slice(-half)}`;
 }
 
-async function withSerializedLock<T>(key: string, work: () => Promise<T>): Promise<T> {
+function toolResultPayload(
+  result: ToolResult,
+  extra: Record<string, unknown> = {},
+) {
+  const rawOutput = result.output || "";
+  const output = truncate(rawOutput);
+  return {
+    ...extra,
+    output,
+    exitCode: result.exitCode ?? 0,
+    files: result.files || [],
+    installSuggestion: result.installSuggestion || null,
+    truncated: output.length !== rawOutput.length,
+    outputLength: rawOutput.length,
+  };
+}
+
+function textFromMcpResult(result: ReturnType<typeof textResult>): string {
+  return result.content
+    .filter(
+      (item: any) => item?.type === "text" && typeof item.text === "string",
+    )
+    .map((item: any) => item.text)
+    .join("\n");
+}
+
+function deriveEngagementId(
+  args: any,
+  result?: ReturnType<typeof textResult>,
+): string | null {
+  if (args?.engagement_id) return String(args.engagement_id);
+  const structured = result?.structuredContent as any;
+  const engagementId =
+    structured?.engagement?.engagementId || structured?.engagement_id;
+  return engagementId ? String(engagementId) : null;
+}
+
+function redactMcpArgs(value: any): any {
+  if (Array.isArray(value)) return value.map(redactMcpArgs);
+  if (!value || typeof value !== "object") return value;
+
+  const redacted: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const normalized = key.toLowerCase();
+    if (
+      normalized.includes("password") ||
+      normalized.includes("passphrase") ||
+      normalized.includes("privatekey") ||
+      normalized.includes("apikey") ||
+      normalized.includes("api_key") ||
+      normalized.includes("secret") ||
+      normalized.includes("token") ||
+      normalized.includes("credential") ||
+      normalized === "profile_content" ||
+      normalized === "profile_content_base64"
+    ) {
+      redacted[key] = nested ? "[redacted]" : nested;
+    } else {
+      redacted[key] = redactMcpArgs(nested);
+    }
+  }
+  return redacted;
+}
+
+async function recordMcpActivity(
+  user: UserDoc,
+  event: {
+    toolName: string;
+    args: any;
+    startedAt: Date;
+    status: "success" | "error";
+    result?: ReturnType<typeof textResult>;
+    error?: string;
+  },
+) {
+  const engagementId = deriveEngagementId(event.args, event.result);
+  if (!engagementId) return;
+
+  const session = await SessionsModel.findOne({
+    uid: user._id,
+    sessionId: engagementId,
+    status: "active",
+  });
+  if (!session) return;
+
+  const toolCallId = `mcp_${uuidv4()}`;
+  const args = redactMcpArgs(event.args || {});
+  const endedAt = new Date();
+  const content =
+    event.status === "error"
+      ? `MCP tool failed: ${event.error || "Unknown error"}`
+      : textFromMcpResult(event.result!);
+
+  const assistantMsg: AgentMessageDoc = {
+    id: uuidv4(),
+    role: "assistant",
+    content: null,
+    toolCalls: [
+      {
+        id: toolCallId,
+        name: event.toolName,
+        arguments: JSON.stringify(args),
+      },
+    ],
+    timestamp: event.startedAt,
+    turnIndex: session.turnIndex,
+  };
+
+  const toolMsg: AgentMessageDoc = {
+    id: uuidv4(),
+    role: "tool",
+    content: content || "(no output)",
+    toolCallId,
+    toolName: event.toolName,
+    timestamp: endedAt,
+    turnIndex: session.turnIndex,
+  };
+
+  session.messages.push(assistantMsg, toolMsg);
+  await session.save();
+}
+
+async function safeRecordMcpActivity(
+  user: UserDoc,
+  event: Parameters<typeof recordMcpActivity>[1],
+) {
+  try {
+    await recordMcpActivity(user, event);
+  } catch (error) {
+    console.warn("[mcp] Failed to record MCP activity:", error);
+  }
+}
+
+function createMemorySSEWriter(): SSEWriter & {
+  events: Array<{ event: string; data: any }>;
+} {
+  const events: Array<{ event: string; data: any }> = [];
+  return {
+    events,
+    write(event: string, data: any) {
+      events.push({ event, data });
+    },
+    end() {},
+  };
+}
+
+async function withSerializedLock<T>(
+  key: string,
+  work: () => Promise<T>,
+): Promise<T> {
   const prior = operationLocks.get(key) || Promise.resolve();
   let release!: () => void;
   const current = new Promise<void>((resolve) => {
     release = resolve;
   });
-  operationLocks.set(key, prior.then(() => current));
+  operationLocks.set(
+    key,
+    prior.then(() => current),
+  );
   await prior;
   try {
     return await work();
@@ -99,9 +315,16 @@ function ensureVPNDir(): void {
   }
 }
 
-function listLocalProfiles(): Array<{ name: string; filename: string; path: string; size: number }> {
+function listLocalProfiles(): Array<{
+  name: string;
+  filename: string;
+  path: string;
+  size: number;
+}> {
   ensureVPNDir();
-  const files = fs.readdirSync(VPN_DIR).filter((entry) => entry.endsWith(".ovpn") || entry.endsWith(".conf"));
+  const files = fs
+    .readdirSync(VPN_DIR)
+    .filter((entry) => entry.endsWith(".ovpn") || entry.endsWith(".conf"));
   return files.map((entry) => {
     const fullPath = path.join(VPN_DIR, entry);
     const stat = fs.statSync(fullPath);
@@ -118,8 +341,14 @@ function shellEscape(input: string): string {
   return `'${input.replace(/'/g, `'\\''`)}'`;
 }
 
-function sudoWrap(command: string, sshConfig: { username?: string; password?: string }, isScriptPath = false): string {
-  const run = isScriptPath ? `bash ${shellEscape(command)}` : `sh -c ${shellEscape(command)}`;
+function sudoWrap(
+  command: string,
+  sshConfig: { username?: string; password?: string },
+  isScriptPath = false,
+): string {
+  const run = isScriptPath
+    ? `bash ${shellEscape(command)}`
+    : `sh -c ${shellEscape(command)}`;
   if (sshConfig.username === "root") return run;
   if (sshConfig.password) {
     return `echo ${shellEscape(sshConfig.password)} | sudo -S ${run}`;
@@ -127,7 +356,9 @@ function sudoWrap(command: string, sshConfig: { username?: string; password?: st
   return `sudo -n ${run}`;
 }
 
-function sshConnectPromise(sshConfig: ReturnType<typeof buildSSHConfig>): Promise<SSHClient> {
+function sshConnectPromise(
+  sshConfig: ReturnType<typeof buildSSHConfig>,
+): Promise<SSHClient> {
   return new Promise((resolve, reject) => {
     const ssh = new SSHClient();
     ssh.on("ready", () => resolve(ssh));
@@ -136,7 +367,10 @@ function sshConnectPromise(sshConfig: ReturnType<typeof buildSSHConfig>): Promis
   });
 }
 
-function sshExecPromise(ssh: SSHClient, command: string): Promise<{ stdout: string; stderr: string; code: number }> {
+function sshExecPromise(
+  ssh: SSHClient,
+  command: string,
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     ssh.exec(command, (err, stream) => {
       if (err) return reject(err);
@@ -155,7 +389,11 @@ function sshExecPromise(ssh: SSHClient, command: string): Promise<{ stdout: stri
   });
 }
 
-function uploadFileViaSftp(ssh: SSHClient, localPath: string, remotePath: string): Promise<void> {
+function uploadFileViaSftp(
+  ssh: SSHClient,
+  localPath: string,
+  remotePath: string,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     ssh.sftp((err, sftp) => {
       if (err) return reject(err);
@@ -167,9 +405,16 @@ function uploadFileViaSftp(ssh: SSHClient, localPath: string, remotePath: string
   });
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
     promise
       .then((value) => {
         clearTimeout(timer);
@@ -207,18 +452,34 @@ async function getExecutionContext(sessionId: string, agentId: string) {
   });
 }
 
-async function executeLowLevelTool(sessionId: string, agentId: string, toolName: string, args: Record<string, unknown>) {
+async function executeLowLevelTool(
+  sessionId: string,
+  agentId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+) {
   const tool = toolRegistry.get(toolName);
   if (!tool) throw new Error(`Unsupported tool: ${toolName}`);
   const ctx = await getExecutionContext(sessionId, agentId);
-  const dangerous = tool.shouldRequireConsent?.(args, ctx) ?? tool.requiresConsent ?? false;
-  if (dangerous && !ALLOW_DANGEROUS) {
+  const dangerous =
+    tool.shouldRequireConsent?.(args, ctx) ?? tool.requiresConsent ?? false;
+  if (dangerous && !allowDangerousMcpTools()) {
     throw new Error(
-      `Blocked: ${toolName} was flagged as dangerous. Re-run with PENTEST_MCP_ALLOW_DANGEROUS=1 on the backend to allow destructive commands.`,
+      `Blocked: ${toolName} was flagged as consent-gated. Enable "Allow Consent-Gated MCP Tools" in Settings -> MCP Access to allow MCP clients to run these actions.`,
     );
   }
   const result = await tool.execute(args, ctx);
   return { result, ctx };
+}
+
+async function executeBackendTool(
+  toolName: string,
+  args: Record<string, unknown>,
+) {
+  const tool = toolRegistry.get(toolName);
+  if (!tool) throw new Error(`Unsupported tool: ${toolName}`);
+  const result = await tool.execute(args, {} as any);
+  return { result };
 }
 
 function sessionSummary(session: any) {
@@ -235,24 +496,30 @@ function sessionSummary(session: any) {
     credentials: session.mcpContext?.credentials || null,
     labels: session.mcpContext?.labels || [],
     findingsCount: session.mcpFindings?.length || 0,
+    artifactsCount: session.mcpArtifacts?.length || 0,
     shellCount: session.shells?.length || 0,
     totalTokens: session.totalTokens || 0,
   };
 }
 
-async function collectPlatformHealth(component = "all"): Promise<HealthCheckResult[]> {
+async function collectPlatformHealth(
+  component = "all",
+): Promise<HealthCheckResult[]> {
   const env = readEnvFile();
   const checks: HealthCheckResult[] = [];
-  const selected = component === "all"
-    ? ["ssh", "shell", "burp", "magnitude", "vpn", "google_search"]
-    : [component];
+  const selected =
+    component === "all"
+      ? ["ssh", "shell", "burp", "magnitude", "vpn", "google_search"]
+      : [component];
 
   if (selected.includes("ssh") || selected.includes("shell")) {
     const missing = [
       !env.SSH_HOST && "SSH_HOST",
       !env.SSH_PORT && "SSH_PORT",
       !env.SSH_USERNAME && "SSH_USERNAME",
-      !env.SSH_PASSWORD && !env.SSH_PRIVATE_KEY && "SSH_PASSWORD or SSH_PRIVATE_KEY",
+      !env.SSH_PASSWORD &&
+        !env.SSH_PRIVATE_KEY &&
+        "SSH_PASSWORD or SSH_PRIVATE_KEY",
     ].filter(Boolean) as string[];
     if (missing.length > 0) {
       checks.push({
@@ -261,7 +528,8 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
         canAutoRepair: false,
         summary: "SSH is not fully configured",
         missingItems: missing,
-        nextAction: "Run platform_setup with ssh settings or configure SSH / Exploit Box in Settings.",
+        nextAction:
+          "Run platform_setup with ssh settings or configure SSH / Exploit Box in Settings.",
       });
     } else {
       try {
@@ -281,7 +549,8 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
           canAutoRepair: false,
           summary: `SSH connection failed: ${error.message || error}`,
           missingItems: [],
-          nextAction: "Verify the attack box is running and the SSH credentials are correct.",
+          nextAction:
+            "Verify the attack box is running and the SSH credentials are correct.",
         });
       }
     }
@@ -295,7 +564,8 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
         canAutoRepair: false,
         summary: "Burp RPC is not configured",
         missingItems: ["BURP_RPC_HOST", "BURP_RPC_PORT"],
-        nextAction: "Set Burp host/port in platform_setup or Settings -> Burp Suite.",
+        nextAction:
+          "Set Burp host/port in platform_setup or Settings -> Burp Suite.",
       });
     } else {
       try {
@@ -324,7 +594,8 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
           canAutoRepair: false,
           summary: `Burp RPC is configured but unreachable: ${error.message || error}`,
           missingItems: [],
-          nextAction: "Open Burp locally, load the Burp RPC extension, and ensure the configured host/port are correct.",
+          nextAction:
+            "Open Burp locally, load the Burp RPC extension, and ensure the configured host/port are correct.",
         });
       }
     }
@@ -332,14 +603,15 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
 
   if (selected.includes("magnitude")) {
     const enabled = env.MAGNITUDE_ENABLED === "true";
-    const provider = env.MAGNITUDE_MODEL_PROVIDER || "";
-    const model = env.MAGNITUDE_MODEL || "";
-    const apiKey = env.MAGNITUDE_MODEL_API_KEY || "";
+    const registry = readModelRegistry();
+    const browserModel = registry.models.find(
+      (model) => model.id === registry.assignments.browserModelId,
+    );
     const missing = [
       !enabled && "MAGNITUDE_ENABLED=true",
-      !provider && "MAGNITUDE_MODEL_PROVIDER",
-      !model && "MAGNITUDE_MODEL",
-      !apiKey && "MAGNITUDE_MODEL_API_KEY",
+      !browserModel && "browser model assignment",
+      browserModel && !browserModel.apiKey && "browser model API key",
+      browserModel && getMagnitudeModelIssue(browserModel),
     ].filter(Boolean) as string[];
 
     if (missing.length > 0) {
@@ -349,7 +621,8 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
         canAutoRepair: false,
         summary: "Magnitude is not fully configured",
         missingItems: missing,
-        nextAction: "Run platform_setup with magnitude settings, then retry platform_health.",
+        nextAction:
+          "Configure a model preset and select it for Browser Agent, then retry platform_health.",
       });
     } else {
       try {
@@ -358,7 +631,7 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
           component: "magnitude",
           status: "ready",
           canAutoRepair: false,
-          summary: `Magnitude ready with ${provider}/${model}`,
+          summary: `Magnitude ready with ${browserModel!.label} (${browserModel!.provider}/${browserModel!.model})`,
           missingItems: [],
           nextAction: "None",
         });
@@ -369,7 +642,8 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
           canAutoRepair: false,
           summary: `Magnitude dependency load failed: ${error.message || error}`,
           missingItems: [],
-          nextAction: "Reinstall backend dependencies and verify browser-agent packages are present.",
+          nextAction:
+            "Reinstall backend dependencies and verify browser-agent packages are present.",
         });
       }
     }
@@ -384,11 +658,15 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
         canAutoRepair: false,
         summary: "No VPN profiles have been uploaded",
         missingItems: ["VPN profile (.ovpn or .conf)"],
-        nextAction: "Use vpn_manage upload_profile before attempting a connection.",
+        nextAction:
+          "Use vpn_manage upload_profile before attempting a connection.",
       });
     } else {
       try {
-        await execSSHCommand("command -v openvpn >/dev/null 2>&1 && echo READY || echo MISSING", 8000);
+        await execSSHCommand(
+          "command -v openvpn >/dev/null 2>&1 && echo READY || echo MISSING",
+          8000,
+        );
         checks.push({
           component: "vpn",
           status: "ready",
@@ -420,18 +698,27 @@ async function collectPlatformHealth(component = "all"): Promise<HealthCheckResu
       component: "google_search",
       status: missing.length > 0 ? "missing" : "ready",
       canAutoRepair: false,
-      summary: missing.length > 0 ? "Google Custom Search is not fully configured" : "Google Custom Search is configured",
+      summary:
+        missing.length > 0
+          ? "Google Custom Search is not fully configured"
+          : "Google Custom Search is configured",
       missingItems: missing,
-      nextAction: missing.length > 0
-        ? "Run platform_setup with google_search settings."
-        : "None",
+      nextAction:
+        missing.length > 0
+          ? "Run platform_setup with google_search settings."
+          : "None",
     });
   }
 
-  return checks.filter((check) => component === "all" || check.component === component);
+  return checks.filter(
+    (check) => component === "all" || check.component === component,
+  );
 }
 
-function buildRepairSteps(component: string, health: HealthCheckResult[]): string {
+function buildRepairSteps(
+  component: string,
+  health: HealthCheckResult[],
+): string {
   const sshStep = [
     "1. Open Settings -> SSH / Exploit Box or call platform_setup with SSH values.",
     "2. Set SSH host, port, username, and either a password or private key.",
@@ -449,9 +736,10 @@ function buildRepairSteps(component: string, health: HealthCheckResult[]): strin
 
   const magnitudeStep = [
     "1. Set MAGNITUDE_ENABLED=true.",
-    "2. Configure MAGNITUDE_MODEL_PROVIDER, MAGNITUDE_MODEL, and MAGNITUDE_MODEL_API_KEY.",
-    "3. Optionally set MAGNITUDE_MODEL_BASE_URL, MAGNITUDE_PROXY_URL, and MAGNITUDE_DISPLAY.",
-    "4. Re-run platform_health for magnitude, then test with browser_run.",
+    "2. Configure a reusable model preset in Settings -> Models.",
+    "3. Select that preset as the Browser Agent model, or pass magnitude.browserModelId to platform_setup.",
+    "4. Optionally set MAGNITUDE_PROXY_URL and MAGNITUDE_DISPLAY.",
+    "5. Re-run platform_health for magnitude, then test with browser_run.",
   ].join("\n");
 
   const vpnStep = [
@@ -468,6 +756,15 @@ function buildRepairSteps(component: string, health: HealthCheckResult[]): strin
     "4. Re-run platform_health for google_search.",
   ].join("\n");
 
+  if (component === "all") {
+    return health
+      .map(
+        (item) =>
+          `## ${item.component}\n${buildRepairSteps(item.component, health)}`,
+      )
+      .join("\n\n");
+  }
+
   const mapping: Record<string, string> = {
     ssh: sshStep,
     shell: sshStep,
@@ -475,17 +772,16 @@ function buildRepairSteps(component: string, health: HealthCheckResult[]): strin
     magnitude: magnitudeStep,
     vpn: vpnStep,
     google_search: googleStep,
-    all: health.map((item) => `## ${item.component}\n${buildRepairSteps(item.component, health)}`).join("\n\n"),
   };
 
-  return mapping[component] || mapping.all;
+  return mapping[component] || "";
 }
 
 async function applyRepair(component: string): Promise<string> {
   if (component === "vpn") {
     await execSSHCommand(
       "command -v openvpn >/dev/null 2>&1 || " +
-      "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get update -qq && sudo apt-get install -y -qq openvpn)",
+        "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get update -qq && sudo apt-get install -y -qq openvpn)",
       120_000,
     );
     return "Attempted to install openvpn on the attack box.";
@@ -518,35 +814,50 @@ async function applyPlatformSetup(input: {
     const ssh = input.ssh;
     if (ssh.host !== undefined) updates.SSH_HOST = String(ssh.host || "");
     if (ssh.port !== undefined) updates.SSH_PORT = String(ssh.port || "");
-    if (ssh.username !== undefined) updates.SSH_USERNAME = String(ssh.username || "");
-    if (ssh.password !== undefined) updates.SSH_PASSWORD = String(ssh.password || "");
-    if (ssh.privateKey !== undefined) updates.SSH_PRIVATE_KEY = String(ssh.privateKey || "");
+    if (ssh.username !== undefined)
+      updates.SSH_USERNAME = String(ssh.username || "");
+    if (ssh.password !== undefined)
+      updates.SSH_PASSWORD = String(ssh.password || "");
+    if (ssh.privateKey !== undefined)
+      updates.SSH_PRIVATE_KEY = String(ssh.privateKey || "");
     if (ssh.privateKeyPassphrase !== undefined) {
-      updates.SSH_PRIVATE_KEY_PASSPHRASE = String(ssh.privateKeyPassphrase || "");
+      updates.SSH_PRIVATE_KEY_PASSPHRASE = String(
+        ssh.privateKeyPassphrase || "",
+      );
     }
   }
 
   if (input.burp) {
     const burp = input.burp;
-    if (burp.host !== undefined) updates.BURP_RPC_HOST = String(burp.host || "");
-    if (burp.port !== undefined) updates.BURP_RPC_PORT = String(burp.port || "50051");
+    if (burp.host !== undefined)
+      updates.BURP_RPC_HOST = String(burp.host || "");
+    if (burp.port !== undefined)
+      updates.BURP_RPC_PORT = String(burp.port || "50051");
   }
 
   if (input.magnitude) {
     const magnitude = input.magnitude;
-    if (magnitude.enabled !== undefined) updates.MAGNITUDE_ENABLED = String(!!magnitude.enabled);
-    if (magnitude.proxyUrl !== undefined) updates.MAGNITUDE_PROXY_URL = String(magnitude.proxyUrl || "");
-    if (magnitude.headless !== undefined) updates.MAGNITUDE_HEADLESS = String(magnitude.headless !== false);
-    if (magnitude.display !== undefined) updates.MAGNITUDE_DISPLAY = String(magnitude.display || "");
-    if (magnitude.modelProvider !== undefined) updates.MAGNITUDE_MODEL_PROVIDER = String(magnitude.modelProvider || "");
-    if (magnitude.model !== undefined) updates.MAGNITUDE_MODEL = String(magnitude.model || "");
-    if (magnitude.apiKey !== undefined) updates.MAGNITUDE_MODEL_API_KEY = String(magnitude.apiKey || "");
-    if (magnitude.baseURL !== undefined) updates.MAGNITUDE_MODEL_BASE_URL = String(magnitude.baseURL || "");
+    if (magnitude.enabled !== undefined)
+      updates.MAGNITUDE_ENABLED = String(!!magnitude.enabled);
+    if (magnitude.proxyUrl !== undefined)
+      updates.MAGNITUDE_PROXY_URL = String(magnitude.proxyUrl || "");
+    if (magnitude.headless !== undefined)
+      updates.MAGNITUDE_HEADLESS = String(magnitude.headless !== false);
+    if (magnitude.display !== undefined)
+      updates.MAGNITUDE_DISPLAY = String(magnitude.display || "");
+    if (magnitude.browserModelId !== undefined) {
+      const registry = readModelRegistry();
+      writeModelRegistry(registry.models, {
+        ...registry.assignments,
+        browserModelId: String(magnitude.browserModelId || ""),
+      });
+    }
   }
 
   if (input.google_search) {
     const google = input.google_search;
-    if (google.apiKey !== undefined) updates["GOOGLE-API-KEY"] = String(google.apiKey || "");
+    if (google.apiKey !== undefined)
+      updates["GOOGLE-API-KEY"] = String(google.apiKey || "");
     if (google.searchEngineId !== undefined) {
       updates["CUSTOM-SEARCH-ENGINE-ID"] = String(google.searchEngineId || "");
     }
@@ -555,10 +866,14 @@ async function applyPlatformSetup(input: {
   if (input.safety) {
     const safety = input.safety;
     if (safety.allowDangerousMcp !== undefined) {
-      updates.PENTEST_MCP_ALLOW_DANGEROUS = String(safety.allowDangerousMcp ? 1 : 0);
+      updates.PENTEST_MCP_ALLOW_DANGEROUS = String(
+        safety.allowDangerousMcp ? 1 : 0,
+      );
     }
     if (safety.maxOutputChars !== undefined) {
-      updates.PENTEST_MCP_MAX_OUTPUT_CHARS = String(safety.maxOutputChars || env.PENTEST_MCP_MAX_OUTPUT_CHARS || "60000");
+      updates.PENTEST_MCP_MAX_OUTPUT_CHARS = String(
+        safety.maxOutputChars || env.PENTEST_MCP_MAX_OUTPUT_CHARS || "60000",
+      );
     }
   }
 
@@ -566,31 +881,51 @@ async function applyPlatformSetup(input: {
   return updates;
 }
 
-async function uploadVpnProfile(profileName: string, content: string, encoded = false) {
+async function uploadVpnProfile(
+  profileName: string,
+  content: string,
+  encoded = false,
+) {
   ensureVPNDir();
   const safeName = sanitizeProfileName(profileName);
-  const ext = safeName.endsWith(".conf") || safeName.endsWith(".ovpn")
-    ? ""
-    : ".ovpn";
+  const ext =
+    safeName.endsWith(".conf") || safeName.endsWith(".ovpn") ? "" : ".ovpn";
   const filename = `${safeName}${ext}`;
   const filePath = path.join(VPN_DIR, filename);
-  const buffer = encoded ? Buffer.from(content, "base64") : Buffer.from(content, "utf8");
+  const buffer = encoded
+    ? Buffer.from(content, "base64")
+    : Buffer.from(content, "utf8");
   fs.writeFileSync(filePath, buffer);
-  return { filename, path: filePath, size: buffer.length, name: filename.replace(/\.(ovpn|conf)$/i, "") };
+  return {
+    filename,
+    path: filePath,
+    size: buffer.length,
+    name: filename.replace(/\.(ovpn|conf)$/i, ""),
+  };
 }
 
 async function connectVpnProfile(sessionId: string, profileName: string) {
   const safeName = sanitizeProfileName(profileName);
-  const profile = listLocalProfiles().find((candidate) => candidate.name === safeName);
+  const profile = listLocalProfiles().find(
+    (candidate) => candidate.name === safeName,
+  );
   if (!profile) {
     throw new Error(`VPN profile not found: ${safeName}`);
   }
 
   const sshConfig = buildSSHConfig();
-  const ssh = await withTimeout(sshConnectPromise(sshConfig), 15000, "SSH connect for VPN");
+  const ssh = await withTimeout(
+    sshConnectPromise(sshConfig),
+    15000,
+    "SSH connect for VPN",
+  );
   try {
     const remotePath = `/tmp/vpn-${safeName}.ovpn`;
-    await withTimeout(uploadFileViaSftp(ssh, profile.path, remotePath), 30000, "Upload VPN profile");
+    await withTimeout(
+      uploadFileViaSftp(ssh, profile.path, remotePath),
+      30000,
+      "Upload VPN profile",
+    );
 
     const logFile = `/tmp/openvpn-${safeName}.log`;
     const pidFile = `/tmp/openvpn-${safeName}.pid`;
@@ -611,17 +946,29 @@ async function connectVpnProfile(sessionId: string, profileName: string) {
     const localScriptPath = path.join(VPN_DIR, `vpn-start-${safeName}.sh`);
     fs.writeFileSync(localScriptPath, scriptContent, "utf8");
     try {
-      await withTimeout(uploadFileViaSftp(ssh, localScriptPath, scriptPath), 10000, "Upload VPN start script");
+      await withTimeout(
+        uploadFileViaSftp(ssh, localScriptPath, scriptPath),
+        10000,
+        "Upload VPN start script",
+      );
     } finally {
       fs.unlinkSync(localScriptPath);
     }
 
     const startCmd = sudoWrap(scriptPath, sshConfig, true);
-    const { stdout, stderr, code } = await withTimeout(sshExecPromise(ssh, startCmd), 25000, "VPN start");
+    const { stdout, stderr, code } = await withTimeout(
+      sshExecPromise(ssh, startCmd),
+      25000,
+      "VPN start",
+    );
     if (code === 0 && stdout.includes("STARTED")) {
       return { message: `VPN "${safeName}" connected`, profileName: safeName };
     }
-    throw new Error(stderr?.trim() || stdout.replace("FAILED", "").trim() || `Failed to start VPN "${safeName}"`);
+    throw new Error(
+      stderr?.trim() ||
+        stdout.replace("FAILED", "").trim() ||
+        `Failed to start VPN "${safeName}"`,
+    );
   } finally {
     ssh.end();
   }
@@ -639,9 +986,13 @@ async function disconnectVpnConnection(pid?: string, profileName?: string) {
       const pidFile = `/tmp/openvpn-${safeName}.pid`;
       rawCommand = `if [ -f ${pidFile} ]; then kill $(cat ${pidFile}) 2>/dev/null && rm -f ${pidFile} && echo 'KILLED'; else echo 'NOT_FOUND'; fi`;
     } else {
-      rawCommand = "pkill openvpn 2>/dev/null; rm -f /tmp/openvpn-*.pid /tmp/vpn-*.ovpn; echo 'DONE'";
+      rawCommand =
+        "pkill openvpn 2>/dev/null; rm -f /tmp/openvpn-*.pid /tmp/vpn-*.ovpn; echo 'DONE'";
     }
-    const { stdout } = await sshExecPromise(ssh, sudoWrap(rawCommand, sshConfig));
+    const { stdout } = await sshExecPromise(
+      ssh,
+      sudoWrap(rawCommand, sshConfig),
+    );
     return stdout.trim();
   } finally {
     ssh.end();
@@ -652,9 +1003,16 @@ async function vpnStatus() {
   const sshConfig = buildSSHConfig();
   const ssh = await sshConnectPromise(sshConfig);
   try {
-    const { stdout: pgrepOut, code } = await sshExecPromise(ssh, "pgrep -a openvpn 2>/dev/null");
+    const { stdout: pgrepOut, code } = await sshExecPromise(
+      ssh,
+      "pgrep -a openvpn 2>/dev/null",
+    );
     if (code !== 0 || !pgrepOut.trim()) {
-      return { success: false, connections: [], message: "No VPN connections active" };
+      return {
+        success: false,
+        connections: [],
+        message: "No VPN connections active",
+      };
     }
 
     const lines = pgrepOut.trim().split("\n").filter(Boolean);
@@ -663,13 +1021,59 @@ async function vpnStatus() {
       const pid = parts[0];
       const configIndex = parts.indexOf("--config");
       const configFile = configIndex !== -1 ? parts[configIndex + 1] || "" : "";
-      const profileName = configFile ? path.basename(configFile, path.extname(configFile)).replace(/^vpn-/, "") : "unknown";
+      const profileName = configFile
+        ? path
+            .basename(configFile, path.extname(configFile))
+            .replace(/^vpn-/, "")
+        : "unknown";
       return { pid, profile_name: profileName, config_file: configFile };
     });
-    return { success: true, connections, message: `${connections.length} VPN connection(s) active` };
+    return {
+      success: true,
+      connections,
+      message: `${connections.length} VPN connection(s) active`,
+    };
   } finally {
     ssh.end();
   }
+}
+
+async function addSessionArtifact(
+  user: UserDoc,
+  input: {
+    engagementId: string;
+    type:
+      | "note"
+      | "file"
+      | "image"
+      | "browser_observation"
+      | "request"
+      | "other";
+    title: string;
+    content?: string;
+    url?: string;
+    path?: string;
+    mimeType?: string;
+    createdBy?: string;
+    metadata?: Record<string, string>;
+  },
+) {
+  const session = await getOwnedSession(user, input.engagementId);
+  const artifact = {
+    artifactId: uuidv4(),
+    type: input.type,
+    title: input.title.substring(0, 160),
+    content: input.content,
+    url: input.url,
+    path: input.path,
+    mimeType: input.mimeType,
+    createdBy: input.createdBy || "mcp",
+    createdAt: new Date(),
+    metadata: input.metadata || {},
+  };
+  session.mcpArtifacts = [...(session.mcpArtifacts || []), artifact];
+  await session.save();
+  return artifact;
 }
 
 export function buildMcpServerForUser(user: UserDoc): McpServer {
@@ -682,12 +1086,25 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "platform_health",
     {
-      description: "Check whether SSH, shell, Burp, Magnitude, VPN, and Google search are correctly configured and reachable.",
+      description:
+        "Check whether SSH, shell, Burp, Magnitude, VPN, and Google search are correctly configured and reachable.",
       inputSchema: {
-        component: z.enum(["all", "ssh", "shell", "burp", "magnitude", "vpn", "google_search"]).optional(),
+        component: z
+          .enum([
+            "all",
+            "ssh",
+            "shell",
+            "burp",
+            "magnitude",
+            "vpn",
+            "google_search",
+          ])
+          .optional(),
       },
     },
     async ({ component = "all" }) => {
@@ -699,74 +1116,113 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "platform_setup",
     {
-      description: "Persist platform configuration for SSH, Burp, Magnitude, Google search, and MCP safety flags.",
+      description:
+        "Persist platform configuration for SSH, Burp, Browser Agent, Google search, and MCP safety flags.",
       inputSchema: {
-        ssh: z.object({
-          host: z.string().optional(),
-          port: z.union([z.string(), z.number()]).optional(),
-          username: z.string().optional(),
-          password: z.string().optional(),
-          privateKey: z.string().optional(),
-          privateKeyPassphrase: z.string().optional(),
-        }).optional(),
-        burp: z.object({
-          host: z.string().optional(),
-          port: z.union([z.string(), z.number()]).optional(),
-        }).optional(),
-        magnitude: z.object({
-          enabled: z.boolean().optional(),
-          proxyUrl: z.string().optional(),
-          headless: z.boolean().optional(),
-          display: z.string().optional(),
-          modelProvider: z.string().optional(),
-          model: z.string().optional(),
-          apiKey: z.string().optional(),
-          baseURL: z.string().optional(),
-        }).optional(),
-        google_search: z.object({
-          apiKey: z.string().optional(),
-          searchEngineId: z.string().optional(),
-        }).optional(),
-        safety: z.object({
-          allowDangerousMcp: z.boolean().optional(),
-          maxOutputChars: z.number().optional(),
-        }).optional(),
+        ssh: z
+          .object({
+            host: z.string().optional(),
+            port: z.union([z.string(), z.number()]).optional(),
+            username: z.string().optional(),
+            password: z.string().optional(),
+            privateKey: z.string().optional(),
+            privateKeyPassphrase: z.string().optional(),
+          })
+          .optional(),
+        burp: z
+          .object({
+            host: z.string().optional(),
+            port: z.union([z.string(), z.number()]).optional(),
+          })
+          .optional(),
+        magnitude: z
+          .object({
+            enabled: z.boolean().optional(),
+            proxyUrl: z.string().optional(),
+            headless: z.boolean().optional(),
+            display: z.string().optional(),
+            browserModelId: z.string().optional(),
+          })
+          .optional(),
+        google_search: z
+          .object({
+            apiKey: z.string().optional(),
+            searchEngineId: z.string().optional(),
+          })
+          .optional(),
+        safety: z
+          .object({
+            allowDangerousMcp: z.boolean().optional(),
+            maxOutputChars: z.number().optional(),
+          })
+          .optional(),
       },
     },
     async (args) => {
-      const updated = await withSerializedLock("platform_setup", () => applyPlatformSetup(args));
-      return textResult(`Updated ${Object.keys(updated).length} configuration values.`, { updated });
+      const updated = await withSerializedLock("platform_setup", () =>
+        applyPlatformSetup(args),
+      );
+      return textResult(
+        `Updated ${Object.keys(updated).length} configuration values.`,
+        { updated },
+      );
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "platform_repair",
     {
-      description: "Explain or apply repair steps for Burp, Magnitude, VPN, SSH, shell, or Google search setup issues.",
+      description:
+        "Explain or apply repair steps for Burp, Magnitude, VPN, SSH, shell, or Google search setup issues.",
       inputSchema: {
-        component: z.enum(["all", "ssh", "shell", "burp", "magnitude", "vpn", "google_search"]),
+        component: z.enum([
+          "all",
+          "ssh",
+          "shell",
+          "burp",
+          "magnitude",
+          "vpn",
+          "google_search",
+        ]),
         mode: z.enum(["explain", "apply_safe", "apply"]).default("explain"),
       },
     },
     async ({ component, mode }) => {
-      const health = await collectPlatformHealth(component === "all" ? "all" : component);
+      const health = await collectPlatformHealth(
+        component === "all" ? "all" : component,
+      );
       if (mode === "explain") {
         return textResult(buildRepairSteps(component, health), { health });
       }
 
-      const outcome = await withSerializedLock(`repair:${component}`, async () => applyRepair(component));
-      const after = await collectPlatformHealth(component === "all" ? "all" : component);
-      return textResult(`${outcome}\n\nPost-repair health:\n${after.map((item) => `- ${item.component}: ${item.status}`).join("\n")}`, { health: after });
+      const outcome = await withSerializedLock(
+        `repair:${component}`,
+        async () => applyRepair(component),
+      );
+      const after = await collectPlatformHealth(
+        component === "all" ? "all" : component,
+      );
+      return textResult(
+        `${outcome}\n\nPost-repair health:\n${after.map((item) => `- ${item.component}: ${item.status}`).join("\n")}`,
+        { health: after },
+      );
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "engagement_open",
     {
-      description: "Create a new engagement or reopen an existing one. Engagements map to Pentest Copilot sessions.",
+      description:
+        "Create a new engagement or reopen an existing one. Engagements map to Pentest Copilot sessions.",
       inputSchema: {
         engagement_id: z.string().optional(),
         name: z.string().optional(),
@@ -779,14 +1235,31 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         labels: z.array(z.string()).optional(),
       },
     },
-    async ({ engagement_id, name, workspace_name, description, target, scope, notes, credentials, labels }) => {
+    async ({
+      engagement_id,
+      name,
+      workspace_name,
+      description,
+      target,
+      scope,
+      notes,
+      credentials,
+      labels,
+    }) => {
       if (engagement_id) {
         const session = await getOwnedSession(user, engagement_id);
-        return textResult(`Resumed engagement ${session.sessionId}.`, { engagement: sessionSummary(session) });
+        return textResult(`Resumed engagement ${session.sessionId}.`, {
+          engagement: sessionSummary(session),
+        });
       }
 
       const workspaceId = uuidv4();
-      const workspaceName = (workspace_name || name || target || "MCP Engagement").substring(0, 50);
+      const workspaceName = (
+        workspace_name ||
+        name ||
+        target ||
+        "MCP Engagement"
+      ).substring(0, 50);
       await new WorkspaceModel({
         uid: user._id,
         workspaceId,
@@ -815,14 +1288,19 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         },
       }).save();
 
-      return textResult(`Created engagement ${sessionId}.`, { engagement: sessionSummary(session) });
+      return textResult(`Created engagement ${sessionId}.`, {
+        engagement: sessionSummary(session),
+      });
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "engagement_status",
     {
-      description: "Return the current state of an engagement, including context, shells, findings, and agent state.",
+      description:
+        "Return the current state of an engagement, including context, shells, findings, and agent state.",
       inputSchema: {
         engagement_id: z.string(),
       },
@@ -838,6 +1316,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
             pendingManualExecution: session.pendingManualExecution || null,
             shells: session.shells || [],
             findings: session.mcpFindings || [],
+            artifacts: session.mcpArtifacts || [],
             messageCount: session.messages.length,
           },
         },
@@ -845,10 +1324,13 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "engagement_update",
     {
-      description: "Update target context, notes, credentials, scope, labels, or engagement naming metadata.",
+      description:
+        "Update target context, notes, credentials, scope, labels, or engagement naming metadata.",
       inputSchema: {
         engagement_id: z.string(),
         name: z.string().optional(),
@@ -862,25 +1344,34 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
     async ({ engagement_id, ...updates }) => {
       const session = await getOwnedSession(user, engagement_id);
-      if (updates.name !== undefined) session.name = updates.name.substring(0, 50);
-      if (updates.description !== undefined) session.description = updates.description.substring(0, 500);
+      if (updates.name !== undefined)
+        session.name = updates.name.substring(0, 50);
+      if (updates.description !== undefined)
+        session.description = updates.description.substring(0, 500);
       session.mcpContext = {
         ...(session.mcpContext || {}),
         ...(updates.target !== undefined ? { target: updates.target } : {}),
         ...(updates.scope !== undefined ? { scope: updates.scope } : {}),
         ...(updates.notes !== undefined ? { notes: updates.notes } : {}),
-        ...(updates.credentials !== undefined ? { credentials: updates.credentials } : {}),
+        ...(updates.credentials !== undefined
+          ? { credentials: updates.credentials }
+          : {}),
         ...(updates.labels !== undefined ? { labels: updates.labels } : {}),
       };
       await session.save();
-      return textResult(`Updated engagement ${engagement_id}.`, { engagement: sessionSummary(session) });
+      return textResult(`Updated engagement ${engagement_id}.`, {
+        engagement: sessionSummary(session),
+      });
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "engagement_pause",
     {
-      description: "Pause an engagement and abort any active built-in agent controller if one is running.",
+      description:
+        "Pause an engagement and abort any active built-in agent controller if one is running.",
       inputSchema: {
         engagement_id: z.string(),
       },
@@ -897,10 +1388,13 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "engagement_history",
     {
-      description: "Return engagement message history, archive history, shell summaries, and findings.",
+      description:
+        "Return engagement message history, archive history, shell summaries, and findings.",
       inputSchema: {
         engagement_id: z.string(),
         limit: z.number().optional(),
@@ -908,7 +1402,9 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
     async ({ engagement_id, limit = 50 }) => {
       const session = await getOwnedSession(user, engagement_id);
-      const archive = await HistoryArchiveModel.findOne({ sessionId: engagement_id }).lean();
+      const archive = await HistoryArchiveModel.findOne({
+        sessionId: engagement_id,
+      }).lean();
       const messages = session.messages.slice(-limit);
       return textResult(
         `Returned ${messages.length} live messages and ${(archive?.history || []).length} archived history items.`,
@@ -917,15 +1413,86 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           archiveHistory: archive?.history || [],
           shells: session.shells || [],
           findings: session.mcpFindings || [],
+          artifacts: session.mcpArtifacts || [],
         },
       );
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
+    "agent_message",
+    {
+      description:
+        "Send a message into the native Pentest Copilot agent loop for an engagement and wait for the turn to complete, pause, or error.",
+      inputSchema: {
+        engagement_id: z.string(),
+        message: z.string(),
+      },
+    },
+    async ({ engagement_id, message }) => {
+      const session = await getOwnedSession(user, engagement_id);
+      if (
+        session.agentState === "running" &&
+        hasActiveController(engagement_id)
+      ) {
+        throw new Error(
+          `Agent is already running for engagement ${engagement_id}`,
+        );
+      }
+      if (session.agentState === "running") {
+        await SessionsModel.updateOne(
+          { sessionId: engagement_id },
+          { $set: { agentState: "idle" } },
+        );
+      }
+
+      const sse = createMemorySSEWriter();
+      const abortCtrl = registerAbortController(engagement_id);
+      try {
+        await initAndRun({
+          sessionId: engagement_id,
+          userId: user._id.toString(),
+          userMessage: message,
+          sse,
+          abortSignal: abortCtrl.signal,
+        });
+      } finally {
+        abortSession(engagement_id);
+      }
+
+      const updated = await getOwnedSession(user, engagement_id);
+      const terminalEvent = [...sse.events]
+        .reverse()
+        .find((item) => ["done", "paused", "error"].includes(item.event));
+      const toolEvents = sse.events.filter((item) =>
+        ["tool_start", "tool_done", "tool_error", "consent_required"].includes(
+          item.event,
+        ),
+      );
+
+      return textResult(
+        terminalEvent?.event === "error"
+          ? `Native agent returned an error for engagement ${engagement_id}.`
+          : `Native agent turn completed for engagement ${engagement_id}.`,
+        {
+          engagement: sessionSummary(updated),
+          terminalEvent: terminalEvent || null,
+          toolEventCount: toolEvents.length,
+          events: sse.events,
+        },
+      );
+    },
+  );
+
+  registerMcpTool(
+    server,
+    user,
     "shell_exec",
     {
-      description: "Run a one-shot command on the attack box within an engagement context.",
+      description:
+        "Run a one-shot command on the attack box within an engagement context.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),
@@ -935,21 +1502,39 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
     async ({ engagement_id, agent_id = "mcp", command, timeout_seconds }) => {
       await getOwnedSession(user, engagement_id);
-      const { result } = await executeLowLevelTool(engagement_id, agent_id, "run_bash", { command, timeout_seconds });
-      return textResult(formatToolResult(result));
+      const { result } = await executeLowLevelTool(
+        engagement_id,
+        agent_id,
+        "run_bash",
+        { command, timeout_seconds },
+      );
+      const structured = toolResultPayload(result, {
+        command,
+        timeout_seconds,
+      });
+      return textResult(
+        formatToolResult(result),
+        structured,
+        (result.exitCode ?? 0) !== 0,
+      );
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "shell_session",
     {
-      description: "Manage persistent shell sessions for an engagement. Actions: open, write, read, close, list.",
+      description:
+        "Manage persistent shell sessions for an engagement. Actions: open, write, read, close, list.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),
         action: z.enum(["open", "write", "read", "close", "list"]),
         label: z.string().optional(),
-        purpose: z.enum(["exploit-box", "reverse-shell", "listener"]).optional(),
+        purpose: z
+          .enum(["exploit-box", "reverse-shell", "listener"])
+          .optional(),
         rows: z.number().optional(),
         cols: z.number().optional(),
         shell_id: z.string().optional(),
@@ -961,7 +1546,9 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       await getOwnedSession(user, engagement_id);
       if (action === "list") {
         const session = await getOwnedSession(user, engagement_id);
-        return textResult(`Found ${session.shells.length} shell records.`, { shells: session.shells || [] });
+        return textResult(`Found ${session.shells.length} shell records.`, {
+          shells: session.shells || [],
+        });
       }
 
       const mapping: Record<string, string> = {
@@ -970,25 +1557,42 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         read: "read_shell",
         close: "close_shell",
       };
-      const { result } = await executeLowLevelTool(engagement_id, agent_id, mapping[action], rest);
-      return textResult(formatToolResult(result));
+      const { result } = await executeLowLevelTool(
+        engagement_id,
+        agent_id,
+        mapping[action],
+        rest,
+      );
+      const structured = toolResultPayload(result, { action, ...rest });
+      return textResult(formatToolResult(result), structured);
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "burp",
     {
-      description: "Operate Burp Suite through Pentest Copilot. Actions: status, request, intruder, history, collaborator.",
+      description:
+        "Operate Burp Suite through Pentest Copilot. Actions: status, request, intruder, history, collaborator.",
       inputSchema: {
         engagement_id: z.string().optional(),
         agent_id: z.string().optional(),
-        action: z.enum(["status", "request", "intruder", "history", "collaborator"]),
+        action: z.enum([
+          "status",
+          "request",
+          "intruder",
+          "history",
+          "collaborator",
+        ]),
         host: z.string().optional(),
         port: z.number().optional(),
         secure: z.boolean().optional(),
         raw_request: z.string().optional(),
         tab_name: z.string().optional(),
-        insertion_points: z.array(z.object({ start: z.number(), end: z.number() })).optional(),
+        insertion_points: z
+          .array(z.object({ start: z.number(), end: z.number() }))
+          .optional(),
         search: z.string().optional(),
         methods: z.string().optional(),
         status_min: z.number().optional(),
@@ -1000,38 +1604,67 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         custom_data: z.string().optional(),
       },
     },
-    async ({ engagement_id = "mcp", agent_id = "mcp", action, collaborator_action, ...rest }) => {
+    async ({
+      engagement_id = "mcp",
+      agent_id = "mcp",
+      action,
+      collaborator_action,
+      ...rest
+    }) => {
       if (action === "status") {
         const health = await collectPlatformHealth("burp");
-        return textResult(health[0]?.summary || "Burp status unavailable.", { health });
+        return textResult(health[0]?.summary || "Burp status unavailable.", {
+          health,
+        });
       }
       if (action === "request") {
-        const { result } = await executeLowLevelTool(engagement_id, agent_id, "send_to_burp_repeater", rest);
-        return textResult(formatToolResult(result));
+        const { result } = await executeBackendTool(
+          "send_to_burp_repeater",
+          rest,
+        );
+        const structured = toolResultPayload(result, { action, ...rest });
+        return textResult(formatToolResult(result), structured);
       }
       if (action === "intruder") {
-        const { result } = await executeLowLevelTool(engagement_id, agent_id, "send_to_burp_intruder", rest);
-        return textResult(formatToolResult(result));
+        const { result } = await executeBackendTool(
+          "send_to_burp_intruder",
+          rest,
+        );
+        const structured = toolResultPayload(result, { action, ...rest });
+        return textResult(formatToolResult(result), structured);
       }
       if (action === "history") {
-        const toolArgs = rest.entry_id != null ? { action: "get", entry_id: rest.entry_id } : { action: "search", ...rest };
-        const { result } = await executeLowLevelTool(engagement_id, agent_id, "search_burp_proxy_history", toolArgs);
-        return textResult(formatToolResult(result));
+        const toolArgs =
+          rest.entry_id != null
+            ? { action: "get", entry_id: rest.entry_id }
+            : { action: "search", ...rest };
+        const { result } = await executeBackendTool(
+          "search_burp_proxy_history",
+          toolArgs,
+        );
+        const structured = toolResultPayload(result, { action, ...toolArgs });
+        return textResult(formatToolResult(result), structured);
       }
-      const { result } = await executeLowLevelTool(
-        engagement_id,
-        agent_id,
-        "burp_collaborator",
-        { action: collaborator_action, secret_key: rest.secret_key, custom_data: rest.custom_data },
-      );
-      return textResult(formatToolResult(result));
+      const { result } = await executeBackendTool("burp_collaborator", {
+        action: collaborator_action,
+        secret_key: rest.secret_key,
+        custom_data: rest.custom_data,
+      });
+      const structured = toolResultPayload(result, {
+        action,
+        collaborator_action,
+      });
+      return textResult(formatToolResult(result), structured);
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "browser_run",
     {
-      description: "Run a browser task through the Magnitude agent for a given engagement.",
+      description:
+        "Run a browser task through the Magnitude agent for a given engagement.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),
@@ -1042,66 +1675,109 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
     async ({ engagement_id, agent_id = "mcp", url, goal, extract }) => {
       await getOwnedSession(user, engagement_id);
-      const output = await withSerializedLock("browser_run", async () => {
-        const { result } = await executeLowLevelTool(engagement_id, agent_id, "browser_action", { url, goal, extract });
-        return formatToolResult(result);
+      const structured = await withSerializedLock("browser_run", async () => {
+        const { result } = await executeLowLevelTool(
+          engagement_id,
+          agent_id,
+          "browser_action",
+          { url, goal, extract },
+        );
+        return toolResultPayload(result, { url, goal, extract });
       });
-      return textResult(output);
+      return textResult(
+        String(structured.output || ""),
+        structured,
+        Number(structured.exitCode || 0) !== 0,
+      );
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "vpn_manage",
     {
-      description: "Manage VPN profiles and connections. Actions: upload_profile, list_profiles, connect, disconnect, status.",
+      description:
+        "Manage VPN profiles and connections. Actions: upload_profile, list_profiles, connect, disconnect, status.",
       inputSchema: {
         engagement_id: z.string().optional(),
-        action: z.enum(["upload_profile", "list_profiles", "connect", "disconnect", "status"]),
+        action: z.enum([
+          "upload_profile",
+          "list_profiles",
+          "connect",
+          "disconnect",
+          "status",
+        ]),
         profile_name: z.string().optional(),
         profile_content: z.string().optional(),
         profile_content_base64: z.string().optional(),
         pid: z.string().optional(),
       },
     },
-    async ({ engagement_id, action, profile_name, profile_content, profile_content_base64, pid }) => {
+    async ({
+      engagement_id,
+      action,
+      profile_name,
+      profile_content,
+      profile_content_base64,
+      pid,
+    }) => {
       if (action === "upload_profile") {
         if (!profile_name || (!profile_content && !profile_content_base64)) {
           throw new Error("profile_name and profile content are required");
         }
-        const profile = await uploadVpnProfile(profile_name, profile_content_base64 || profile_content || "", !!profile_content_base64);
+        const profile = await uploadVpnProfile(
+          profile_name,
+          profile_content_base64 || profile_content || "",
+          !!profile_content_base64,
+        );
         return textResult(`Uploaded VPN profile ${profile.name}.`, { profile });
       }
 
       if (action === "list_profiles") {
         const profiles = listLocalProfiles();
-        return textResult(`Found ${profiles.length} VPN profile(s).`, { profiles });
+        return textResult(`Found ${profiles.length} VPN profile(s).`, {
+          profiles,
+        });
       }
 
       if (!engagement_id) {
-        throw new Error("engagement_id is required for VPN connect/disconnect/status");
+        throw new Error(
+          "engagement_id is required for VPN connect/disconnect/status",
+        );
       }
       await getOwnedSession(user, engagement_id);
 
       if (action === "connect") {
         if (!profile_name) throw new Error("profile_name is required");
-        const connected = await withSerializedLock("vpn_connect", async () => connectVpnProfile(engagement_id, profile_name));
+        const connected = await withSerializedLock("vpn_connect", async () =>
+          connectVpnProfile(engagement_id, profile_name),
+        );
         return textResult(connected.message, connected);
       }
 
       if (action === "disconnect") {
-        const outcome = await withSerializedLock("vpn_disconnect", async () => disconnectVpnConnection(pid, profile_name));
+        const outcome = await withSerializedLock("vpn_disconnect", async () =>
+          disconnectVpnConnection(pid, profile_name),
+        );
         return textResult(`VPN disconnect result: ${outcome}`);
       }
 
       const status = await vpnStatus();
-      return textResult(status.message, status as unknown as Record<string, unknown>);
+      return textResult(
+        status.message,
+        status as unknown as Record<string, unknown>,
+      );
     },
   );
 
-  server.registerTool(
+  registerMcpTool(
+    server,
+    user,
     "findings_manage",
     {
-      description: "List, add, update, close, or export engagement findings stored by MCP.",
+      description:
+        "List, add, update, close, or export engagement findings stored by MCP.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),
@@ -1109,11 +1785,22 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         finding_id: z.string().optional(),
         title: z.string().optional(),
         content: z.string().optional(),
-        severity: z.enum(["info", "low", "medium", "high", "critical"]).optional(),
+        severity: z
+          .enum(["info", "low", "medium", "high", "critical"])
+          .optional(),
         status: z.enum(["open", "closed"]).optional(),
       },
     },
-    async ({ engagement_id, agent_id = "mcp", action, finding_id, title, content, severity = "info", status }) => {
+    async ({
+      engagement_id,
+      agent_id = "mcp",
+      action,
+      finding_id,
+      title,
+      content,
+      severity = "info",
+      status,
+    }) => {
       const session = await getOwnedSession(user, engagement_id);
       const findings = session.mcpFindings || [];
 
@@ -1122,7 +1809,8 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       }
 
       if (action === "add") {
-        if (!title || !content) throw new Error("title and content are required");
+        if (!title || !content)
+          throw new Error("title and content are required");
         const finding = {
           findingId: uuidv4(),
           title,
@@ -1139,19 +1827,27 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       }
 
       if (action === "export") {
-        const markdown = findings.map((finding, index) => [
-          `## ${index + 1}. ${finding.title}`,
-          `Severity: ${finding.severity}`,
-          `Status: ${finding.status}`,
-          `Created By: ${finding.createdBy}`,
-          "",
-          finding.content,
-        ].join("\n")).join("\n\n");
-        return textResult(markdown || "No findings recorded yet.", { findings });
+        const markdown = findings
+          .map((finding, index) =>
+            [
+              `## ${index + 1}. ${finding.title}`,
+              `Severity: ${finding.severity}`,
+              `Status: ${finding.status}`,
+              `Created By: ${finding.createdBy}`,
+              "",
+              finding.content,
+            ].join("\n"),
+          )
+          .join("\n\n");
+        return textResult(markdown || "No findings recorded yet.", {
+          findings,
+        });
       }
 
       if (!finding_id) throw new Error("finding_id is required");
-      const finding = findings.find((candidate) => candidate.findingId === finding_id);
+      const finding = findings.find(
+        (candidate) => candidate.findingId === finding_id,
+      );
       if (!finding) throw new Error(`Finding not found: ${finding_id}`);
 
       if (action === "update") {
@@ -1171,34 +1867,174 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     },
   );
 
-  server.registerTool(
-    "artifact_get",
+  registerMcpTool(
+    server,
+    user,
+    "artifact_add",
     {
-      description: "Fetch useful artifacts such as engagement history, shell records, files, or image inspection outputs.",
+      description:
+        "Attach a note, file reference, image reference, request, or other external artifact to an engagement so it is visible in Pentest Copilot history.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),
-        action: z.enum(["history", "shells", "file", "image"]),
+        type: z
+          .enum([
+            "note",
+            "file",
+            "image",
+            "browser_observation",
+            "request",
+            "other",
+          ])
+          .default("other"),
+        title: z.string(),
+        content: z.string().optional(),
+        url: z.string().optional(),
+        path: z.string().optional(),
+        mime_type: z.string().optional(),
+        metadata: z.record(z.string()).optional(),
+      },
+    },
+    async ({
+      engagement_id,
+      agent_id = "mcp",
+      type,
+      title,
+      content,
+      url,
+      path: artifactPath,
+      mime_type,
+      metadata,
+    }) => {
+      const artifact = await addSessionArtifact(user, {
+        engagementId: engagement_id,
+        type,
+        title,
+        content,
+        url,
+        path: artifactPath,
+        mimeType: mime_type,
+        createdBy: agent_id,
+        metadata,
+      });
+      return textResult(`Added artifact ${artifact.artifactId}.`, {
+        artifact,
+      });
+    },
+  );
+
+  registerMcpTool(
+    server,
+    user,
+    "browser_observation_add",
+    {
+      description:
+        "Report browser work performed outside Pentest Copilot, such as via Claude Code/Codex Playwright MCP, back into an engagement.",
+      inputSchema: {
+        engagement_id: z.string(),
+        agent_id: z.string().optional(),
+        url: z.string(),
+        title: z.string().optional(),
+        summary: z.string(),
+        screenshot_path: z.string().optional(),
+        screenshot_mime_type: z.string().optional(),
+        page_text: z.string().optional(),
+        metadata: z.record(z.string()).optional(),
+      },
+    },
+    async ({
+      engagement_id,
+      agent_id = "mcp",
+      url,
+      title,
+      summary,
+      screenshot_path,
+      screenshot_mime_type,
+      page_text,
+      metadata,
+    }) => {
+      const content = [
+        summary,
+        page_text ? `\n\nPage text:\n${page_text}` : "",
+      ].join("");
+      const artifact = await addSessionArtifact(user, {
+        engagementId: engagement_id,
+        type: "browser_observation",
+        title: title || `Browser observation: ${url}`,
+        content,
+        url,
+        path: screenshot_path,
+        mimeType: screenshot_mime_type,
+        createdBy: agent_id,
+        metadata,
+      });
+      return textResult(`Added browser observation ${artifact.artifactId}.`, {
+        artifact,
+      });
+    },
+  );
+
+  registerMcpTool(
+    server,
+    user,
+    "artifact_get",
+    {
+      description:
+        "Fetch useful artifacts such as engagement history, shell records, files, or image inspection outputs.",
+      inputSchema: {
+        engagement_id: z.string(),
+        agent_id: z.string().optional(),
+        action: z.enum(["history", "shells", "artifacts", "file", "image"]),
         path: z.string().optional(),
         question: z.string().optional(),
         max_lines: z.number().optional(),
       },
     },
-    async ({ engagement_id, agent_id = "mcp", action, path: artifactPath, question, max_lines = 120 }) => {
+    async ({
+      engagement_id,
+      agent_id = "mcp",
+      action,
+      path: artifactPath,
+      question,
+      max_lines = 120,
+    }) => {
       const session = await getOwnedSession(user, engagement_id);
       if (action === "history") {
-        return textResult(`Returned ${session.messages.length} messages.`, { messages: session.messages, archive: await HistoryArchiveModel.findOne({ sessionId: engagement_id }).lean() });
+        return textResult(`Returned ${session.messages.length} messages.`, {
+          messages: session.messages,
+          archive: await HistoryArchiveModel.findOne({
+            sessionId: engagement_id,
+          }).lean(),
+        });
       }
       if (action === "shells") {
-        return textResult(`Returned ${session.shells.length} shell records.`, { shells: session.shells || [] });
+        return textResult(`Returned ${session.shells.length} shell records.`, {
+          shells: session.shells || [],
+        });
+      }
+      if (action === "artifacts") {
+        const artifacts = session.mcpArtifacts || [];
+        return textResult(`Returned ${artifacts.length} artifact(s).`, {
+          artifacts,
+        });
       }
       if (!artifactPath) throw new Error("path is required");
       if (action === "image") {
-        const { result } = await executeLowLevelTool(engagement_id, agent_id, "view_image", {
-          image_path: artifactPath,
+        const { result } = await executeLowLevelTool(
+          engagement_id,
+          agent_id,
+          "view_image",
+          {
+            image_path: artifactPath,
+            question,
+          },
+        );
+        const structured = toolResultPayload(result, {
+          action,
+          path: artifactPath,
           question,
         });
-        return textResult(formatToolResult(result));
+        return textResult(formatToolResult(result), structured);
       }
 
       const ctx = await getExecutionContext(engagement_id, agent_id);
@@ -1211,7 +2047,12 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         `if echo "$MIME" | grep -q '^text/'; then sed -n '1,${max_lines}p' "$FILE"; else echo "__BINARY__"; fi`,
       ].join(" && ");
       const { output } = await ctx.runCommand(command, 20_000);
-      return textResult(output.trim());
+      return textResult(output.trim(), {
+        action,
+        path: artifactPath,
+        max_lines,
+        output: output.trim(),
+      });
     },
   );
 
@@ -1227,14 +2068,18 @@ export function getMcpHostValidationMiddleware() {
     const origin = String(req.headers.origin || "");
     const allowedHosts = new Set(["localhost", "127.0.0.1", "::1"]);
     if (host && !allowedHosts.has(host)) {
-      return res.status(403).json({ message: "Forbidden host header for local MCP endpoint" });
+      return res
+        .status(403)
+        .json({ message: "Forbidden host header for local MCP endpoint" });
     }
 
     if (origin) {
       try {
         const originHost = new URL(origin).hostname;
         if (!allowedHosts.has(originHost)) {
-          return res.status(403).json({ message: "Forbidden origin for local MCP endpoint" });
+          return res
+            .status(403)
+            .json({ message: "Forbidden origin for local MCP endpoint" });
         }
       } catch {
         return res.status(403).json({ message: "Invalid origin header" });

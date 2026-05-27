@@ -187,6 +187,11 @@ export const createMcpAccessToken = async (body) => {
   return res.data;
 };
 
+export const updateMcpSafety = async (body) => {
+  const res = await apiClient.post("/mcp/safety", body || {});
+  return res.data;
+};
+
 export const revokeMcpAccessToken = async (tokenId) => {
   const res = await apiClient.delete(`/mcp/tokens/${tokenId}`);
   return res.data;

@@ -13,6 +13,7 @@
     "watch": "tsc -w",
     "dev": "nodemon dist/server.js",
     "build": "tsc -p ./tsconfig.json",
+    "mcp:smoke": "node scripts/mcp-smoke.mjs",
     "lint": "eslint . --config .eslintrc.json",
     "lint:fix": "eslint . --fix --config .eslintrc.json"
   },

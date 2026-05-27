@@ -1,51 +1,54 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useMemo, useState } from "react";
 import {
+  App,
+  AutoComplete,
+  Col,
+  Empty,
   Form,
   Input,
-  Select,
-  AutoComplete,
-  Row,
-  Col,
-  Tag,
-  App,
-  Tooltip,
-  Popconfirm,
-  Empty,
   Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Tag,
+  Tooltip,
 } from "antd";
 import {
-  PlusOutlined,
-  DeleteOutlined,
-  EditOutlined,
+  ApiOutlined,
+  BulbOutlined,
   CheckOutlined,
   CloseOutlined,
-  InfoCircleOutlined,
-  BulbOutlined,
   CrownFilled,
-  ThunderboltFilled,
-  HolderOutlined,
+  DeleteOutlined,
+  EditOutlined,
   ExportOutlined,
-  LinkOutlined,
-  ApiOutlined,
+  InfoCircleOutlined,
+  PlusOutlined,
+  ThunderboltFilled,
+  WarningOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
-  getModels,
-  updateModels,
-  getAvailableModels,
-  initiateAnthropicOAuth,
   exchangeAnthropicOAuth,
+  getAvailableModels,
+  getModels,
+  initiateAnthropicOAuth,
+  updateModels,
 } from "@/services/user.service";
+import {
+  getMagnitudeModelIssue,
+  isMagnitudeModelCompatible,
+} from "@/utils/magnitudeModels";
 
 const PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic (Claude)" },
-  { value: "minimax", label: "MiniMax" },
+  { value: "anthropic-compatible", label: "Anthropic-Compatible" },
   { value: "openrouter", label: "OpenRouter" },
   { value: "google", label: "Google" },
   { value: "mistralai", label: "Mistral AI" },
@@ -53,310 +56,297 @@ const PROVIDER_OPTIONS = [
   { value: "openai-compatible", label: "OpenAI-Compatible" },
 ];
 
-const REASONING_OPTIONS = [
-  { value: "off", label: "Off" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "XHigh" },
-];
-
-const REASONING_META = {
-  off: { color: "var(--secondary-text)", bg: "transparent", border: "1px solid var(--border-color-100)" },
-  low: { color: "#52c41a", bg: "rgba(82, 196, 26, 0.1)", border: "1px solid rgba(82, 196, 26, 0.25)" },
-  medium: { color: "#faad14", bg: "rgba(250, 173, 20, 0.12)", border: "1px solid rgba(250, 173, 20, 0.3)" },
-  high: { color: "#ff7875", bg: "rgba(255, 120, 117, 0.14)", border: "1px solid rgba(255, 120, 117, 0.32)" },
-  xhigh: { color: "#ff4d4f", bg: "rgba(255, 77, 79, 0.16)", border: "1px solid rgba(255, 77, 79, 0.38)" },
-};
+const REASONING_OPTIONS = ["off", "low", "medium", "high", "xhigh"].map(
+  (value) => ({ value, label: value.toUpperCase() }),
+);
 
 const PROVIDER_META = {
-  openai: { keyURL: "https://platform.openai.com/api-keys", keyLabel: "Get OpenAI API Key" },
-  anthropic: { keyURL: "https://console.anthropic.com/settings/keys", keyLabel: "Get Claude API Key" },
-  minimax: { keyURL: "https://platform.minimax.io/user-center/basic-information/interface-key", keyLabel: "Get MiniMax API Key" },
-  openrouter: { keyURL: "https://openrouter.ai/settings/keys", keyLabel: "Get OpenRouter API Key" },
-  google: { keyURL: "https://aistudio.google.com/apikey", keyLabel: "Get Google AI API Key" },
-  mistralai: { keyURL: "https://console.mistral.ai/api-keys", keyLabel: "Get Mistral API Key" },
-  ollama: { keyURL: "https://ollama.com/library", keyLabel: "Browse Ollama models" },
+  openai: {
+    keyURL: "https://platform.openai.com/api-keys",
+    keyLabel: "Get OpenAI API Key",
+  },
+  anthropic: {
+    keyURL: "https://console.anthropic.com/settings/keys",
+    keyLabel: "Get Claude API Key",
+  },
+  "anthropic-compatible": {
+    keyURL:
+      "https://platform.minimax.io/user-center/basic-information/interface-key",
+    keyLabel: "Get MiniMax API Key",
+  },
+  openrouter: {
+    keyURL: "https://openrouter.ai/settings/keys",
+    keyLabel: "Get OpenRouter API Key",
+  },
+  google: {
+    keyURL: "https://aistudio.google.com/apikey",
+    keyLabel: "Get Google AI API Key",
+  },
+  mistralai: {
+    keyURL: "https://console.mistral.ai/api-keys",
+    keyLabel: "Get Mistral API Key",
+  },
+  ollama: {
+    keyURL: "https://ollama.com/library",
+    keyLabel: "Browse Ollama models",
+  },
 };
 
 const FALLBACK_MODELS = {
-  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2", "gpt-4.1", "gpt-4.1-mini"],
-  anthropic: ["claude-opus-4-7", "claude-mythos-preview", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-opus-4-6", "claude-sonnet-4-5"],
-  minimax: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"],
-  openrouter: ["minimax/minimax-m2.7", "minimax/minimax-m2.7-highspeed", "anthropic/claude-opus-4.7", "anthropic/claude-mythos-preview", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5", "openai/gpt-5.4"],
+  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-4.1"],
+  anthropic: [
+    "claude-opus-4-7",
+    "claude-mythos-preview",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+  ],
+  "anthropic-compatible": [
+    "MiniMax-M2.7",
+    "MiniMax-M2.7-highspeed",
+    "MiniMax-M2.5",
+    "MiniMax-M2",
+  ],
+  openrouter: [
+    "minimax/minimax-m2.7",
+    "anthropic/claude-sonnet-4.6",
+    "openai/gpt-5.5",
+  ],
   google: ["gemini-2.0-flash", "gemini-2.0-pro"],
   mistralai: ["mistral-large-latest", "mistral-medium-latest"],
-  ollama: ["llama3.3", "llama3.2", "llama3.1", "qwen2.5-coder", "qwen2.5", "mistral", "mixtral", "codellama", "deepseek-r1", "gpt-oss", "phi4", "gemma3"],
+  ollama: ["llama3.3", "llama3.2", "qwen2.5-coder", "mistral"],
 };
 
-const EMPTY_MODEL = { label: "", provider: "openai", model: "", apiKey: "", baseURL: "", reasoningMode: "off" };
+const EMPTY_MODEL = {
+  label: "",
+  provider: "openai",
+  model: "",
+  apiKey: "",
+  baseURL: "",
+  reasoningMode: "off",
+};
 
-const OAuthCodeModal = ({ open, onCancel, onSubmit, loading }) => {
-  const [code, setCode] = useState("");
+const NONE_MODEL_VALUE = "__none__";
+
+function createModelId(label) {
+  const suffix =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID().slice(0, 8)
+      : String(Date.now()).slice(-8);
+  const slug =
+    label
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "model";
+  return `${slug}-${suffix}`;
+}
+
+function needsBaseURL(provider) {
+  return ["anthropic-compatible", "openai-compatible", "ollama"].includes(
+    provider,
+  );
+}
+
+function baseURLPlaceholder(provider) {
+  if (provider === "ollama") return "http://localhost:11434/v1";
+  if (provider === "anthropic-compatible") {
+    return "https://api.minimax.io/anthropic";
+  }
+  return "https://api.groq.com/openai/v1";
+}
+
+function providerLabel(provider) {
+  return (
+    PROVIDER_OPTIONS.find((option) => option.value === provider)?.label ||
+    provider
+  );
+}
+
+function assignedIds(assignments) {
+  return new Set(
+    [
+      assignments?.orchestratorModelId,
+      assignments?.browserModelId,
+      ...(assignments?.racerModelIds || []),
+    ].filter(Boolean),
+  );
+}
+
+const ModelModal = ({
+  open,
+  initialValues,
+  modelSuggestions,
+  onCancel,
+  onSubmit,
+}) => {
+  const [form] = Form.useForm();
+  const provider = Form.useWatch("provider", form) || initialValues.provider;
+  const providerMeta = PROVIDER_META[provider] || {};
+  const browserModelIssue = getMagnitudeModelIssue({
+    provider,
+    baseURL: Form.useWatch("baseURL", form) || initialValues.baseURL,
+  });
+
   return (
     <Modal
-      title="Paste Authorization Code"
+      title={initialValues.id ? "Edit Model" : "Add Model"}
       open={open}
-      onCancel={() => { setCode(""); onCancel(); }}
+      onCancel={onCancel}
       footer={null}
-      width={520}
+      width={720}
+      centered
+      className={styles.modelModal}
+      destroyOnClose
     >
-      <p style={{ color: "var(--secondary-text)", fontSize: "0.78rem", lineHeight: 1.6, margin: "0 0 12px 0" }}>
-        After authorizing in your browser, copy the authorization code and paste it below.
-      </p>
-      <Input.TextArea
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="Paste the authorization code here..."
-        rows={3}
-        style={{ fontFamily: "monospace", fontSize: "0.78rem", marginBottom: 16 }}
-      />
-      <Row justify="end" gutter={8}>
-        <Col>
-          <PrimaryButton onClick={() => { setCode(""); onCancel(); }} style={{ height: 34, fontSize: "0.78rem" }}>
-            Cancel
-          </PrimaryButton>
-        </Col>
-        <Col>
-          <PrimaryButton
-            purple
-            loading={loading}
-            disabled={!code.trim()}
-            onClick={() => { onSubmit(code.trim()); setCode(""); }}
-            style={{ height: 34, fontSize: "0.78rem" }}
-          >
-            Connect
-          </PrimaryButton>
-        </Col>
-      </Row>
-    </Modal>
-  );
-};
-
-const ModelCard = ({ model, index, total, onRemove, onEdit, onMoveUp, onMoveDown }) => {
-  const isOrchestrator = index === 0;
-  const reasoningMode = model.reasoningMode || "off";
-  const reasoningStyle = REASONING_META[reasoningMode] || REASONING_META.off;
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "10px 14px",
-        marginBottom: 6,
-        borderRadius: 8,
-        border: `1px solid ${isOrchestrator ? "rgba(142, 53, 255, 0.3)" : "var(--border-color-100)"}`,
-        backgroundColor: isOrchestrator ? "rgba(142, 53, 255, 0.06)" : "var(--surface-hover)",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginRight: 2 }}>
-        <HolderOutlined
-          onClick={index > 0 ? onMoveUp : undefined}
-          style={{
-            fontSize: 9,
-            color: index > 0 ? "var(--secondary-text)" : "transparent",
-            cursor: index > 0 ? "pointer" : "default",
-            transform: "rotate(90deg)",
-          }}
-        />
-        <HolderOutlined
-          onClick={index < total - 1 ? onMoveDown : undefined}
-          style={{
-            fontSize: 9,
-            color: index < total - 1 ? "var(--secondary-text)" : "transparent",
-            cursor: index < total - 1 ? "pointer" : "default",
-            transform: "rotate(90deg)",
-          }}
-        />
-      </div>
-
-      {isOrchestrator ? (
-        <Tooltip title="Orchestrator — this model runs the main session">
-          <Tag color="purple" style={{ margin: 0, fontSize: "0.62rem", fontWeight: 700, lineHeight: "16px" }}>
-            <CrownFilled /> ORCHESTRATOR
-          </Tag>
-        </Tooltip>
-      ) : (
-        <Tooltip title="Racer — runs in parallel on every user message">
-          <Tag style={{
-            margin: 0, fontSize: "0.62rem", fontWeight: 600, lineHeight: "16px",
-            background: "rgba(240, 192, 0, 0.1)", border: "1px solid rgba(240, 192, 0, 0.25)", color: "#f0c000",
-          }}>
-            <ThunderboltFilled /> RACER
-          </Tag>
-        </Tooltip>
-      )}
-
-      <Tag color="blue" style={{ margin: 0, fontSize: "0.68rem", fontWeight: 600 }}>
-        {model.label}
-      </Tag>
-      <span style={{ fontSize: "0.72rem", color: "var(--secondary-text)" }}>
-        {(PROVIDER_OPTIONS.find((p) => p.value === model.provider) || {}).label || model.provider}
-      </span>
-      <span style={{ fontSize: "0.72rem", color: "var(--primary-text)", fontFamily: "'JetBrains Mono', monospace" }}>
-        {model.model}
-      </span>
-
-      <Tooltip title={`Reasoning mode: ${reasoningMode}`}>
-        <Tag style={{ margin: 0, fontSize: "0.6rem", background: reasoningStyle.bg, border: reasoningStyle.border, color: reasoningStyle.color }}>
-          <BulbOutlined /> {reasoningMode.toUpperCase()}
-        </Tag>
-      </Tooltip>
-      {model.apiKey && (
-        <Tooltip title="Has custom API key">
-          <Tag style={{ margin: 0, fontSize: "0.6rem", background: "transparent", border: "1px solid var(--border-color-100)", color: "var(--secondary-text)" }}>
-            KEY
-          </Tag>
-        </Tooltip>
-      )}
-      {model.baseURL && (
-        <Tooltip title={model.baseURL}>
-          <Tag style={{ margin: 0, fontSize: "0.6rem", background: "transparent", border: "1px solid var(--border-color-100)", color: "var(--secondary-text)" }}>
-            URL
-          </Tag>
-        </Tooltip>
-      )}
-      <span style={{ flex: 1 }} />
-      <Tooltip title="Edit">
-        <EditOutlined
-          onClick={onEdit}
-          style={{ color: "var(--secondary-text)", fontSize: 13, cursor: "pointer" }}
-        />
-      </Tooltip>
-      <Popconfirm title="Remove this model?" onConfirm={onRemove} okText="Remove" cancelText="Cancel">
-        <DeleteOutlined style={{ color: "var(--secondary-text)", fontSize: 13, cursor: "pointer" }} />
-      </Popconfirm>
-    </div>
-  );
-};
-
-const ModelEditCard = ({ model, index, onSave, onCancel, modelSuggestions }) => {
-  const [draft, setDraft] = useState({ ...model });
-  const isOrchestrator = index === 0;
-  const providerMeta = PROVIDER_META[draft.provider] || {};
-  const showBaseURL = draft.provider === "openai-compatible" || draft.provider === "ollama" || !!draft.baseURL;
-
-  return (
-    <div style={{
-      padding: "16px 18px",
-      marginBottom: 6,
-      borderRadius: 8,
-      border: `1px solid ${isOrchestrator ? "rgba(142, 53, 255, 0.45)" : "rgba(88, 166, 255, 0.3)"}`,
-      backgroundColor: isOrchestrator ? "rgba(142, 53, 255, 0.05)" : "var(--surface-hover)",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
-        <EditOutlined style={{ fontSize: 11, color: "#58a6ff" }} />
-        <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--primary-text)" }}>
-          Editing — {model.label || "model"}
-        </span>
-        {isOrchestrator && (
-          <Tag color="purple" style={{ margin: 0, fontSize: "0.58rem", fontWeight: 700, lineHeight: "14px" }}>
-            ORCHESTRATOR
-          </Tag>
-        )}
-      </div>
-      <Form layout="vertical" requiredMark={false}>
-        {/* Row 1: Label · Provider · Model */}
-        <Row gutter={[14, 0]}>
-          <Col span={7}>
-            <Form.Item label="Label" style={{ marginBottom: 12 }}>
-              <Input
-                placeholder="e.g. Claude Sonnet"
-                value={draft.label}
-                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-              />
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={initialValues}
+        onFinish={(values) => {
+          const entry = {
+            ...initialValues,
+            ...values,
+            id: initialValues.id || createModelId(values.label),
+          };
+          if (!entry.apiKey) delete entry.apiKey;
+          if (!entry.baseURL) delete entry.baseURL;
+          onSubmit(entry);
+        }}
+      >
+        <Row gutter={14}>
+          <Col span={8}>
+            <Form.Item
+              label="Label"
+              name="label"
+              rules={[{ required: true, message: "Label is required" }]}
+            >
+              <Input placeholder="e.g. Claude Sonnet" />
             </Form.Item>
           </Col>
-          <Col span={7}>
-            <Form.Item label="Provider" style={{ marginBottom: 12 }}>
+          <Col span={8}>
+            <Form.Item
+              label="Provider"
+              name="provider"
+              rules={[{ required: true }]}
+            >
               <Select
-                value={draft.provider}
-                onChange={(val) => setDraft({ ...draft, provider: val, model: "" })}
                 options={PROVIDER_OPTIONS}
-                style={{ width: "100%" }}
                 popupMatchSelectWidth={false}
+                popupClassName={styles.modelSelectDropdown}
+                onChange={() => {
+                  form.setFieldValue("model", "");
+                  form.setFieldValue("baseURL", "");
+                }}
               />
             </Form.Item>
           </Col>
-          <Col span={10}>
-            <Form.Item label="Model" style={{ marginBottom: 12 }}>
+          <Col span={8}>
+            <Form.Item
+              label="Model"
+              name="model"
+              rules={[{ required: true, message: "Model is required" }]}
+            >
               <AutoComplete
-                placeholder="e.g. gpt-5.5"
-                value={draft.model}
-                onChange={(val) => setDraft({ ...draft, model: val })}
-                options={(modelSuggestions[draft.provider] || []).map((m) => ({ value: m, label: m }))}
-                filterOption={(input, option) =>
-                  (option?.value ?? "").toLowerCase().includes(input.toLowerCase())
-                }
                 allowClear
+                placeholder="Select or type a model"
+                popupClassName={styles.modelSelectDropdown}
+                options={(modelSuggestions[provider] || []).map((model) => ({
+                  value: model,
+                  label: model,
+                }))}
+                filterOption={(input, option) =>
+                  option.value.toLowerCase().includes(input.toLowerCase())
+                }
               />
             </Form.Item>
           </Col>
         </Row>
 
-        {/* Row 2: Reasoning · API Key · Base URL (conditional) */}
-        <Row gutter={[14, 0]}>
-          <Col span={6}>
-            <Form.Item label="Reasoning" style={{ marginBottom: 12 }}>
+        <Row gutter={14}>
+          <Col span={needsBaseURL(provider) ? 8 : 12}>
+            <Form.Item label="Reasoning" name="reasoningMode">
               <Select
-                value={draft.reasoningMode || "off"}
-                onChange={(val) => setDraft({ ...draft, reasoningMode: val })}
                 options={REASONING_OPTIONS}
-                style={{ width: "100%" }}
+                popupClassName={styles.modelSelectDropdown}
               />
             </Form.Item>
           </Col>
-          <Col span={showBaseURL ? 9 : 18}>
-            <Form.Item label="API Key" style={{ marginBottom: 12 }}>
+          <Col span={needsBaseURL(provider) ? 8 : 12}>
+            <Form.Item label="API Key" name="apiKey">
               <Input.Password
-                placeholder={draft.provider === "ollama" ? "Optional — Ollama is keyless by default" : "Optional — leave blank to keep current"}
-                value={draft.apiKey}
-                onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
-                visibilityToggle
                 autoComplete="off"
+                placeholder={
+                  provider === "ollama"
+                    ? "Optional for local Ollama"
+                    : "Optional if using OAuth"
+                }
               />
             </Form.Item>
           </Col>
-          {showBaseURL && (
-            <Col span={9}>
-              <Form.Item label="Base URL" style={{ marginBottom: 12 }}>
-                <Input
-                  placeholder={draft.provider === "ollama" ? "http://localhost:11434/v1" : "https://api.groq.com/openai/v1"}
-                  value={draft.baseURL}
-                  onChange={(e) => setDraft({ ...draft, baseURL: e.target.value })}
-                />
+          {needsBaseURL(provider) && (
+            <Col span={8}>
+              <Form.Item
+                label="Base URL"
+                name="baseURL"
+                rules={[
+                  {
+                    required: provider !== "ollama",
+                    message: "Base URL is required",
+                  },
+                ]}
+              >
+                <Input placeholder={baseURLPlaceholder(provider)} />
               </Form.Item>
             </Col>
           )}
         </Row>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
-          <div>
+        {browserModelIssue && (
+          <div className={styles.warningBox} style={{ marginBottom: "1rem" }}>
+            <WarningOutlined />
+            <span>
+              This preset can still be used for orchestrator or racers, but it
+              will not appear in the Browser Agent selector.{" "}
+              {browserModelIssue}
+            </span>
+          </div>
+        )}
+
+        <Row justify="space-between" align="middle">
+          <Col>
             {providerMeta.keyURL && (
-              <a href={providerMeta.keyURL} target="_blank" rel="noopener noreferrer" className={styles.externalLink}>
-                <ExportOutlined style={{ fontSize: 11 }} /> {providerMeta.keyLabel}
+              <a
+                href={providerMeta.keyURL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.externalLink}
+              >
+                <ExportOutlined style={{ fontSize: 11 }} />
+                {providerMeta.keyLabel}
               </a>
             )}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <PrimaryButton onClick={onCancel} style={{ height: 30, fontSize: "0.75rem" }}>
-              <CloseOutlined /> Cancel
-            </PrimaryButton>
-            <PrimaryButton
-              purple
-              onClick={() => {
-                if (!draft.label || !draft.provider || !draft.model) return;
-                onSave(draft);
-              }}
-              style={{ height: 30, fontSize: "0.75rem" }}
-            >
-              <CheckOutlined /> Save
-            </PrimaryButton>
-          </div>
-        </div>
+          </Col>
+          <Col>
+            <div style={{ display: "flex", gap: 8 }}>
+              <PrimaryButton
+                onClick={onCancel}
+                style={{ height: 32, fontSize: "0.75rem" }}
+              >
+                <CloseOutlined /> Cancel
+              </PrimaryButton>
+              <PrimaryButton
+                purpleFilled
+                htmlType="submit"
+                style={{ height: 32, fontSize: "0.75rem" }}
+              >
+                <CheckOutlined /> Save
+              </PrimaryButton>
+            </div>
+          </Col>
+        </Row>
       </Form>
-    </div>
+    </Modal>
   );
 };
 
@@ -370,41 +360,46 @@ const ModelsPage = () => {
     refetchOnWindowFocus: false,
   });
 
-  const [models, setModels] = useState(null);
-  const [adding, setAdding] = useState(false);
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [newModel, setNewModel] = useState({ ...EMPTY_MODEL });
+  const [editingModel, setEditingModel] = useState(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [oauthState, setOauthState] = useState(null);
 
-  const currentModels = models ?? data?.models ?? [];
+  const models = data?.models || [];
+  const assignments = data?.assignments || { racerModelIds: [] };
+  const protectedIds = assignedIds(assignments);
 
   const modelSuggestions = useMemo(() => {
-    const map = { ...FALLBACK_MODELS };
+    const suggestions = { ...FALLBACK_MODELS };
     if (catalog?.providers) {
-      for (const cp of catalog.providers) {
-        let ids = cp.models.map((m) => m.modelId);
-        if (cp.id === "anthropic") {
-          ids = ids.map((id) => id.replace(/(\d+)\.(\d+)/g, "$1-$2"));
+      for (const provider of catalog.providers) {
+        const existing = new Set(suggestions[provider.id] || []);
+        suggestions[provider.id] = [...existing];
+        for (const catalogModel of provider.models) {
+          const modelId =
+            provider.id === "anthropic"
+              ? catalogModel.modelId.replace(/(\d+)\.(\d+)/g, "$1-$2")
+              : catalogModel.modelId;
+          if (!existing.has(modelId)) {
+            existing.add(modelId);
+            suggestions[provider.id].push(modelId);
+          }
         }
-        const seen = new Set(map[cp.id] || []);
-        const merged = [...seen];
-        for (const id of ids) {
-          if (!seen.has(id)) { merged.push(id); seen.add(id); }
-        }
-        map[cp.id] = merged;
       }
     }
-    return map;
+    return suggestions;
   }, [catalog]);
 
-  const updateMutation = useMutation(updateModels, {
+  const persistMutation = useMutation(updateModels, {
     onSuccess: () => {
       message.success("Models updated");
       queryClient.invalidateQueries("unified-models");
+      queryClient.invalidateQueries("magnitude-config");
     },
     onError: (err) => {
-      notification.error({ message: "Error", description: err?.response?.data?.message ?? "Failed to update" });
+      notification.error({
+        message: "Error",
+        description: err?.response?.data?.message ?? "Failed to update models",
+      });
     },
   });
 
@@ -415,7 +410,10 @@ const ModelsPage = () => {
       setShowCodeModal(true);
     },
     onError: (err) => {
-      notification.error({ message: "OAuth Error", description: err?.response?.data?.message ?? "Failed to initiate OAuth" });
+      notification.error({
+        message: "OAuth Error",
+        description: err?.response?.data?.message ?? "Failed to initiate OAuth",
+      });
     },
   });
 
@@ -426,249 +424,311 @@ const ModelsPage = () => {
       setOauthState(null);
     },
     onError: (err) => {
-      notification.error({ message: "OAuth Error", description: err?.response?.data?.message ?? "Failed to exchange code" });
+      notification.error({
+        message: "OAuth Error",
+        description: err?.response?.data?.message ?? "Failed to exchange code",
+      });
     },
   });
 
-  const persist = useCallback((updated) => {
-    setModels(updated);
-    updateMutation.mutate({ models: updated });
-  }, [updateMutation]);
+  const persist = (nextModels, nextAssignments = assignments) => {
+    persistMutation.mutate({
+      models: nextModels,
+      assignments: nextAssignments,
+    });
+  };
 
   if (isLoading) return <Loader />;
 
-  const handleAdd = () => {
-    if (!newModel.label || !newModel.provider || !newModel.model) {
-      message.warning("Label, provider, and model are required");
-      return;
-    }
-    const entry = { ...newModel };
-    if (!entry.apiKey) delete entry.apiKey;
-    if (!entry.baseURL) delete entry.baseURL;
-    persist([...currentModels, entry]);
-    setNewModel({ ...EMPTY_MODEL });
-    setAdding(false);
-  };
-
-  const handleRemove = (index) => {
-    if (editingIndex === index) setEditingIndex(null);
-    persist(currentModels.filter((_, i) => i !== index));
-  };
-
-  const handleSaveEdit = (index, updated) => {
-    const entry = { ...updated };
-    if (!entry.apiKey) delete entry.apiKey;
-    if (!entry.baseURL) delete entry.baseURL;
-    const arr = [...currentModels];
-    arr[index] = entry;
-    persist(arr);
-    setEditingIndex(null);
-  };
-
-  const handleMove = (from, to) => {
-    const arr = [...currentModels];
-    const [item] = arr.splice(from, 1);
-    arr.splice(to, 0, item);
-    persist(arr);
-  };
-
-  const providerMeta = PROVIDER_META[newModel.provider] || {};
+  const options = models.map((model) => ({
+    value: model.id,
+    label: `${model.label} · ${model.model}`,
+  }));
+  const browserModelOptions = models
+    .filter(isMagnitudeModelCompatible)
+    .map((model) => ({
+      value: model.id,
+      label: `${model.label} · ${model.model}`,
+    }));
+  const optionalModelOptions = [
+    { value: NONE_MODEL_VALUE, label: "None" },
+    ...browserModelOptions,
+  ];
+  const selectedBrowserModel = models.find(
+    (model) => model.id === assignments.browserModelId,
+  );
+  const browserModelIssue =
+    selectedBrowserModel && getMagnitudeModelIssue(selectedBrowserModel);
 
   return (
     <div className={styles.settingsContainer}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <CrownFilled style={{ color: "#8e35ff", fontSize: 14 }} />
-        <strong style={{ fontSize: "0.82rem", color: "var(--primary-text, #fff)" }}>Models</strong>
-        <Tag
-          style={{
-            margin: 0, fontSize: "0.6rem", padding: "0 4px", lineHeight: "16px",
-            background: currentModels.length > 0 ? "rgba(142, 53, 255, 0.12)" : "var(--surface-hover)",
-            border: `1px solid ${currentModels.length > 0 ? "rgba(142, 53, 255, 0.25)" : "var(--border-color-100)"}`,
-            color: currentModels.length > 0 ? "#8e35ff" : "var(--secondary-text)",
-          }}
-        >
-          {currentModels.length} model{currentModels.length !== 1 ? "s" : ""}
-        </Tag>
-      </div>
-
-      <div className={styles.infoBox} style={{ marginBottom: 14 }}>
+      <div className={styles.infoBox}>
         <InfoCircleOutlined />
         <span>
-          The <strong>first model</strong> is the orchestrator that runs the main session.
-          All other models are <strong>racers</strong> that run in parallel on every user message,
-          competing to find the best solution. Configure <strong>reasoning mode</strong> per model and drag to reorder.
+          Configure model credentials once, then choose which model runs the
+          orchestrator, Browser Agent, and optional racers.
         </span>
       </div>
 
-      {currentModels.length === 0 && !adding ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="No models configured — using server defaults"
-          style={{ margin: "24px 0" }}
-        >
-          <PrimaryButton purple onClick={() => setAdding(true)} style={{ height: 32, fontSize: "0.75rem" }}>
+      <div className={styles.warningBox}>
+        <WarningOutlined />
+        <span>
+          Browser Agent only shows Magnitude-compatible presets. For MiniMax,
+          use provider <strong>OpenAI-Compatible</strong> with base URL{" "}
+          <code>https://api.minimax.io/v1</code>. Anthropic-Compatible MiniMax
+          presets can still be used by orchestrator/racers, but not by Browser
+          Agent.
+        </span>
+      </div>
+
+      <div className={styles.settingSectionHeader}>
+        <div className={styles.settingSectionHeaderRow}>
+          <div className={styles.heading}>Assignments</div>
+          <PrimaryButton
+            purple
+            onClick={() => setEditingModel({ ...EMPTY_MODEL })}
+            style={{ height: 30, fontSize: "0.72rem" }}
+          >
             <PlusOutlined /> Add Model
           </PrimaryButton>
-        </Empty>
+        </div>
+        <div className={styles.divider} />
+      </div>
+
+      <Form layout="vertical" requiredMark={false}>
+        <Form.Item label="Orchestrator">
+          <Select
+            allowClear
+            placeholder="Select orchestrator model"
+            value={assignments.orchestratorModelId}
+            options={options}
+            onChange={(value) =>
+              persist(models, {
+                ...assignments,
+                orchestratorModelId: value,
+                racerModelIds: (assignments.racerModelIds || []).filter(
+                  (id) => id !== value,
+                ),
+              })
+            }
+          />
+        </Form.Item>
+
+        <Form.Item label="Browser Agent">
+          <Select
+            placeholder="Select browser model"
+            value={browserModelIssue ? NONE_MODEL_VALUE : assignments.browserModelId}
+            options={optionalModelOptions}
+            onChange={(value) =>
+              persist(models, {
+                ...assignments,
+                browserModelId:
+                  value === NONE_MODEL_VALUE ? undefined : value,
+              })
+            }
+          />
+        </Form.Item>
+
+        {browserModelIssue && (
+          <div className={styles.errorBox} style={{ marginTop: "-0.5rem" }}>
+            <WarningOutlined />
+            <span>
+              The currently assigned Browser Agent model is incompatible and is
+              hidden from the selector. Choose a compatible preset or set
+              Browser Agent to None. {browserModelIssue}
+            </span>
+          </div>
+        )}
+
+        <Form.Item
+          label={
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              Racers
+              <Tooltip title="Racers are optional parallel agents. Only selected models run as racers.">
+                <InfoCircleOutlined
+                  style={{ color: "var(--secondary-text)", fontSize: 11 }}
+                />
+              </Tooltip>
+            </span>
+          }
+        >
+          <Select
+            mode="multiple"
+            allowClear
+            placeholder="Select optional racer models"
+            value={assignments.racerModelIds || []}
+            options={options}
+            onChange={(value) =>
+              persist(models, { ...assignments, racerModelIds: value })
+            }
+          />
+        </Form.Item>
+      </Form>
+
+      <div className={styles.settingSectionHeader}>
+        <div className={styles.heading}>Configured Models</div>
+        <div className={styles.divider} />
+      </div>
+
+      {models.length === 0 ? (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="No models configured"
+          style={{ margin: "24px 0" }}
+        />
       ) : (
-        <>
-          {currentModels.map((m, i) =>
-            editingIndex === i ? (
-              <ModelEditCard
-                key={`edit-${i}`}
-                model={m}
-                index={i}
-                modelSuggestions={modelSuggestions}
-                onSave={(updated) => handleSaveEdit(i, updated)}
-                onCancel={() => setEditingIndex(null)}
-              />
-            ) : (
-              <ModelCard
-                key={`${m.label}-${m.model}-${i}`}
-                model={m}
-                index={i}
-                total={currentModels.length}
-                onRemove={() => handleRemove(i)}
-                onEdit={() => { setEditingIndex(i); setAdding(false); }}
-                onMoveUp={() => handleMove(i, i - 1)}
-                onMoveDown={() => handleMove(i, i + 1)}
-              />
-            ),
-          )}
-
-          {adding ? (
-            <div style={{
-              padding: "16px 18px", marginTop: 8, borderRadius: 8,
-              border: "1px solid var(--border-color-100)", backgroundColor: "var(--surface-hover)",
-            }}>
-              <Form layout="vertical" requiredMark={false}>
-                {/* Row 1: Label · Provider · Model */}
-                <Row gutter={[14, 0]}>
-                  <Col span={7}>
-                    <Form.Item label="Label" style={{ marginBottom: 12 }}>
-                      <Input
-                        placeholder="e.g. Claude Sonnet"
-                        value={newModel.label}
-                        onChange={(e) => setNewModel({ ...newModel, label: e.target.value })}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={7}>
-                    <Form.Item label="Provider" style={{ marginBottom: 12 }}>
-                      <Select
-                        value={newModel.provider}
-                        onChange={(val) => setNewModel({ ...newModel, provider: val, model: "" })}
-                        options={PROVIDER_OPTIONS}
-                        style={{ width: "100%" }}
-                        popupMatchSelectWidth={false}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={10}>
-                    <Form.Item label="Model" style={{ marginBottom: 12 }}>
-                      <AutoComplete
-                        placeholder="e.g. gpt-5.5"
-                        value={newModel.model}
-                        onChange={(val) => setNewModel({ ...newModel, model: val })}
-                        options={(modelSuggestions[newModel.provider] || []).map((m) => ({ value: m, label: m }))}
-                        filterOption={(input, option) =>
-                          (option?.value ?? "").toLowerCase().includes(input.toLowerCase())
-                        }
-                        allowClear
-                      />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                {/* Row 2: Reasoning · API Key · Base URL (conditional) */}
-                <Row gutter={[14, 0]}>
-                  <Col span={6}>
-                    <Form.Item label="Reasoning" style={{ marginBottom: 12 }}>
-                      <Select
-                        value={newModel.reasoningMode}
-                        onChange={(val) => setNewModel({ ...newModel, reasoningMode: val })}
-                        options={REASONING_OPTIONS}
-                        style={{ width: "100%" }}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={(newModel.provider === "openai-compatible" || newModel.provider === "ollama") ? 9 : 18}>
-                    <Form.Item label="API Key" style={{ marginBottom: 12 }}>
-                      <Input.Password
-                        placeholder={newModel.provider === "ollama" ? "Optional — Ollama is keyless by default" : "Optional"}
-                        value={newModel.apiKey}
-                        onChange={(e) => setNewModel({ ...newModel, apiKey: e.target.value })}
-                        visibilityToggle
-                        autoComplete="off"
-                      />
-                    </Form.Item>
-                  </Col>
-                  {(newModel.provider === "openai-compatible" || newModel.provider === "ollama") && (
-                    <Col span={9}>
-                      <Form.Item label="Base URL" style={{ marginBottom: 12 }}>
-                        <Input
-                          placeholder={newModel.provider === "ollama" ? "http://localhost:11434/v1" : "https://api.groq.com/openai/v1"}
-                          value={newModel.baseURL}
-                          onChange={(e) => setNewModel({ ...newModel, baseURL: e.target.value })}
-                        />
-                      </Form.Item>
-                    </Col>
-                  )}
-                </Row>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    {newModel.provider === "anthropic" && (
-                      <PrimaryButton
-                        onClick={() => initOAuthMutation.mutate({})}
-                        loading={initOAuthMutation.isLoading}
-                        style={{ height: 28, fontSize: "0.72rem" }}
-                      >
-                        <LinkOutlined /> Connect via Claude OAuth
-                      </PrimaryButton>
-                    )}
-                    {providerMeta.keyURL && (
-                      <a href={providerMeta.keyURL} target="_blank" rel="noopener noreferrer" className={styles.externalLink}>
-                        <ExportOutlined style={{ fontSize: 11 }} /> {providerMeta.keyLabel}
-                      </a>
-                    )}
+        <div className={styles.mcpTokenList}>
+          {models.map((model) => {
+            const isAssigned = protectedIds.has(model.id);
+            return (
+              <div key={model.id} className={styles.mcpTokenItem}>
+                <div className={styles.mcpTokenHeader}>
+                  <div className={styles.mcpTokenTitle}>
+                    <ApiOutlined />
+                    {model.label}
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <PrimaryButton
-                      onClick={() => { setAdding(false); setNewModel({ ...EMPTY_MODEL }); }}
-                      style={{ height: 30, fontSize: "0.75rem" }}
-                    >
-                      Cancel
-                    </PrimaryButton>
-                    <PrimaryButton
-                      purple
-                      onClick={handleAdd}
-                      loading={updateMutation.isLoading}
-                      style={{ height: 30, fontSize: "0.75rem" }}
-                    >
-                      Add
-                    </PrimaryButton>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {assignments.orchestratorModelId === model.id && (
+                      <Tag color="purple">
+                        <CrownFilled /> Orchestrator
+                      </Tag>
+                    )}
+                    {assignments.browserModelId === model.id && (
+                      <Tag color="blue">Browser</Tag>
+                    )}
+                    {(assignments.racerModelIds || []).includes(model.id) && (
+                      <Tag color="gold">
+                        <ThunderboltFilled /> Racer
+                      </Tag>
+                    )}
                   </div>
                 </div>
-              </Form>
-            </div>
-          ) : (
-            <PrimaryButton
-              onClick={() => { setAdding(true); setEditingIndex(null); }}
-              style={{ height: 28, fontSize: "0.72rem", marginTop: 8 }}
-            >
-              <PlusOutlined /> Add Model
-            </PrimaryButton>
-          )}
-        </>
+                <div className={styles.mcpTokenMeta}>
+                  {providerLabel(model.provider)} · {model.model} · Reasoning{" "}
+                  {(model.reasoningMode || "off").toUpperCase()}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {model.apiKey && <Tag>KEY</Tag>}
+                  {model.baseURL && <Tag>URL</Tag>}
+                  {isMagnitudeModelCompatible(model) ? (
+                    <Tag color="green">BROWSER OK</Tag>
+                  ) : (
+                    <Tooltip title={getMagnitudeModelIssue(model)}>
+                      <Tag color="warning">NO BROWSER</Tag>
+                    </Tooltip>
+                  )}
+                  <Tag>
+                    <BulbOutlined />{" "}
+                    {(model.reasoningMode || "off").toUpperCase()}
+                  </Tag>
+                  <span style={{ flex: 1 }} />
+                  <Tooltip title="Edit model">
+                    <EditOutlined
+                      onClick={() => setEditingModel(model)}
+                      style={{
+                        color: "var(--secondary-text)",
+                        cursor: "pointer",
+                      }}
+                    />
+                  </Tooltip>
+                  <Popconfirm
+                    title={
+                      isAssigned
+                        ? "Clear assignments before deleting this model."
+                        : "Delete this model?"
+                    }
+                    onConfirm={() =>
+                      !isAssigned &&
+                      persist(models.filter((entry) => entry.id !== model.id))
+                    }
+                    okText="Delete"
+                    cancelText="Cancel"
+                  >
+                    <DeleteOutlined
+                      style={{
+                        color: isAssigned
+                          ? "var(--secondary-text-500)"
+                          : "var(--secondary-text)",
+                        cursor: isAssigned ? "not-allowed" : "pointer",
+                      }}
+                    />
+                  </Popconfirm>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      <OAuthCodeModal
-        open={showCodeModal}
-        onCancel={() => { setShowCodeModal(false); setOauthState(null); }}
-        onSubmit={(code) => exchangeOAuthMutation.mutate({ code, state: oauthState })}
-        loading={exchangeOAuthMutation.isLoading}
+      <div style={{ marginTop: 16 }}>
+        <PrimaryButton
+          onClick={() => initOAuthMutation.mutate({})}
+          loading={initOAuthMutation.isLoading}
+          style={{ height: 30, fontSize: "0.72rem" }}
+        >
+          Connect Claude OAuth
+        </PrimaryButton>
+      </div>
+
+      <ModelModal
+        open={!!editingModel}
+        initialValues={editingModel || EMPTY_MODEL}
+        modelSuggestions={modelSuggestions}
+        onCancel={() => setEditingModel(null)}
+        onSubmit={(entry) => {
+          const exists = models.some((model) => model.id === entry.id);
+          persist(
+            exists
+              ? models.map((model) => (model.id === entry.id ? entry : model))
+              : [...models, entry],
+          );
+          setEditingModel(null);
+        }}
       />
+
+      <Modal
+        title="Paste Authorization Code"
+        open={showCodeModal}
+        onCancel={() => setShowCodeModal(false)}
+        footer={null}
+        width={520}
+        centered
+        className={styles.modelModal}
+      >
+        <Form
+          layout="vertical"
+          onFinish={({ code }) =>
+            exchangeOAuthMutation.mutate({
+              code: code.trim(),
+              state: oauthState,
+            })
+          }
+        >
+          <Form.Item
+            label="Authorization Code"
+            name="code"
+            rules={[{ required: true }]}
+          >
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Row justify="end" gutter={8}>
+            <Col>
+              <PrimaryButton onClick={() => setShowCodeModal(false)}>
+                Cancel
+              </PrimaryButton>
+            </Col>
+            <Col>
+              <PrimaryButton
+                purple
+                htmlType="submit"
+                loading={exchangeOAuthMutation.isLoading}
+              >
+                Connect
+              </PrimaryButton>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
     </div>
   );
 };

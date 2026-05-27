@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 const Schema = mongoose.Schema;
 
 export interface ModelPresetDoc {
+  id?: string;
   label: string;
   provider: string;
   model: string;
@@ -16,7 +17,6 @@ export interface McpTokenDoc {
   tokenId: string;
   label: string;
   token: string;
-  tokenHash: string;
   createdAt: Date;
   lastUsedAt?: Date;
   revokedAt?: Date | null;
@@ -94,10 +94,31 @@ const UserSchema = new Schema({
     capabilities: {
       type: [{ type: String }],
       default: [
-        "python3", "gcc", "make", "git", "curl", "nc", "socat", "ssh",
-        "file", "strings", "xxd", "openssl", "jq", "tmux",
-        "requests", "pyyaml", "beautifulsoup4", "Pillow", "python-magic", "chepy",
-        "nmap", "feroxbuster", "subfinder", "hydra", "sqlmap",
+        "python3",
+        "gcc",
+        "make",
+        "git",
+        "curl",
+        "nc",
+        "socat",
+        "ssh",
+        "file",
+        "strings",
+        "xxd",
+        "openssl",
+        "jq",
+        "tmux",
+        "requests",
+        "pyyaml",
+        "beautifulsoup4",
+        "Pillow",
+        "python-magic",
+        "chepy",
+        "nmap",
+        "feroxbuster",
+        "subfinder",
+        "hydra",
+        "sqlmap",
       ],
     },
     installedCapabilities: {
@@ -119,12 +140,17 @@ const UserSchema = new Schema({
     models: {
       type: [
         {
+          id: { type: String },
           label: { type: String, required: true },
           provider: { type: String, required: true },
           model: { type: String, required: true },
           apiKey: { type: String },
           baseURL: { type: String },
-          reasoningMode: { type: String, enum: ["off", "low", "medium", "high", "xhigh"], default: "off" },
+          reasoningMode: {
+            type: String,
+            enum: ["off", "low", "medium", "high", "xhigh"],
+            default: "off",
+          },
           isOrchestrator: { type: Boolean, default: false },
         },
       ],
@@ -136,7 +162,6 @@ const UserSchema = new Schema({
           tokenId: { type: String, required: true },
           label: { type: String, required: true },
           token: { type: String, required: true },
-          tokenHash: { type: String, required: true },
           createdAt: { type: Date, default: Date.now },
           lastUsedAt: { type: Date },
           revokedAt: { type: Date, default: null },

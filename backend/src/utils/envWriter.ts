@@ -50,3 +50,11 @@ export function updateEnvVars(updates: Record<string, string>): void {
   const merged = { ...current, ...updates };
   writeEnvFile(merged);
 }
+
+export function deleteEnvVars(keys: string[]): void {
+  const current = readEnvFile();
+  for (const key of keys) {
+    delete current[key];
+  }
+  writeEnvFile(current);
+}

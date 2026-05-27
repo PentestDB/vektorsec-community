@@ -11,10 +11,6 @@ function stableStringCompare(a: string, b: string): boolean {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
-export function hashMcpToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
-
 export function generateMcpTokenValue(): string {
   return `${MCP_TOKEN_PREFIX}${crypto.randomBytes(24).toString("hex")}`;
 }
@@ -48,15 +44,18 @@ export function createMcpTokenDoc(label?: string): McpTokenDoc {
     tokenId: crypto.randomUUID(),
     label: (label || DEFAULT_TOKEN_LABEL).trim() || DEFAULT_TOKEN_LABEL,
     token,
-    tokenHash: hashMcpToken(token),
     createdAt: new Date(),
     lastUsedAt: undefined,
     revokedAt: null,
   };
 }
 
-export async function ensureDefaultMcpToken(user: UserDoc): Promise<McpTokenDoc> {
-  const existing = (user.configs.mcpTokens || []).find((token) => !token.revokedAt);
+export async function ensureDefaultMcpToken(
+  user: UserDoc,
+): Promise<McpTokenDoc> {
+  const existing = (user.configs.mcpTokens || []).find(
+    (token) => !token.revokedAt,
+  );
   if (existing) return existing;
 
   const created = createMcpTokenDoc(DEFAULT_TOKEN_LABEL);
@@ -65,16 +64,24 @@ export async function ensureDefaultMcpToken(user: UserDoc): Promise<McpTokenDoc>
   return created;
 }
 
-export async function createMcpToken(user: UserDoc, label?: string): Promise<McpTokenDoc> {
+export async function createMcpToken(
+  user: UserDoc,
+  label?: string,
+): Promise<McpTokenDoc> {
   const created = createMcpTokenDoc(label);
   user.configs.mcpTokens = [...(user.configs.mcpTokens || []), created];
   await user.save();
   return created;
 }
 
-export async function revokeMcpToken(user: UserDoc, tokenId: string): Promise<boolean> {
+export async function revokeMcpToken(
+  user: UserDoc,
+  tokenId: string,
+): Promise<boolean> {
   const tokens = user.configs.mcpTokens || [];
-  const token = tokens.find((candidate) => candidate.tokenId === tokenId && !candidate.revokedAt);
+  const token = tokens.find(
+    (candidate) => candidate.tokenId === tokenId && !candidate.revokedAt,
+  );
   if (!token) return false;
   token.revokedAt = new Date();
   await user.save();
@@ -85,13 +92,14 @@ export function listActiveMcpTokens(user: UserDoc): McpTokenDoc[] {
   return (user.configs.mcpTokens || []).filter((token) => !token.revokedAt);
 }
 
-export async function findUserByMcpToken(token: string): Promise<{ user: UserDoc; token: McpTokenDoc } | null> {
+export async function findUserByMcpToken(
+  token: string,
+): Promise<{ user: UserDoc; token: McpTokenDoc } | null> {
   if (!token || !token.startsWith(MCP_TOKEN_PREFIX)) return null;
-  const tokenHash = hashMcpToken(token);
   const user = await UserModel.findOne({
     "configs.mcpTokens": {
       $elemMatch: {
-        tokenHash,
+        token,
         revokedAt: null,
       },
     },
@@ -100,17 +108,18 @@ export async function findUserByMcpToken(token: string): Promise<{ user: UserDoc
   if (!user) return null;
 
   const matched = (user.configs.mcpTokens || []).find(
-    (candidate) => !candidate.revokedAt && stableStringCompare(candidate.tokenHash, tokenHash),
+    (candidate) =>
+      !candidate.revokedAt && stableStringCompare(candidate.token, token),
   );
 
-  if (!matched || !stableStringCompare(matched.token, token)) {
-    return null;
-  }
-
+  if (!matched) return null;
   return { user, token: matched };
 }
 
-export async function touchMcpTokenUsage(user: UserDoc, tokenId: string): Promise<void> {
+export async function touchMcpTokenUsage(
+  user: UserDoc,
+  tokenId: string,
+): Promise<void> {
   await UserModel.updateOne(
     { _id: user._id, "configs.mcpTokens.tokenId": tokenId },
     { $set: { "configs.mcpTokens.$.lastUsedAt": new Date() } },

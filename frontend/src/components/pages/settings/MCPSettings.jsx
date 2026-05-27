@@ -5,13 +5,20 @@ import {
   createMcpAccessToken,
   getMcpConfig,
   revokeMcpAccessToken,
+  updateMcpSafety,
 } from "@/services/user.service";
 import styles from "@/styles/pages/Settings.module.scss";
-import { App, Button, Card, Input, Space, Typography } from "antd";
+import { App, Button, Input, Switch, Tag, Tooltip } from "antd";
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  FileTextOutlined,
+  KeyOutlined,
+  PlusOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useMemo } from "react";
-
-const { Paragraph, Text } = Typography;
 
 const copyText = async (messageApi, text, label) => {
   try {
@@ -21,6 +28,9 @@ const copyText = async (messageApi, text, label) => {
     messageApi.error(`Failed to copy ${label.toLowerCase()}`);
   }
 };
+
+const redactConfigSecret = (value = "") =>
+  value.replace(/token:\s*\S+/g, "token: *****");
 
 const MCPSettingsPage = () => {
   const queryClient = useQueryClient();
@@ -47,110 +57,163 @@ const MCPSettingsPage = () => {
     },
   });
 
+  const safetyMutation = useMutation(updateMcpSafety, {
+    onSuccess: async (res) => {
+      message.success(res?.message || "MCP safety updated");
+      await queryClient.invalidateQueries("mcp-config");
+    },
+    onError: (error) => {
+      message.error(error?.response?.data?.message || "Failed to update MCP safety");
+    },
+  });
+
   const primaryToken = useMemo(() => data?.tokens?.[0] || null, [data?.tokens]);
 
   if (isLoading) return <Loader />;
 
   return (
     <div className={styles.settingsContainer}>
-      <Card
-        bordered={false}
-        style={{
-          background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          marginBottom: 20,
-        }}
-      >
-        <Paragraph style={{ color: "var(--secondary-text)", marginBottom: 16 }}>
-          Use this endpoint and token with any MCP-capable client. The backend serves MCP directly at
-          <Text code style={{ marginLeft: 6 }}>{data?.endpoint}</Text>.
-        </Paragraph>
+      <div className={styles.infoBox}>
+        <WarningOutlined />
+        <span>
+          Treat MCP access as local admin access. A token can run commands on
+          the exploit box, operate Burp, browser automation, and VPN flows, read
+          artifacts, write findings, and update local configuration.
+        </span>
+      </div>
 
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>MCP Endpoint</label>
-          <Input value={data?.endpoint || ""} readOnly />
-        </div>
-
-        <div className={styles.fieldGroup}>
-          <label className={styles.fieldLabel}>Universal MCP Token</label>
-          <Input.Password value={data?.token || ""} readOnly visibilityToggle />
-        </div>
-
-        <Space wrap style={{ marginTop: 12 }}>
-          <Button onClick={() => copyText(message, data?.endpoint || "", "Endpoint")}>Copy Endpoint</Button>
-          <Button onClick={() => copyText(message, data?.token || "", "Token")}>Copy Token</Button>
-          <Button type="primary" onClick={() => copyText(message, data?.configTemplate || "", "Config")}>
+      <section className={styles.mcpPanel}>
+        <div className={styles.mcpPanelHeader}>
+          <div>
+            <div className={styles.mcpPanelTitle}>
+              <FileTextOutlined />
+              Client Config
+            </div>
+            <div className={styles.mcpPanelDescription}>
+              Copy one config block into Claude Code, Codex, or another
+              MCP-capable client.
+            </div>
+          </div>
+          <Button
+            type="primary"
+            icon={<CopyOutlined />}
+            onClick={() =>
+              copyText(message, data?.configTemplate || "", "Config")
+            }
+          >
             Copy Config
           </Button>
-          <Button onClick={() => copyText(message, data?.envTemplate || "", "Env Block")}>
+        </div>
+
+        <pre className={styles.mcpCodeBlock}>
+          {redactConfigSecret(data?.configTemplate || "")}
+        </pre>
+
+        <div className={styles.mcpActionRow}>
+          <Button
+            icon={<FileTextOutlined />}
+            onClick={() =>
+              copyText(message, data?.envTemplate || "", "Env Block")
+            }
+          >
             Copy Env Block
           </Button>
-        </Space>
-      </Card>
-
-      <div className={styles.settingSectionHeader}>
-        <div className={styles.settingSectionHeaderRow}>
-          <div className={styles.heading}>Config Template</div>
           <Button
-            className={styles.headerExtraButton}
-            onClick={() => createTokenMutation.mutateAsync({ label: `Extra Token ${Date.now()}` })}
+            icon={<PlusOutlined />}
+            onClick={() =>
+              createTokenMutation.mutateAsync({
+                label: `Extra Token ${Date.now()}`,
+              })
+            }
             loading={createTokenMutation.isLoading}
           >
             Create Additional Token
           </Button>
         </div>
-        <div className={styles.divider} />
-      </div>
+      </section>
 
-      <div className={styles.fieldGroup}>
-        <label className={styles.fieldLabel}>Canonical MCP Config</label>
-        <Input.TextArea value={data?.configTemplate || ""} readOnly autoSize={{ minRows: 7, maxRows: 10 }} />
-      </div>
-
-      <div className={styles.fieldGroup}>
-        <label className={styles.fieldLabel}>Environment Block</label>
-        <Input.TextArea value={data?.envTemplate || ""} readOnly autoSize={{ minRows: 2, maxRows: 4 }} />
-      </div>
+      <section className={styles.mcpPanel}>
+        <div className={styles.mcpSafetyControl}>
+          <div>
+            <div className={styles.mcpPanelTitle}>
+              <WarningOutlined />
+              Allow Consent-Gated MCP Tools
+            </div>
+            <div className={styles.mcpPanelDescription}>
+              Enables MCP clients to run tools that normally require in-app
+              approval, including browser automation and other side-effecting
+              actions. Keep this off unless you trust the connected client.
+            </div>
+          </div>
+          <Switch
+            checked={data?.safety?.allowDangerousMcp}
+            loading={safetyMutation.isLoading}
+            onChange={(checked) =>
+              safetyMutation.mutate({ allowDangerousMcp: checked })
+            }
+          />
+        </div>
+      </section>
 
       <div className={styles.settingSectionHeader}>
         <div className={styles.heading}>Active Tokens</div>
         <div className={styles.divider} />
       </div>
 
-      <Space direction="vertical" style={{ width: "100%" }} size={12}>
+      <div className={styles.mcpTokenList}>
         {(data?.tokens || []).map((token) => (
-          <Card
-            key={token.tokenId}
-            bordered={false}
-            style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <Space direction="vertical" style={{ width: "100%" }} size={6}>
-              <Text strong style={{ color: "var(--primary-text)" }}>{token.label}</Text>
-              <Text style={{ color: "var(--secondary-text)" }}>
-                Created: {new Date(token.createdAt).toLocaleString()}
-              </Text>
-              <Text style={{ color: "var(--secondary-text)" }}>
-                Last used: {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleString() : "Never"}
-              </Text>
-              <Input.Password value={token.token} readOnly visibilityToggle />
-              <Space wrap>
-                <Button onClick={() => copyText(message, token.token, "Token")}>Copy</Button>
+          <div key={token.tokenId} className={styles.mcpTokenItem}>
+            <div className={styles.mcpTokenHeader}>
+              <div className={styles.mcpTokenTitle}>
+                <KeyOutlined />
+                {token.label}
+              </div>
+              {primaryToken?.tokenId === token.tokenId && (
+                <Tag color="processing">Primary</Tag>
+              )}
+            </div>
+            <div className={styles.mcpTokenMeta}>
+              Created {new Date(token.createdAt).toLocaleString()} - Last used{" "}
+              {token.lastUsedAt
+                ? new Date(token.lastUsedAt).toLocaleString()
+                : "Never"}
+            </div>
+            <div className={styles.mcpInlineControl}>
+              <Input.Password
+                className={styles.mcpReadOnlyInput}
+                value={token.token}
+                readOnly
+                visibilityToggle
+              />
+              <Tooltip title="Copy token">
+                <Button
+                  icon={<CopyOutlined />}
+                  onClick={() => copyText(message, token.token, "Token")}
+                />
+              </Tooltip>
+              <Tooltip
+                title={
+                  primaryToken?.tokenId === token.tokenId &&
+                  (data?.tokens || []).length === 1
+                    ? "Create another token before revoking the only token"
+                    : "Revoke token"
+                }
+              >
                 <Button
                   danger
-                  disabled={primaryToken?.tokenId === token.tokenId && (data?.tokens || []).length === 1}
+                  icon={<DeleteOutlined />}
+                  disabled={
+                    primaryToken?.tokenId === token.tokenId &&
+                    (data?.tokens || []).length === 1
+                  }
                   loading={revokeTokenMutation.isLoading}
                   onClick={() => revokeTokenMutation.mutateAsync(token.tokenId)}
-                >
-                  Revoke
-                </Button>
-              </Space>
-            </Space>
-          </Card>
+                />
+              </Tooltip>
+            </div>
+          </div>
         ))}
-      </Space>
+      </div>
     </div>
   );
 };
