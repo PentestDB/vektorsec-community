@@ -49,6 +49,7 @@ const PROVIDER_OPTIONS = [
   { value: "openrouter", label: "OpenRouter" },
   { value: "google", label: "Google" },
   { value: "mistralai", label: "Mistral AI" },
+  { value: "ollama", label: "Ollama (Local)" },
   { value: "openai-compatible", label: "OpenAI-Compatible" },
 ];
 
@@ -75,6 +76,7 @@ const PROVIDER_META = {
   openrouter: { keyURL: "https://openrouter.ai/settings/keys", keyLabel: "Get OpenRouter API Key" },
   google: { keyURL: "https://aistudio.google.com/apikey", keyLabel: "Get Google AI API Key" },
   mistralai: { keyURL: "https://console.mistral.ai/api-keys", keyLabel: "Get Mistral API Key" },
+  ollama: { keyURL: "https://ollama.com/library", keyLabel: "Browse Ollama models" },
 };
 
 const FALLBACK_MODELS = {
@@ -84,6 +86,7 @@ const FALLBACK_MODELS = {
   openrouter: ["minimax/minimax-m2.7", "minimax/minimax-m2.7-highspeed", "anthropic/claude-opus-4.7", "anthropic/claude-mythos-preview", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5", "openai/gpt-5.4"],
   google: ["gemini-2.0-flash", "gemini-2.0-pro"],
   mistralai: ["mistral-large-latest", "mistral-medium-latest"],
+  ollama: ["llama3.3", "llama3.2", "llama3.1", "qwen2.5-coder", "qwen2.5", "mistral", "mixtral", "codellama", "deepseek-r1", "gpt-oss", "phi4", "gemma3"],
 };
 
 const EMPTY_MODEL = { label: "", provider: "openai", model: "", apiKey: "", baseURL: "", reasoningMode: "off" };
@@ -232,7 +235,7 @@ const ModelEditCard = ({ model, index, onSave, onCancel, modelSuggestions }) => 
   const [draft, setDraft] = useState({ ...model });
   const isOrchestrator = index === 0;
   const providerMeta = PROVIDER_META[draft.provider] || {};
-  const showBaseURL = draft.provider === "openai-compatible" || !!draft.baseURL;
+  const showBaseURL = draft.provider === "openai-compatible" || draft.provider === "ollama" || !!draft.baseURL;
 
   return (
     <div style={{
@@ -307,7 +310,7 @@ const ModelEditCard = ({ model, index, onSave, onCancel, modelSuggestions }) => 
           <Col span={showBaseURL ? 9 : 18}>
             <Form.Item label="API Key" style={{ marginBottom: 12 }}>
               <Input.Password
-                placeholder="Optional — leave blank to keep current"
+                placeholder={draft.provider === "ollama" ? "Optional — Ollama is keyless by default" : "Optional — leave blank to keep current"}
                 value={draft.apiKey}
                 onChange={(e) => setDraft({ ...draft, apiKey: e.target.value })}
                 visibilityToggle
@@ -319,7 +322,7 @@ const ModelEditCard = ({ model, index, onSave, onCancel, modelSuggestions }) => 
             <Col span={9}>
               <Form.Item label="Base URL" style={{ marginBottom: 12 }}>
                 <Input
-                  placeholder="https://api.groq.com/openai/v1"
+                  placeholder={draft.provider === "ollama" ? "http://localhost:11434/v1" : "https://api.groq.com/openai/v1"}
                   value={draft.baseURL}
                   onChange={(e) => setDraft({ ...draft, baseURL: e.target.value })}
                 />
@@ -589,10 +592,10 @@ const ModelsPage = () => {
                       />
                     </Form.Item>
                   </Col>
-                  <Col span={newModel.provider === "openai-compatible" ? 9 : 18}>
+                  <Col span={(newModel.provider === "openai-compatible" || newModel.provider === "ollama") ? 9 : 18}>
                     <Form.Item label="API Key" style={{ marginBottom: 12 }}>
                       <Input.Password
-                        placeholder="Optional"
+                        placeholder={newModel.provider === "ollama" ? "Optional — Ollama is keyless by default" : "Optional"}
                         value={newModel.apiKey}
                         onChange={(e) => setNewModel({ ...newModel, apiKey: e.target.value })}
                         visibilityToggle
@@ -600,11 +603,11 @@ const ModelsPage = () => {
                       />
                     </Form.Item>
                   </Col>
-                  {newModel.provider === "openai-compatible" && (
+                  {(newModel.provider === "openai-compatible" || newModel.provider === "ollama") && (
                     <Col span={9}>
                       <Form.Item label="Base URL" style={{ marginBottom: 12 }}>
                         <Input
-                          placeholder="https://api.groq.com/openai/v1"
+                          placeholder={newModel.provider === "ollama" ? "http://localhost:11434/v1" : "https://api.groq.com/openai/v1"}
                           value={newModel.baseURL}
                           onChange={(e) => setNewModel({ ...newModel, baseURL: e.target.value })}
                         />

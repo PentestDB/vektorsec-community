@@ -158,6 +158,26 @@ export interface CtfConfigDoc {
   solveHistory?: CtfSolveRecord[];
 }
 
+export interface SessionFindingDoc {
+  findingId: string;
+  title: string;
+  content: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  status: "open" | "closed";
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface McpContextDoc {
+  target?: string;
+  scope?: string;
+  notes?: string;
+  credentials?: string;
+  labels?: string[];
+  metadata?: Record<string, string>;
+}
+
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
@@ -185,6 +205,8 @@ export interface SessionDoc extends mongoose.Document {
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
   ctfConfig?: CtfConfigDoc;
+  mcpFindings?: SessionFindingDoc[];
+  mcpContext?: McpContextDoc;
 }
 
 const ToolCallSchema = new Schema(
@@ -305,6 +327,42 @@ const SwarmSchema = new Schema(
   { _id: false },
 );
 
+const SessionFindingSchema = new Schema(
+  {
+    findingId: { type: String, required: true },
+    title: { type: String, required: true },
+    content: { type: String, required: true },
+    severity: {
+      type: String,
+      required: true,
+      enum: ["info", "low", "medium", "high", "critical"],
+      default: "info",
+    },
+    status: {
+      type: String,
+      required: true,
+      enum: ["open", "closed"],
+      default: "open",
+    },
+    createdBy: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const McpContextSchema = new Schema(
+  {
+    target: { type: String },
+    scope: { type: String },
+    notes: { type: String },
+    credentials: { type: String },
+    labels: { type: [String], default: [] },
+    metadata: { type: Map, of: String, default: {} },
+  },
+  { _id: false },
+);
+
 const SessionSchema = new Schema({
   uid: { type: mongoose.Types.ObjectId, required: true },
   sessionId: { type: String, required: true, unique: true },
@@ -421,6 +479,14 @@ const SessionSchema = new Schema({
         default: [],
       },
     },
+    default: undefined,
+  },
+  mcpFindings: {
+    type: [SessionFindingSchema],
+    default: [],
+  },
+  mcpContext: {
+    type: McpContextSchema,
     default: undefined,
   },
 });

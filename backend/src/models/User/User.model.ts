@@ -12,6 +12,16 @@ export interface ModelPresetDoc {
   isOrchestrator?: boolean;
 }
 
+export interface McpTokenDoc {
+  tokenId: string;
+  label: string;
+  token: string;
+  tokenHash: string;
+  createdAt: Date;
+  lastUsedAt?: Date;
+  revokedAt?: Date | null;
+}
+
 export interface UserDoc extends mongoose.Document {
   email: string;
   name: string;
@@ -39,6 +49,7 @@ export interface UserDoc extends mongoose.Document {
     requireConsentForAllTools?: boolean;
     disableSafetyProtections?: boolean;
     models?: ModelPresetDoc[];
+    mcpTokens?: McpTokenDoc[];
   };
   referredBy: mongoose.Types.ObjectId;
   workingIndustry: string;
@@ -115,6 +126,20 @@ const UserSchema = new Schema({
           baseURL: { type: String },
           reasoningMode: { type: String, enum: ["off", "low", "medium", "high", "xhigh"], default: "off" },
           isOrchestrator: { type: Boolean, default: false },
+        },
+      ],
+      default: [],
+    },
+    mcpTokens: {
+      type: [
+        {
+          tokenId: { type: String, required: true },
+          label: { type: String, required: true },
+          token: { type: String, required: true },
+          tokenHash: { type: String, required: true },
+          createdAt: { type: Date, default: Date.now },
+          lastUsedAt: { type: Date },
+          revokedAt: { type: Date, default: null },
         },
       ],
       default: [],

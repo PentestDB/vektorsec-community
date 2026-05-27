@@ -79,6 +79,24 @@ const CURATED_PROVIDERS: CatalogProvider[] = [
       model("openrouter/openai/gpt-5.4", "openai/gpt-5.4", "GPT-5.4 via OpenRouter", 1_000_000),
     ],
   },
+  {
+    id: "ollama",
+    name: "Ollama (Local)",
+    models: [
+      model("ollama/llama3.3", "llama3.3", "Llama 3.3", 128_000),
+      model("ollama/llama3.2", "llama3.2", "Llama 3.2", 128_000),
+      model("ollama/llama3.1", "llama3.1", "Llama 3.1", 128_000),
+      model("ollama/qwen2.5-coder", "qwen2.5-coder", "Qwen2.5 Coder", 32_768),
+      model("ollama/qwen2.5", "qwen2.5", "Qwen2.5", 32_768),
+      model("ollama/mistral", "mistral", "Mistral 7B", 32_768),
+      model("ollama/mixtral", "mixtral", "Mixtral 8x7B", 32_768),
+      model("ollama/codellama", "codellama", "Code Llama", 16_384),
+      model("ollama/deepseek-r1", "deepseek-r1", "DeepSeek R1", 65_536),
+      model("ollama/gpt-oss", "gpt-oss", "GPT-OSS", 131_072),
+      model("ollama/phi4", "phi4", "Phi-4", 16_384),
+      model("ollama/gemma3", "gemma3", "Gemma 3", 128_000),
+    ],
+  },
 ];
 
 function model(id: string, modelId: string, name: string, contextLength: number): CatalogModel {

@@ -177,3 +177,17 @@ export const updateSwarmModels = async (body) => {
 export const getModels = getSwarmModels;
 export const updateModels = updateSwarmModels;
 
+export const getMcpConfig = async () => {
+  const res = await apiClient.get("/mcp/config");
+  return res.data;
+};
+
+export const createMcpAccessToken = async (body) => {
+  const res = await apiClient.post("/mcp/tokens", body || {});
+  return res.data;
+};
+
+export const revokeMcpAccessToken = async (tokenId) => {
+  const res = await apiClient.delete(`/mcp/tokens/${tokenId}`);
+  return res.data;
+};

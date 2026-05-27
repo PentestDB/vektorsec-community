@@ -11,6 +11,7 @@ import SSHPage from "@/components/pages/settings/SSH";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
+import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 
 const TABS = [
   {
@@ -59,6 +60,13 @@ const TABS = [
     description: "Configure Magnitude for agentic browser automation during pentests.",
     icon: TbWorldWww,
     component: MagnitudeSettingsPage,
+  },
+  {
+    key: "mcp",
+    label: "MCP Access",
+    description: "Generate MCP tokens and copy the backend-integrated MCP endpoint config.",
+    icon: TbWorldWww,
+    component: MCPSettingsPage,
   },
 ];
 

@@ -8,7 +8,7 @@ import getSecrets from "../getSecrets";
 import { readEnvFile, updateEnvVars } from "../envWriter";
 import { isTracingEnabled } from "../tracing";
 
-export type ProviderType = "openai" | "anthropic" | "minimax" | "openrouter" | "openai-compatible";
+export type ProviderType = "openai" | "anthropic" | "minimax" | "openrouter" | "ollama" | "openai-compatible";
 
 export interface ProviderConfig {
   provider: ProviderType;
@@ -24,6 +24,7 @@ const PROVIDER_DEFAULTS: Record<ProviderType, { baseURL: string }> = {
   anthropic: { baseURL: "https://api.anthropic.com/v1/" },
   minimax: { baseURL: "https://api.minimax.io/v1" },
   openrouter: { baseURL: "https://openrouter.ai/api/v1" },
+  ollama: { baseURL: "http://localhost:11434/v1" },
   "openai-compatible": { baseURL: "" },
 };
 
@@ -31,9 +32,10 @@ function buildClient(config: ProviderConfig): OpenAI {
   const baseURL = config.baseURL || PROVIDER_DEFAULTS[config.provider]?.baseURL;
 
   const isOAuth = config.provider === "anthropic" && config.authMethod === "oauth" && config.oauthAccessToken;
+  const isKeylessLocal = config.provider === "ollama" && !config.apiKey;
 
   const clientOpts: ConstructorParameters<typeof OpenAI>[0] = {
-    apiKey: isOAuth ? "placeholder" : config.apiKey,
+    apiKey: isOAuth || isKeylessLocal ? "ollama" : config.apiKey,
   };
 
   if (baseURL) {
@@ -232,10 +234,13 @@ export async function presetToProviderConfig(preset: ModelPresetDoc): Promise<Pr
     }
   }
 
+  const providerType = preset.provider as ProviderType;
+  const isKeyless = providerType === "ollama";
+
   return {
-    provider: preset.provider as ProviderType,
+    provider: providerType,
     model,
-    apiKey: preset.apiKey || envConfig.apiKey,
+    apiKey: preset.apiKey || (isKeyless ? "" : envConfig.apiKey),
     baseURL: preset.baseURL || undefined,
     authMethod: "api_key",
   };
@@ -1007,7 +1012,7 @@ export async function invoke_llm_streaming(opts: StreamingInvokeOptions): Promis
   const runStream = async (temp: number): Promise<InvokeResult> => {
     const params = buildCompletionConfig(config, opts, temp, true);
 
-    if (reasoningMode !== "off" && (config.provider === "openai-compatible" || config.provider === "openrouter")) {
+    if (reasoningMode !== "off" && (config.provider === "openai-compatible" || config.provider === "openrouter" || config.provider === "ollama")) {
       params.reasoning_effort = reasoningMode;
     }
 

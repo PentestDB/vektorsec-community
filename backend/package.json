@@ -30,6 +30,7 @@
     "@langfuse/openai": "4.6.1",
     "@langfuse/otel": "4.6.1",
     "@langfuse/tracing": "4.6.1",
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@opentelemetry/sdk-node": "0.213.0",
     "@types/bcryptjs": "2.4.6",
     "@types/connect-redis": "0.0.18",
@@ -96,6 +97,7 @@
     "eslint-plugin-promise": "7.2.1",
     "nodemon": "3.1.14",
     "prettier": "3.8.1",
+    "tsx": "4.22.3",
     "typescript": "5.9.3"
   },
   "pnpm": {
