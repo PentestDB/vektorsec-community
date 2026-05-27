@@ -42,7 +42,12 @@ export interface PendingManualExecutionDoc {
   command: string;
 }
 
-export type AgentState = "idle" | "running" | "paused" | "waiting_consent" | "waiting_manual_execution";
+export type AgentState =
+  | "idle"
+  | "running"
+  | "paused"
+  | "waiting_consent"
+  | "waiting_manual_execution";
 
 export type ShellType = "pty" | "exec";
 export type ShellStatus = "active" | "closed";
@@ -59,7 +64,12 @@ export interface ShellDoc {
   closedAt?: Date;
 }
 
-export type SubagentStatus = "running" | "completed" | "failed" | "cancelled" | "paused";
+export type SubagentStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "paused";
 
 export interface SubagentDoc {
   subagentId: string;
@@ -74,7 +84,12 @@ export interface SubagentDoc {
 }
 
 export type SwarmWinCondition = "first_success" | "all_complete";
-export type SwarmStatus = "running" | "completed" | "cancelled" | "timed_out" | "paused";
+export type SwarmStatus =
+  | "running"
+  | "completed"
+  | "cancelled"
+  | "timed_out"
+  | "paused";
 
 export interface SwarmAgentDoc {
   agentId: string;
@@ -158,6 +173,39 @@ export interface CtfConfigDoc {
   solveHistory?: CtfSolveRecord[];
 }
 
+export interface SessionFindingDoc {
+  findingId: string;
+  title: string;
+  content: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  status: "open" | "closed";
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface McpContextDoc {
+  target?: string;
+  scope?: string;
+  notes?: string;
+  credentials?: string;
+  labels?: string[];
+  metadata?: Record<string, string>;
+}
+
+export interface SessionArtifactDoc {
+  artifactId: string;
+  type: "note" | "file" | "image" | "browser_observation" | "request" | "other";
+  title: string;
+  content?: string;
+  url?: string;
+  path?: string;
+  mimeType?: string;
+  createdBy: string;
+  createdAt: Date;
+  metadata?: Record<string, string>;
+}
+
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
@@ -185,6 +233,9 @@ export interface SessionDoc extends mongoose.Document {
   connectionState: ConnectionStateDoc;
   disabledAgentTools?: string[];
   ctfConfig?: CtfConfigDoc;
+  mcpFindings?: SessionFindingDoc[];
+  mcpContext?: McpContextDoc;
+  mcpArtifacts?: SessionArtifactDoc[];
 }
 
 const ToolCallSchema = new Schema(
@@ -199,7 +250,11 @@ const ToolCallSchema = new Schema(
 const AgentMessageSchema = new Schema(
   {
     id: { type: String, required: true },
-    role: { type: String, required: true, enum: ["system", "user", "assistant", "tool"] },
+    role: {
+      type: String,
+      required: true,
+      enum: ["system", "user", "assistant", "tool"],
+    },
     content: { type: String, default: null },
     reasoning: { type: String },
     toolCalls: { type: [ToolCallSchema], default: undefined },
@@ -218,7 +273,11 @@ const ShellSchema = new Schema(
     label: { type: String, required: true },
     type: { type: String, required: true, enum: ["pty", "exec"] },
     status: { type: String, default: "active", enum: ["active", "closed"] },
-    createdBy: { type: String, required: true, enum: ["user", "agent", "subagent"] },
+    createdBy: {
+      type: String,
+      required: true,
+      enum: ["user", "agent", "subagent"],
+    },
     subagentId: { type: String },
     createdAt: { type: Date, default: Date.now },
     closedAt: { type: Date },
@@ -229,7 +288,11 @@ const ShellSchema = new Schema(
 const SubagentMessageSchema = new Schema(
   {
     id: { type: String, required: true },
-    role: { type: String, required: true, enum: ["system", "user", "assistant", "tool"] },
+    role: {
+      type: String,
+      required: true,
+      enum: ["system", "user", "assistant", "tool"],
+    },
     content: { type: String, default: null },
     toolCalls: { type: [ToolCallSchema], default: undefined },
     toolCallId: { type: String },
@@ -246,7 +309,11 @@ const SubagentSchema = new Schema(
     subagentId: { type: String, required: true },
     parentId: { type: String, required: true },
     task: { type: String, required: true },
-    status: { type: String, default: "running", enum: ["running", "completed", "failed", "cancelled"] },
+    status: {
+      type: String,
+      default: "running",
+      enum: ["running", "completed", "failed", "cancelled"],
+    },
     result: { type: String },
     messages: { type: [SubagentMessageSchema], default: [] },
     shells: { type: [String], default: [] },
@@ -268,7 +335,11 @@ const SwarmAgentSchema = new Schema(
       },
       required: true,
     },
-    status: { type: String, default: "running", enum: ["running", "completed", "failed", "cancelled"] },
+    status: {
+      type: String,
+      default: "running",
+      enum: ["running", "completed", "failed", "cancelled"],
+    },
     result: { type: String },
     messages: { type: [SubagentMessageSchema], default: [] },
     subagents: { type: [SubagentSchema], default: [] },
@@ -293,14 +364,86 @@ const SwarmSchema = new Schema(
   {
     swarmId: { type: String, required: true },
     goal: { type: String, required: true },
-    winCondition: { type: String, required: true, enum: ["first_success", "all_complete"] },
-    status: { type: String, default: "running", enum: ["running", "completed", "cancelled", "timed_out"] },
+    winCondition: {
+      type: String,
+      required: true,
+      enum: ["first_success", "all_complete"],
+    },
+    status: {
+      type: String,
+      default: "running",
+      enum: ["running", "completed", "cancelled", "timed_out"],
+    },
     agents: { type: [SwarmAgentSchema], default: [] },
     findings: { type: [SwarmFindingSchema], default: [] },
     winner: { type: String },
     timeoutMs: { type: Number },
     createdAt: { type: Date, default: Date.now },
     completedAt: { type: Date },
+  },
+  { _id: false },
+);
+
+const SessionFindingSchema = new Schema(
+  {
+    findingId: { type: String, required: true },
+    title: { type: String, required: true },
+    content: { type: String, required: true },
+    severity: {
+      type: String,
+      required: true,
+      enum: ["info", "low", "medium", "high", "critical"],
+      default: "info",
+    },
+    status: {
+      type: String,
+      required: true,
+      enum: ["open", "closed"],
+      default: "open",
+    },
+    createdBy: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const McpContextSchema = new Schema(
+  {
+    target: { type: String },
+    scope: { type: String },
+    notes: { type: String },
+    credentials: { type: String },
+    labels: { type: [String], default: [] },
+    metadata: { type: Map, of: String, default: {} },
+  },
+  { _id: false },
+);
+
+const SessionArtifactSchema = new Schema(
+  {
+    artifactId: { type: String, required: true },
+    type: {
+      type: String,
+      required: true,
+      enum: [
+        "note",
+        "file",
+        "image",
+        "browser_observation",
+        "request",
+        "other",
+      ],
+      default: "other",
+    },
+    title: { type: String, required: true },
+    content: { type: String },
+    url: { type: String },
+    path: { type: String },
+    mimeType: { type: String },
+    createdBy: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    metadata: { type: Map, of: String, default: {} },
   },
   { _id: false },
 );
@@ -317,7 +460,13 @@ const SessionSchema = new Schema({
   agentState: {
     type: String,
     default: "idle",
-    enum: ["idle", "running", "paused", "waiting_consent", "waiting_manual_execution"],
+    enum: [
+      "idle",
+      "running",
+      "paused",
+      "waiting_consent",
+      "waiting_manual_execution",
+    ],
   },
   messages: { type: [AgentMessageSchema], default: [] },
   pendingConsent: {
@@ -378,7 +527,11 @@ const SessionSchema = new Schema({
     type: {
       url: { type: String, required: true },
       ctfName: { type: String, required: true },
-      authMethod: { type: String, required: true, enum: ["token", "credentials"] },
+      authMethod: {
+        type: String,
+        required: true,
+        enum: ["token", "credentials"],
+      },
       apiToken: { type: String },
       username: { type: String },
       sessionCookie: { type: String },
@@ -408,7 +561,13 @@ const SessionSchema = new Schema({
             status: {
               type: String,
               required: true,
-              enum: ["solving", "flag_found", "incorrect", "solved", "submitted"],
+              enum: [
+                "solving",
+                "flag_found",
+                "incorrect",
+                "solved",
+                "submitted",
+              ],
             },
             confirmedFlag: { type: String },
             attempts: { type: Number, default: 0 },
@@ -422,6 +581,18 @@ const SessionSchema = new Schema({
       },
     },
     default: undefined,
+  },
+  mcpFindings: {
+    type: [SessionFindingSchema],
+    default: [],
+  },
+  mcpContext: {
+    type: McpContextSchema,
+    default: undefined,
+  },
+  mcpArtifacts: {
+    type: [SessionArtifactSchema],
+    default: [],
   },
 });
 

@@ -3,14 +3,23 @@ import crypto from "crypto";
 import { formatMagnitudeError } from "../utils/magnitudeError";
 import axios from "axios";
 import moment from "moment";
-import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
-import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
-import { clearProviderCache } from "../utils/llm/providers";
 import {
-  buildSwarmModelEnvUpdates,
-  normalizeSwarmModelsInput,
-  readSwarmModelsFromEnv,
-} from "../utils/swarmModelEnv";
+  getVncDisplay,
+  getVncRfbPort,
+  getWebsockifyPort,
+} from "../config/constants";
+import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
+import {
+  clearProviderCache,
+  presetToProviderConfig,
+} from "../utils/llm/providers";
+import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
+import {
+  getAssignedModels,
+  normalizeModelRegistryInput,
+  readModelRegistry,
+  writeModelRegistry,
+} from "../utils/modelRegistryStore";
 
 export const updateUserProfile = async (req: Request, res: Response) => {
   try {
@@ -56,8 +65,6 @@ export const updateUserProfileImage = async (req: Request, res: Response) => {
     if (file.size > 2097152) {
       return res.status(400).json({ message: "file size is too large" });
     }
-
-
 
     return res.status(200).json({
       message: "User profile image updated",
@@ -132,7 +139,9 @@ export const getAgentToolsConfig = async (req: Request, res: Response) => {
     return res.status(200).json({ tools: allTools });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to get agent tools config" });
+    return res
+      .status(400)
+      .json({ message: "Failed to get agent tools config" });
   }
 };
 
@@ -142,7 +151,9 @@ export const updateAgentToolsConfig = async (req: Request, res: Response) => {
     const { disabledTools } = req.body;
 
     if (!Array.isArray(disabledTools)) {
-      return res.status(400).json({ message: "disabledTools must be an array" });
+      return res
+        .status(400)
+        .json({ message: "disabledTools must be an array" });
     }
 
     user.configs.disabledAgentTools = disabledTools;
@@ -151,7 +162,9 @@ export const updateAgentToolsConfig = async (req: Request, res: Response) => {
     return res.status(200).json({ message: "Agent tools config updated" });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to update agent tools config" });
+    return res
+      .status(400)
+      .json({ message: "Failed to update agent tools config" });
   }
 };
 
@@ -159,9 +172,10 @@ export const updateAgentToolsConfig = async (req: Request, res: Response) => {
 
 export const getSwarmModels = async (req: Request, res: Response) => {
   try {
-    const env = readEnvFile();
+    const registry = readModelRegistry();
     return res.status(200).json({
-      models: readSwarmModelsFromEnv(env),
+      models: registry.models,
+      assignments: registry.assignments,
     });
   } catch (error) {
     console.log(error);
@@ -171,22 +185,28 @@ export const getSwarmModels = async (req: Request, res: Response) => {
 
 export const updateSwarmModels = async (req: Request, res: Response) => {
   try {
-    const { models } = req.body;
+    const { models, assignments } = req.body;
 
     if (!Array.isArray(models)) {
       return res.status(400).json({ message: "models must be an array" });
     }
 
-    const normalized = normalizeSwarmModelsInput(models);
-    if (models.length > 0 && normalized.length !== models.length) {
-      return res.status(400).json({ message: "Each model must have label, provider, and model fields" });
+    const normalized = normalizeModelRegistryInput(models, assignments || {});
+    if (models.length > 0 && normalized.models.length !== models.length) {
+      return res.status(400).json({
+        message:
+          "Each model must have id, label, valid provider, and model fields",
+      });
     }
 
-    const updates = buildSwarmModelEnvUpdates(normalized);
-    updateEnvVars(updates);
+    const registry = writeModelRegistry(models, assignments || {});
     clearProviderCache();
 
-    return res.status(200).json({ message: "Models updated" });
+    return res.status(200).json({
+      message: "Models updated",
+      models: registry.models,
+      assignments: registry.assignments,
+    });
   } catch (error) {
     console.log(error);
     return res.status(400).json({ message: "Failed to update models" });
@@ -210,7 +230,8 @@ export const getCapabilities = async (req: Request, res: Response) => {
       buckets: capabilityBuckets,
       selectedCapabilities: user.configs.capabilities ?? [],
       installedCapabilities: user.configs.installedCapabilities ?? [],
-      requireConsentForAllTools: user.configs.requireConsentForAllTools ?? false,
+      requireConsentForAllTools:
+        user.configs.requireConsentForAllTools ?? false,
     });
   } catch (error) {
     console.log(error);
@@ -251,7 +272,8 @@ export const updateCapabilities = async (req: Request, res: Response) => {
 export const detectCapabilities = async (req: Request, res: Response) => {
   try {
     const user = res.locals.user;
-    const selected: string[] = user.configs.capabilities ?? allCapabilities.map((c) => c.name);
+    const selected: string[] =
+      user.configs.capabilities ?? allCapabilities.map((c) => c.name);
 
     const script = buildDetectionScript(selected);
     const output = await execSSHCommand(script);
@@ -271,7 +293,8 @@ export const detectCapabilities = async (req: Request, res: Response) => {
   } catch (error) {
     console.log(error);
     return res.status(400).json({
-      message: "Failed to detect capabilities. Ensure SSH/Exploit Box is connected.",
+      message:
+        "Failed to detect capabilities. Ensure SSH/Exploit Box is connected.",
     });
   }
 };
@@ -280,33 +303,33 @@ export const detectCapabilities = async (req: Request, res: Response) => {
 
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
 
-const MODEL_ENV_KEYS = {
-  provider: "ORCHESTRATOR_PROVIDER",
-  model: "ORCHESTRATOR_MODEL",
-  apiKey: "ORCHESTRATOR_API_KEY",
-  baseURL: "ORCHESTRATOR_BASE_URL",
-};
-
 export const getModelConfig = async (_req: Request, res: Response) => {
   try {
     const env = readEnvFile();
 
     const mask = (key?: string) =>
-      key ? `${key.slice(0, 4)}${"•".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}` : "";
+      key
+        ? `${key.slice(0, 4)}${"•".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`
+        : "";
 
     const oauthToken = env.ANTHROPIC_OAUTH_ACCESS_TOKEN || "";
     const oauthConnected = !!oauthToken;
+    const registry = readModelRegistry();
+    const orchestrator = registry.models.find(
+      (model) => model.id === registry.assignments.orchestratorModelId,
+    );
 
-    const provider = env[MODEL_ENV_KEYS.provider] || "openai";
-    const model = env[MODEL_ENV_KEYS.model] || "";
-    const apiKey = env[MODEL_ENV_KEYS.apiKey] || "";
-    const baseURL = env[MODEL_ENV_KEYS.baseURL] || "";
+    const provider = orchestrator?.provider || "openai";
+    const model = orchestrator?.model || "";
+    const apiKey = orchestrator?.apiKey || "";
+    const baseURL = orchestrator?.baseURL || "";
     const isOAuth = provider === "anthropic" && oauthConnected;
     const configured = !!(model && (apiKey || isOAuth));
 
-    const reasoningMode = env.ORCHESTRATOR_REASONING_MODE || "off";
+    const reasoningMode = orchestrator?.reasoningMode || "off";
 
     return res.status(200).json({
+      id: orchestrator?.id || "",
       provider,
       model,
       apiKey: mask(apiKey),
@@ -324,10 +347,12 @@ export const getModelConfig = async (_req: Request, res: Response) => {
 
 export const updateModelConfig = async (req: Request, res: Response) => {
   try {
-    const { provider, model, apiKey, baseURL, reasoningMode } = req.body;
+    const { label, provider, model, apiKey, baseURL, reasoningMode } = req.body;
 
     if (!provider || !model) {
-      return res.status(400).json({ message: "Provider and model are required" });
+      return res
+        .status(400)
+        .json({ message: "Provider and model are required" });
     }
 
     const env = readEnvFile();
@@ -336,29 +361,55 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "API key is required" });
     }
 
-    const validProviders = ["openai", "anthropic", "minimax", "openrouter", "openai-compatible"];
+    const validProviders = [
+      "openai",
+      "anthropic",
+      "anthropic-compatible",
+      "openrouter",
+      "google",
+      "mistralai",
+      "ollama",
+      "openai-compatible",
+    ];
     if (!validProviders.includes(provider)) {
-      return res.status(400).json({ message: `Invalid provider. Must be one of: ${validProviders.join(", ")}` });
+      return res.status(400).json({
+        message: `Invalid provider. Must be one of: ${validProviders.join(", ")}`,
+      });
     }
 
-    if (reasoningMode && !["off", "low", "medium", "high", "xhigh"].includes(reasoningMode)) {
-      return res.status(400).json({ message: "Invalid reasoning mode. Must be one of: off, low, medium, high, xhigh" });
+    if (
+      reasoningMode &&
+      !["off", "low", "medium", "high", "xhigh"].includes(reasoningMode)
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid reasoning mode. Must be one of: off, low, medium, high, xhigh",
+      });
     }
 
+    const registry = readModelRegistry();
+    const existingId =
+      registry.assignments.orchestratorModelId ||
+      `${provider}-${model}`.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
+    const existing = registry.models.find((entry) => entry.id === existingId);
     const isApiKeyMasked = apiKey?.includes("•");
-    const existingKey = env[MODEL_ENV_KEYS.apiKey] || "";
-
-    const updates: Record<string, string> = {
-      [MODEL_ENV_KEYS.provider]: provider,
-      [MODEL_ENV_KEYS.model]: model,
-      [MODEL_ENV_KEYS.apiKey]: isApiKeyMasked && existingKey ? existingKey : (apiKey || ""),
-      [MODEL_ENV_KEYS.baseURL]: baseURL || "",
-      ...(reasoningMode !== undefined ? { ORCHESTRATOR_REASONING_MODE: reasoningMode } : {}),
+    const entry = {
+      id: existingId,
+      label: label || existing?.label || "Orchestrator",
+      provider,
+      model,
+      apiKey: isApiKeyMasked ? existing?.apiKey : apiKey || "",
+      baseURL: baseURL || "",
+      reasoningMode: reasoningMode || "off",
     };
+    const models = existing
+      ? registry.models.map((item) => (item.id === existingId ? entry : item))
+      : [...registry.models, entry];
 
-    updateEnvVars(updates);
-
-    const { clearProviderCache } = await import("../utils/llm/providers");
+    writeModelRegistry(models, {
+      ...registry.assignments,
+      orchestratorModelId: existingId,
+    });
     clearProviderCache();
 
     return res.status(200).json({ message: "Model config updated" });
@@ -370,15 +421,11 @@ export const updateModelConfig = async (req: Request, res: Response) => {
 
 export const deleteModelConfig = async (req: Request, res: Response) => {
   try {
-    updateEnvVars({
-      [MODEL_ENV_KEYS.provider]: "openai",
-      [MODEL_ENV_KEYS.model]: "gpt-5.5",
-      [MODEL_ENV_KEYS.apiKey]: "",
-      [MODEL_ENV_KEYS.baseURL]: "",
-      ORCHESTRATOR_REASONING_MODE: "off",
+    const registry = readModelRegistry();
+    writeModelRegistry(registry.models, {
+      ...registry.assignments,
+      orchestratorModelId: undefined,
     });
-
-    const { clearProviderCache } = await import("../utils/llm/providers");
     clearProviderCache();
 
     return res.status(200).json({ message: "Model config reset to defaults" });
@@ -407,7 +454,10 @@ function generatePKCE() {
   return { verifier, challenge };
 }
 
-const oauthStateStore = new Map<string, { verifier: string; userId: string; expiresAt: number }>();
+const oauthStateStore = new Map<
+  string,
+  { verifier: string; userId: string; expiresAt: number }
+>();
 
 setInterval(() => {
   const now = Date.now();
@@ -461,7 +511,9 @@ export const exchangeAnthropicOAuth = async (req: Request, res: Response) => {
 
     const stored = oauthStateStore.get(state);
     if (!stored || stored.userId !== userId.toString()) {
-      return res.status(400).json({ message: "Invalid or expired OAuth state" });
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired OAuth state" });
     }
 
     oauthStateStore.delete(state);
@@ -481,7 +533,7 @@ export const exchangeAnthropicOAuth = async (req: Request, res: Response) => {
       }).toString(),
       {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      }
+      },
     );
 
     const { access_token, refresh_token, expires_in } = tokenResponse.data;
@@ -489,21 +541,29 @@ export const exchangeAnthropicOAuth = async (req: Request, res: Response) => {
     updateEnvVars({
       ANTHROPIC_OAUTH_ACCESS_TOKEN: access_token,
       ANTHROPIC_OAUTH_REFRESH_TOKEN: refresh_token,
-      ANTHROPIC_OAUTH_EXPIRES_AT: String(Math.floor(Date.now() / 1000) + (expires_in || 3600)),
+      ANTHROPIC_OAUTH_EXPIRES_AT: String(
+        Math.floor(Date.now() / 1000) + (expires_in || 3600),
+      ),
     });
 
     const { clearProviderCache } = await import("../utils/llm/providers");
     clearProviderCache();
 
-    return res.status(200).json({ message: "Claude account connected via OAuth" });
+    return res
+      .status(200)
+      .json({ message: "Claude account connected via OAuth" });
   } catch (error: any) {
     console.log("OAuth exchange error:", error?.response?.data || error);
-    const msg = error?.response?.data?.error_description || "OAuth token exchange failed";
+    const msg =
+      error?.response?.data?.error_description || "OAuth token exchange failed";
     return res.status(400).json({ message: msg });
   }
 };
 
-export const disconnectAnthropicOAuth = async (_req: Request, res: Response) => {
+export const disconnectAnthropicOAuth = async (
+  _req: Request,
+  res: Response,
+) => {
   try {
     updateEnvVars({
       ANTHROPIC_OAUTH_ACCESS_TOKEN: "",
@@ -542,7 +602,9 @@ export const getVNCConfig = async (_req: Request, res: Response) => {
     const setupDone = env[VNC_ENV_KEYS.setupDone] === "true";
     const baseUrl = (env[VNC_ENV_KEYS.baseUrl] || "").trim();
 
-    const configured = !!(mode && (mode === "manual" ? (host && password) : setupDone));
+    const configured = !!(
+      mode && (mode === "manual" ? host && password : setupDone)
+    );
 
     return res.status(200).json({
       mode,
@@ -565,12 +627,16 @@ export const updateVNCConfig = async (req: Request, res: Response) => {
     const env = readEnvFile();
 
     if (!mode || !["auto", "manual"].includes(mode)) {
-      return res.status(400).json({ message: "Mode must be 'auto' or 'manual'" });
+      return res
+        .status(400)
+        .json({ message: "Mode must be 'auto' or 'manual'" });
     }
 
     if (mode === "manual") {
       if (!host || !password) {
-        return res.status(400).json({ message: "Host and password are required for manual mode" });
+        return res
+          .status(400)
+          .json({ message: "Host and password are required for manual mode" });
       }
     }
 
@@ -578,8 +644,12 @@ export const updateVNCConfig = async (req: Request, res: Response) => {
       [VNC_ENV_KEYS.mode]: mode,
       [VNC_ENV_KEYS.host]: host ?? env[VNC_ENV_KEYS.host] ?? "",
       [VNC_ENV_KEYS.port]: String(port ?? env[VNC_ENV_KEYS.port] ?? 9020),
-      [VNC_ENV_KEYS.password]: password !== undefined && password !== "" ? password : (env[VNC_ENV_KEYS.password] || ""),
-      [VNC_ENV_KEYS.setupDone]: mode === "manual" ? "true" : (env[VNC_ENV_KEYS.setupDone] || "false"),
+      [VNC_ENV_KEYS.password]:
+        password !== undefined && password !== ""
+          ? password
+          : env[VNC_ENV_KEYS.password] || "",
+      [VNC_ENV_KEYS.setupDone]:
+        mode === "manual" ? "true" : env[VNC_ENV_KEYS.setupDone] || "false",
       [VNC_ENV_KEYS.baseUrl]: typeof baseUrl === "string" ? baseUrl.trim() : "",
     };
 
@@ -640,8 +710,12 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
                 let out = "";
                 stream
                   .on("close", () => resolve(out))
-                  .on("data", (d: Buffer) => { out += d.toString(); })
-                  .stderr.on("data", (d: Buffer) => { out += d.toString(); });
+                  .on("data", (d: Buffer) => {
+                    out += d.toString();
+                  })
+                  .stderr.on("data", (d: Buffer) => {
+                    out += d.toString();
+                  });
               });
             });
           };
@@ -653,9 +727,11 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
 
           let wsInstalled = false;
           try {
-            const wsRaw = await execCmd('command -v websockify 2>/dev/null');
+            const wsRaw = await execCmd("command -v websockify 2>/dev/null");
             wsInstalled = parseVncPath(wsRaw).length > 0;
-          } catch { /* not installed */ }
+          } catch {
+            /* not installed */
+          }
 
           const alreadyInstalled = vncBin.length > 0 && wsInstalled;
           steps[0].done = true;
@@ -665,12 +741,12 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
             // Install Xvnc + lightweight GUI deps; try tigervnc first, fall back to tightvncserver
             await execCmd(
               "export DEBIAN_FRONTEND=noninteractive && " +
-              "sudo apt-get update -qq 2>&1 && " +
-              "sudo apt-get install -y -qq " +
-              "tigervnc-standalone-server tigervnc-common " +
-              "novnc python3-websockify " +
-              "xterm xfonts-base x11-xserver-utils " +
-              "dbus-x11 2>&1 || true"
+                "sudo apt-get update -qq 2>&1 && " +
+                "sudo apt-get install -y -qq " +
+                "tigervnc-standalone-server tigervnc-common " +
+                "novnc python3-websockify " +
+                "xterm xfonts-base x11-xserver-utils " +
+                "dbus-x11 2>&1 || true",
             );
 
             // If tigervnc failed (no Xvnc), try tightvncserver as fallback
@@ -679,19 +755,35 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
             if (!vncBin) {
               await execCmd(
                 "export DEBIAN_FRONTEND=noninteractive && " +
-                "sudo apt-get install -y -qq tightvncserver 2>&1 || true"
+                  "sudo apt-get install -y -qq tightvncserver 2>&1 || true",
               );
               recheck = await execCmd(VNC_SEARCH_CMD);
               vncBin = parseVncPath(recheck);
             }
 
             if (!vncBin) {
-              const dpkgInfo = await execCmd("dpkg -l | grep -i vnc 2>/dev/null || true").catch(() => "");
-              const findInfo = await execCmd("find /usr -maxdepth 4 -type f \\( -name '*vnc*' -o -name '*Xvnc*' \\) 2>/dev/null | head -20").catch(() => "");
-              console.log("VNC binary not found after install. dpkg:", dpkgInfo, "find:", findInfo);
+              const dpkgInfo = await execCmd(
+                "dpkg -l | grep -i vnc 2>/dev/null || true",
+              ).catch(() => "");
+              const findInfo = await execCmd(
+                "find /usr -maxdepth 4 -type f \\( -name '*vnc*' -o -name '*Xvnc*' \\) 2>/dev/null | head -20",
+              ).catch(() => "");
+              console.log(
+                "VNC binary not found after install. dpkg:",
+                dpkgInfo,
+                "find:",
+                findInfo,
+              );
               sshClient.end();
               return res.status(400).json({
-                message: `VNC binary not found after package install. Installed VNC packages: ${dpkgInfo.trim().split("\n").filter(l => l.startsWith("ii")).map(l => l.split(/\s+/)[1]).join(", ") || "none"}. Found files: ${findInfo.trim().split("\n").slice(0, 5).join(", ") || "none"}`,
+                message: `VNC binary not found after package install. Installed VNC packages: ${
+                  dpkgInfo
+                    .trim()
+                    .split("\n")
+                    .filter((l) => l.startsWith("ii"))
+                    .map((l) => l.split(/\s+/)[1])
+                    .join(", ") || "none"
+                }. Found files: ${findInfo.trim().split("\n").slice(0, 5).join(", ") || "none"}`,
               });
             }
           }
@@ -702,34 +794,37 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           try {
             const raw = await execCmd(
               'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec"; ' +
-              'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
-              'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done'
+                'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
+                'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done',
             );
             const found = parseVncPath(raw);
             if (found) vncPasswdBin = found;
-          } catch { /* use default */ }
+          } catch {
+            /* use default */
+          }
 
-          const isXvncDirect = vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
+          const isXvncDirect =
+            vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
           const isX11vnc = vncBin.endsWith("x11vnc");
 
           // Step 3: Configure VNC
           const randomPassword = generateRandomPassword();
           await execCmd(
             `mkdir -p ~/.vnc && ` +
-            `echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
-            `chmod +x ~/.vnc/xstartup`
+              `echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
+              `chmod +x ~/.vnc/xstartup`,
           );
           // Kill all existing VNC/Xvfb processes for a clean start
           await execCmd(
             "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
-            "pkill -f x11vnc 2>/dev/null || true; " +
-            "pkill -f 'Xvfb' 2>/dev/null || true; " +
-            `for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done`
+              "pkill -f x11vnc 2>/dev/null || true; " +
+              "pkill -f 'Xvfb' 2>/dev/null || true; " +
+              `for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done`,
           );
           const escapedPw = randomPassword.replace(/'/g, "'\\''");
           if (!isX11vnc) {
             await execCmd(
-              `echo '${escapedPw}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
+              `echo '${escapedPw}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`,
             );
           }
           steps[2].done = true;
@@ -738,27 +833,29 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           if (isXvncDirect) {
             await execCmd(
               `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
-              `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
-              `-pn > /dev/null 2>&1 &`
+                `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+                `-pn > /dev/null 2>&1 &`,
             );
             await new Promise((resolve) => setTimeout(resolve, 1500));
             await execCmd(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
           } else if (isX11vnc) {
             await execCmd(
               "command -v Xvfb >/dev/null 2>&1 || " +
-              "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
+                "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)",
             );
-            await execCmd(`Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`);
+            await execCmd(
+              `Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`,
+            );
             await new Promise((resolve) => setTimeout(resolve, 2000));
             await execCmd(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
             await execCmd(
               `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escapedPw}' ` +
-              `-forever -shared -noxdamage > /dev/null 2>&1 &`
+                `-forever -shared -noxdamage > /dev/null 2>&1 &`,
             );
             await new Promise((resolve) => setTimeout(resolve, 1500));
             // Verify x11vnc actually started
             const verify = await execCmd(
-              `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || echo NOTLISTENING`
+              `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || echo NOTLISTENING`,
             );
             if (verify.includes("NOTLISTENING")) {
               sshClient.end();
@@ -767,19 +864,23 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
               });
             }
           } else {
-            await execCmd(`${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`);
+            await execCmd(
+              `${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`,
+            );
           }
           // Ensure DISPLAY is exported in the user's shell profile
           await execCmd(
             `grep -q "export DISPLAY=${VNC_DISPLAY}" ~/.bashrc 2>/dev/null || ` +
-            `echo "export DISPLAY=${VNC_DISPLAY}" >> ~/.bashrc`
+              `echo "export DISPLAY=${VNC_DISPLAY}" >> ~/.bashrc`,
           );
           steps[3].done = true;
 
           // Step 5: Start noVNC proxy
-          await execCmd(`pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`);
           await execCmd(
-            `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`
+            `pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`,
+          );
+          await execCmd(
+            `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`,
           );
           await new Promise((resolve) => setTimeout(resolve, 1000));
           steps[4].done = true;
@@ -787,7 +888,11 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           const vncHost = sshConfig.host || "localhost";
           const vncPort = "9020";
 
-          const isDockerInternal = vncHost !== "localhost" && vncHost !== "127.0.0.1" && !/^\d+\.\d+\.\d+\.\d+$/.test(vncHost) && !vncHost.includes(".");
+          const isDockerInternal =
+            vncHost !== "localhost" &&
+            vncHost !== "127.0.0.1" &&
+            !/^\d+\.\d+\.\d+\.\d+$/.test(vncHost) &&
+            !vncHost.includes(".");
           const baseUrl = isDockerInternal ? `http://localhost:${vncPort}` : "";
 
           updateEnvVars({
@@ -811,14 +916,16 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           sshClient.end();
           console.log("VNC auto-setup error:", error);
           return res.status(400).json({
-            message: "VNC setup failed during installation. Ensure the exploit box has internet access for package installation.",
+            message:
+              "VNC setup failed during installation. Ensure the exploit box has internet access for package installation.",
           });
         }
       })
       .on("error", (err: Error) => {
         console.log("SSH connection error during VNC setup:", err);
         return res.status(400).json({
-          message: "Cannot connect to exploit box via SSH. Please configure SSH settings first.",
+          message:
+            "Cannot connect to exploit box via SSH. Please configure SSH settings first.",
         });
       });
 
@@ -843,17 +950,17 @@ interface DiagCheck {
 const VNC_SEARCH_CMD = [
   'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/usr/libexec";',
   // Prefer Xvnc/Xtigervnc (the actual binaries) over wrapper scripts
-  'for b in Xvnc Xtigervnc vncserver tigervncserver x11vnc; do',
+  "for b in Xvnc Xtigervnc vncserver tigervncserver x11vnc; do",
   '  p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && exit 0;',
-  'done;',
-  'for p in /usr/bin/Xvnc /usr/bin/Xtigervnc /usr/bin/vncserver /usr/bin/tigervncserver',
-  '  /usr/local/bin/Xvnc /usr/local/bin/vncserver /usr/libexec/vncserver /usr/sbin/vncserver',
-  '  /usr/bin/x11vnc /snap/bin/vncserver; do',
+  "done;",
+  "for p in /usr/bin/Xvnc /usr/bin/Xtigervnc /usr/bin/vncserver /usr/bin/tigervncserver",
+  "  /usr/local/bin/Xvnc /usr/local/bin/vncserver /usr/libexec/vncserver /usr/sbin/vncserver",
+  "  /usr/bin/x11vnc /snap/bin/vncserver; do",
   '  [ -x "$p" ] && echo "$p" && exit 0;',
-  'done;',
+  "done;",
   'dpkg -L tigervnc-standalone-server 2>/dev/null | grep -m1 -E "/(Xvnc|Xtigervnc|vncserver|tigervncserver)$";',
   'find /usr -maxdepth 4 \\( -name "Xvnc" -o -name "Xtigervnc" -o -name "vncserver" -o -name "tigervncserver" -o -name "x11vnc" \\) -type f 2>/dev/null | head -1',
-].join(' ');
+].join(" ");
 
 function parseVncPath(raw: string): string {
   for (const line of raw.trim().split("\n")) {
@@ -883,16 +990,30 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
       detail: `Connected as ${whoami.trim()}`,
     });
   } catch (err: any) {
-    console.error("[VNC Diagnose] SSH: connection failed:", err?.message || err);
+    console.error(
+      "[VNC Diagnose] SSH: connection failed:",
+      err?.message || err,
+    );
     checks.push({
       id: "ssh",
       label: "SSH connectivity",
       status: "fail",
       detail: err?.message || "Cannot connect via SSH",
     });
-    const skipRest = ["vnc_installed", "websockify_installed", "vnc_running", "websockify_running", "novnc_reachable"];
+    const skipRest = [
+      "vnc_installed",
+      "websockify_installed",
+      "vnc_running",
+      "websockify_running",
+      "novnc_reachable",
+    ];
     for (const id of skipRest) {
-      checks.push({ id, label: "", status: "skip", detail: "Skipped — SSH failed" });
+      checks.push({
+        id,
+        label: "",
+        status: "skip",
+        detail: "Skipped — SSH failed",
+      });
     }
     return checks;
   }
@@ -904,45 +1025,74 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
     console.log("[VNC Diagnose] VNC search raw output:", out.trim());
     vncBinaryPath = parseVncPath(out);
     const found = vncBinaryPath.length > 0;
-    console.log(`[VNC Diagnose] VNC installed: ${found ? vncBinaryPath : "NOT FOUND"}`);
+    console.log(
+      `[VNC Diagnose] VNC installed: ${found ? vncBinaryPath : "NOT FOUND"}`,
+    );
     checks.push({
       id: "vnc_installed",
       label: "VNC server installed",
       status: found ? "pass" : "fail",
-      detail: found ? `Found: ${vncBinaryPath}` : "No VNC binary found (vncserver, Xvnc, Xtigervnc)",
+      detail: found
+        ? `Found: ${vncBinaryPath}`
+        : "No VNC binary found (vncserver, Xvnc, Xtigervnc)",
     });
   } catch (err: any) {
-    console.error("[VNC Diagnose] VNC installed check failed:", err?.message || err);
-    checks.push({ id: "vnc_installed", label: "VNC server installed", status: "fail", detail: "Check failed" });
+    console.error(
+      "[VNC Diagnose] VNC installed check failed:",
+      err?.message || err,
+    );
+    checks.push({
+      id: "vnc_installed",
+      label: "VNC server installed",
+      status: "fail",
+      detail: "Check failed",
+    });
   }
 
   // 3. Websockify installed
   try {
-    const out = await execSSHCommand("which websockify 2>/dev/null && echo FOUND || echo MISSING");
+    const out = await execSSHCommand(
+      "which websockify 2>/dev/null && echo FOUND || echo MISSING",
+    );
     const found = out.trim().endsWith("FOUND");
-    console.log(`[VNC Diagnose] Websockify installed: ${found ? out.split("\\n")[0]?.trim() : "NOT FOUND"}`);
+    console.log(
+      `[VNC Diagnose] Websockify installed: ${found ? out.split("\\n")[0]?.trim() : "NOT FOUND"}`,
+    );
     checks.push({
       id: "websockify_installed",
       label: "Websockify (noVNC proxy) installed",
       status: found ? "pass" : "fail",
-      detail: found ? `websockify at ${out.split("\n")[0]?.trim()}` : "websockify not found in PATH",
+      detail: found
+        ? `websockify at ${out.split("\n")[0]?.trim()}`
+        : "websockify not found in PATH",
     });
   } catch (err: any) {
-    console.error("[VNC Diagnose] Websockify installed check failed:", err?.message || err);
-    checks.push({ id: "websockify_installed", label: "Websockify installed", status: "fail", detail: "Check failed" });
+    console.error(
+      "[VNC Diagnose] Websockify installed check failed:",
+      err?.message || err,
+    );
+    checks.push({
+      id: "websockify_installed",
+      label: "Websockify installed",
+      status: "fail",
+      detail: "Check failed",
+    });
   }
 
   // 4. VNC server running on DISPLAY=${VNC_DISPLAY} (rfbport ${VNC_RFBPORT})
   try {
     const psOut = await execSSHCommand(
-      "ps aux 2>/dev/null | grep -E 'Xvnc|Xtigervnc|Xvfb|x11vnc|vncserver' | grep -v grep || true"
+      "ps aux 2>/dev/null | grep -E 'Xvnc|Xtigervnc|Xvfb|x11vnc|vncserver' | grep -v grep || true",
     );
     console.log("[VNC Diagnose] VNC processes:\n", psOut.trim() || "(none)");
 
     const portCheck = await execSSHCommand(
-      `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || true`
+      `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || true`,
     );
-    console.log(`[VNC Diagnose] Port ${VNC_RFBPORT} check:`, portCheck.trim() || "(not listening)");
+    console.log(
+      `[VNC Diagnose] Port ${VNC_RFBPORT} check:`,
+      portCheck.trim() || "(not listening)",
+    );
     const rfbPortListening = portCheck.trim().length > 0;
 
     const hasAnyVnc = psOut.trim().length > 0;
@@ -956,7 +1106,9 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
     } else {
       detail = "No VNC server process found";
     }
-    console.log(`[VNC Diagnose] VNC running: ${healthy ? "PASS" : "FAIL"} — ${detail}`);
+    console.log(
+      `[VNC Diagnose] VNC running: ${healthy ? "PASS" : "FAIL"} — ${detail}`,
+    );
 
     checks.push({
       id: "vnc_running",
@@ -965,16 +1117,35 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
       detail,
     });
   } catch (err: any) {
-    console.error("[VNC Diagnose] VNC running check failed:", err?.message || err);
-    checks.push({ id: "vnc_running", label: `VNC on DISPLAY=${VNC_DISPLAY}`, status: "fail", detail: "Check failed" });
+    console.error(
+      "[VNC Diagnose] VNC running check failed:",
+      err?.message || err,
+    );
+    checks.push({
+      id: "vnc_running",
+      label: `VNC on DISPLAY=${VNC_DISPLAY}`,
+      status: "fail",
+      detail: "Check failed",
+    });
   }
 
   // 5. Websockify running: port ${WEBSOCKIFY_PORT} -> localhost:${VNC_RFBPORT}
   try {
-    const out = await execSSHCommand("ps aux 2>/dev/null | grep 'websockify' | grep -v grep || true");
-    console.log("[VNC Diagnose] Websockify processes:\n", out.trim() || "(none)");
-    const lines = out.trim().split("\n").filter(l => l.trim().length > 0);
-    const correctProxy = lines.some(l => l.includes(String(WEBSOCKIFY_PORT)) && l.includes(String(VNC_RFBPORT)));
+    const out = await execSSHCommand(
+      "ps aux 2>/dev/null | grep 'websockify' | grep -v grep || true",
+    );
+    console.log(
+      "[VNC Diagnose] Websockify processes:\n",
+      out.trim() || "(none)",
+    );
+    const lines = out
+      .trim()
+      .split("\n")
+      .filter((l) => l.trim().length > 0);
+    const correctProxy = lines.some(
+      (l) =>
+        l.includes(String(WEBSOCKIFY_PORT)) && l.includes(String(VNC_RFBPORT)),
+    );
     const anyWs = lines.length > 0;
 
     let status: "pass" | "fail" = correctProxy ? "pass" : "fail";
@@ -986,7 +1157,9 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
     } else {
       detail = "No websockify process found";
     }
-    console.log(`[VNC Diagnose] Websockify running: ${status.toUpperCase()} — ${detail}`);
+    console.log(
+      `[VNC Diagnose] Websockify running: ${status.toUpperCase()} — ${detail}`,
+    );
 
     checks.push({
       id: "websockify_running",
@@ -995,28 +1168,53 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
       detail,
     });
   } catch (err: any) {
-    console.error("[VNC Diagnose] Websockify running check failed:", err?.message || err);
-    checks.push({ id: "websockify_running", label: "Websockify running", status: "fail", detail: "Check failed" });
+    console.error(
+      "[VNC Diagnose] Websockify running check failed:",
+      err?.message || err,
+    );
+    checks.push({
+      id: "websockify_running",
+      label: "Websockify running",
+      status: "fail",
+      detail: "Check failed",
+    });
   }
 
   // 6. noVNC reachable locally
   try {
-    const out = await execSSHCommand(`curl -s -o /dev/null -w "%{http_code}" http://localhost:${WEBSOCKIFY_PORT}/ 2>/dev/null || echo 000`);
+    const out = await execSSHCommand(
+      `curl -s -o /dev/null -w "%{http_code}" http://localhost:${WEBSOCKIFY_PORT}/ 2>/dev/null || echo 000`,
+    );
     const code = out.trim();
     const ok = code === "200" || code === "301" || code === "302";
-    console.log(`[VNC Diagnose] noVNC reachable: HTTP ${code} — ${ok ? "PASS" : "FAIL"}`);
+    console.log(
+      `[VNC Diagnose] noVNC reachable: HTTP ${code} — ${ok ? "PASS" : "FAIL"}`,
+    );
     checks.push({
       id: "novnc_reachable",
       label: `noVNC web UI reachable (localhost:${WEBSOCKIFY_PORT})`,
       status: ok ? "pass" : "fail",
-      detail: ok ? `HTTP ${code}` : `HTTP ${code} — noVNC not responding on port ${WEBSOCKIFY_PORT}`,
+      detail: ok
+        ? `HTTP ${code}`
+        : `HTTP ${code} — noVNC not responding on port ${WEBSOCKIFY_PORT}`,
     });
   } catch (err: any) {
-    console.error("[VNC Diagnose] noVNC reachable check failed:", err?.message || err);
-    checks.push({ id: "novnc_reachable", label: "noVNC reachable", status: "fail", detail: "Check failed" });
+    console.error(
+      "[VNC Diagnose] noVNC reachable check failed:",
+      err?.message || err,
+    );
+    checks.push({
+      id: "novnc_reachable",
+      label: "noVNC reachable",
+      status: "fail",
+      detail: "Check failed",
+    });
   }
 
-  console.log("[VNC Diagnose] Completed. Results:", JSON.stringify(checks, null, 2));
+  console.log(
+    "[VNC Diagnose] Completed. Results:",
+    JSON.stringify(checks, null, 2),
+  );
   return checks;
 }
 
@@ -1030,7 +1228,8 @@ export const diagnoseVNC = async (_req: Request, res: Response) => {
   } catch (error: any) {
     console.error("[VNC Diagnose] Top-level error:", error);
     return res.status(400).json({
-      message: error?.message || "Diagnostics failed. Ensure SSH is configured.",
+      message:
+        error?.message || "Diagnostics failed. Ensure SSH is configured.",
     });
   }
 };
@@ -1072,7 +1271,7 @@ export const repairVNC = async (req: Request, res: Response) => {
     // Check if websockify is missing too
     let websockifyMissing = false;
     try {
-      const wsOut = await execSSHCommand('command -v websockify 2>/dev/null');
+      const wsOut = await execSSHCommand("command -v websockify 2>/dev/null");
       if (!parseVncPath(wsOut)) {
         websockifyMissing = true;
         console.log("[VNC Repair] Websockify not found");
@@ -1085,28 +1284,40 @@ export const repairVNC = async (req: Request, res: Response) => {
     }
 
     // Install missing packages
-    if ((fix === "all" || fix === "vnc_server") && (vncMissing || websockifyMissing)) {
+    if (
+      (fix === "all" || fix === "vnc_server") &&
+      (vncMissing || websockifyMissing)
+    ) {
       log.push("Installing missing VNC/noVNC packages...");
-      console.log("[VNC Repair] Installing packages (vncMissing=%s, websockifyMissing=%s)", vncMissing, websockifyMissing);
+      console.log(
+        "[VNC Repair] Installing packages (vncMissing=%s, websockifyMissing=%s)",
+        vncMissing,
+        websockifyMissing,
+      );
       try {
         const installOut = await execSSHCommand(
           "export DEBIAN_FRONTEND=noninteractive && " +
-          "sudo apt-get update -qq 2>&1 && " +
-          "sudo apt-get install -y -qq " +
-          "tigervnc-standalone-server tigervnc-common " +
-          "novnc python3-websockify " +
-          "xterm xfonts-base x11-xserver-utils dbus-x11 2>&1 || true"
+            "sudo apt-get update -qq 2>&1 && " +
+            "sudo apt-get install -y -qq " +
+            "tigervnc-standalone-server tigervnc-common " +
+            "novnc python3-websockify " +
+            "xterm xfonts-base x11-xserver-utils dbus-x11 2>&1 || true",
         );
-        console.log("[VNC Repair] Package install output:", installOut.trim().slice(-500));
+        console.log(
+          "[VNC Repair] Package install output:",
+          installOut.trim().slice(-500),
+        );
         log.push("Package installation completed");
 
         let found = parseVncPath(await execSSHCommand(VNC_SEARCH_CMD));
         if (!found) {
           log.push("tigervnc not found, trying tightvncserver fallback...");
-          console.log("[VNC Repair] tigervnc not found, trying tightvncserver...");
+          console.log(
+            "[VNC Repair] tigervnc not found, trying tightvncserver...",
+          );
           await execSSHCommand(
             "export DEBIAN_FRONTEND=noninteractive && " +
-            "sudo apt-get install -y -qq tightvncserver 2>&1 || true"
+              "sudo apt-get install -y -qq tightvncserver 2>&1 || true",
           );
           found = parseVncPath(await execSSHCommand(VNC_SEARCH_CMD));
         }
@@ -1117,7 +1328,9 @@ export const repairVNC = async (req: Request, res: Response) => {
           console.log(`[VNC Repair] VNC binary now available: ${vncBin}`);
         } else {
           log.push("WARNING: VNC binary still not found after install");
-          console.warn("[VNC Repair] WARNING: VNC binary still not found after install");
+          console.warn(
+            "[VNC Repair] WARNING: VNC binary still not found after install",
+          );
         }
       } catch (e: any) {
         log.push(`Package install failed: ${e.message}`);
@@ -1130,27 +1343,34 @@ export const repairVNC = async (req: Request, res: Response) => {
     try {
       const raw = await execSSHCommand(
         'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec"; ' +
-        'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
-        'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done'
+          'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
+          'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done',
       );
       const found = parseVncPath(raw);
       if (found) vncPasswdBin = found;
       console.log(`[VNC Repair] vncpasswd binary: ${vncPasswdBin}`);
-    } catch { /* use default */ }
+    } catch {
+      /* use default */
+    }
 
     if (fix === "all" || fix === "vnc_server") {
-      const isXvncDirect = vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
+      const isXvncDirect =
+        vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
       const isX11vnc = vncBin.endsWith("x11vnc");
-      console.log(`[VNC Repair] VNC type: isXvncDirect=${isXvncDirect}, isX11vnc=${isX11vnc}, binary=${vncBin}`);
+      console.log(
+        `[VNC Repair] VNC type: isXvncDirect=${isXvncDirect}, isX11vnc=${isX11vnc}, binary=${vncBin}`,
+      );
 
       try {
         await execSSHCommand(
           `mkdir -p ~/.vnc && ` +
-          `echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
-          `chmod +x ~/.vnc/xstartup`
+            `echo '#!/bin/bash\\nexport DISPLAY=${VNC_DISPLAY}\\n[ -f $$HOME/.Xresources ] && xrdb $$HOME/.Xresources\\nif command -v startxfce4 >/dev/null 2>&1; then\\n  startxfce4 &\\nelif command -v openbox-session >/dev/null 2>&1; then\\n  openbox-session &\\nelse\\n  xterm &\\nfi' > ~/.vnc/xstartup && ` +
+            `chmod +x ~/.vnc/xstartup`,
         );
         log.push(`Configured xstartup with DISPLAY=${VNC_DISPLAY}`);
-        console.log(`[VNC Repair] Configured xstartup with DISPLAY=${VNC_DISPLAY}`);
+        console.log(
+          `[VNC Repair] Configured xstartup with DISPLAY=${VNC_DISPLAY}`,
+        );
       } catch (e: any) {
         log.push(`xstartup config failed: ${e.message}`);
         console.error("[VNC Repair] xstartup config failed:", e.message);
@@ -1159,9 +1379,9 @@ export const repairVNC = async (req: Request, res: Response) => {
       try {
         await execSSHCommand(
           "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
-          "pkill -f x11vnc 2>/dev/null || true; " +
-          "pkill -f 'Xvfb' 2>/dev/null || true; " +
-          "for display in {1..99}; do vncserver -kill \":$display\" 2>/dev/null || true; done"
+            "pkill -f x11vnc 2>/dev/null || true; " +
+            "pkill -f 'Xvfb' 2>/dev/null || true; " +
+            'for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done',
         );
         log.push("Killed all existing VNC/Xvfb processes");
         console.log("[VNC Repair] Killed all existing VNC/Xvfb processes");
@@ -1174,7 +1394,7 @@ export const repairVNC = async (req: Request, res: Response) => {
         try {
           const escaped = savedPassword.replace(/'/g, "'\\''");
           await execSSHCommand(
-            `echo '${escaped}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
+            `echo '${escaped}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`,
           );
           log.push("Set VNC password");
           console.log("[VNC Repair] Set VNC password");
@@ -1186,58 +1406,84 @@ export const repairVNC = async (req: Request, res: Response) => {
 
       try {
         if (isXvncDirect) {
-          console.log(`[VNC Repair] Starting Xvnc directly: ${vncBin} ${VNC_DISPLAY} rfbport=${VNC_RFBPORT}`);
+          console.log(
+            `[VNC Repair] Starting Xvnc directly: ${vncBin} ${VNC_DISPLAY} rfbport=${VNC_RFBPORT}`,
+          );
           await execSSHCommand(
             `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
-            `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
-            `-pn > /dev/null 2>&1 &`
+              `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+              `-pn > /dev/null 2>&1 &`,
           );
           await new Promise((r) => setTimeout(r, 1500));
-          await execSSHCommand(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
+          await execSSHCommand(
+            `export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`,
+          );
           log.push(`Started Xvnc directly on ${VNC_DISPLAY}`);
           console.log(`[VNC Repair] Started Xvnc directly on ${VNC_DISPLAY}`);
         } else if (isX11vnc) {
-          console.log(`[VNC Repair] Starting x11vnc flow: Xvfb ${VNC_DISPLAY} + x11vnc rfbport=${VNC_RFBPORT}`);
+          console.log(
+            `[VNC Repair] Starting x11vnc flow: Xvfb ${VNC_DISPLAY} + x11vnc rfbport=${VNC_RFBPORT}`,
+          );
           await execSSHCommand(
             "command -v Xvfb >/dev/null 2>&1 || " +
-            "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)"
+              "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get install -y -qq xvfb 2>&1 || true)",
           );
-          await execSSHCommand(`Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`);
+          await execSSHCommand(
+            `Xvfb ${VNC_DISPLAY} -screen 0 1280x800x24 > /dev/null 2>&1 &`,
+          );
           await new Promise((r) => setTimeout(r, 2000));
 
           // Verify Xvfb started
           const xvfbCheck = await execSSHCommand(
-            `ps aux 2>/dev/null | grep 'Xvfb.*${VNC_DISPLAY}' | grep -v grep || true`
+            `ps aux 2>/dev/null | grep 'Xvfb.*${VNC_DISPLAY}' | grep -v grep || true`,
           );
-          console.log("[VNC Repair] Xvfb process check:", xvfbCheck.trim() || "(not found)");
+          console.log(
+            "[VNC Repair] Xvfb process check:",
+            xvfbCheck.trim() || "(not found)",
+          );
 
-          await execSSHCommand(`export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`);
+          await execSSHCommand(
+            `export DISPLAY=${VNC_DISPLAY} && ~/.vnc/xstartup &`,
+          );
           const escaped = (savedPassword || "").replace(/'/g, "'\\''");
           await execSSHCommand(
-            `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escaped}' -forever -shared -noxdamage > /dev/null 2>&1 &`
+            `x11vnc -display ${VNC_DISPLAY} -rfbport ${VNC_RFBPORT} -passwd '${escaped}' -forever -shared -noxdamage > /dev/null 2>&1 &`,
           );
           await new Promise((r) => setTimeout(r, 1500));
 
           // Verify x11vnc started and port is listening
           const portCheck = await execSSHCommand(
-            `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || echo NOTLISTENING`
+            `(ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep ':${VNC_RFBPORT}' || echo NOTLISTENING`,
           );
-          console.log(`[VNC Repair] Port ${VNC_RFBPORT} check after x11vnc start:`, portCheck.trim());
+          console.log(
+            `[VNC Repair] Port ${VNC_RFBPORT} check after x11vnc start:`,
+            portCheck.trim(),
+          );
           if (portCheck.includes("NOTLISTENING")) {
-            log.push(`WARNING: x11vnc started but port ${VNC_RFBPORT} not listening`);
-            console.warn(`[VNC Repair] x11vnc started but port ${VNC_RFBPORT} not listening`);
+            log.push(
+              `WARNING: x11vnc started but port ${VNC_RFBPORT} not listening`,
+            );
+            console.warn(
+              `[VNC Repair] x11vnc started but port ${VNC_RFBPORT} not listening`,
+            );
           } else {
             log.push(`Started x11vnc with Xvfb on ${VNC_DISPLAY}`);
-            console.log(`[VNC Repair] Started x11vnc with Xvfb on ${VNC_DISPLAY}`);
+            console.log(
+              `[VNC Repair] Started x11vnc with Xvfb on ${VNC_DISPLAY}`,
+            );
           }
         } else {
-          console.log(`[VNC Repair] Starting via vncserver wrapper: ${vncBin} ${VNC_DISPLAY}`);
-          await execSSHCommand(`${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`);
+          console.log(
+            `[VNC Repair] Starting via vncserver wrapper: ${vncBin} ${VNC_DISPLAY}`,
+          );
+          await execSSHCommand(
+            `${vncBin} -geometry 1280x800 -depth 24 ${VNC_DISPLAY}`,
+          );
           log.push(`Started VNC server on ${VNC_DISPLAY}`);
           console.log(`[VNC Repair] Started VNC server on ${VNC_DISPLAY}`);
         }
         await execSSHCommand(
-          `grep -q "export DISPLAY=${VNC_DISPLAY}" ~/.bashrc 2>/dev/null || echo "export DISPLAY=${VNC_DISPLAY}" >> ~/.bashrc`
+          `grep -q "export DISPLAY=${VNC_DISPLAY}" ~/.bashrc 2>/dev/null || echo "export DISPLAY=${VNC_DISPLAY}" >> ~/.bashrc`,
         );
         console.log(`[VNC Repair] Ensured DISPLAY=${VNC_DISPLAY} in ~/.bashrc`);
       } catch (e: any) {
@@ -1248,7 +1494,9 @@ export const repairVNC = async (req: Request, res: Response) => {
 
     if (fix === "all" || fix === "websockify") {
       try {
-        await execSSHCommand(`pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`);
+        await execSSHCommand(
+          `pkill -f 'websockify.*${WEBSOCKIFY_PORT}' 2>/dev/null || true`,
+        );
         log.push("Killed existing websockify");
         console.log("[VNC Repair] Killed existing websockify");
       } catch (e: any) {
@@ -1258,18 +1506,22 @@ export const repairVNC = async (req: Request, res: Response) => {
 
       try {
         await execSSHCommand(
-          `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`
+          `websockify --web /usr/share/novnc/ ${WEBSOCKIFY_PORT} localhost:${VNC_RFBPORT} > /dev/null 2>&1 &`,
         );
         await new Promise((resolve) => setTimeout(resolve, 1500));
         log.push(`Started websockify on port ${WEBSOCKIFY_PORT}`);
-        console.log(`[VNC Repair] Started websockify ${WEBSOCKIFY_PORT} → localhost:${VNC_RFBPORT}`);
+        console.log(
+          `[VNC Repair] Started websockify ${WEBSOCKIFY_PORT} → localhost:${VNC_RFBPORT}`,
+        );
       } catch (e: any) {
         log.push(`Start websockify failed: ${e.message}`);
         console.error("[VNC Repair] Start websockify failed:", e.message);
       }
     }
 
-    console.log("[VNC Repair] Repair steps done. Running post-repair diagnostics...");
+    console.log(
+      "[VNC Repair] Repair steps done. Running post-repair diagnostics...",
+    );
     const checks = await runDiagnostics();
     const allPassed = checks.every((c) => c.status === "pass");
     console.log(`[VNC Repair] Post-repair all passed: ${allPassed}. Log:`, log);
@@ -1298,7 +1550,8 @@ export const getSSHConfig = async (_req: Request, res: Response) => {
       password: env.SSH_PASSWORD || "",
       hasPrivateKey: !!env.SSH_PRIVATE_KEY,
       configured: !!(env.SSH_HOST && env.SSH_USERNAME),
-      disableSafetyProtections: user?.configs?.disableSafetyProtections ?? false,
+      disableSafetyProtections:
+        user?.configs?.disableSafetyProtections ?? false,
     });
   } catch (error) {
     console.log(error);
@@ -1308,10 +1561,21 @@ export const getSSHConfig = async (_req: Request, res: Response) => {
 
 export const updateSSHConfig = async (req: Request, res: Response) => {
   try {
-    const { host, port, username, authMethod, password, privateKeyPath, passphrase, disableSafetyProtections } = req.body;
+    const {
+      host,
+      port,
+      username,
+      authMethod,
+      password,
+      privateKeyPath,
+      passphrase,
+      disableSafetyProtections,
+    } = req.body;
 
     if (!host || !username) {
-      return res.status(400).json({ message: "Host and username are required" });
+      return res
+        .status(400)
+        .json({ message: "Host and username are required" });
     }
 
     const env = readEnvFile();
@@ -1323,7 +1587,8 @@ export const updateSSHConfig = async (req: Request, res: Response) => {
 
     if (authMethod === "key") {
       updates.SSH_PRIVATE_KEY = privateKeyPath || env.SSH_PRIVATE_KEY || "";
-      updates.SSH_PRIVATE_KEY_PASSPHRASE = passphrase || env.SSH_PRIVATE_KEY_PASSPHRASE || "";
+      updates.SSH_PRIVATE_KEY_PASSPHRASE =
+        passphrase || env.SSH_PRIVATE_KEY_PASSPHRASE || "";
       updates.SSH_PASSWORD = "";
     } else {
       updates.SSH_PASSWORD = password || env.SSH_PASSWORD || "";
@@ -1352,16 +1617,23 @@ export const updateSafetyProtections = async (req: Request, res: Response) => {
     const { disableSafetyProtections } = req.body;
 
     if (typeof disableSafetyProtections !== "boolean") {
-      return res.status(400).json({ message: "disableSafetyProtections must be a boolean" });
+      return res
+        .status(400)
+        .json({ message: "disableSafetyProtections must be a boolean" });
     }
 
     user.configs.disableSafetyProtections = disableSafetyProtections;
     await user.save();
 
-    return res.status(200).json({ message: "Safety protections updated", disableSafetyProtections });
+    return res.status(200).json({
+      message: "Safety protections updated",
+      disableSafetyProtections,
+    });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to update safety protections" });
+    return res
+      .status(400)
+      .json({ message: "Failed to update safety protections" });
   }
 };
 
@@ -1381,8 +1653,6 @@ export const saveUserInformation = async (req: Request, res: Response) => {
         .status(400)
         .json({ message: "User information already saved!" });
     }
-
-
 
     user.workingIndustry = industry;
     user.workingExperience = experience;
@@ -1413,7 +1683,9 @@ export const getAvailableModels = async (_req: Request, res: Response) => {
     return res.status(200).json({ providers });
   } catch (error: any) {
     console.error("[user] Failed to fetch available models:", error.message);
-    return res.status(500).json({ message: "Failed to fetch available models" });
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch available models" });
   }
 };
 
@@ -1456,9 +1728,10 @@ export const updateBurpConfig = async (req: Request, res: Response) => {
 export const getMagnitudeConfig = async (_req: Request, res: Response) => {
   try {
     const env = readEnvFile();
-
-    const mask = (key?: string) =>
-      key ? `${key.slice(0, 4)}${"•".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}` : "";
+    const modelRegistry = readModelRegistry();
+    const browserModel = modelRegistry.models.find(
+      (model) => model.id === modelRegistry.assignments.browserModelId,
+    );
 
     return res.status(200).json({
       enabled: env.MAGNITUDE_ENABLED === "true",
@@ -1466,10 +1739,9 @@ export const getMagnitudeConfig = async (_req: Request, res: Response) => {
       headless: env.MAGNITUDE_HEADLESS !== "false",
       displayPort: env.MAGNITUDE_DISPLAY || "",
       configured: env.MAGNITUDE_ENABLED === "true",
-      modelProvider: env.MAGNITUDE_MODEL_PROVIDER || "",
-      model: env.MAGNITUDE_MODEL || "",
-      apiKey: mask(env.MAGNITUDE_MODEL_API_KEY),
-      baseURL: env.MAGNITUDE_MODEL_BASE_URL || "",
+      browserModelId: modelRegistry.assignments.browserModelId || "",
+      browserModel: browserModel || null,
+      models: modelRegistry.models,
     });
   } catch (error) {
     console.log(error);
@@ -1479,7 +1751,8 @@ export const getMagnitudeConfig = async (_req: Request, res: Response) => {
 
 export const updateMagnitudeConfig = async (req: Request, res: Response) => {
   try {
-    const { enabled, proxyUrl, headless, displayPort, modelProvider, model, apiKey, baseURL } = req.body;
+    const { enabled, proxyUrl, headless, displayPort, browserModelId } =
+      req.body;
 
     const updates: Record<string, string> = {
       MAGNITUDE_ENABLED: String(!!enabled),
@@ -1494,19 +1767,23 @@ export const updateMagnitudeConfig = async (req: Request, res: Response) => {
       updates.MAGNITUDE_DISPLAY = displayPort || "";
     }
 
-    if (modelProvider !== undefined) updates.MAGNITUDE_MODEL_PROVIDER = modelProvider || "";
-    if (model !== undefined) updates.MAGNITUDE_MODEL = model || "";
-    if (apiKey !== undefined && !apiKey.includes("•")) {
-      updates.MAGNITUDE_MODEL_API_KEY = apiKey || "";
-    }
-    if (baseURL !== undefined) updates.MAGNITUDE_MODEL_BASE_URL = baseURL || "";
-
     updateEnvVars(updates);
+
+    if (browserModelId !== undefined) {
+      const registry = readModelRegistry();
+      writeModelRegistry(registry.models, {
+        ...registry.assignments,
+        browserModelId: browserModelId || undefined,
+      });
+      clearProviderCache();
+    }
 
     return res.status(200).json({ message: "Magnitude configuration updated" });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to update Magnitude config" });
+    return res
+      .status(400)
+      .json({ message: "Failed to update Magnitude config" });
   }
 };
 
@@ -1515,7 +1792,9 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     const { goal, targetUrl } = req.body;
 
     if (!goal) {
-      return res.status(400).json({ message: "A goal is required to start the browser agent" });
+      return res
+        .status(400)
+        .json({ message: "A goal is required to start the browser agent" });
     }
 
     if (!targetUrl) {
@@ -1525,38 +1804,39 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     const env = readEnvFile();
 
     if (env.MAGNITUDE_ENABLED !== "true") {
-      return res.status(400).json({ message: "Magnitude browser agent is not enabled. Enable it in Settings first." });
+      return res.status(400).json({
+        message:
+          "Magnitude browser agent is not enabled. Enable it in Settings -> Browser Agent.",
+      });
     }
 
-    const provider = env.MAGNITUDE_MODEL_PROVIDER || "openai";
-    const model = env.MAGNITUDE_MODEL || "gpt-5.5";
-    const apiKey = env.MAGNITUDE_MODEL_API_KEY || "";
-    const baseURL = env.MAGNITUDE_MODEL_BASE_URL
-      || (provider === "minimax" ? "https://api.minimax.io/v1" : "")
-      || (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "");
+    const browserModel = getAssignedModels().browser;
+    if (!browserModel) {
+      return res.status(400).json({
+        message:
+          "No Browser Agent model selected. Assign one in Settings → Models.",
+      });
+    }
+
+    const providerConfig = await presetToProviderConfig(browserModel);
+    const { apiKey } = providerConfig;
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
     const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
     const normalizedDisplay = display.startsWith(":") ? display : `:${display}`;
 
     if (!apiKey) {
-      return res.status(400).json({ message: "No API key configured for the Browser Agent. Configure a model in Settings → Browser Agent." });
+      return res.status(400).json({
+        message:
+          "The selected Browser Agent model has no API key. Configure it in Settings → Models.",
+      });
     }
 
     // Always ensure DISPLAY is set for the process
     process.env.DISPLAY = normalizedDisplay;
 
-    const PROVIDER_MAP: Record<string, string> = {
-      anthropic: "anthropic",
-      openai: "openai",
-      google: "google-ai",
-      minimax: "openai-generic",
-      openrouter: "openai-generic",
-      "openai-compatible": "openai-generic",
-    };
-    const magnitudeLlmProvider = PROVIDER_MAP[provider] || "openai";
-
     const { startBrowserAgent } = await import("magnitude-core");
+    const llm = resolveMagnitudeLlmConfig(providerConfig);
 
     const launchOptions: any = { headless };
     if (proxyUrl) {
@@ -1574,12 +1854,8 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
         contextOptions: { ignoreHTTPSErrors: true },
       },
       llm: {
-        provider: magnitudeLlmProvider,
-        options: {
-          model,
-          apiKey,
-          ...(baseURL ? { baseUrl: baseURL } : {}),
-        },
+        provider: llm.provider,
+        options: llm.options,
       },
     };
 
@@ -1594,7 +1870,9 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
         targetUrl,
       });
     } catch (agentError: any) {
-      try { await agent.stop(); } catch {}
+      try {
+        await agent.stop();
+      } catch {}
       return res.status(500).json({
         message: `Browser agent failed: ${formatMagnitudeError(agentError)}`,
         goal,
@@ -1631,6 +1909,8 @@ export const getBrowserAgentVNC = async (_req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to get Browser Agent VNC config" });
+    return res
+      .status(400)
+      .json({ message: "Failed to get Browser Agent VNC config" });
   }
 };

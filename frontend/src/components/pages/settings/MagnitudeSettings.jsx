@@ -1,25 +1,22 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
+  App,
+  Col,
+  Divider,
   Form,
   Input,
-  Select,
-  AutoComplete,
-  Switch,
   Row,
-  Col,
+  Switch,
   Tag,
-  App,
-  Divider,
   Tooltip,
 } from "antd";
 import {
   CheckCircleFilled,
   InfoCircleOutlined,
-  WarningOutlined,
   LoadingOutlined,
-  ExportOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
@@ -27,117 +24,21 @@ import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
   getMagnitudeConfig,
-  updateMagnitudeConfig,
   startMagnitudeAgent,
-  getAvailableModels,
+  updateMagnitudeConfig,
 } from "@/services/user.service";
+import { getMagnitudeModelIssue } from "@/utils/magnitudeModels";
 
-const PROVIDER_META = {
-  openai: {
-    label: "OpenAI",
-    placeholder: "sk-...",
-    keyURL: "https://platform.openai.com/api-keys",
-    keyLabel: "Get OpenAI API Key",
-  },
-  anthropic: {
-    label: "Anthropic (Claude)",
-    placeholder: "sk-ant-...",
-    keyURL: "https://console.anthropic.com/settings/keys",
-    keyLabel: "Get Claude API Key",
-  },
-  minimax: {
-    label: "MiniMax",
-    placeholder: "MiniMax API key",
-    keyURL: "https://platform.minimax.io/user-center/basic-information/interface-key",
-    keyLabel: "Get MiniMax API Key",
-  },
-  openrouter: {
-    label: "OpenRouter",
-    placeholder: "sk-or-v1-...",
-    keyURL: "https://openrouter.ai/settings/keys",
-    keyLabel: "Get OpenRouter API Key",
-  },
-  google: {
-    label: "Google",
-    placeholder: "AI...",
-    keyURL: "https://aistudio.google.com/apikey",
-    keyLabel: "Get Google AI API Key",
-  },
-  mistralai: {
-    label: "Mistral AI",
-    placeholder: "API key",
-    keyURL: "https://console.mistral.ai/api-keys",
-    keyLabel: "Get Mistral API Key",
-  },
-};
-
-const FALLBACK_PROVIDERS = [
-  { value: "openai", label: "OpenAI", models: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-4.1", "gpt-4.1-mini"] },
-  { value: "anthropic", label: "Anthropic (Claude)", models: ["claude-opus-4-7", "claude-mythos-preview", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-6", "claude-sonnet-4-5"] },
-  { value: "minimax", label: "MiniMax", models: ["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.1", "MiniMax-M2.1-highspeed", "MiniMax-M2"] },
-  { value: "openrouter", label: "OpenRouter", models: ["minimax/minimax-m2.7", "minimax/minimax-m2.7-highspeed", "anthropic/claude-opus-4.7", "anthropic/claude-mythos-preview", "anthropic/claude-sonnet-4.6", "openai/gpt-5.5", "openai/gpt-5.4"] },
-];
-
-const OPENAI_COMPATIBLE_ENTRY = {
-  value: "openai-compatible",
-  label: "OpenAI-Compatible",
-  models: [],
-};
-
-function buildProviders(catalog) {
-  if (!catalog?.providers?.length) {
-    return [
-      ...FALLBACK_PROVIDERS.map((fb) => ({ ...fb, ...(PROVIDER_META[fb.value] || {}) })),
-      OPENAI_COMPATIBLE_ENTRY,
-    ];
-  }
-  const providers = catalog.providers.map((cp) => {
-    const meta = PROVIDER_META[cp.id] || {};
-    let catalogModels = cp.models.map((m) => m.modelId);
-    if (cp.id === "anthropic") {
-      catalogModels = catalogModels.map((id) => id.replace(/(\d+)\.(\d+)/g, "$1-$2"));
-    }
-    const fb = FALLBACK_PROVIDERS.find((f) => f.value === cp.id);
-    const base = fb?.models || [];
-    const seen = new Set(base);
-    const merged = [...base];
-    for (const id of catalogModels) {
-      if (!seen.has(id)) { merged.push(id); seen.add(id); }
-    }
-    return {
-      value: cp.id,
-      label: meta.label || cp.name,
-      models: merged,
-      placeholder: meta.placeholder || "API key",
-      keyURL: meta.keyURL || null,
-      keyLabel: meta.keyLabel || null,
-    };
-  });
-  providers.push(OPENAI_COMPATIBLE_ENTRY);
-  return providers;
-}
-
-const MagnitudeSettingsPage = () => {
+const MagnitudeSettingsPage = ({ onNavigate }) => {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("magnitude-config", getMagnitudeConfig);
-  const { data: catalog } = useQuery("available-models", getAvailableModels, {
-    staleTime: 6 * 60 * 60 * 1000,
-    cacheTime: 6 * 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
 
   const [form] = Form.useForm();
-  const [modelForm] = Form.useForm();
   const [goalForm] = Form.useForm();
   const [saving, setSaving] = useState(false);
-  const [savingModel, setSavingModel] = useState(false);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState(null);
-
-  const providers = useMemo(() => buildProviders(catalog), [catalog]);
-  const modelProvider = Form.useWatch("modelProvider", modelForm);
-  const providerDef = providers.find((p) => p.value === modelProvider);
 
   useEffect(() => {
     if (data) {
@@ -147,36 +48,20 @@ const MagnitudeSettingsPage = () => {
         headless: data.headless,
         displayPort: data.displayPort,
       });
-      modelForm.setFieldsValue({
-        modelProvider: data.modelProvider || "openai",
-        model: data.model || undefined,
-        apiKey: data.apiKey || "",
-        baseURL: data.baseURL || "",
-      });
     }
-  }, [data, form, modelForm]);
+  }, [data, form]);
 
   const saveMutation = useMutation(updateMagnitudeConfig, {
     onSuccess: () => {
-      message.success("Magnitude configuration saved");
+      message.success("Browser Agent configuration saved");
       queryClient.invalidateQueries("magnitude-config");
       setSaving(false);
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save Magnitude config");
+      message.error(
+        err?.response?.data?.message || "Failed to save Browser Agent config",
+      );
       setSaving(false);
-    },
-  });
-
-  const saveModelMutation = useMutation(updateMagnitudeConfig, {
-    onSuccess: () => {
-      message.success("Browser Agent model saved");
-      queryClient.invalidateQueries("magnitude-config");
-      setSavingModel(false);
-    },
-    onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save model config");
-      setSavingModel(false);
     },
   });
 
@@ -187,21 +72,6 @@ const MagnitudeSettingsPage = () => {
       proxyUrl: values.proxyUrl || "",
       headless: values.headless,
       displayPort: values.displayPort || "",
-    });
-  };
-
-  const handleSaveModel = (values) => {
-    setSavingModel(true);
-    saveModelMutation.mutate({
-      enabled: form.getFieldValue("enabled"),
-      proxyUrl: form.getFieldValue("proxyUrl") || "",
-      headless: form.getFieldValue("headless"),
-      displayPort: form.getFieldValue("displayPort") || "",
-      useOwnModel: true,
-      modelProvider: values.modelProvider,
-      model: values.model,
-      apiKey: values.apiKey,
-      baseURL: values.baseURL || "",
     });
   };
 
@@ -229,16 +99,75 @@ const MagnitudeSettingsPage = () => {
   if (isLoading) return <Loader />;
 
   const configured = data?.configured;
-  const modelConfigured = !!(data?.modelProvider && data?.apiKey);
+  const selectedModel = data?.browserModel || null;
+  const browserModelIssue = selectedModel
+    ? getMagnitudeModelIssue(selectedModel)
+    : null;
+  const canRunBrowserAgent = configured && selectedModel && !browserModelIssue;
 
   return (
     <div className={styles.settingsContainer}>
       <div className={styles.statusRow}>
         {configured ? (
-          <Tag icon={<CheckCircleFilled />} color="success">Enabled</Tag>
+          <Tag icon={<CheckCircleFilled />} color="success">
+            Enabled
+          </Tag>
         ) : (
-          <Tag icon={<WarningOutlined />} color="warning">Disabled</Tag>
+          <Tag icon={<WarningOutlined />} color="warning">
+            Disabled
+          </Tag>
         )}
+        {selectedModel ? (
+          <Tag color={browserModelIssue ? "warning" : "blue"}>
+            {selectedModel.label}
+          </Tag>
+        ) : (
+          <Tag color="warning">No model selected</Tag>
+        )}
+      </div>
+
+      <div className={styles.warningBox}>
+        <WarningOutlined />
+        <span>
+          Browser Agent requires a Magnitude-compatible model. For MiniMax, use
+          an <strong>OpenAI-Compatible</strong> preset with base URL{" "}
+          <code>https://api.minimax.io/v1</code>. Incompatible presets are
+          hidden from the Browser Agent dropdown in Settings &gt; Models.
+        </span>
+      </div>
+
+      {browserModelIssue && (
+        <div className={styles.errorBox}>
+          <WarningOutlined />
+          <span>{browserModelIssue}</span>
+        </div>
+      )}
+
+      <div className={styles.infoBox}>
+        <InfoCircleOutlined />
+        <span>
+          Browser Agent uses the model selected in Settings &gt; Models.
+          Configure credentials and assignments there once.
+        </span>
+      </div>
+
+      <div className={styles.mcpPanel}>
+        <div className={styles.mcpPanelHeader} style={{ marginBottom: 0 }}>
+          <div>
+            <div className={styles.mcpPanelTitle}>Browser Model</div>
+            <div className={styles.mcpPanelDescription}>
+              {selectedModel
+                ? `${selectedModel.label} · ${selectedModel.provider}/${selectedModel.model}`
+                : "No Browser Agent model is assigned yet."}
+            </div>
+          </div>
+          <PrimaryButton
+            onClick={() => onNavigate?.("models")}
+            style={{ height: "1.85rem", fontSize: "0.72rem" }}
+          >
+            Open Models
+          </PrimaryButton>
+        </div>
       </div>
 
       <Form
@@ -264,25 +193,20 @@ const MagnitudeSettingsPage = () => {
           label={
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
               Proxy URL
-              <Tooltip title="Route browser traffic through a proxy (e.g. Burp Suite). Use format http://host:port or socks5://host:port">
-                <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
+              <Tooltip title="Route browser traffic through a proxy such as Burp Suite. Use http://host:port or socks5://host:port.">
+                <InfoCircleOutlined
+                  style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }}
+                />
               </Tooltip>
             </span>
           }
           name="proxyUrl"
         >
-          <Input placeholder="e.g. http://127.0.0.1:8080 or socks5://proxy:1080" />
+          <Input placeholder="e.g. http://127.0.0.1:8080" />
         </Form.Item>
 
         <Form.Item
-          label={
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Headless Mode
-              <Tooltip title="Run the browser without a visible window. Disable to watch the browser on your VNC/X display.">
-                <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
-              </Tooltip>
-            </span>
-          }
+          label="Headless Mode"
           name="headless"
           valuePropName="checked"
         >
@@ -295,24 +219,16 @@ const MagnitudeSettingsPage = () => {
         >
           {({ getFieldValue }) =>
             !getFieldValue("headless") && (
-              <Form.Item
-                label={
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    X Display
-                    <Tooltip title="The X11 DISPLAY to render the browser on (e.g. :99 for a VNC server on display 99). Required when headless is off on a server without a physical display.">
-                      <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
-                    </Tooltip>
-                  </span>
-                }
-                name="displayPort"
-              >
+              <Form.Item label="X Display" name="displayPort">
                 <Input placeholder="e.g. :99 or :1" />
               </Form.Item>
             )
           }
         </Form.Item>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}
+        >
           <PrimaryButton
             htmlType="submit"
             loading={saving}
@@ -324,124 +240,24 @@ const MagnitudeSettingsPage = () => {
         </div>
       </Form>
 
-      <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0" }} />
-
-      <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--primary-text)", marginBottom: "0.75rem" }}>
-        Browser Agent Model
-      </div>
-
-      <div className={styles.infoBox} style={{ marginBottom: "1rem" }}>
-        <InfoCircleOutlined />
-        <span>
-          Configure the model and API key used by the browser agent. This is independent of the main copilot model.
-        </span>
-      </div>
-
-      <Form
-        form={modelForm}
-        layout="vertical"
-        onFinish={handleSaveModel}
-        initialValues={{
-          modelProvider: data?.modelProvider || "openai",
-          model: data?.model || undefined,
-          apiKey: data?.apiKey || "",
-          baseURL: data?.baseURL || "",
-        }}
-        requiredMark={false}
-      >
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="modelProvider" label="Provider" rules={[{ required: true }]}>
-              <Select
-                showSearch
-                options={providers.map((p) => ({ value: p.value, label: p.label }))}
-                popupMatchSelectWidth={false}
-                filterOption={(input, option) => option.label.toLowerCase().includes(input.toLowerCase())}
-                onChange={() => {
-                  modelForm.setFieldValue("model", undefined);
-                  modelForm.setFieldValue("apiKey", "");
-                  modelForm.setFieldValue("baseURL", "");
-                }}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="model" label="Model" rules={[{ required: true, message: "Model is required" }]}>
-              <AutoComplete
-                allowClear
-                placeholder={providerDef?.models?.length ? "Select or type a model" : "e.g. llama-3.1-70b-versatile"}
-                options={(providerDef?.models || []).map((m) => ({ value: m, label: m }))}
-                popupMatchSelectWidth={false}
-                filterOption={(input, option) => option.value.toLowerCase().includes(input.toLowerCase())}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={16}>
-          <Col span={modelProvider === "openai-compatible" ? 12 : 24}>
-            <Form.Item name="apiKey" label="API Key" rules={[{ required: true, message: "API key is required" }]}>
-              <Input.Password autoComplete="off" placeholder={providerDef?.placeholder || "API key"} visibilityToggle />
-            </Form.Item>
-          </Col>
-          {modelProvider === "openai-compatible" && (
-            <Col span={12}>
-              <Form.Item
-                name="baseURL"
-                label={
-                  <span>
-                    Base URL{" "}
-                    <Tooltip title="e.g. https://api.groq.com/openai/v1">
-                      <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: 11 }} />
-                    </Tooltip>
-                  </span>
-                }
-                rules={[{ required: true, message: "Base URL is required" }]}
-              >
-                <Input placeholder="https://api.groq.com/openai/v1" />
-              </Form.Item>
-            </Col>
-          )}
-        </Row>
-
-        <Row justify="space-between" align="middle" style={{ marginTop: 4 }}>
-          <Col>
-            {providerDef?.keyURL && (
-              <a
-                href={providerDef.keyURL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.externalLink}
-              >
-                <ExportOutlined style={{ fontSize: 11 }} />
-                {providerDef.keyLabel}
-              </a>
-            )}
-          </Col>
-          <Col>
-            <PrimaryButton
-              purple
-              htmlType="submit"
-              loading={savingModel}
-              style={{ height: "2rem", fontSize: "0.75rem" }}
-            >
-              Save Model
-            </PrimaryButton>
-          </Col>
-        </Row>
-      </Form>
-
-      {configured && (
+      {canRunBrowserAgent && (
         <>
-          <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0" }} />
+          <Divider
+            style={{
+              borderColor: "var(--border-color-100)",
+              margin: "1.25rem 0",
+            }}
+          />
 
-          <div style={{
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            color: "var(--primary-text)",
-            marginBottom: "0.75rem",
-          }}>
-            Quick Test — Run Browser Agent
+          <div
+            style={{
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              color: "var(--primary-text)",
+              marginBottom: "0.75rem",
+            }}
+          >
+            Quick Test
           </div>
 
           {runResult && (
@@ -462,10 +278,7 @@ const MagnitudeSettingsPage = () => {
             </div>
           )}
 
-          <Form
-            form={goalForm}
-            layout="vertical"
-          >
+          <Form form={goalForm} layout="vertical">
             <Form.Item
               label="Target URL"
               name="targetUrl"
@@ -485,52 +298,23 @@ const MagnitudeSettingsPage = () => {
               />
             </Form.Item>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-              <PrimaryButton
-                onClick={handleStartAgent}
-                loading={running}
-                purple
-                style={{ height: "2rem", fontSize: "0.75rem" }}
-                disabled={!modelConfigured}
-              >
-                {running ? (
-                  <><LoadingOutlined style={{ marginRight: 6 }} /> Running Agent...</>
-                ) : (
-                  "Run Browser Agent"
-                )}
-              </PrimaryButton>
-            </div>
+            <Row justify="end">
+              <Col>
+                <PrimaryButton
+                  purple
+                  onClick={handleStartAgent}
+                  loading={running}
+                  disabled={!selectedModel}
+                  style={{ height: "2rem", fontSize: "0.75rem" }}
+                >
+                  {running ? <LoadingOutlined /> : null}
+                  Run Test
+                </PrimaryButton>
+              </Col>
+            </Row>
           </Form>
         </>
       )}
-
-      <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
-
-      <div className={styles.notesSection}>
-        <ul>
-          <li>
-            Magnitude enables <strong>agentic browser automation</strong> for penetration testing —
-            the AI can navigate web apps, fill forms, click buttons, and extract data.
-          </li>
-          <li>
-            The browser agent uses its own <strong>model and API key</strong> configured above,
-            independent of the main copilot model. Supports OpenAI and Anthropic providers.
-          </li>
-          <li>
-            Set a <strong>proxy URL</strong> to route browser traffic through Burp Suite or
-            another intercepting proxy for full visibility.
-          </li>
-          <li>
-            During a pentest session, the AI can invoke the <code>browser_action</code> tool
-            to autonomously interact with target web applications.
-          </li>
-          <li>
-            Disable <strong>headless mode</strong> to watch the browser in real time. On a VM
-            or server, set the <strong>X Display</strong> to your VNC display (e.g. <code>:99</code>)
-            so the browser renders on the VNC session.
-          </li>
-        </ul>
-      </div>
     </div>
   );
 };

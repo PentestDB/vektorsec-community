@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
-import { TbTools, TbBrain, TbTerminal2, TbDeviceDesktop, TbRadar, TbWorldWww } from "react-icons/tb";
+import {
+  TbTools,
+  TbBrain,
+  TbTerminal2,
+  TbDeviceDesktop,
+  TbRadar,
+  TbWorldWww,
+} from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
@@ -11,6 +18,7 @@ import SSHPage from "@/components/pages/settings/SSH";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
+import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 
 const TABS = [
   {
@@ -22,14 +30,16 @@ const TABS = [
   {
     key: "capabilities",
     label: "Capabilities",
-    description: "Manage CLI tools and Python packages available on your exploit box.",
+    description:
+      "Manage CLI tools and Python packages available on your exploit box.",
     icon: TbTools,
     component: CapabilitiesPage,
   },
   {
     key: "models",
     label: "Models",
-    description: "Configure orchestrator and racer models for parallel agent sessions.",
+    description:
+      "Configure reusable model presets and assign them to orchestrator, racers, and browser agent.",
     icon: TbBrain,
     component: ModelsPage,
   },
@@ -42,7 +52,8 @@ const TABS = [
   {
     key: "gui",
     label: "GUI / VNC",
-    description: "Set up a remote desktop on your exploit box for graphical tools.",
+    description:
+      "Set up a remote desktop on your exploit box for graphical tools.",
     icon: TbDeviceDesktop,
     component: GUISettingsPage,
   },
@@ -56,9 +67,18 @@ const TABS = [
   {
     key: "magnitude",
     label: "Browser Agent",
-    description: "Configure Magnitude for agentic browser automation during pentests.",
+    description:
+      "Configure Magnitude for agentic browser automation during pentests.",
     icon: TbWorldWww,
     component: MagnitudeSettingsPage,
+  },
+  {
+    key: "mcp",
+    label: "MCP Access",
+    description:
+      "Generate MCP tokens and copy the backend-integrated MCP endpoint config.",
+    icon: TbWorldWww,
+    component: MCPSettingsPage,
   },
 ];
 
@@ -75,7 +95,7 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
     (e) => {
       if (e.key === "Escape") onClose();
     },
-    [onClose]
+    [onClose],
   );
 
   useEffect(() => {
@@ -104,9 +124,7 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
               <div
                 key={tab.key}
                 className={
-                  activeTab === tab.key
-                    ? styles.navItemActive
-                    : styles.navItem
+                  activeTab === tab.key ? styles.navItemActive : styles.navItem
                 }
                 onClick={() => setActiveTab(tab.key)}
               >
@@ -132,7 +150,7 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
             </button>
           </div>
           <div className={styles.contentBody}>
-            <ActiveComponent />
+            <ActiveComponent onNavigate={setActiveTab} />
           </div>
         </div>
       </div>

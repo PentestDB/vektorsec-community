@@ -3,8 +3,6 @@ import { loadConfig } from "./loadConfig";
 loadConfig();
 
 const OPTIONAL_KEYS = new Set([
-  "ORCHESTRATOR_API_KEY",
-  "ORCHESTRATOR_BASE_URL",
   "SSH_PASSWORD",
   "SSH_PRIVATE_KEY",
   "SSH_PRIVATE_KEY_PASSPHRASE",

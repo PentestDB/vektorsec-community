@@ -47,6 +47,11 @@ function resolveTomlPath(): string {
 
 let _loaded = false;
 
+function shouldPreserveExistingEnv(key: string): boolean {
+  const existing = process.env[key];
+  return existing !== undefined && existing !== "";
+}
+
 export function getDataDir(): string {
   return resolveDataDir();
 }
@@ -73,7 +78,7 @@ export function loadConfig(): void {
 
         for (const [tomlKey, envKey] of Object.entries(keys)) {
           const val = sectionData[tomlKey];
-          if (val !== undefined && val !== null && val !== "") {
+          if (val !== undefined && val !== null && val !== "" && !shouldPreserveExistingEnv(envKey)) {
             process.env[envKey] = String(val);
           }
         }
@@ -86,7 +91,9 @@ export function loadConfig(): void {
   if (fs.existsSync(envPath)) {
     const envVars = dotenv.parse(fs.readFileSync(envPath, "utf-8"));
     for (const [key, value] of Object.entries(envVars)) {
-      process.env[key] = value;
+      if (!shouldPreserveExistingEnv(key)) {
+        process.env[key] = value;
+      }
     }
   }
 

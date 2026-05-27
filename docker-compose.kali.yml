@@ -24,6 +24,7 @@ services:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend/.env:/srv/data/.env
+      - ./backend/model-registry.json:/srv/data/model-registry.json
       - ./config.toml:/srv/data/config.toml:ro
     depends_on:
       redis:

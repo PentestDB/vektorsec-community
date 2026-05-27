@@ -19,6 +19,8 @@ import { vncRoutes } from "./routes/vnc.routes";
 import { burpRoutes } from "./routes/burp.routes";
 import { ctfRoutes } from "./routes/ctf.routes";
 import { workspaceRoutes } from "./routes/workspace.routes";
+import { mcpRoutes } from "./routes/mcp.routes";
+import { mcpHttpRoutes } from "./routes/mcp-http.routes";
 import getSecrets from "./utils/getSecrets";
 import { initTracing } from "./utils/tracing";
 import { setupShellWebSocket } from "./services/shell.socket";
@@ -198,6 +200,8 @@ const initializeApp = async () => {
     app.use("/api/burp", burpRoutes);
     app.use("/api/ctf", ctfRoutes);
     app.use("/api/workspace", workspaceRoutes);
+    app.use("/api/mcp", mcpRoutes);
+    app.use("/mcp", mcpHttpRoutes);
 
     app.use(function (err: any, req: any, res: any, next: any) {
       console.log("Error occurred but handled - ", err);

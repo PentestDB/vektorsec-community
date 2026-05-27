@@ -1,6 +1,9 @@
 import { ToolDefinition } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
 import { formatMagnitudeError } from "../../utils/magnitudeError";
+import { presetToProviderConfig } from "../../utils/llm/providers";
+import { getAssignedModels } from "../../utils/modelRegistryStore";
+import { resolveMagnitudeLlmConfig } from "../../utils/magnitudeLlm";
 import { z } from "zod";
 
 const magnitudeBrowser: ToolDefinition = {
@@ -16,7 +19,8 @@ const magnitudeBrowser: ToolDefinition = {
     properties: {
       url: {
         type: "string",
-        description: "The target URL to navigate to before performing the action",
+        description:
+          "The target URL to navigate to before performing the action",
       },
       goal: {
         type: "string",
@@ -39,24 +43,33 @@ const magnitudeBrowser: ToolDefinition = {
     const { url, goal, extract } = args;
 
     if (!url || !goal) {
-      return { output: "Error: both 'url' and 'goal' are required", exitCode: 1 };
+      return {
+        output: "Error: both 'url' and 'goal' are required",
+        exitCode: 1,
+      };
     }
 
     const env = readEnvFile();
 
     if (env.MAGNITUDE_ENABLED !== "true") {
       return {
-        output: "Magnitude browser agent is not enabled. Enable it in Settings → Magnitude.",
+        output:
+          "Magnitude browser agent is not enabled. Enable it in Settings -> Browser Agent.",
         exitCode: 1,
       };
     }
 
-    const provider = env.MAGNITUDE_MODEL_PROVIDER || "openai";
-    const model = env.MAGNITUDE_MODEL || "gpt-5.5";
-    const apiKey = env.MAGNITUDE_MODEL_API_KEY || "";
-    const baseURL = env.MAGNITUDE_MODEL_BASE_URL
-      || (provider === "minimax" ? "https://api.minimax.io/v1" : "")
-      || (provider === "openrouter" ? "https://openrouter.ai/api/v1" : "");
+    const browserModel = getAssignedModels().browser;
+    if (!browserModel) {
+      return {
+        output:
+          "No Browser Agent model selected. Assign one in Settings -> Models.",
+        exitCode: 1,
+      };
+    }
+
+    const providerConfig = await presetToProviderConfig(browserModel);
+    const { apiKey } = providerConfig;
     const proxyUrl = env.MAGNITUDE_PROXY_URL || "";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
     const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
@@ -64,7 +77,8 @@ const magnitudeBrowser: ToolDefinition = {
 
     if (!apiKey) {
       return {
-        output: "No API key configured for the Browser Agent. Configure a model in Settings → Browser Agent.",
+        output:
+          "The selected Browser Agent model has no API key. Configure it in Settings → Models.",
         exitCode: 1,
       };
     }
@@ -72,18 +86,9 @@ const magnitudeBrowser: ToolDefinition = {
     // Always ensure DISPLAY is set for the process
     process.env.DISPLAY = normalizedDisplay;
 
-    const PROVIDER_MAP: Record<string, string> = {
-      anthropic: "anthropic",
-      openai: "openai",
-      google: "google-ai",
-      minimax: "openai-generic",
-      openrouter: "openai-generic",
-      "openai-compatible": "openai-generic",
-    };
-    const magnitudeLlmProvider = PROVIDER_MAP[provider] || "openai";
-
     try {
       const { startBrowserAgent } = await import("magnitude-core");
+      const llm = resolveMagnitudeLlmConfig(providerConfig);
 
       const launchOptions: any = { headless };
       if (proxyUrl) {
@@ -101,12 +106,8 @@ const magnitudeBrowser: ToolDefinition = {
           contextOptions: { ignoreHTTPSErrors: true },
         },
         llm: {
-          provider: magnitudeLlmProvider,
-          options: {
-            model,
-            apiKey,
-            ...(baseURL ? { baseUrl: baseURL } : {}),
-          },
+          provider: llm.provider,
+          options: llm.options,
         },
       };
 
@@ -128,7 +129,9 @@ const magnitudeBrowser: ToolDefinition = {
           exitCode: 0,
         };
       } catch (agentError: any) {
-        try { await agent.stop(); } catch {}
+        try {
+          await agent.stop();
+        } catch {}
         return {
           output: `Browser agent failed during execution: ${formatMagnitudeError(agentError)}`,
           exitCode: 1,

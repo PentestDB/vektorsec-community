@@ -1,6 +1,7 @@
 # ── Secrets & generated config (NEVER commit these) ──
 config.toml
 backend/.env
+backend/model-registry.json
 frontend/.env
 .env
 *.env.local

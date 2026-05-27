@@ -1,8 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import styles from "@/styles/components/Chat.module.scss";
-import { CaretRightOutlined, LoadingOutlined, CopyOutlined, CheckOutlined } from "@ant-design/icons";
+import {
+  CaretRightOutlined,
+  LoadingOutlined,
+  CopyOutlined,
+  CheckOutlined,
+} from "@ant-design/icons";
 
 const TOOL_LABELS = {
   run_bash: "Bash",
@@ -18,24 +29,48 @@ const TOOL_LABELS = {
   spawn_subagent: "Spawn Subagent",
   view_image: "View Image",
   send_to_burp: "Burp Request",
+  platform_health: "MCP Platform Health",
+  platform_setup: "MCP Platform Setup",
+  platform_repair: "MCP Platform Repair",
+  engagement_open: "MCP Engagement Open",
+  engagement_status: "MCP Engagement Status",
+  engagement_update: "MCP Engagement Update",
+  engagement_pause: "MCP Engagement Pause",
+  engagement_history: "MCP Engagement History",
+  agent_message: "MCP Agent Message",
+  shell_exec: "MCP Shell Exec",
+  shell_session: "MCP Shell Session",
+  burp: "MCP Burp",
+  browser_run: "MCP Browser",
+  vpn_manage: "MCP VPN",
+  findings_manage: "MCP Findings",
+  artifact_add: "MCP Artifact Add",
+  browser_observation_add: "MCP Browser Observation",
+  artifact_get: "MCP Artifact Get",
 };
 
 function parseArgs(args) {
   if (!args) return {};
   if (typeof args === "string") {
-    try { return JSON.parse(args); } catch { return {}; }
+    try {
+      return JSON.parse(args);
+    } catch {
+      return {};
+    }
   }
   return args;
 }
 
 function formatArgsPreview(toolName, parsed) {
   if (toolName === "run_bash") return parsed.command ?? "";
-  if (toolName === "run_python_script") return parsed.file_name ?? "inline script";
+  if (toolName === "run_python_script")
+    return parsed.file_name ?? "inline script";
   if (toolName === "google_search") return parsed.query ?? "";
   if (toolName === "run_install_tool") return parsed.tool_name ?? "";
   if (toolName === "ask_user") return parsed.question ?? "";
   if (toolName === "spawn_shell") return parsed.label ?? "";
-  if (toolName === "write_to_shell") return `[${parsed.shell_id}] ${(parsed.input ?? "").slice(0, 60)}`;
+  if (toolName === "write_to_shell")
+    return `[${parsed.shell_id}] ${(parsed.input ?? "").slice(0, 60)}`;
   if (toolName === "read_shell") return `[${parsed.shell_id}]`;
   if (toolName === "close_shell") return `[${parsed.shell_id}]`;
   if (toolName === "spawn_subagent") return (parsed.task ?? "").slice(0, 80);
@@ -47,6 +82,25 @@ function formatArgsPreview(toolName, parsed) {
     const path = firstLine.split(" ")[1] || "";
     return `${method} ${parsed.host ?? ""}${path ? `:${parsed.port ?? 443}${path}` : ""}`;
   }
+  if (toolName === "agent_message") return (parsed.message ?? "").slice(0, 80);
+  if (toolName === "shell_exec") return parsed.command ?? "";
+  if (toolName === "shell_session")
+    return `${parsed.action ?? ""} ${parsed.shell_id ?? parsed.label ?? ""}`;
+  if (toolName === "browser_run")
+    return `${parsed.url ?? ""} ${(parsed.goal ?? "").slice(0, 60)}`;
+  if (toolName === "burp") return parsed.action ?? "";
+  if (toolName === "vpn_manage")
+    return `${parsed.action ?? ""} ${parsed.profile_name ?? ""}`;
+  if (toolName === "findings_manage")
+    return `${parsed.action ?? ""} ${parsed.title ?? parsed.finding_id ?? ""}`;
+  if (toolName === "artifact_add")
+    return `${parsed.type ?? ""} ${parsed.title ?? ""}`;
+  if (toolName === "browser_observation_add") return parsed.url ?? "";
+  if (toolName === "artifact_get")
+    return `${parsed.action ?? ""} ${parsed.path ?? ""}`;
+  if (toolName?.startsWith("engagement_"))
+    return parsed.engagement_id ?? parsed.name ?? "";
+  if (toolName?.startsWith("platform_")) return parsed.component ?? "";
   return JSON.stringify(parsed);
 }
 
@@ -62,6 +116,9 @@ function getCodePreview(toolName, parsed) {
   }
   if (toolName === "send_to_burp") {
     return { code: parsed.raw_request ?? "", language: "http" };
+  }
+  if (toolName === "shell_exec") {
+    return { code: parsed.command ?? "", language: "bash" };
   }
   return null;
 }
@@ -85,7 +142,10 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
   const label = TOOL_LABELS[toolName] ?? toolName;
   const parsed = useMemo(() => parseArgs(args), [args]);
   const argsPreview = formatArgsPreview(toolName, parsed);
-  const codePreview = useMemo(() => getCodePreview(toolName, parsed), [toolName, parsed]);
+  const codePreview = useMemo(
+    () => getCodePreview(toolName, parsed),
+    [toolName, parsed],
+  );
 
   const isRunning = streaming;
   const isError = exitCode != null && exitCode !== 0;
@@ -117,15 +177,20 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
     }
   }, []);
 
-  const handleCopy = useCallback((e) => {
-    e.stopPropagation();
-    const textToCopy = hasCode ? codePreview.code : argsPreview;
-    if (!textToCopy) return;
-    copyText(textToCopy).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  }, [argsPreview, hasCode, codePreview, copyText]);
+  const handleCopy = useCallback(
+    (e) => {
+      e.stopPropagation();
+      const textToCopy = hasCode ? codePreview.code : argsPreview;
+      if (!textToCopy) return;
+      copyText(textToCopy)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        })
+        .catch(() => {});
+    },
+    [argsPreview, hasCode, codePreview, copyText],
+  );
 
   const displayContent = hasContent
     ? content.length > 8000
@@ -212,7 +277,9 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
               setOutputCollapsed(!outputCollapsed);
             }}
           >
-            <span className={`${styles.toolCallIcon} ${!outputCollapsed ? styles.toolCallIconOpen : ""}`}>
+            <span
+              className={`${styles.toolCallIcon} ${!outputCollapsed ? styles.toolCallIconOpen : ""}`}
+            >
               <CaretRightOutlined />
             </span>
             Output

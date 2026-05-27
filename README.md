@@ -24,7 +24,6 @@ Built for real-world engagements, boot2root boxes, and CTFs.
 
 Pentest Copilot performing an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/):
 
-
 <video src="https://github.com/user-attachments/assets/bbb2cab2-6db7-4578-a3b7-f45a1619a987" poster="./assets/video-thumbnail.jpg" controls></video>
 
 Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
@@ -72,15 +71,30 @@ Open `http://localhost:3000`, register, and start a session.
 ./run.sh help       # Full help
 ```
 
+### MCP Access
+
+Pentest Copilot can expose its local control plane over MCP for clients such as Claude Code or Codex. Open Settings -> MCP Access to copy the local MCP endpoint and bearer token.
+
+Treat the token as local admin access: it can run commands on the configured exploit box, operate Burp, browser automation, and VPN flows, read artifacts, write findings, and update local Pentest Copilot configuration. MCP actions tied to an engagement are recorded in that session so they remain visible in the Pentest Copilot UI.
+
+After copying the endpoint and token, you can smoke test the MCP connection:
+
+```bash
+cd backend
+PENTEST_COPILOT_MCP_URL=http://localhost:8080/mcp \
+PENTEST_COPILOT_MCP_TOKEN=pc_mcp_... \
+corepack pnpm run mcp:smoke
+```
+
 ### System Requirements
 
-| | Minimum |
-|---|---|
-| RAM | 8 GB (+2 GB if using the built-in Kali container) |
-| Disk | 20 GB |
-| Docker | v20+ with Compose v2+ |
-| Node.js | v22+ (dev mode only) |
-| pnpm | v9+ (dev mode only) |
+|         | Minimum                                           |
+| ------- | ------------------------------------------------- |
+| RAM     | 8 GB (+2 GB if using the built-in Kali container) |
+| Disk    | 20 GB                                             |
+| Docker  | v20+ with Compose v2+                             |
+| Node.js | v22+ (dev mode only)                              |
+| pnpm    | v9+ (dev mode only)                               |
 
 ## Documentation
 
