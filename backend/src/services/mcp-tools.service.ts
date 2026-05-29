@@ -1739,6 +1739,14 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         secure: z.boolean().optional(),
         raw_request: z.string().optional(),
         tab_name: z.string().optional(),
+        placeholders: z
+          .array(z.object({ start: z.number(), end: z.number() }))
+          .optional(),
+        payloads: z.array(z.string()).optional(),
+        strategy: z
+          .enum(["SEQUENTIAL", "ALL", "PARALLEL", "MATRIX"])
+          .optional(),
+        run: z.boolean().optional(),
         search: z.string().optional(),
         methods: z.string().optional(),
         status_min: z.number().optional(),

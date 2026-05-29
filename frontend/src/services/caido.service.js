@@ -55,13 +55,27 @@ export const sendToReplay = async ({ host, port, secure, rawRequest, tabName }) 
   return res.data;
 };
 
-export const sendToAutomate = async ({ host, port, secure, rawRequest, tabName }) => {
+export const sendToAutomate = async ({
+  host,
+  port,
+  secure,
+  rawRequest,
+  tabName,
+  placeholders,
+  payloads,
+  strategy,
+  run,
+}) => {
   const res = await apiClient.post("/caido/send-to-automate", {
     host,
     port,
     secure,
     rawRequest,
     tabName,
+    placeholders,
+    payloads,
+    strategy,
+    run,
   });
   return res.data;
 };

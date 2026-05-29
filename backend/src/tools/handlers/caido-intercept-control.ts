@@ -1,9 +1,14 @@
 import { ToolDefinition } from "../types";
+import {
+  getCaidoConnection,
+  getCaidoInterceptState,
+  isCaidoConfigured,
+  setCaidoInterceptEnabled,
+} from "../../services/caido.client";
 
 const caidoInterceptControl: ToolDefinition = {
   name: "caido_intercept_control",
-  description:
-    "Control Caido interception. In this version, the tool reports that Caido Intercept control is not exposed by the official client API.",
+  description: "Read or toggle Caido proxy interception.",
   parameters: {
     type: "object",
     properties: {
@@ -15,12 +20,41 @@ const caidoInterceptControl: ToolDefinition = {
     },
     required: ["action"],
   },
-  async execute() {
-    return {
-      output:
-        "Caido Intercept control is not exposed by the current official Caido client API used by Pentest Copilot v1. Toggle Intercept manually in Caido.",
-      exitCode: 1,
-    };
+  async execute(args) {
+    const conn = getCaidoConnection();
+    if (!isCaidoConfigured(conn)) {
+      return {
+        output: "Error: Caido is not configured. Set CAIDO_URL and CAIDO_PAT in Settings > Caido.",
+        exitCode: 1,
+      };
+    }
+
+    try {
+      const action = String(args.action || "status");
+      if (!["status", "enable", "disable"].includes(action)) {
+        return { output: "Error: action must be status, enable, or disable", exitCode: 1 };
+      }
+
+      const state =
+        action === "enable"
+          ? await setCaidoInterceptEnabled(true)
+          : action === "disable"
+            ? await setCaidoInterceptEnabled(false)
+            : await getCaidoInterceptState();
+
+      return {
+        output: [
+          `Caido intercept status: ${state.status}`,
+          `Effective request interception: ${state.enabled ? "enabled" : "disabled"}`,
+          `Request option: ${state.options?.request?.enabled ? "enabled" : "disabled"}`,
+          `Response option: ${state.options?.response?.enabled ? "enabled" : "disabled"}`,
+          `WebSocket stream option: ${state.options?.streamWs?.enabled ? "enabled" : "disabled"}`,
+        ].join("\n"),
+        exitCode: 0,
+      };
+    } catch (err: any) {
+      return { output: `Error controlling Caido Intercept: ${err.message}`, exitCode: 1 };
+    }
   },
 };
 

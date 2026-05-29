@@ -14,6 +14,18 @@ export type CaidoHistoryFilter = {
   hideAssets?: boolean;
 };
 
+export type CaidoAutomateInput = {
+  host: string;
+  port: number;
+  secure: boolean;
+  rawRequest: string;
+  tabName?: string;
+  placeholders?: Array<{ start: number; end: number }>;
+  payloads?: string[];
+  strategy?: "SEQUENTIAL" | "ALL" | "PARALLEL" | "MATRIX";
+  run?: boolean;
+};
+
 export const CAIDO_UNREACHABLE_MSG =
   "Caido appears to be disconnected. Verify Caido is running, the instance is listening on an address WSL can reach, and the URL/PAT in Settings are correct.";
 
@@ -55,6 +67,31 @@ export async function createCaidoClient(conn = getCaidoConnection()) {
   return client as any;
 }
 
+export async function caidoGraphql(query: string, variables?: Record<string, unknown>) {
+  const conn = getCaidoConnection();
+  const client = await createCaidoClient(conn);
+  const token = client.auth?.getAccessToken?.();
+  if (!token) throw new Error("Caido authentication did not return an access token.");
+
+  const res = await fetch(`${conn.url}/graphql`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || `Caido GraphQL request failed with HTTP ${res.status}`);
+  }
+  if (json.errors?.length) {
+    throw new Error(json.errors.map((err: any) => err.message).join("; "));
+  }
+  return json.data;
+}
+
 export function normalizeHttpRequest(rawRequest: string): string {
   let normalized = rawRequest.replace(/\r?\n/g, "\r\n");
   const headerBodySplit = normalized.indexOf("\r\n\r\n");
@@ -77,6 +114,19 @@ function rawToText(raw?: Uint8Array | string): string {
   if (!raw) return "";
   if (typeof raw === "string") return raw;
   return Buffer.from(raw).toString("utf8");
+}
+
+function encodeBlob(raw: string): string {
+  return Buffer.from(raw, "utf8").toString("base64");
+}
+
+function connectionInfo(input: { host: string; port: number; secure: boolean }) {
+  return {
+    host: input.host,
+    port: input.port,
+    isTLS: input.secure,
+    SNI: input.secure ? input.host : undefined,
+  };
 }
 
 function getHeader(raw: string, name: string): string {
@@ -217,16 +267,11 @@ export async function createCaidoReplaySession(input: {
 }) {
   const client = await createCaidoClient();
   const raw = normalizeHttpRequest(input.rawRequest);
-  const rawBlob = Buffer.from(raw, "utf8").toString("base64");
+  const rawBlob = encodeBlob(raw);
   const session = await client.replay.sessions.create({
     requestSource: {
       raw: rawBlob,
-      connection: {
-        host: input.host,
-        port: input.port,
-        isTLS: input.secure,
-        SNI: input.secure ? input.host : undefined,
-      },
+      connection: connectionInfo(input),
     },
   });
   if (input.tabName) {
@@ -248,16 +293,11 @@ export async function sendCaidoReplayRequest(input: {
 }) {
   const client = await createCaidoClient();
   const raw = normalizeHttpRequest(input.rawRequest);
-  const rawBlob = Buffer.from(raw, "utf8").toString("base64");
+  const rawBlob = encodeBlob(raw);
   const session = await client.replay.sessions.create({
     requestSource: {
       raw: rawBlob,
-      connection: {
-        host: input.host,
-        port: input.port,
-        isTLS: input.secure,
-        SNI: input.secure ? input.host : undefined,
-      },
+      connection: connectionInfo(input),
     },
   });
   if (input.tabName) {
@@ -269,12 +309,7 @@ export async function sendCaidoReplayRequest(input: {
   }
   const result = await client.replay.send(session.id, {
     raw,
-    connection: {
-      host: input.host,
-      port: input.port,
-      isTLS: input.secure,
-      SNI: input.secure ? input.host : undefined,
-    },
+    connection: connectionInfo(input),
     settings: { updateContentLength: true },
   });
 
@@ -288,9 +323,146 @@ export async function sendCaidoReplayRequest(input: {
   };
 }
 
-export function caidoUnsupported(feature: string) {
+function defaultAutomateSettings(input: CaidoAutomateInput) {
   return {
-    supported: false,
-    message: `${feature} is not exposed by the current Caido client API used by Pentest Copilot v1.`,
+    payloads: [
+      {
+        options: {
+          simpleList: {
+            list: input.payloads?.length ? input.payloads : ["test"],
+          },
+        },
+        preprocessors: [],
+      },
+    ],
+    placeholders: input.placeholders || [],
+    redirect: { strategy: "NEVER", max: 0 },
+    strategy: input.strategy || "SEQUENTIAL",
+    concurrency: { workers: 1, delay: 0 },
+    retryOnFailure: { maximumRetries: 0, backoff: 0 },
+    closeConnection: false,
+    updateContentLength: true,
   };
+}
+
+export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
+  const raw = normalizeHttpRequest(input.rawRequest);
+  const rawBlob = encodeBlob(raw);
+  const connection = connectionInfo(input);
+
+  const created = await caidoGraphql(
+    `mutation($input: CreateAutomateSessionInput!) {
+      createAutomateSession(input: $input) {
+        session { id name }
+      }
+    }`,
+    {
+      input: {
+        requestSource: {
+          raw: { connectionInfo: connection, raw: rawBlob },
+        },
+      },
+    },
+  );
+  const sessionId = created.createAutomateSession.session.id;
+
+  if (input.tabName) {
+    await caidoGraphql(
+      `mutation($id: ID!, $name: String!) {
+        renameAutomateSession(id: $id, name: $name) { session { id name } }
+      }`,
+      { id: sessionId, name: input.tabName },
+    );
+  }
+
+  const shouldConfigure = input.run || input.placeholders?.length || input.payloads?.length;
+  if (shouldConfigure) {
+    const updated = await caidoGraphql(
+      `mutation($id: ID!, $input: UpdateAutomateSessionInput!) {
+        updateAutomateSession(id: $id, input: $input) {
+          session { id name }
+          error { __typename }
+        }
+      }`,
+      {
+        id: sessionId,
+        input: {
+          connection,
+          raw: rawBlob,
+          settings: defaultAutomateSettings(input),
+        },
+      },
+    );
+    if (updated.updateAutomateSession.error) {
+      throw new Error(`Caido Automate update failed: ${updated.updateAutomateSession.error.__typename}`);
+    }
+  }
+
+  let task;
+  if (input.run) {
+    const started = await caidoGraphql(
+      `mutation($id: ID!) {
+        startAutomateTask(automateSessionId: $id) {
+          automateTask { id paused entry { id name } }
+        }
+      }`,
+      { id: sessionId },
+    );
+    task = started.startAutomateTask.automateTask;
+  }
+
+  return {
+    sessionId,
+    name: input.tabName || created.createAutomateSession.session.name,
+    task,
+  };
+}
+
+export async function getCaidoInterceptState() {
+  const data = await caidoGraphql(
+    `query {
+      interceptStatus
+      interceptOptions {
+        request { enabled }
+        response { enabled }
+        streamWs { enabled }
+      }
+    }`,
+  );
+  const status = data.interceptStatus;
+  const options = data.interceptOptions;
+  return {
+    enabled: status === "RUNNING" && !!options?.request?.enabled,
+    status,
+    options,
+  };
+}
+
+export async function setCaidoInterceptEnabled(enabled: boolean) {
+  if (enabled) {
+    const state = await getCaidoInterceptState();
+    await caidoGraphql(
+      `mutation($input: InterceptOptionsInput!) {
+        setInterceptOptions(input: $input) {
+          options {
+            request { enabled }
+            response { enabled }
+            streamWs { enabled }
+          }
+        }
+      }`,
+      {
+        input: {
+          request: { enabled: true },
+          response: { enabled: !!state.options?.response?.enabled },
+          streamWs: { enabled: !!state.options?.streamWs?.enabled },
+        },
+      },
+    );
+    await caidoGraphql(`mutation { resumeIntercept { status } }`);
+  } else {
+    await caidoGraphql(`mutation { pauseIntercept { status } }`);
+  }
+
+  return getCaidoInterceptState();
 }

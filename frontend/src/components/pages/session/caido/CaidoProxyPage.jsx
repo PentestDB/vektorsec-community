@@ -32,7 +32,7 @@ const CAIDO_INTEGRATION = {
   intruderName: "Automate",
   intruderSuccess: "Sent to Caido Automate",
   intruderError: "Failed to send to Caido Automate",
-  interceptSupported: false,
+  interceptSupported: true,
   storageKey: "caido-to-workspace",
   queryPrefix: "caido",
   services: {

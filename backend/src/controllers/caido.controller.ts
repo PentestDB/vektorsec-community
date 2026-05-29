@@ -1,14 +1,16 @@
 import { Request, Response } from "express";
 import {
   CAIDO_UNREACHABLE_MSG,
-  caidoUnsupported,
+  createCaidoAutomateSession,
   createCaidoReplaySession,
   getCaidoConnection,
   getCaidoEntry,
   getCaidoHealth,
   getCaidoHistory,
+  getCaidoInterceptState,
   isCaidoConfigured,
   sendCaidoReplayRequest,
+  setCaidoInterceptEnabled,
 } from "../services/caido.client";
 
 function caidoError(res: Response, error: any, fallback: string) {
@@ -30,6 +32,36 @@ function replayInput(req: Request) {
     secure: secure ?? true,
     rawRequest: String(rawRequest),
     tabName: tabName ? String(tabName) : undefined,
+  };
+}
+
+function automateInput(req: Request) {
+  const input = replayInput(req);
+  if ("error" in input) return input;
+
+  const placeholders = Array.isArray(req.body.placeholders)
+    ? req.body.placeholders
+        .map((placeholder: any) => ({
+          start: Number(placeholder?.start),
+          end: Number(placeholder?.end),
+        }))
+        .filter((placeholder: any) => Number.isFinite(placeholder.start) && Number.isFinite(placeholder.end))
+    : undefined;
+
+  const payloads = Array.isArray(req.body.payloads)
+    ? req.body.payloads.map((payload: any) => String(payload))
+    : undefined;
+
+  const strategy = ["SEQUENTIAL", "ALL", "PARALLEL", "MATRIX"].includes(req.body.strategy)
+    ? req.body.strategy
+    : undefined;
+
+  return {
+    ...input,
+    placeholders,
+    payloads,
+    strategy,
+    run: req.body.run === true,
   };
 }
 
@@ -144,14 +176,57 @@ export const sendToCaidoReplay = async (req: Request, res: Response) => {
   }
 };
 
-export const sendToCaidoAutomate = async (_req: Request, res: Response) => {
-  return res.status(501).json(caidoUnsupported("Caido Automate"));
+export const sendToCaidoAutomate = async (req: Request, res: Response) => {
+  try {
+    const conn = getCaidoConnection();
+    if (!isCaidoConfigured(conn)) {
+      return res.status(400).json({ message: "Caido is not configured." });
+    }
+
+    const input = automateInput(req);
+    if ("error" in input) return res.status(400).json({ message: input.error });
+
+    const session = await createCaidoAutomateSession(input);
+    return res.status(200).json({
+      message: session.task ? "Started Caido Automate task" : "Sent to Caido Automate",
+      sessionId: session.sessionId,
+      name: session.name,
+      task: session.task,
+    });
+  } catch (error: any) {
+    console.error("[caido] Send to Automate error:", error.message);
+    return caidoError(res, error, "Failed to send to Caido Automate");
+  }
 };
 
 export const getCaidoInterceptStatus = async (_req: Request, res: Response) => {
-  return res.status(501).json(caidoUnsupported("Caido Intercept control"));
+  try {
+    const conn = getCaidoConnection();
+    if (!isCaidoConfigured(conn)) {
+      return res.status(400).json({ message: "Caido is not configured." });
+    }
+
+    return res.status(200).json(await getCaidoInterceptState());
+  } catch (error: any) {
+    console.error("[caido] Intercept status error:", error.message);
+    return caidoError(res, error, "Failed to fetch Caido Intercept status");
+  }
 };
 
-export const setCaidoIntercept = async (_req: Request, res: Response) => {
-  return res.status(501).json(caidoUnsupported("Caido Intercept control"));
+export const setCaidoIntercept = async (req: Request, res: Response) => {
+  try {
+    const conn = getCaidoConnection();
+    if (!isCaidoConfigured(conn)) {
+      return res.status(400).json({ message: "Caido is not configured." });
+    }
+
+    if (typeof req.body.enabled !== "boolean") {
+      return res.status(400).json({ message: "enabled must be a boolean" });
+    }
+
+    return res.status(200).json(await setCaidoInterceptEnabled(req.body.enabled));
+  } catch (error: any) {
+    console.error("[caido] Set intercept error:", error.message);
+    return caidoError(res, error, "Failed to update Caido Intercept");
+  }
 };
