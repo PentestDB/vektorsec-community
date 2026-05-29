@@ -37,14 +37,14 @@ const CaidoSettingsPage = () => {
 
   const saveMutation = useMutation(updateCaidoConfig, {
     onSuccess: () => {
-      message.success("Caido configuration saved");
+      message.success("Configuration saved");
       queryClient.invalidateQueries("caido-config");
       queryClient.invalidateQueries("caido-connection-status");
       setSaving(false);
       form.setFieldsValue({ pat: "" });
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save Caido config");
+      message.error(err?.response?.data?.message || "Failed to save configuration");
       setSaving(false);
     },
   });
@@ -67,7 +67,7 @@ const CaidoSettingsPage = () => {
       setTestResult({
         success: result.connected,
         message: result.connected
-          ? `Connected to Caido${result.viewer?.id ? ` as ${result.viewer.id}` : ""}`
+          ? `Connected${result.viewer?.id ? ` as ${result.viewer.id}` : ""}`
           : result.message || "Connection failed",
       });
     } catch (err) {
@@ -135,9 +135,9 @@ const CaidoSettingsPage = () => {
         }}
       >
         <Form.Item
-          label="Caido URL"
+          label="URL"
           name="url"
-          rules={[{ required: true, message: "Caido URL is required" }]}
+          rules={[{ required: true, message: "URL is required" }]}
         >
           <Input placeholder="http://192.168.160.1:8096" />
         </Form.Item>
@@ -152,7 +152,7 @@ const CaidoSettingsPage = () => {
           </Col>
           <Col span={10}>
             <Form.Item label="Proxy URL" name="proxyUrl">
-              <Input placeholder="Defaults to Caido URL" />
+              <Input placeholder="Defaults to URL" />
             </Form.Item>
           </Col>
         </Row>
@@ -185,7 +185,7 @@ const CaidoSettingsPage = () => {
           WSL Setup Guide
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)", lineHeight: 1.7 }}>
-          Set the Caido instance to listen on <code>0.0.0.0:8096</code>, allow
+          Set the instance to listen on <code>0.0.0.0:8096</code>, allow
           <code> caido-cli</code> through Windows Firewall, then use the WSL gateway
           IP in the URL above. Get the gateway with{" "}
           <code>ip route show | grep -i default | awk '{"{ print $3 }"}'</code>.
@@ -194,12 +194,8 @@ const CaidoSettingsPage = () => {
 
       <div className={styles.notesSection} style={{ marginTop: "1rem" }}>
         <ul>
-          <li>
-            Caido Replay and HTTP History are supported through the official Caido client SDK.
-          </li>
-          <li>
-            Automate and Intercept control are surfaced but may report unsupported until Caido exposes stable client APIs for them.
-          </li>
+          <li>HTTP History, Replay, Automate, and Intercept controls are available.</li>
+          <li>Traffic and API calls are proxied through the backend.</li>
         </ul>
       </div>
     </div>

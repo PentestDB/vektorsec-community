@@ -6,7 +6,7 @@ const MAX_ENTRIES_RETURNED = 25;
 const caidoHttpHistory: ToolDefinition = {
   name: "search_caido_http_history",
   description:
-    "Search and fetch HTTP requests/responses from Caido HTTP History. " +
+    "Search and fetch HTTP requests/responses from the configured HTTP history. " +
     'Use action "search" with optional filters to get a summary list, or action "get" with entry_id for full raw details.',
   parameters: {
     type: "object",
@@ -21,7 +21,7 @@ const caidoHttpHistory: ToolDefinition = {
       status_min: { type: "number", description: "Minimum response status code." },
       status_max: { type: "number", description: "Maximum response status code." },
       hide_assets: { type: "boolean", description: "Hide common static assets." },
-      entry_id: { type: "string", description: 'Caido request ID. Required for "get".' },
+      entry_id: { type: "string", description: 'Request ID. Required for "get".' },
     },
     required: ["action"],
   },
@@ -30,7 +30,7 @@ const caidoHttpHistory: ToolDefinition = {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
       return {
-        output: "Error: Caido is not configured. Set CAIDO_URL and CAIDO_PAT in Settings > Caido.",
+        output: "Error: integration is not configured. Set CAIDO_URL and CAIDO_PAT in Settings.",
         exitCode: 1,
       };
     }
@@ -68,15 +68,15 @@ const caidoHttpHistory: ToolDefinition = {
       }
 
       const entry = await getCaidoEntry(String(args.entry_id));
-      if (!entry) return { output: `No Caido HTTP entry found with ID ${args.entry_id}.`, exitCode: 1 };
+      if (!entry) return { output: `No HTTP entry found with ID ${args.entry_id}.`, exitCode: 1 };
 
-      let output = `=== Caido HTTP Entry #${args.entry_id} ===\n`;
+      let output = `=== HTTP Entry #${args.entry_id} ===\n`;
       output += `Host: ${entry.host}:${entry.port} (${entry.secure ? "HTTPS" : "HTTP"})\n\n`;
       output += `--- REQUEST ---\n${entry.rawRequest || "(no request data)"}`;
       output += `\n\n--- RESPONSE ---\n${entry.rawResponse || "(no response data)"}`;
       return { output, exitCode: 0 };
     } catch (err: any) {
-      return { output: `Error fetching Caido HTTP history: ${err.message}`, exitCode: 1 };
+      return { output: `Error fetching HTTP history: ${err.message}`, exitCode: 1 };
     }
   },
 };

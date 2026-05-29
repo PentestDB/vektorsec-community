@@ -8,7 +8,7 @@ import {
 
 const caidoInterceptControl: ToolDefinition = {
   name: "caido_intercept_control",
-  description: "Read or toggle Caido proxy interception.",
+  description: "Read or toggle proxy interception for the configured integration.",
   parameters: {
     type: "object",
     properties: {
@@ -24,7 +24,7 @@ const caidoInterceptControl: ToolDefinition = {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
       return {
-        output: "Error: Caido is not configured. Set CAIDO_URL and CAIDO_PAT in Settings > Caido.",
+        output: "Error: integration is not configured. Set CAIDO_URL and CAIDO_PAT in Settings.",
         exitCode: 1,
       };
     }
@@ -44,7 +44,7 @@ const caidoInterceptControl: ToolDefinition = {
 
       return {
         output: [
-          `Caido intercept status: ${state.status}`,
+          `Intercept status: ${state.status}`,
           `Effective request interception: ${state.enabled ? "enabled" : "disabled"}`,
           `Request option: ${state.options?.request?.enabled ? "enabled" : "disabled"}`,
           `Response option: ${state.options?.response?.enabled ? "enabled" : "disabled"}`,
@@ -53,7 +53,7 @@ const caidoInterceptControl: ToolDefinition = {
         exitCode: 0,
       };
     } catch (err: any) {
-      return { output: `Error controlling Caido Intercept: ${err.message}`, exitCode: 1 };
+      return { output: `Error controlling Intercept: ${err.message}`, exitCode: 1 };
     }
   },
 };

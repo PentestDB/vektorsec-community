@@ -8,7 +8,7 @@ import {
 const caidoAutomate: ToolDefinition = {
   name: "send_to_caido_automate",
   description:
-    "Send a raw HTTP request to Caido Automate, optionally configuring simple-list payloads/placeholders and starting the Automate task.",
+    "Send a raw HTTP request to the configured Automate integration, optionally configuring simple-list payloads/placeholders and starting the task.",
   parameters: {
     type: "object",
     properties: {
@@ -53,7 +53,7 @@ const caidoAutomate: ToolDefinition = {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
       return {
-        output: "Error: Caido is not configured. Set CAIDO_URL and CAIDO_PAT in Settings > Caido.",
+        output: "Error: integration is not configured. Set CAIDO_URL and CAIDO_PAT in Settings.",
         exitCode: 1,
       };
     }
@@ -87,7 +87,7 @@ const caidoAutomate: ToolDefinition = {
       });
 
       const lines = [
-        session.task ? "Started Caido Automate task." : "Created Caido Automate session.",
+        session.task ? "Started Automate task." : "Created Automate session.",
         `Session ID: ${session.sessionId}`,
       ];
       if (session.name) lines.push(`Name: ${session.name}`);
@@ -96,7 +96,7 @@ const caidoAutomate: ToolDefinition = {
 
       return { output: lines.join("\n"), exitCode: 0 };
     } catch (err: any) {
-      return { output: `Error sending request to Caido Automate: ${err.message}`, exitCode: 1 };
+      return { output: `Error sending request to Automate: ${err.message}`, exitCode: 1 };
     }
   },
 };

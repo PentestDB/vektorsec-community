@@ -608,10 +608,9 @@ async function collectPlatformHealth(
         component: "caido",
         status: "missing",
         canAutoRepair: false,
-        summary: "Caido is not configured",
+        summary: "Integration is not configured",
         missingItems: ["CAIDO_URL", "CAIDO_PAT"],
-        nextAction:
-          "Set Caido URL/PAT in platform_setup or Settings -> Caido.",
+        nextAction: "Set URL/PAT in platform_setup or Settings.",
       });
     } else {
       const health = await getCaidoHealth();
@@ -620,12 +619,12 @@ async function collectPlatformHealth(
         status: health.connected ? "ready" : "unreachable",
         canAutoRepair: false,
         summary: health.connected
-          ? `Caido reachable (${health.url || env.CAIDO_URL})`
-          : `Caido is configured but unreachable: ${health.message || "connection failed"}`,
+          ? `Reachable (${health.url || env.CAIDO_URL})`
+          : `Configured but unreachable: ${health.message || "connection failed"}`,
         missingItems: [],
         nextAction: health.connected
           ? "None"
-          : "Open Caido, bind the instance to an address WSL can reach, and verify CAIDO_URL/CAIDO_PAT.",
+          : "Start the local instance, bind it to an address WSL can reach, and verify CAIDO_URL/CAIDO_PAT.",
       });
     }
   }
@@ -764,11 +763,11 @@ function buildRepairSteps(
   ].join("\n");
 
   const caidoStep = [
-    "1. Start Caido locally.",
-    "2. Edit the Caido instance to listen on 0.0.0.0:8096 if Pentest Copilot is running in WSL.",
+    "1. Start the local instance.",
+    "2. Edit the instance to listen on 0.0.0.0:8096 if Pentest Copilot is running in WSL.",
     "3. Allow caido-cli through Windows Firewall.",
-    "4. Create a Caido Personal Access Token.",
-    "5. Save CAIDO_URL, CAIDO_PAT, and optionally CAIDO_PROXY_URL via platform_setup or Settings -> Caido.",
+    "4. Create a Personal Access Token.",
+    "5. Save CAIDO_URL, CAIDO_PAT, and optionally CAIDO_PROXY_URL via platform_setup or Settings.",
     "6. Re-run platform_health for caido.",
   ].join("\n");
 
@@ -1722,7 +1721,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "caido",
     {
       description:
-        "Operate Caido through Pentest Copilot. Actions: status, request, replay, automate, history, intercept.",
+        "Operate the configured Caido integration. Actions: status, request, replay, automate, history, intercept.",
       inputSchema: {
         engagement_id: z.string().optional(),
         agent_id: z.string().optional(),
@@ -1759,7 +1758,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     async ({ action, intercept_action, ...rest }) => {
       if (action === "status") {
         const health = await collectPlatformHealth("caido");
-        return textResult(health[0]?.summary || "Caido status unavailable.", {
+        return textResult(health[0]?.summary || "Status unavailable.", {
           health,
         });
       }

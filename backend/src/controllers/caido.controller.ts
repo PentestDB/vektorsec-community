@@ -94,7 +94,7 @@ export const getCaidoHttpHistory = async (req: Request, res: Response) => {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
       return res.status(400).json({
-        message: "Caido is not configured. Set the URL and PAT in Settings.",
+        message: "Integration is not configured. Set the URL and PAT in Settings.",
         notConfigured: true,
       });
     }
@@ -118,7 +118,7 @@ export const getCaidoHttpHistory = async (req: Request, res: Response) => {
     return res.status(200).json(result);
   } catch (error: any) {
     console.error("[caido] HTTP history error:", error.message);
-    return caidoError(res, error, "Failed to fetch Caido HTTP history");
+    return caidoError(res, error, "Failed to fetch HTTP history");
   }
 };
 
@@ -127,17 +127,17 @@ export const getCaidoHttpEntry = async (req: Request, res: Response) => {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
       return res.status(400).json({
-        message: "Caido is not configured.",
+        message: "Integration is not configured.",
         notConfigured: true,
       });
     }
 
     const entry = await getCaidoEntry(req.params.id);
-    if (!entry) return res.status(404).json({ message: "Caido HTTP entry not found" });
+    if (!entry) return res.status(404).json({ message: "HTTP entry not found" });
     return res.status(200).json(entry);
   } catch (error: any) {
     console.error("[caido] HTTP entry error:", error.message);
-    return caidoError(res, error, "Failed to fetch Caido HTTP entry");
+    return caidoError(res, error, "Failed to fetch HTTP entry");
   }
 };
 
@@ -145,7 +145,7 @@ export const sendCaidoRequest = async (req: Request, res: Response) => {
   try {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
-      return res.status(400).json({ message: "Caido is not configured." });
+      return res.status(400).json({ message: "Integration is not configured." });
     }
 
     const input = replayInput(req);
@@ -154,7 +154,7 @@ export const sendCaidoRequest = async (req: Request, res: Response) => {
     return res.status(200).json(await sendCaidoReplayRequest(input));
   } catch (error: any) {
     console.error("[caido] Send request error:", error.message);
-    return caidoError(res, error, "Failed to send request through Caido");
+    return caidoError(res, error, "Failed to send request");
   }
 };
 
@@ -162,17 +162,17 @@ export const sendToCaidoReplay = async (req: Request, res: Response) => {
   try {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
-      return res.status(400).json({ message: "Caido is not configured." });
+      return res.status(400).json({ message: "Integration is not configured." });
     }
 
     const input = replayInput(req);
     if ("error" in input) return res.status(400).json({ message: input.error });
 
     const session = await createCaidoReplaySession(input);
-    return res.status(200).json({ message: "Sent to Caido Replay", sessionId: session.id });
+    return res.status(200).json({ message: "Sent to Replay", sessionId: session.id });
   } catch (error: any) {
     console.error("[caido] Send to Replay error:", error.message);
-    return caidoError(res, error, "Failed to send to Caido Replay");
+    return caidoError(res, error, "Failed to send to Replay");
   }
 };
 
@@ -180,7 +180,7 @@ export const sendToCaidoAutomate = async (req: Request, res: Response) => {
   try {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
-      return res.status(400).json({ message: "Caido is not configured." });
+      return res.status(400).json({ message: "Integration is not configured." });
     }
 
     const input = automateInput(req);
@@ -188,14 +188,14 @@ export const sendToCaidoAutomate = async (req: Request, res: Response) => {
 
     const session = await createCaidoAutomateSession(input);
     return res.status(200).json({
-      message: session.task ? "Started Caido Automate task" : "Sent to Caido Automate",
+      message: session.task ? "Started Automate task" : "Sent to Automate",
       sessionId: session.sessionId,
       name: session.name,
       task: session.task,
     });
   } catch (error: any) {
     console.error("[caido] Send to Automate error:", error.message);
-    return caidoError(res, error, "Failed to send to Caido Automate");
+    return caidoError(res, error, "Failed to send to Automate");
   }
 };
 
@@ -203,13 +203,13 @@ export const getCaidoInterceptStatus = async (_req: Request, res: Response) => {
   try {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
-      return res.status(400).json({ message: "Caido is not configured." });
+      return res.status(400).json({ message: "Integration is not configured." });
     }
 
     return res.status(200).json(await getCaidoInterceptState());
   } catch (error: any) {
     console.error("[caido] Intercept status error:", error.message);
-    return caidoError(res, error, "Failed to fetch Caido Intercept status");
+    return caidoError(res, error, "Failed to fetch Intercept status");
   }
 };
 
@@ -217,7 +217,7 @@ export const setCaidoIntercept = async (req: Request, res: Response) => {
   try {
     const conn = getCaidoConnection();
     if (!isCaidoConfigured(conn)) {
-      return res.status(400).json({ message: "Caido is not configured." });
+      return res.status(400).json({ message: "Integration is not configured." });
     }
 
     if (typeof req.body.enabled !== "boolean") {
@@ -227,6 +227,6 @@ export const setCaidoIntercept = async (req: Request, res: Response) => {
     return res.status(200).json(await setCaidoInterceptEnabled(req.body.enabled));
   } catch (error: any) {
     console.error("[caido] Set intercept error:", error.message);
-    return caidoError(res, error, "Failed to update Caido Intercept");
+    return caidoError(res, error, "Failed to update Intercept");
   }
 };

@@ -68,7 +68,7 @@ const TABS = [
   {
     key: "caido",
     label: "Caido",
-    description: "Connect to a Caido instance with a Personal Access Token.",
+    description: "Configure URL, token, and proxy settings.",
     icon: TbRadar,
     component: CaidoSettingsPage,
   },

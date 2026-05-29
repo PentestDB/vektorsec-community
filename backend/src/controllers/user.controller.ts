@@ -1734,7 +1734,7 @@ export const getCaidoConfig = async (_req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to get Caido config" });
+    return res.status(400).json({ message: "Failed to get integration config" });
   }
 };
 
@@ -1743,7 +1743,7 @@ export const updateCaidoConfig = async (req: Request, res: Response) => {
     const { url, pat, proxyUrl } = req.body;
 
     if (!url) {
-      return res.status(400).json({ message: "Caido URL is required" });
+      return res.status(400).json({ message: "URL is required" });
     }
 
     const updates: Record<string, string> = {
@@ -1757,10 +1757,10 @@ export const updateCaidoConfig = async (req: Request, res: Response) => {
 
     updateEnvVars(updates);
 
-    return res.status(200).json({ message: "Caido configuration updated" });
+    return res.status(200).json({ message: "Configuration updated" });
   } catch (error) {
     console.log(error);
-    return res.status(400).json({ message: "Failed to update Caido config" });
+    return res.status(400).json({ message: "Failed to update integration config" });
   }
 };
 

@@ -27,7 +27,7 @@ export type CaidoAutomateInput = {
 };
 
 export const CAIDO_UNREACHABLE_MSG =
-  "Caido appears to be disconnected. Verify Caido is running, the instance is listening on an address WSL can reach, and the URL/PAT in Settings are correct.";
+  "Integration appears to be disconnected. Verify the local instance is running, listening on an address WSL can reach, and the URL/PAT in Settings are correct.";
 
 const STATIC_EXT_RE = /\.(?:css|js|mjs|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|map)(?:\?|$)/i;
 const STATIC_TYPES = ["image/", "font/", "text/css", "javascript"];
@@ -71,7 +71,7 @@ export async function caidoGraphql(query: string, variables?: Record<string, unk
   const conn = getCaidoConnection();
   const client = await createCaidoClient(conn);
   const token = client.auth?.getAccessToken?.();
-  if (!token) throw new Error("Caido authentication did not return an access token.");
+  if (!token) throw new Error("Authentication did not return an access token.");
 
   const res = await fetch(`${conn.url}/graphql`, {
     method: "POST",
@@ -84,7 +84,7 @@ export async function caidoGraphql(query: string, variables?: Record<string, unk
 
   const json = await res.json();
   if (!res.ok) {
-    throw new Error(json?.message || `Caido GraphQL request failed with HTTP ${res.status}`);
+    throw new Error(json?.message || `GraphQL request failed with HTTP ${res.status}`);
   }
   if (json.errors?.length) {
     throw new Error(json.errors.map((err: any) => err.message).join("; "));
@@ -186,7 +186,7 @@ export async function getCaidoHealth() {
     return {
       configured: false,
       connected: false,
-      message: "Caido is not configured.",
+      message: "Integration is not configured.",
     };
   }
 
@@ -394,7 +394,7 @@ export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
       },
     );
     if (updated.updateAutomateSession.error) {
-      throw new Error(`Caido Automate update failed: ${updated.updateAutomateSession.error.__typename}`);
+      throw new Error(`Automate update failed: ${updated.updateAutomateSession.error.__typename}`);
     }
   }
 
