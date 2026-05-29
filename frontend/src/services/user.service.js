@@ -134,6 +134,16 @@ export const updateBurpConfig = async (body) => {
   return res.data;
 };
 
+export const getCaidoConfig = async () => {
+  const res = await apiClient.get("/user/get-caido-config");
+  return res.data;
+};
+
+export const updateCaidoConfig = async (body) => {
+  const res = await apiClient.post("/user/update-caido-config", body);
+  return res.data;
+};
+
 export const getMagnitudeConfig = async () => {
   const res = await apiClient.get("/user/get-magnitude-config");
   return res.data;

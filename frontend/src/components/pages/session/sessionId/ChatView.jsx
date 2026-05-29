@@ -161,7 +161,7 @@ export default function ChatView({ sessionId }) {
     if (userText.trim()) {
       msg += `${userText.trim()}\n\n`;
     } else {
-      msg += `Analyze and pentest the following HTTP request captured from Burp Suite proxy:\n\n`;
+      msg += `Analyze and pentest the following HTTP request captured from ${attachment.sourceName || "Burp Suite"} proxy:\n\n`;
     }
     msg += `Target: ${target}\n`;
     msg += `Host: ${attachment.host} | Port: ${attachment.port || 443} | TLS: ${tls}\n\n`;
@@ -255,9 +255,12 @@ export default function ChatView({ sessionId }) {
   const burpPendingProcessed = useRef(false);
   useEffect(() => {
     if (historyLoading || burpPendingProcessed.current) return;
-    const pending = sessionStorage.getItem("burp-to-workspace");
+    const pending =
+      sessionStorage.getItem("burp-to-workspace") ||
+      sessionStorage.getItem("caido-to-workspace");
     if (pending) {
       sessionStorage.removeItem("burp-to-workspace");
+      sessionStorage.removeItem("caido-to-workspace");
       burpPendingProcessed.current = true;
       try {
         const parsed = JSON.parse(pending);
