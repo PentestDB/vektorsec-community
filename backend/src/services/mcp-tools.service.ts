@@ -23,6 +23,7 @@ import {
   writeModelRegistry,
 } from "../utils/modelRegistryStore";
 import { getMagnitudeModelIssue } from "../utils/magnitudeLlm";
+import { getCaidoHealth } from "./caido.client";
 import {
   abortSession,
   hasActiveController,
@@ -509,7 +510,7 @@ async function collectPlatformHealth(
   const checks: HealthCheckResult[] = [];
   const selected =
     component === "all"
-      ? ["ssh", "shell", "burp", "magnitude", "vpn", "google_search"]
+      ? ["ssh", "shell", "burp", "caido", "magnitude", "vpn", "google_search"]
       : [component];
 
   if (selected.includes("ssh") || selected.includes("shell")) {
@@ -598,6 +599,33 @@ async function collectPlatformHealth(
             "Open Burp locally, load the Burp RPC extension, and ensure the configured host/port are correct.",
         });
       }
+    }
+  }
+
+  if (selected.includes("caido")) {
+    if (!env.CAIDO_URL || !env.CAIDO_PAT) {
+      checks.push({
+        component: "caido",
+        status: "missing",
+        canAutoRepair: false,
+        summary: "Integration is not configured",
+        missingItems: ["CAIDO_URL", "CAIDO_PAT"],
+        nextAction: "Set URL/PAT in platform_setup or Settings.",
+      });
+    } else {
+      const health = await getCaidoHealth();
+      checks.push({
+        component: "caido",
+        status: health.connected ? "ready" : "unreachable",
+        canAutoRepair: false,
+        summary: health.connected
+          ? `Reachable (${health.url || env.CAIDO_URL})`
+          : `Configured but unreachable: ${health.message || "connection failed"}`,
+        missingItems: [],
+        nextAction: health.connected
+          ? "None"
+          : "Start the local instance, bind it to an address WSL can reach, and verify CAIDO_URL/CAIDO_PAT.",
+      });
     }
   }
 
@@ -734,6 +762,15 @@ function buildRepairSteps(
     "5. Re-run platform_health for burp.",
   ].join("\n");
 
+  const caidoStep = [
+    "1. Start the local instance.",
+    "2. Edit the instance to listen on 0.0.0.0:8096 if Pentest Copilot is running in WSL.",
+    "3. Allow caido-cli through Windows Firewall.",
+    "4. Create a Personal Access Token.",
+    "5. Save CAIDO_URL, CAIDO_PAT, and optionally CAIDO_PROXY_URL via platform_setup or Settings.",
+    "6. Re-run platform_health for caido.",
+  ].join("\n");
+
   const magnitudeStep = [
     "1. Set MAGNITUDE_ENABLED=true.",
     "2. Configure a reusable model preset in Settings -> Models.",
@@ -769,6 +806,7 @@ function buildRepairSteps(
     ssh: sshStep,
     shell: sshStep,
     burp: burpStep,
+    caido: caidoStep,
     magnitude: magnitudeStep,
     vpn: vpnStep,
     google_search: googleStep,
@@ -803,6 +841,7 @@ async function applyRepair(component: string): Promise<string> {
 async function applyPlatformSetup(input: {
   ssh?: Record<string, unknown>;
   burp?: Record<string, unknown>;
+  caido?: Record<string, unknown>;
   magnitude?: Record<string, unknown>;
   google_search?: Record<string, unknown>;
   safety?: Record<string, unknown>;
@@ -833,6 +872,15 @@ async function applyPlatformSetup(input: {
       updates.BURP_RPC_HOST = String(burp.host || "");
     if (burp.port !== undefined)
       updates.BURP_RPC_PORT = String(burp.port || "50051");
+  }
+
+  if (input.caido) {
+    const caido = input.caido;
+    if (caido.url !== undefined)
+      updates.CAIDO_URL = String(caido.url || "").replace(/\/+$/, "");
+    if (caido.pat !== undefined) updates.CAIDO_PAT = String(caido.pat || "");
+    if (caido.proxyUrl !== undefined)
+      updates.CAIDO_PROXY_URL = String(caido.proxyUrl || "").replace(/\/+$/, "");
   }
 
   if (input.magnitude) {
@@ -1092,7 +1140,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "platform_health",
     {
       description:
-        "Check whether SSH, shell, Burp, Magnitude, VPN, and Google search are correctly configured and reachable.",
+        "Check whether SSH, shell, Burp, Caido, Magnitude, VPN, and Google search are correctly configured and reachable.",
       inputSchema: {
         component: z
           .enum([
@@ -1100,6 +1148,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
             "ssh",
             "shell",
             "burp",
+            "caido",
             "magnitude",
             "vpn",
             "google_search",
@@ -1122,7 +1171,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "platform_setup",
     {
       description:
-        "Persist platform configuration for SSH, Burp, Browser Agent, Google search, and MCP safety flags.",
+        "Persist platform configuration for SSH, Burp, Caido, Browser Agent, Google search, and MCP safety flags.",
       inputSchema: {
         ssh: z
           .object({
@@ -1138,6 +1187,13 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           .object({
             host: z.string().optional(),
             port: z.union([z.string(), z.number()]).optional(),
+          })
+          .optional(),
+        caido: z
+          .object({
+            url: z.string().optional(),
+            pat: z.string().optional(),
+            proxyUrl: z.string().optional(),
           })
           .optional(),
         magnitude: z
@@ -1187,6 +1243,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           "ssh",
           "shell",
           "burp",
+          "caido",
           "magnitude",
           "vpn",
           "google_search",
@@ -1653,6 +1710,92 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       const structured = toolResultPayload(result, {
         action,
         collaborator_action,
+      });
+      return textResult(formatToolResult(result), structured);
+    },
+  );
+
+  registerMcpTool(
+    server,
+    user,
+    "caido",
+    {
+      description:
+        "Operate the configured Caido integration. Actions: status, request, replay, automate, history, intercept.",
+      inputSchema: {
+        engagement_id: z.string().optional(),
+        agent_id: z.string().optional(),
+        action: z.enum([
+          "status",
+          "request",
+          "replay",
+          "automate",
+          "history",
+          "intercept",
+        ]),
+        host: z.string().optional(),
+        port: z.number().optional(),
+        secure: z.boolean().optional(),
+        raw_request: z.string().optional(),
+        tab_name: z.string().optional(),
+        placeholders: z
+          .array(z.object({ start: z.number(), end: z.number() }))
+          .optional(),
+        payloads: z.array(z.string()).optional(),
+        strategy: z
+          .enum(["SEQUENTIAL", "ALL", "PARALLEL", "MATRIX"])
+          .optional(),
+        run: z.boolean().optional(),
+        search: z.string().optional(),
+        methods: z.string().optional(),
+        status_min: z.number().optional(),
+        status_max: z.number().optional(),
+        hide_assets: z.boolean().optional(),
+        entry_id: z.string().optional(),
+        intercept_action: z.enum(["status", "enable", "disable"]).optional(),
+      },
+    },
+    async ({ action, intercept_action, ...rest }) => {
+      if (action === "status") {
+        const health = await collectPlatformHealth("caido");
+        return textResult(health[0]?.summary || "Status unavailable.", {
+          health,
+        });
+      }
+      if (action === "request" || action === "replay") {
+        const { result } = await executeBackendTool(
+          "send_to_caido_replay",
+          rest,
+        );
+        const structured = toolResultPayload(result, { action, ...rest });
+        return textResult(formatToolResult(result), structured);
+      }
+      if (action === "automate") {
+        const { result } = await executeBackendTool(
+          "send_to_caido_automate",
+          rest,
+        );
+        const structured = toolResultPayload(result, { action, ...rest });
+        return textResult(formatToolResult(result), structured);
+      }
+      if (action === "history") {
+        const toolArgs =
+          rest.entry_id != null
+            ? { action: "get", entry_id: rest.entry_id }
+            : { action: "search", ...rest };
+        const { result } = await executeBackendTool(
+          "search_caido_http_history",
+          toolArgs,
+        );
+        const structured = toolResultPayload(result, { action, ...toolArgs });
+        return textResult(formatToolResult(result), structured);
+      }
+      const { result } = await executeBackendTool("caido_intercept_control", {
+        action: intercept_action || "status",
+      });
+      const structured = toolResultPayload(result, {
+        action,
+        intercept_action,
       });
       return textResult(formatToolResult(result), structured);
     },

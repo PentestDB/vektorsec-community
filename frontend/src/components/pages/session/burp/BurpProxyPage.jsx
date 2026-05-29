@@ -29,6 +29,41 @@ import {
 } from "@/services/burp.service";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
+const BURP_INTEGRATION = {
+  key: "burp",
+  settingsKey: "burp",
+  productName: "Burp Suite",
+  shortName: "Burp",
+  historyTitle: "Proxy History",
+  notEnabledTitle: "Burp Suite Not Enabled",
+  notEnabledText:
+    "Burp is not configured. Set the Burp RPC host and port in Settings to connect to your Burp Suite instance.",
+  notConnectedTitle: "Burp Suite Not Connected",
+  notConnectedText:
+    "Burp is configured but cannot connect. Make sure Burp Suite with the RPC extension is running.",
+  checkingText: "Checking Burp connection...",
+  replayName: "Repeater",
+  sendViaReplayText: "Send via Repeater",
+  sendToReplayText: "To Burp",
+  intruderName: "Intruder",
+  intruderSuccess: "Sent to Burp Intruder",
+  intruderError: "Failed to send to Intruder",
+  interceptSupported: true,
+  storageKey: "burp-to-workspace",
+  queryPrefix: "burp",
+  services: {
+    getConnectionStatus: getBurpConnectionStatus,
+    getHistory: getBurpProxyHistory,
+    getEntry: getBurpProxyEntry,
+    sendRequest: sendBurpRequest,
+    sendToReplay: sendToRepeater,
+    sendToIntruder,
+    replaySend: repeaterSend,
+    getInterceptStatus: getProxyInterceptStatus,
+    setIntercept: setProxyIntercept,
+  },
+};
+
 const METHOD_COLORS = {
   GET: "green",
   POST: "blue",
@@ -126,12 +161,12 @@ const HttpCodeBlock = ({ content, isRequest = true }) => {
   );
 };
 
-const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace, onSendToIntruder }) => {
+const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace, onSendToIntruder, integration }) => {
   const [activeTab, setActiveTab] = useState("request");
 
   const { data: fullEntry, isLoading: entryLoading } = useQuery(
-    ["burp-proxy-entry", record.id],
-    () => getBurpProxyEntry(record.id),
+    [`${integration.queryPrefix}-proxy-entry`, record.id],
+    () => integration.services.getEntry(record.id),
     { staleTime: 30_000, refetchOnWindowFocus: false }
   );
 
@@ -177,7 +212,7 @@ const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace, onSendToIntrud
               onOpenRepeater(mergedRecord);
             }}
           >
-            Repeater
+            {integration.replayName}
           </Button>
           <Button
             size="small"
@@ -189,7 +224,7 @@ const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace, onSendToIntrud
               onSendToIntruder(mergedRecord);
             }}
           >
-            Intruder
+            {integration.intruderName}
           </Button>
         </div>
       </div>
@@ -207,7 +242,7 @@ const ExpandedRow = ({ record, onOpenRepeater, onSendToWorkspace, onSendToIntrud
   );
 };
 
-const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
+const RepeaterModal = ({ open, onClose, record, onSendToWorkspace, integration }) => {
   const [requestText, setRequestText] = useState("");
   const [targetHost, setTargetHost] = useState("");
   const [targetPort, setTargetPort] = useState(443);
@@ -216,7 +251,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
   const [responseTime, setResponseTime] = useState(null);
   const [loadingEntry, setLoadingEntry] = useState(false);
 
-  const sendMutation = useMutation(sendBurpRequest, {
+  const sendMutation = useMutation(integration.services.sendRequest, {
     onMutate: () => {
       setResponseTime(Date.now());
     },
@@ -233,17 +268,17 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
     },
   });
 
-  const repeaterMutation = useMutation(sendToRepeater, {
+  const repeaterMutation = useMutation(integration.services.sendToReplay, {
     onSuccess: () => {
-      message.success({ content: "Sent to Burp Repeater tab", duration: 2 });
+      message.success({ content: `Sent to ${integration.shortName} ${integration.replayName}`, duration: 2 });
     },
     onError: (err) => {
-      const msg = err?.response?.data?.message || "Failed to send to Repeater";
+      const msg = err?.response?.data?.message || `Failed to send to ${integration.replayName}`;
       message.error({ content: msg, duration: 4 });
     },
   });
 
-  const repeaterSendMutation = useMutation(repeaterSend, {
+  const repeaterSendMutation = useMutation(integration.services.replaySend, {
     onMutate: () => {
       setResponseTime(Date.now());
     },
@@ -251,11 +286,11 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
       const elapsed = Date.now() - responseTime;
       setResponseTime(elapsed);
       setResponseText(data.rawResponse || "(no response body)");
-      message.success({ content: `Repeater response in ${elapsed}ms`, duration: 2 });
+      message.success({ content: `${integration.replayName} response in ${elapsed}ms`, duration: 2 });
     },
     onError: (err) => {
       setResponseTime(null);
-      const msg = err?.response?.data?.message || "Failed to send via Repeater";
+      const msg = err?.response?.data?.message || `Failed to send via ${integration.replayName}`;
       message.error({ content: msg, duration: 4 });
     },
   });
@@ -274,7 +309,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
     } else if (record.id != null) {
       setLoadingEntry(true);
       try {
-        const full = await getBurpProxyEntry(record.id);
+        const full = await integration.services.getEntry(record.id);
         setRequestText(full.rawRequest || "");
       } catch {
         setRequestText("");
@@ -341,7 +376,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
       onCancel={onClose}
       afterOpenChange={(visible) => visible && handleOpen()}
       width={1100}
-      title="Repeater"
+      title={integration.replayName}
       className={styles.repeaterModal}
       footer={null}
       destroyOnClose
@@ -396,7 +431,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
                 onClick={handleRepeaterSend}
                 className={styles.toBurpBtn}
               >
-                Send via Repeater
+                {integration.sendViaReplayText}
               </Button>
               <Button
                 size="small"
@@ -405,7 +440,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace }) => {
                 onClick={handleSendToRepeater}
                 className={styles.toBurpBtn}
               >
-                To Burp
+                {integration.sendToReplayText}
               </Button>
               <Button
                 size="small"
@@ -480,8 +515,9 @@ function useDebounce(value, delay) {
   return debounced;
 }
 
-const BurpProxyPage = ({ sessionId }) => {
+const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION }) => {
   const router = useRouter();
+  const services = integration.services;
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [repeaterOpen, setRepeaterOpen] = useState(false);
@@ -525,19 +561,19 @@ const BurpProxyPage = ({ sessionId }) => {
     data: connectionStatus,
     isLoading: connectionLoading,
     refetch: refetchConnection,
-  } = useQuery("burp-connection-status", getBurpConnectionStatus, {
+  } = useQuery(`${integration.queryPrefix}-connection-status`, services.getConnectionStatus, {
     staleTime: 5_000,
     refetchInterval: 10_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
 
-  const burpConnected = connectionStatus?.connected === true;
+  const integrationConnected = connectionStatus?.connected === true;
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery(
-    ["burp-proxy-history", page, pageSize, debouncedSearch, methodParam, statusRange, hideAssets],
+    [`${integration.queryPrefix}-proxy-history`, page, pageSize, debouncedSearch, methodParam, statusRange, hideAssets],
     () =>
-      getBurpProxyHistory({
+      services.getHistory({
         page,
         pageSize,
         search: debouncedSearch || undefined,
@@ -547,7 +583,7 @@ const BurpProxyPage = ({ sessionId }) => {
         hideAssets: hideAssets ? "true" : undefined,
       }),
     {
-      enabled: burpConnected,
+      enabled: integrationConnected,
       keepPreviousData: true,
       refetchOnWindowFocus: false,
       retry: 1,
@@ -555,13 +591,13 @@ const BurpProxyPage = ({ sessionId }) => {
   );
 
   const { data: interceptData, refetch: refetchIntercept } = useQuery(
-    ["burp-intercept-status"],
-    getProxyInterceptStatus,
-    { enabled: burpConnected, refetchOnWindowFocus: false, retry: false }
+    [`${integration.queryPrefix}-intercept-status`],
+    services.getInterceptStatus,
+    { enabled: integrationConnected && integration.interceptSupported, refetchOnWindowFocus: false, retry: false }
   );
 
   const interceptMutation = useMutation(
-    (enabled) => setProxyIntercept({ enabled }),
+    (enabled) => services.setIntercept({ enabled }),
     {
       onSuccess: (_, enabled) => {
         refetchIntercept();
@@ -577,12 +613,12 @@ const BurpProxyPage = ({ sessionId }) => {
     }
   );
 
-  const intruderMutation = useMutation(sendToIntruder, {
+  const intruderMutation = useMutation(services.sendToIntruder, {
     onSuccess: () => {
-      message.success({ content: "Sent to Burp Intruder", duration: 2 });
+      message.success({ content: integration.intruderSuccess, duration: 2 });
     },
     onError: (err) => {
-      const msg = err?.response?.data?.message || "Failed to send to Intruder";
+      const msg = err?.response?.data?.message || integration.intruderError;
       message.error({ content: msg, duration: 4 });
     },
   });
@@ -601,7 +637,7 @@ const BurpProxyPage = ({ sessionId }) => {
     let fullRecord = record;
     if (!record.rawRequest && record.id != null) {
       try {
-        fullRecord = { ...record, ...(await getBurpProxyEntry(record.id)) };
+        fullRecord = { ...record, ...(await services.getEntry(record.id)) };
       } catch {
         message.error({ content: "Failed to load request details", duration: 3 });
         return;
@@ -620,7 +656,7 @@ const BurpProxyPage = ({ sessionId }) => {
     let fullRecord = record;
     if (!record.rawRequest && record.id != null) {
       try {
-        fullRecord = { ...record, ...(await getBurpProxyEntry(record.id)) };
+        fullRecord = { ...record, ...(await services.getEntry(record.id)) };
       } catch {
         message.error({ content: "Failed to load request details", duration: 3 });
         return;
@@ -635,8 +671,9 @@ const BurpProxyPage = ({ sessionId }) => {
       rawRequest: fullRecord.rawRequest || "",
       rawResponse: fullRecord.rawResponse || "",
       statusCode: fullRecord.statusCode,
+      sourceName: integration.shortName,
     };
-    sessionStorage.setItem("burp-to-workspace", JSON.stringify(attachment));
+    sessionStorage.setItem(integration.storageKey, JSON.stringify(attachment));
     router.push(`/session/${sessionId}`);
     message.success({ content: "Request attached to workspace", duration: 2 });
   }, [sessionId, router]);
@@ -732,7 +769,7 @@ const BurpProxyPage = ({ sessionId }) => {
             e.stopPropagation();
             openRepeater(record);
           }}
-          title="Open in Repeater"
+          title={`Open in ${integration.replayName}`}
         />
       ),
     },
@@ -743,7 +780,7 @@ const BurpProxyPage = ({ sessionId }) => {
       <div className={styles.burpContainer}>
         <div className={styles.emptyState}>
           <Spin size="large" />
-          <p style={{ marginTop: "1rem" }}>Checking Burp connection...</p>
+          <p style={{ marginTop: "1rem" }}>{integration.checkingText}</p>
         </div>
       </div>
     );
@@ -754,17 +791,15 @@ const BurpProxyPage = ({ sessionId }) => {
       <div className={styles.burpContainer}>
         <div className={styles.emptyState}>
           <TbRadar className={styles.emptyIcon} />
-          <h3>Burp Suite Not Enabled</h3>
-          <p>
-            Burp is not configured. Set the Burp RPC host and port in Settings to connect to your Burp Suite instance.
-          </p>
+          <h3>{integration.notEnabledTitle}</h3>
+          <p>{integration.notEnabledText}</p>
           <Button
             type="primary"
             size="small"
             icon={<SettingOutlined />}
             className={styles.configureBtn}
             onClick={() => {
-              window.dispatchEvent(new CustomEvent("open-settings", { detail: "burp" }));
+              window.dispatchEvent(new CustomEvent("open-settings", { detail: integration.settingsKey }));
             }}
           >
             Enable in Settings
@@ -779,10 +814,10 @@ const BurpProxyPage = ({ sessionId }) => {
       <div className={styles.burpContainer}>
         <div className={styles.emptyState}>
           <TbRadar className={styles.emptyIcon} />
-          <h3>Burp Suite Not Connected</h3>
+          <h3>{integration.notConnectedTitle}</h3>
           <p>
             {connectionStatus?.message ||
-              "Burp is configured but cannot connect. Make sure Burp Suite with the RPC extension is running."}
+              integration.notConnectedText}
           </p>
           <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
             <Button
@@ -797,7 +832,7 @@ const BurpProxyPage = ({ sessionId }) => {
               size="small"
               icon={<SettingOutlined />}
               onClick={() => {
-                window.dispatchEvent(new CustomEvent("open-settings", { detail: "burp" }));
+                window.dispatchEvent(new CustomEvent("open-settings", { detail: integration.settingsKey }));
               }}
             >
               Check Settings
@@ -812,13 +847,13 @@ const BurpProxyPage = ({ sessionId }) => {
     <div className={styles.burpContainer}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <h2 className={styles.headerTitle}>Proxy History</h2>
+          <h2 className={styles.headerTitle}>{integration.historyTitle}</h2>
           {data?.total != null && (
             <span className={styles.entryCount}>{data.total}</span>
           )}
         </div>
         <div className={styles.headerRight}>
-          <div className={styles.interceptToggle}>
+          {integration.interceptSupported && <div className={styles.interceptToggle}>
             <span>Intercept</span>
             <Switch
               size="small"
@@ -826,7 +861,7 @@ const BurpProxyPage = ({ sessionId }) => {
               loading={interceptMutation.isLoading}
               onChange={(checked) => interceptMutation.mutate(checked)}
             />
-          </div>
+          </div>}
           <Button
             icon={<ReloadOutlined spin={isFetching} />}
             onClick={() => refetch()}
@@ -929,6 +964,7 @@ const BurpProxyPage = ({ sessionId }) => {
                 onOpenRepeater={openRepeater}
                 onSendToWorkspace={sendToWorkspace}
                 onSendToIntruder={handleSendToIntruder}
+                integration={integration}
               />
             ),
             expandRowByClick: true,
@@ -951,6 +987,7 @@ const BurpProxyPage = ({ sessionId }) => {
         onClose={() => setRepeaterOpen(false)}
         record={repeaterRecord}
         onSendToWorkspace={sendToWorkspace}
+        integration={integration}
       />
     </div>
   );

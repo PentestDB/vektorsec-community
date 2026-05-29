@@ -7,6 +7,13 @@ const BURP_TOOLS = [
   "burp_collaborator",
 ];
 
+const CAIDO_TOOLS = [
+  "search_caido_http_history",
+  "send_to_caido_replay",
+  "send_to_caido_automate",
+  "caido_intercept_control",
+];
+
 /**
  * Returns tool names that are NOT configured (missing required env/settings).
  * These tools should be excluded from the LLM context and greyed out in the UI.
@@ -18,6 +25,11 @@ export function getUnconfiguredToolNames(): string[] {
   const burpConfigured = !!env.BURP_RPC_HOST;
   if (!burpConfigured) {
     unconfigured.push(...BURP_TOOLS);
+  }
+
+  const caidoConfigured = !!env.CAIDO_URL && !!env.CAIDO_PAT;
+  if (!caidoConfigured) {
+    unconfigured.push(...CAIDO_TOOLS);
   }
 
   const magnitudeConfigured = env.MAGNITUDE_ENABLED === "true";

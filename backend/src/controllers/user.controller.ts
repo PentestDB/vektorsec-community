@@ -1723,6 +1723,47 @@ export const updateBurpConfig = async (req: Request, res: Response) => {
   }
 };
 
+export const getCaidoConfig = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    return res.status(200).json({
+      url: env.CAIDO_URL || "",
+      patConfigured: !!env.CAIDO_PAT,
+      proxyUrl: env.CAIDO_PROXY_URL || env.CAIDO_URL || "",
+      configured: !!env.CAIDO_URL && !!env.CAIDO_PAT,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get integration config" });
+  }
+};
+
+export const updateCaidoConfig = async (req: Request, res: Response) => {
+  try {
+    const { url, pat, proxyUrl } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ message: "URL is required" });
+    }
+
+    const updates: Record<string, string> = {
+      CAIDO_URL: String(url).replace(/\/+$/, ""),
+      CAIDO_PROXY_URL: String(proxyUrl || url).replace(/\/+$/, ""),
+    };
+
+    if (pat !== undefined) {
+      updates.CAIDO_PAT = String(pat || "");
+    }
+
+    updateEnvVars(updates);
+
+    return res.status(200).json({ message: "Configuration updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update integration config" });
+  }
+};
+
 // ─── Magnitude Browser Agent Configuration ───────────────────────────
 
 export const getMagnitudeConfig = async (_req: Request, res: Response) => {
