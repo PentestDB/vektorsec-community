@@ -1760,6 +1760,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         provider_id: z.string().optional(),
         session_id: z.string().optional(),
         title: z.string().optional(),
+        force: z.boolean().optional(),
       },
     },
     async ({ action, intercept_action, oast_action, ...rest }) => {
@@ -1803,6 +1804,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           provider_id: rest.provider_id,
           session_id: rest.session_id,
           title: rest.title,
+          force: rest.force,
         });
         const structured = toolResultPayload(result, {
           action,

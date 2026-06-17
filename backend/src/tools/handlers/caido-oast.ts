@@ -68,6 +68,10 @@ const caidoOast: ToolDefinition = {
         type: "string",
         description: 'Optional session title for "generate".',
       },
+      force: {
+        type: "boolean",
+        description: 'Force reinstall the plugin when using action "install".',
+      },
     },
     required: ["action"],
   },
@@ -85,10 +89,10 @@ const caidoOast: ToolDefinition = {
       const action = String(args.action || "status");
 
       if (action === "install") {
-        const result = await installCaidoOastPlugin();
+        const result = await installCaidoOastPlugin({ force: args.force === true });
         return {
           output:
-            `OAST plugin installed: ${result.manifestId}\n` +
+            `OAST plugin ${args.force === true ? "reinstalled" : "installed"}: ${result.manifestId}\n` +
             result.plugins
               .map((plugin: any) => `- ${plugin.kind} ${plugin.manifestId}: ${plugin.enabled ? "enabled" : "disabled"}`)
               .join("\n"),

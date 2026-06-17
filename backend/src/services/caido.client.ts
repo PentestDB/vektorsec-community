@@ -479,17 +479,20 @@ function unwrapQuickSsrf<T>(result: QuickSsrfResult<T>, action: string): T {
   return result.value;
 }
 
-async function getQuickSsrfPackage(options: { install?: boolean } = {}) {
+async function getQuickSsrfPackage(options: { install?: boolean; force?: boolean } = {}) {
   const client = await createCaidoClient();
   let pluginPackage = await client.plugin.pluginPackage<QuickSsrfSpec>("quickssrf");
-  if (!pluginPackage && options.install) {
-    pluginPackage = await client.plugin.install<QuickSsrfSpec>({ manifestId: "quickssrf" });
+  if (options.install && (!pluginPackage || options.force)) {
+    pluginPackage = await client.plugin.install<QuickSsrfSpec>({
+      manifestId: "quickssrf",
+      force: options.force,
+    });
   }
   return pluginPackage;
 }
 
-export async function installCaidoOastPlugin() {
-  const pluginPackage = await getQuickSsrfPackage({ install: true });
+export async function installCaidoOastPlugin(options: { force?: boolean } = {}) {
+  const pluginPackage = await getQuickSsrfPackage({ install: true, force: options.force });
   if (!pluginPackage) throw new Error("Could not install OAST plugin.");
   return {
     installed: true,
