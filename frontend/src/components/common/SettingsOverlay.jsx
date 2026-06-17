@@ -17,6 +17,7 @@ import ModelsPage from "@/components/pages/settings/Models";
 import SSHPage from "@/components/pages/settings/SSH";
 import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
+import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 
@@ -63,6 +64,13 @@ const TABS = [
     description: "Connect to a Burp Suite instance via the Burp RPC extension.",
     icon: TbRadar,
     component: BurpSettingsPage,
+  },
+  {
+    key: "caido",
+    label: "Caido",
+    description: "Configure URL, token, and proxy settings.",
+    icon: TbRadar,
+    component: CaidoSettingsPage,
   },
   {
     key: "magnitude",

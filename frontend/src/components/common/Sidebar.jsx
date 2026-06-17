@@ -162,6 +162,18 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     router.push(`/session/${sessionId}/burp`);
   };
 
+  const navigateToCaido = () => {
+    const caidoId = `${sessionId}/caido`;
+    let updatedSess = [...sessions];
+    const exists = updatedSess.find((s) => s.id === caidoId);
+    if (!exists) {
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: caidoId, is_main: false, is_active: true, type: "caido" });
+      dispatch(updateSessions(updatedSess));
+    }
+    router.push(`/session/${sessionId}/caido`);
+  };
+
   const navigateToBrowserAgent = () => {
     const baId = `${sessionId}/browser-agent`;
     let updatedSess = [...sessions];
@@ -182,6 +194,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const isOnVPN = pathname?.includes("/vpn");
   const isOnGUI = pathname?.includes("/gui");
   const isOnBurp = pathname?.includes("/burp");
+  const isOnCaido = pathname?.includes("/caido");
   const isOnBrowserAgent = pathname?.includes("/browser-agent");
   const activeRacerPath = pathname?.match(/\/racer\/([^/]+)/)?.[1] ?? null;
   const activeRacerTokenUsage = useMemo(() => {
@@ -379,6 +392,14 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           >
             <TbRadar />
             Burp
+          </div>
+
+          <div
+            onClick={navigateToCaido}
+            className={isOnCaido ? styles.activeTab : styles.tab}
+          >
+            <TbRadar />
+            Caido
           </div>
 
           <div
