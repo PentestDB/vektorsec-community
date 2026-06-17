@@ -32,6 +32,9 @@ importers:
       '@arizeai/openinference-instrumentation-anthropic':
         specifier: 0.1.7
         version: 0.1.7
+      '@caido-community/quickssrf':
+        specifier: 1.0.2
+        version: 1.0.2
       '@caido/sdk-client':
         specifier: 0.3.1
         version: 0.3.1(ws@8.19.0)
@@ -83,6 +86,9 @@ importers:
       '@types/ws':
         specifier: 8.18.1
         version: 8.18.1
+      '@urql/core':
+        specifier: 6.0.2
+        version: 6.0.2(graphql@16.14.0)
       archiver:
         specifier: 5.3.2
         version: 5.3.2
@@ -355,6 +361,9 @@ packages:
     resolution: {integrity: sha512-C1VY5XERJJpOcBfx0lu+Dru9UaVdG9/O69yXkAbPu0ZbAu99Rod5InDreTigeDxCddj+mn1TvOry7NylDDW+xQ==}
     engines: {node: '>= 10'}
     hasBin: true
+
+  '@caido-community/quickssrf@1.0.2':
+    resolution: {integrity: sha512-yl2T5fo4oRjmMvxXHB/Nj1wtfTSg+wvQZcCWkt6PEf1viKp67kd5ZTBPEP6si+W/RV/4RH3Bmw39LCREUtYuag==}
 
   '@caido/sdk-client@0.3.1':
     resolution: {integrity: sha512-QFy4IVXAfRNxm0h0FQTO24kWl9jp0q6aTGmsXLVXClmFPa6RocWXxP0na0Bg+xFsDRx26PlNLKPlFtUgOqWnDw==}
@@ -1264,8 +1273,8 @@ packages:
     resolution: {integrity: sha512-KiROIzYdEV85YygXw6BI/Dx4fnBlFQu6Mq4QE4MOH9fFnhohw6wX/OAvDY2/C+ut0I3RSPKenvZJIVYqJNkhEw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@urql/core@6.0.1':
-    resolution: {integrity: sha512-FZDiQk6jxbj5hixf2rEPv0jI+IZz0EqqGW8mJBEug68/zHTtT+f34guZDmyjJZyiWbj0vL165LoMr/TkeDHaug==}
+  '@urql/core@6.0.2':
+    resolution: {integrity: sha512-9Z4/o97iJujIHKIXcT6jTz147nEb2myZGUKRZ7caHomnKNmm6vd3kpIrkaCuoWJDWrF21eVbNhHWhrBP7gItYw==}
 
   '@urql/exchange-auth@3.0.0':
     resolution: {integrity: sha512-tj09xiOR2f1J2h8TE9uZWjRZipCdmDoTewEytOacDQ+0Teo+yIZxm3ppHxolQtiA51OHrGYiNTkMte8HtfvaBw==}
@@ -3801,6 +3810,9 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -3905,13 +3917,18 @@ snapshots:
       '@boundaryml/baml-linux-x64-musl': 0.202.1
       '@boundaryml/baml-win32-x64-msvc': 0.202.1
 
+  '@caido-community/quickssrf@1.0.2':
+    dependencies:
+      '@caido/sdk-shared': 0.2.2
+      zod: 4.3.6
+
   '@caido/sdk-client@0.3.1(ws@8.19.0)':
     dependencies:
       '@caido/sdk-shared': 0.2.2
       '@caido/server-auth': 0.2.0(ws@8.19.0)
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.14.0)
-      '@urql/core': 6.0.1(graphql@16.14.0)
-      '@urql/exchange-auth': 3.0.0(@urql/core@6.0.1(graphql@16.14.0))
+      '@urql/core': 6.0.2(graphql@16.14.0)
+      '@urql/exchange-auth': 3.0.0(@urql/core@6.0.2(graphql@16.14.0))
       graphql: 16.14.0
       graphql-ws: 6.0.8(graphql@16.14.0)(ws@8.19.0)
       wonka: 6.3.6
@@ -3925,7 +3942,7 @@ snapshots:
 
   '@caido/server-auth@0.2.0(ws@8.19.0)':
     dependencies:
-      '@urql/core': 6.0.1(graphql@16.14.0)
+      '@urql/core': 6.0.2(graphql@16.14.0)
       graphql: 16.14.0
       graphql-tag: 2.12.6(graphql@16.14.0)
       graphql-ws: 6.0.8(graphql@16.14.0)(ws@8.19.0)
@@ -4895,16 +4912,16 @@ snapshots:
       '@typescript-eslint/types': 8.56.1
       eslint-visitor-keys: 5.0.1
 
-  '@urql/core@6.0.1(graphql@16.14.0)':
+  '@urql/core@6.0.2(graphql@16.14.0)':
     dependencies:
       '@0no-co/graphql.web': 1.2.0(graphql@16.14.0)
       wonka: 6.3.6
     transitivePeerDependencies:
       - graphql
 
-  '@urql/exchange-auth@3.0.0(@urql/core@6.0.1(graphql@16.14.0))':
+  '@urql/exchange-auth@3.0.0(@urql/core@6.0.2(graphql@16.14.0))':
     dependencies:
-      '@urql/core': 6.0.1(graphql@16.14.0)
+      '@urql/core': 6.0.2(graphql@16.14.0)
       wonka: 6.3.6
 
   abbrev@1.1.1: {}
@@ -7870,5 +7887,7 @@ snapshots:
       zod: 3.25.76
 
   zod@3.25.76: {}
+
+  zod@4.3.6: {}
 
   zod@4.4.3: {}

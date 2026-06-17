@@ -1721,7 +1721,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "caido",
     {
       description:
-        "Operate the configured Caido integration. Actions: status, request, replay, automate, history, intercept.",
+        "Operate the configured Caido integration. Actions: status, request, replay, automate, history, intercept, oast.",
       inputSchema: {
         engagement_id: z.string().optional(),
         agent_id: z.string().optional(),
@@ -1732,6 +1732,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           "automate",
           "history",
           "intercept",
+          "oast",
         ]),
         host: z.string().optional(),
         port: z.number().optional(),
@@ -1753,9 +1754,15 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         hide_assets: z.boolean().optional(),
         entry_id: z.string().optional(),
         intercept_action: z.enum(["status", "enable", "disable"]).optional(),
+        oast_action: z
+          .enum(["status", "install", "providers", "generate", "poll", "interactions", "sessions"])
+          .optional(),
+        provider_id: z.string().optional(),
+        session_id: z.string().optional(),
+        title: z.string().optional(),
       },
     },
-    async ({ action, intercept_action, ...rest }) => {
+    async ({ action, intercept_action, oast_action, ...rest }) => {
       if (action === "status") {
         const health = await collectPlatformHealth("caido");
         return textResult(health[0]?.summary || "Status unavailable.", {
@@ -1788,6 +1795,20 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           toolArgs,
         );
         const structured = toolResultPayload(result, { action, ...toolArgs });
+        return textResult(formatToolResult(result), structured);
+      }
+      if (action === "oast") {
+        const { result } = await executeBackendTool("caido_oast", {
+          action: oast_action || "status",
+          provider_id: rest.provider_id,
+          session_id: rest.session_id,
+          title: rest.title,
+        });
+        const structured = toolResultPayload(result, {
+          action,
+          oast_action,
+          ...rest,
+        });
         return textResult(formatToolResult(result), structured);
       }
       const { result } = await executeBackendTool("caido_intercept_control", {

@@ -1,3 +1,11 @@
+import { gql } from "@urql/core";
+import type {
+  Interaction as QuickSsrfInteraction,
+  Provider as QuickSsrfProvider,
+  Result as QuickSsrfResult,
+  Session as QuickSsrfSession,
+  Spec as QuickSsrfSpec,
+} from "@caido-community/quickssrf";
 import { readEnvFile } from "../utils/envWriter";
 
 export type CaidoConnection = {
@@ -64,32 +72,23 @@ export async function createCaidoClient(conn = getCaidoConnection()) {
     logger: quietLogger(),
   });
   await client.connect();
-  return client as any;
+  return client;
 }
 
-export async function caidoGraphql(query: string, variables?: Record<string, unknown>) {
-  const conn = getCaidoConnection();
-  const client = await createCaidoClient(conn);
-  const token = client.auth?.getAccessToken?.();
-  if (!token) throw new Error("Authentication did not return an access token.");
+export async function caidoQuery<TData = any, TVars extends Record<string, unknown> = Record<string, unknown>>(
+  document: any,
+  variables?: TVars,
+): Promise<TData> {
+  const client = await createCaidoClient();
+  return client.graphql.query(document, variables);
+}
 
-  const res = await fetch(`${conn.url}/graphql`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json?.message || `GraphQL request failed with HTTP ${res.status}`);
-  }
-  if (json.errors?.length) {
-    throw new Error(json.errors.map((err: any) => err.message).join("; "));
-  }
-  return json.data;
+export async function caidoMutation<TData = any, TVars extends Record<string, unknown> = Record<string, unknown>>(
+  document: any,
+  variables?: TVars,
+): Promise<TData> {
+  const client = await createCaidoClient();
+  return client.graphql.mutation(document, variables);
 }
 
 export function normalizeHttpRequest(rawRequest: string): string {
@@ -350,8 +349,9 @@ export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
   const rawBlob = encodeBlob(raw);
   const connection = connectionInfo(input);
 
-  const created = await caidoGraphql(
-    `mutation($input: CreateAutomateSessionInput!) {
+  const created = await caidoMutation(
+    gql`
+      mutation($input: CreateAutomateSessionInput!) {
       createAutomateSession(input: $input) {
         session { id name }
       }
@@ -367,8 +367,9 @@ export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
   const sessionId = created.createAutomateSession.session.id;
 
   if (input.tabName) {
-    await caidoGraphql(
-      `mutation($id: ID!, $name: String!) {
+    await caidoMutation(
+      gql`
+        mutation($id: ID!, $name: String!) {
         renameAutomateSession(id: $id, name: $name) { session { id name } }
       }`,
       { id: sessionId, name: input.tabName },
@@ -377,8 +378,9 @@ export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
 
   const shouldConfigure = input.run || input.placeholders?.length || input.payloads?.length;
   if (shouldConfigure) {
-    const updated = await caidoGraphql(
-      `mutation($id: ID!, $input: UpdateAutomateSessionInput!) {
+    const updated = await caidoMutation(
+      gql`
+        mutation($id: ID!, $input: UpdateAutomateSessionInput!) {
         updateAutomateSession(id: $id, input: $input) {
           session { id name }
           error { __typename }
@@ -400,8 +402,9 @@ export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
 
   let task;
   if (input.run) {
-    const started = await caidoGraphql(
-      `mutation($id: ID!) {
+    const started = await caidoMutation(
+      gql`
+        mutation($id: ID!) {
         startAutomateTask(automateSessionId: $id) {
           automateTask { id paused entry { id name } }
         }
@@ -419,8 +422,9 @@ export async function createCaidoAutomateSession(input: CaidoAutomateInput) {
 }
 
 export async function getCaidoInterceptState() {
-  const data = await caidoGraphql(
-    `query {
+  const data = await caidoQuery(
+    gql`
+      query {
       interceptStatus
       interceptOptions {
         request { enabled }
@@ -441,8 +445,9 @@ export async function getCaidoInterceptState() {
 export async function setCaidoInterceptEnabled(enabled: boolean) {
   if (enabled) {
     const state = await getCaidoInterceptState();
-    await caidoGraphql(
-      `mutation($input: InterceptOptionsInput!) {
+    await caidoMutation(
+      gql`
+        mutation($input: InterceptOptionsInput!) {
         setInterceptOptions(input: $input) {
           options {
             request { enabled }
@@ -459,10 +464,101 @@ export async function setCaidoInterceptEnabled(enabled: boolean) {
         },
       },
     );
-    await caidoGraphql(`mutation { resumeIntercept { status } }`);
+    await caidoMutation(gql`mutation { resumeIntercept { status } }`);
   } else {
-    await caidoGraphql(`mutation { pauseIntercept { status } }`);
+    await caidoMutation(gql`mutation { pauseIntercept { status } }`);
   }
 
   return getCaidoInterceptState();
+}
+
+function unwrapQuickSsrf<T>(result: QuickSsrfResult<T>, action: string): T {
+  if (result.kind === "Error") {
+    throw new Error(`${action} failed: ${result.error}`);
+  }
+  return result.value;
+}
+
+async function getQuickSsrfPackage(options: { install?: boolean } = {}) {
+  const client = await createCaidoClient();
+  let pluginPackage = await client.plugin.pluginPackage<QuickSsrfSpec>("quickssrf");
+  if (!pluginPackage && options.install) {
+    pluginPackage = await client.plugin.install<QuickSsrfSpec>({ manifestId: "quickssrf" });
+  }
+  return pluginPackage;
+}
+
+export async function installCaidoOastPlugin() {
+  const pluginPackage = await getQuickSsrfPackage({ install: true });
+  if (!pluginPackage) throw new Error("Could not install OAST plugin.");
+  return {
+    installed: true,
+    manifestId: pluginPackage.manifestId,
+    plugins: pluginPackage.plugins,
+  };
+}
+
+export async function getCaidoOastStatus() {
+  const pluginPackage = await getQuickSsrfPackage();
+  if (!pluginPackage) {
+    return {
+      installed: false,
+      providers: [] as QuickSsrfProvider[],
+      sessions: [] as QuickSsrfSession[],
+    };
+  }
+
+  const providers = unwrapQuickSsrf(await pluginPackage.getProviders(), "getProviders");
+  const sessions = unwrapQuickSsrf(await pluginPackage.getSessions(), "getSessions");
+  return {
+    installed: true,
+    manifestId: pluginPackage.manifestId,
+    providers,
+    sessions,
+  };
+}
+
+export async function getCaidoOastProviders() {
+  const pluginPackage = await getQuickSsrfPackage();
+  if (!pluginPackage) throw new Error("OAST plugin is not installed. Run install first.");
+  return unwrapQuickSsrf(await pluginPackage.getProviders(), "getProviders");
+}
+
+export async function getCaidoOastSessions() {
+  const pluginPackage = await getQuickSsrfPackage();
+  if (!pluginPackage) throw new Error("OAST plugin is not installed. Run install first.");
+  return unwrapQuickSsrf(await pluginPackage.getSessions(), "getSessions");
+}
+
+export async function createCaidoOastSession(input: { providerId?: string; title?: string } = {}) {
+  const pluginPackage = await getQuickSsrfPackage();
+  if (!pluginPackage) throw new Error("OAST plugin is not installed. Run install first.");
+
+  let providerId = input.providerId;
+  if (!providerId) {
+    const providers = unwrapQuickSsrf(await pluginPackage.getProviders(), "getProviders");
+    providerId = providers.find((provider) => provider.enabled)?.id || providers[0]?.id;
+  }
+  if (!providerId) throw new Error("No OAST providers are configured.");
+
+  let session = unwrapQuickSsrf(await pluginPackage.createSession(providerId), "createSession");
+  if (input.title) {
+    session = unwrapQuickSsrf(
+      await pluginPackage.updateSessionTitle(session.id, input.title),
+      "updateSessionTitle",
+    );
+  }
+  return session;
+}
+
+export async function pollCaidoOastSession(sessionId: string): Promise<QuickSsrfInteraction[]> {
+  const pluginPackage = await getQuickSsrfPackage();
+  if (!pluginPackage) throw new Error("OAST plugin is not installed. Run install first.");
+  return unwrapQuickSsrf(await pluginPackage.pollSession(sessionId), "pollSession");
+}
+
+export async function getCaidoOastInteractions(sessionId: string): Promise<QuickSsrfInteraction[]> {
+  const pluginPackage = await getQuickSsrfPackage();
+  if (!pluginPackage) throw new Error("OAST plugin is not installed. Run install first.");
+  return unwrapQuickSsrf(await pluginPackage.getInteractions(sessionId), "getInteractions");
 }
