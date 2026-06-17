@@ -12,6 +12,7 @@ const CAIDO_TOOLS = [
   "send_to_caido_replay",
   "send_to_caido_automate",
   "caido_intercept_control",
+  "caido_oast",
 ];
 
 /**

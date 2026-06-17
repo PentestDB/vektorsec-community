@@ -33,6 +33,7 @@ const TOOL_LABELS = {
   send_to_caido_replay: "Caido Replay",
   send_to_caido_automate: "Caido Automate",
   caido_intercept_control: "Caido Intercept",
+  caido_oast: "Caido OAST",
   platform_health: "MCP Platform Health",
   platform_setup: "MCP Platform Setup",
   platform_repair: "MCP Platform Repair",
