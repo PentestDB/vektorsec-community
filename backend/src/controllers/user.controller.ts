@@ -302,6 +302,13 @@ export const detectCapabilities = async (req: Request, res: Response) => {
 // ─── Server-level Model Configuration (reads/writes .env) ────────────
 
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
+import {
+  writeVncPasswordCmd,
+  hasVncPassword,
+  xvncSecurityArgs,
+  APT_POLICY_GUARD_INSTALL,
+  APT_POLICY_GUARD_REMOVE,
+} from "../utils/vncSetup";
 
 export const getModelConfig = async (_req: Request, res: Response) => {
   try {
@@ -738,12 +745,18 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
 
           // Step 2: Install packages if anything is missing
           if (!alreadyInstalled) {
+            // Deny apt maintainer scripts from starting services so the install
+            // doesn't hang on containers without an init system.
+            await execCmd(APT_POLICY_GUARD_INSTALL);
             // Install Xvnc + lightweight GUI deps; try tigervnc first, fall back to tightvncserver
             await execCmd(
               "export DEBIAN_FRONTEND=noninteractive && " +
                 "sudo apt-get update -qq 2>&1 && " +
                 "sudo apt-get install -y -qq " +
                 "tigervnc-standalone-server tigervnc-common " +
+                // x11vnc provides -storepasswd, used to write a VNC passwd file
+                // when the distro's tigervnc ships no vncpasswd binary.
+                "x11vnc " +
                 "novnc python3-websockify " +
                 "xterm xfonts-base x11-xserver-utils " +
                 "dbus-x11 2>&1 || true",
@@ -760,6 +773,7 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
               recheck = await execCmd(VNC_SEARCH_CMD);
               vncBin = parseVncPath(recheck);
             }
+            await execCmd(APT_POLICY_GUARD_REMOVE);
 
             if (!vncBin) {
               const dpkgInfo = await execCmd(
@@ -789,20 +803,6 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           }
           steps[1].done = true;
 
-          // Discover vncpasswd binary
-          let vncPasswdBin = "vncpasswd";
-          try {
-            const raw = await execCmd(
-              'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec"; ' +
-                'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
-                'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done',
-            );
-            const found = parseVncPath(raw);
-            if (found) vncPasswdBin = found;
-          } catch {
-            /* use default */
-          }
-
           const isXvncDirect =
             vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
           const isX11vnc = vncBin.endsWith("x11vnc");
@@ -822,10 +822,13 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
               `for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done`,
           );
           const escapedPw = randomPassword.replace(/'/g, "'\\''");
+          // Write a VNC passwd file (vncpasswd / tigervncpasswd / x11vnc
+          // -storepasswd). Only if none of those exist do we fall back to no
+          // auth so the box still comes up.
+          let useVncAuth = false;
           if (!isX11vnc) {
-            await execCmd(
-              `echo '${escapedPw}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`,
-            );
+            const pwProbe = await execCmd(writeVncPasswordCmd(escapedPw));
+            useVncAuth = hasVncPassword(pwProbe);
           }
           steps[2].done = true;
 
@@ -833,7 +836,7 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           if (isXvncDirect) {
             await execCmd(
               `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
-                `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+                `${xvncSecurityArgs(useVncAuth)} ` +
                 `-pn > /dev/null 2>&1 &`,
             );
             await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -895,11 +898,16 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
             !vncHost.includes(".");
           const baseUrl = isDockerInternal ? `http://localhost:${vncPort}` : "";
 
+          // When Xvnc had no vncpasswd binary it starts without auth; surface an
+          // empty password so the client doesn't prompt for an unused one.
+          const passwordProtected = isX11vnc || useVncAuth;
+          const effectivePassword = passwordProtected ? randomPassword : "";
+
           updateEnvVars({
             [VNC_ENV_KEYS.mode]: "auto",
             [VNC_ENV_KEYS.host]: vncHost,
             [VNC_ENV_KEYS.port]: vncPort,
-            [VNC_ENV_KEYS.password]: randomPassword,
+            [VNC_ENV_KEYS.password]: effectivePassword,
             [VNC_ENV_KEYS.setupDone]: "true",
             [VNC_ENV_KEYS.baseUrl]: baseUrl,
           });
@@ -907,9 +915,12 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           sshClient.end();
 
           return res.status(200).json({
-            message: "VNC setup completed successfully",
+            message: passwordProtected
+              ? "VNC setup completed successfully"
+              : "VNC setup completed. No vncpasswd binary was available, so VNC "
+                + "auth is disabled — access is protected by the SSH tunnel only.",
             vncURL: `${vncHost}:${vncPort}`,
-            password: randomPassword,
+            password: effectivePassword,
             steps,
           });
         } catch (error) {
@@ -1338,21 +1349,6 @@ export const repairVNC = async (req: Request, res: Response) => {
       }
     }
 
-    // Determine the right vncpasswd binary
-    let vncPasswdBin = "vncpasswd";
-    try {
-      const raw = await execSSHCommand(
-        'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec"; ' +
-          'for b in vncpasswd tigervncpasswd; do p="$(command -v "$b" 2>/dev/null)" && [ -x "$p" ] && echo "$p" && break; done; ' +
-          'for p in /usr/bin/vncpasswd /usr/bin/tigervncpasswd; do [ -x "$p" ] && echo "$p" && break; done',
-      );
-      const found = parseVncPath(raw);
-      if (found) vncPasswdBin = found;
-      console.log(`[VNC Repair] vncpasswd binary: ${vncPasswdBin}`);
-    } catch {
-      /* use default */
-    }
-
     if (fix === "all" || fix === "vnc_server") {
       const isXvncDirect =
         vncBin.endsWith("Xvnc") || vncBin.endsWith("Xtigervnc");
@@ -1390,14 +1386,20 @@ export const repairVNC = async (req: Request, res: Response) => {
         console.error("[VNC Repair] Kill VNC failed:", e.message);
       }
 
+      let useVncAuth = false;
       if (savedPassword && !isX11vnc) {
         try {
           const escaped = savedPassword.replace(/'/g, "'\\''");
-          await execSSHCommand(
-            `echo '${escaped}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`,
+          const pwProbe = await execSSHCommand(writeVncPasswordCmd(escaped));
+          useVncAuth = hasVncPassword(pwProbe);
+          log.push(
+            useVncAuth
+              ? "Set VNC password"
+              : "No vncpasswd binary; starting Xvnc without auth (SSH-tunnel only)",
           );
-          log.push("Set VNC password");
-          console.log("[VNC Repair] Set VNC password");
+          console.log(
+            `[VNC Repair] VNC auth: ${useVncAuth ? "VncAuth" : "None (no vncpasswd)"}`,
+          );
         } catch (e: any) {
           log.push(`Set password failed: ${e.message}`);
           console.error("[VNC Repair] Set password failed:", e.message);
@@ -1411,7 +1413,7 @@ export const repairVNC = async (req: Request, res: Response) => {
           );
           await execSSHCommand(
             `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
-              `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+              `${xvncSecurityArgs(useVncAuth)} ` +
               `-pn > /dev/null 2>&1 &`,
           );
           await new Promise((r) => setTimeout(r, 1500));

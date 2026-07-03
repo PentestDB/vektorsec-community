@@ -301,8 +301,15 @@ function readProfileRegistry(): ModelRegistry | null {
 function writeProfileRegistry(registry: ModelRegistry): void {
   const profilePath = getModelRegistryPath();
   fs.mkdirSync(path.dirname(profilePath), { recursive: true });
-  fs.writeFileSync(`${profilePath}.tmp`, `${JSON.stringify(registry, null, 2)}\n`, "utf-8");
-  fs.renameSync(`${profilePath}.tmp`, profilePath);
+  // Write in place instead of write-tmp + rename. model-registry.json is often
+  // bind-mounted as an individual file, and renaming over a bind-mount
+  // mountpoint fails with EBUSY (Docker Desktop on macOS, and Linux when the
+  // destination is the mount itself). writeFileSync rewrites the existing inode.
+  fs.writeFileSync(
+    profilePath,
+    `${JSON.stringify(registry, null, 2)}\n`,
+    "utf-8",
+  );
 }
 
 function registryFromEnvJson(env: Record<string, string>): ModelRegistry {
