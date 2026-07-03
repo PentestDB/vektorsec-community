@@ -28,6 +28,8 @@ const TOML_KEY_MAP: Record<string, Record<string, string>> = {
 };
 
 function resolveDataDir(): string {
+  const override = process.env.DATA_DIR?.trim();
+  if (override) return override;
   if (fs.existsSync("/srv/data")) return "/srv/data";
   return path.resolve(__dirname, "../..");
 }

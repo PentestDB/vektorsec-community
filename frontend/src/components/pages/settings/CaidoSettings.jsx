@@ -182,13 +182,31 @@ const CaidoSettingsPage = () => {
           color: "var(--primary-text)",
           marginBottom: "0.75rem",
         }}>
-          WSL Setup Guide
+          Setup Guide
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)", lineHeight: 1.7 }}>
-          Set the instance to listen on <code>0.0.0.0:8096</code>, allow
-          <code> caido-cli</code> through Windows Firewall, then use the WSL gateway
-          IP in the URL above. Get the gateway with{" "}
-          <code>ip route show | grep -i default | awk '{"{ print $3 }"}'</code>.
+          <div style={{ marginBottom: "0.6rem" }}>
+            <strong>WSL:</strong> Set the instance to listen on{" "}
+            <code>0.0.0.0:8096</code>, allow <code>caido-cli</code> through
+            Windows Firewall, then use the WSL gateway IP in the URL above. Get
+            the gateway with{" "}
+            <code>ip route show | grep -i default | awk '{"{ print $3 }"}'</code>.
+          </div>
+          <div style={{ marginBottom: "0.6rem" }}>
+            <strong>Server / non-localhost:</strong> When the backend reaches
+            Caido over a Docker network (a service name or gateway IP as the
+            Host), the instance replies <code>Domain &lt;name&gt; not allowed</code>.
+            Start <code>caido-cli</code> with the host allow-listed, e.g.{" "}
+            <code>--ui-domain caido --ui-domain localhost --ui-domain 127.0.0.1</code>.
+          </div>
+          <div>
+            <strong>Headless needs a Teams plan:</strong> registering a headless{" "}
+            <code>caido-cli</code> instance requires a registration key
+            (<code>ckey_</code>), which is a Caido Teams feature. On an Individual
+            plan a headless instance serves GraphQL but device approval fails with{" "}
+            <code>Unregistered instance</code> — use a desktop Caido (already
+            registered) reached over a reverse SSH tunnel instead.
+          </div>
         </div>
       </div>
 

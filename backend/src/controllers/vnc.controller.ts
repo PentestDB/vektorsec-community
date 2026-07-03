@@ -4,6 +4,11 @@ import { executeCommand, generateRandomPassword } from "../utils/fileUtils";
 import { buildSSHConfig } from "../utils/sshConfig";
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
 import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
+import {
+  writeVncPasswordCmd,
+  hasVncPassword,
+  xvncSecurityArgs,
+} from "../utils/vncSetup";
 
 const FIND_VNC_BIN = [
   'export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/libexec";',
@@ -86,24 +91,23 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
               "for display in {1..99}; do vncserver -kill \":$display\" 2>/dev/null || true; done"
             );
 
-            // Set password
+            // Set password. Fall back to no VNC auth when the box has no working
+            // vncpasswd binary (e.g. Debian tigervnc) so the server still starts;
+            // access stays restricted to the SSH tunnel + loopback.
             const escapedPassword = savedPassword.replace(/'/g, "'\\''");
+            let useVncAuth = false;
             if (!isX11vnc) {
-              const vncPasswdBin = pickVncPath(
-                await execWithOutput(
-                  'command -v vncpasswd 2>/dev/null || command -v tigervncpasswd 2>/dev/null || echo vncpasswd'
-                )
-              ) || "vncpasswd";
-              await exec(
-                `echo '${escapedPassword}' | ${vncPasswdBin} -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd`
+              const pwProbe = await execWithOutput(
+                writeVncPasswordCmd(escapedPassword)
               );
+              useVncAuth = hasVncPassword(pwProbe);
             }
 
             // Start VNC based on detected binary
             if (isXvncDirect) {
               await exec(
                 `${vncBin} ${VNC_DISPLAY} -geometry 1280x800 -depth 24 -rfbport ${VNC_RFBPORT} ` +
-                `-SecurityTypes VncAuth -PasswordFile ~/.vnc/passwd ` +
+                `${xvncSecurityArgs(useVncAuth)} ` +
                 `-pn > /dev/null 2>&1 &`
               );
               await new Promise((r) => setTimeout(r, 1500));

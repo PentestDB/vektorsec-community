@@ -6,6 +6,10 @@ import type { LangfuseGeneration } from "@langfuse/tracing";
 import { startObservation } from "@langfuse/tracing";
 import { readEnvFile, updateEnvVars } from "../envWriter";
 import { isTracingEnabled } from "../tracing";
+import {
+  buildAnthropicMessageParams,
+  buildAnthropicStreamParams,
+} from "./anthropicParams";
 
 export type ProviderType =
   | "openai"
@@ -497,19 +501,14 @@ async function runAnthropicMessage(
   start: number,
 ): Promise<InvokeResult> {
   const client = buildAnthropicClient(config);
-  const { system, messages } = openaiToAnthropicMessages(opts.messages);
-  const anthropicTools = openaiToAnthropicTools(opts.tools);
 
-  const response = await client.messages.create({
-    model: config.model,
-    max_tokens: 8192,
-    temperature: clampTemperature(config.model, opts.temperature ?? 0.75),
-    messages,
-    ...(system ? { system } : {}),
-    ...(anthropicTools
-      ? { tools: anthropicTools, tool_choice: { type: "auto" } }
-      : {}),
-  });
+  const response = await client.messages.create(
+    buildAnthropicMessageParams({
+      model: config.model,
+      messages: opts.messages,
+      tools: opts.tools,
+    }),
+  );
 
   const elapsed = Date.now() - start;
   const result = anthropicBlocksToResult(response, config, elapsed);
@@ -646,90 +645,6 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
 
 // ─── Anthropic native streaming (for extended thinking) ─────────────
 
-function openaiToAnthropicMessages(
-  messages: OpenAI.Chat.ChatCompletionMessageParam[],
-): { system: string; messages: Anthropic.MessageParam[] } {
-  let system = "";
-  const out: Anthropic.MessageParam[] = [];
-
-  for (const m of messages) {
-    if (m.role === "system") {
-      system += (typeof m.content === "string" ? m.content : "") + "\n";
-      continue;
-    }
-    if (m.role === "user") {
-      out.push({
-        role: "user",
-        content:
-          typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-      });
-      continue;
-    }
-    if (m.role === "assistant") {
-      const am = m as OpenAI.Chat.ChatCompletionAssistantMessageParam;
-      const blocks: Anthropic.ContentBlockParam[] = [];
-      if (am.content)
-        blocks.push({
-          type: "text",
-          text:
-            typeof am.content === "string"
-              ? am.content
-              : JSON.stringify(am.content),
-        });
-      if (am.tool_calls) {
-        for (const tc of am.tool_calls) {
-          let input: Record<string, unknown> = {};
-          try {
-            input = JSON.parse(tc.function.arguments);
-          } catch {
-            /* ignore */
-          }
-          blocks.push({
-            type: "tool_use",
-            id: tc.id,
-            name: tc.function.name,
-            input,
-          });
-        }
-      }
-      if (blocks.length) out.push({ role: "assistant", content: blocks });
-      continue;
-    }
-    if (m.role === "tool") {
-      const tm = m as OpenAI.Chat.ChatCompletionToolMessageParam;
-      out.push({
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: tm.tool_call_id,
-            content:
-              typeof tm.content === "string"
-                ? tm.content
-                : JSON.stringify(tm.content),
-          },
-        ],
-      });
-    }
-  }
-
-  return { system: system.trim(), messages: out };
-}
-
-function openaiToAnthropicTools(
-  tools?: OpenAI.Chat.ChatCompletionTool[],
-): Anthropic.Tool[] | undefined {
-  if (!tools?.length) return undefined;
-  return tools.map((t) => ({
-    name: t.function.name,
-    description: t.function.description ?? "",
-    input_schema: (t.function.parameters ?? {
-      type: "object",
-      properties: {},
-    }) as Anthropic.Tool.InputSchema,
-  }));
-}
-
 async function runAnthropicThinkingStream(
   config: ProviderConfig,
   opts: StreamingInvokeOptions,
@@ -738,29 +653,10 @@ async function runAnthropicThinkingStream(
 ): Promise<InvokeResult> {
   const client = buildAnthropicClient(config);
 
-  const { system, messages } = openaiToAnthropicMessages(opts.messages);
-  const anthropicTools = openaiToAnthropicTools(opts.tools);
-
-  const params: Anthropic.MessageCreateParamsStreaming = {
-    model: config.model,
-    max_tokens: budgetTokens
-      ? Math.min(64000, Math.max(16384, budgetTokens + 4096))
-      : 8192,
-    stream: true,
-    messages,
-    ...(system ? { system } : {}),
-    ...(!budgetTokens
-      ? {
-          temperature: clampTemperature(config.model, opts.temperature ?? 0.75),
-        }
-      : {}),
-    ...(budgetTokens
-      ? { thinking: { type: "enabled", budget_tokens: budgetTokens } as const }
-      : {}),
-    ...(anthropicTools
-      ? { tools: anthropicTools, tool_choice: { type: "auto" } as const }
-      : {}),
-  };
+  const params = buildAnthropicStreamParams(
+    { model: config.model, messages: opts.messages, tools: opts.tools },
+    budgetTokens,
+  );
 
   console.log(
     budgetTokens

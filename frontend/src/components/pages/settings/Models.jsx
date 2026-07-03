@@ -668,6 +668,21 @@ const ModelsPage = () => {
         >
           Connect Claude OAuth
         </PrimaryButton>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: "0.7rem",
+            color: "var(--secondary-text)",
+            lineHeight: 1.6,
+            maxWidth: 520,
+          }}
+        >
+          OAuth uses a Claude Pro/Max subscription and is intended for Claude
+          Code / claude.ai. Anthropic blocks subscription tokens for third-party
+          autonomous use, so the orchestrator typically returns{" "}
+          <code>429 rate_limit_error</code> on the first call. For a self-hosted
+          orchestrator, add a pay-as-you-go API key model instead.
+        </div>
       </div>
 
       <ModelModal
