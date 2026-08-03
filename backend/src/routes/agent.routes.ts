@@ -18,6 +18,11 @@ import {
   updateSessionAgentToolsConfig,
   installCapability,
 } from "../controllers/agent.controller";
+import {
+  chatAboutVulnerability,
+  getVulnerabilities,
+  getVulnerability,
+} from "../controllers/vulnerability.controller";
 
 const router = express.Router();
 
@@ -27,6 +32,9 @@ router.get("/session/:sessionId", [verifySess], getSessionInfo);
 router.get("/session/:sessionId/history", [verifySess], getHistory);
 router.get("/session/:sessionId/agent-tools-config", [verifySess], getSessionAgentToolsConfig);
 router.post("/session/:sessionId/agent-tools-config", [verifySess], updateSessionAgentToolsConfig);
+router.get("/session/:sessionId/vulnerabilities", [verifySess], getVulnerabilities);
+router.get("/session/:sessionId/vulnerabilities/:vulnerabilityId", [verifySess], getVulnerability);
+router.post("/session/:sessionId/vulnerabilities/:vulnerabilityId/chat", [verifySess], chatAboutVulnerability);
 router.post("/delete-session", [verifySess], deleteSession);
 
 router.post("/message", [verifySess], sendMessage);

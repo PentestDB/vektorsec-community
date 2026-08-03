@@ -395,6 +395,17 @@
       border-bottom: 1px solid var(--border-subtle);
     }
 
+    .navBadge {
+      min-width: 1.15rem;
+      padding: 0.05rem 0.3rem;
+      color: var(--secondary-text);
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      font-size: 0.58rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
     .racerHeader {
       display: flex;
       align-items: center;
@@ -757,4 +768,3 @@
     }
   }
 }
-

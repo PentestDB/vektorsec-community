@@ -18,7 +18,12 @@ const DEFAULT_STATE = {
   tokenUsage: null,
 };
 
-export default function useAgentStream({ sessionId, onComplete, onInstallSuggestion }) {
+export default function useAgentStream({
+  sessionId,
+  onComplete,
+  onInstallSuggestion,
+  onIterationLimit,
+}) {
   const store = useAgentStreamStore;
 
   useEffect(() => {
@@ -388,6 +393,10 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
         })
         .onEvent("install_suggestion", (data) => {
           onInstallSuggestion?.(data);
+        })
+        .onEvent("iteration_limit", (data) => {
+          flushAssistant();
+          onIterationLimit?.(data);
         })
         .onEvent("manual_execution_required", (data) => {
           flushAssistant();
@@ -857,7 +866,7 @@ export default function useAgentStream({ sessionId, onComplete, onInstallSuggest
           refs().controllerRef.current = null;
         });
     },
-    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setSwarms, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion],
+    [sessionId, refs, setMessages, setAgentState, setPendingConsent, setPendingManualExecution, setSubagents, setSwarms, setTokenUsage, flushAssistant, flushToolOutputBuffer, flushThinkingBuffer, flushReasoningBuffer, onComplete, onInstallSuggestion, onIterationLimit],
   );
 
   const abort = useCallback(() => {

@@ -139,7 +139,7 @@ Write and run Python scripts for any complex logic. Use chepy for encoding/decod
       bucket: "core",
       label: "xxd",
       description: "Hex dump / reverse hex dump. Essential for binary data manipulation.",
-      installCommand: "apt install -y vim-common",
+      installCommand: "apt install -y xxd",
       checkCommand: "which xxd",
       size: "1 MB",
     },

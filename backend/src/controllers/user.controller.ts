@@ -129,6 +129,12 @@ export const getUserTools = async (req: Request, res: Response) => {
 // ─── Agent Tools Toggle ─────────────────────────────────────────────
 
 import { toolRegistry } from "../tools/registry";
+import {
+  DEFAULT_MAX_AGENT_ITERATIONS,
+  MAX_MAX_AGENT_ITERATIONS,
+  MIN_MAX_AGENT_ITERATIONS,
+  normalizeMaxAgentIterations,
+} from "../utils/agentConfig";
 
 export const getAgentToolsConfig = async (req: Request, res: Response) => {
   try {
@@ -170,6 +176,59 @@ export const updateAgentToolsConfig = async (req: Request, res: Response) => {
     return res
       .status(400)
       .json({ message: "Failed to update agent tools config" });
+  }
+};
+
+// ─── Agent Behavior ─────────────────────────────────────────────────
+
+export const getAgentBehaviorConfig = async (req: Request, res: Response) => {
+  try {
+    const user = res.locals.user;
+    return res.status(200).json({
+      maxAgentIterations: normalizeMaxAgentIterations(
+        user.configs.maxAgentIterations ?? DEFAULT_MAX_AGENT_ITERATIONS,
+      ),
+      minMaxAgentIterations: MIN_MAX_AGENT_ITERATIONS,
+      maxMaxAgentIterations: MAX_MAX_AGENT_ITERATIONS,
+    });
+  } catch (error) {
+    console.log(error);
+    return res
+      .status(400)
+      .json({ message: "Failed to get agent behavior config" });
+  }
+};
+
+export const updateAgentBehaviorConfig = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const rawValue = req.body?.maxAgentIterations;
+    const parsed = Number(rawValue);
+    if (
+      !Number.isInteger(parsed) ||
+      parsed < MIN_MAX_AGENT_ITERATIONS ||
+      parsed > MAX_MAX_AGENT_ITERATIONS
+    ) {
+      return res.status(400).json({
+        message: `maxAgentIterations must be an integer between ${MIN_MAX_AGENT_ITERATIONS} and ${MAX_MAX_AGENT_ITERATIONS}`,
+      });
+    }
+
+    const user = res.locals.user;
+    user.configs.maxAgentIterations = parsed;
+    await user.save();
+
+    return res.status(200).json({
+      message: "Agent behavior updated",
+      maxAgentIterations: parsed,
+    });
+  } catch (error) {
+    console.log(error);
+    return res
+      .status(400)
+      .json({ message: "Failed to update agent behavior config" });
   }
 };
 

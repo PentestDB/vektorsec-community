@@ -6,9 +6,11 @@ import { installCapability } from "@/services/agent.service";
 export default function InstallSuggestionBanner({ suggestion, sessionId, onDismiss }) {
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleInstall = async () => {
     setInstalling(true);
+    setErrorMessage("");
     try {
       const res = await installCapability({
         sessionId,
@@ -17,9 +19,20 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
       setResult(res.success ? "success" : "failed");
       if (res.success) {
         setTimeout(onDismiss, 2000);
+      } else {
+        setErrorMessage(
+          res.message ||
+            res.output ||
+            `Installation exited with code ${res.exitCode ?? "unknown"}.`,
+        );
       }
-    } catch {
+    } catch (error) {
       setResult("failed");
+      setErrorMessage(
+        error?.response?.data?.message ||
+          error?.message ||
+          "The installation request failed.",
+      );
     } finally {
       setInstalling(false);
     }
@@ -61,30 +74,29 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
               {suggestion.size} &middot; {suggestion.installCommand}
             </div>
           </div>
-          <div className={styles.consentActions}>
+          <div className={styles.installActions}>
             <button
-              className={styles.consentApproveBtn}
+              className={styles.installPrimaryBtn}
               onClick={handleInstall}
               disabled={installing}
-              title="Install"
-              aria-label="Install"
             >
               {installing ? <LoadingOutlined spin /> : <DownloadOutlined />}
+              <span>{installing ? "Installing…" : result === "failed" ? "Retry" : "Install"}</span>
             </button>
             <button
-              className={styles.consentDenyBtn}
+              className={styles.installDismissBtn}
               onClick={onDismiss}
               disabled={installing}
-              title="Dismiss"
-              aria-label="Dismiss"
             >
               <CloseOutlined />
+              <span>Dismiss</span>
             </button>
           </div>
         </div>
         {result === "failed" && (
           <div className={styles.installError}>
-            Installation failed. Try running manually or use run_install_tool.
+            <strong>Installation failed.</strong>
+            <span>{errorMessage}</span>
           </div>
         )}
       </div>

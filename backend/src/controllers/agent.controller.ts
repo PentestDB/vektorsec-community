@@ -20,8 +20,12 @@ import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { getProvider } from "../utils/llm/providers";
 import { sessionLifecycle } from "../services/session.lifecycle";
-import { getCapabilityByName } from "../capabilities/registry";
+import {
+  getCapabilityByName,
+  getInstallCommandForOS,
+} from "../capabilities/registry";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
+import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -567,12 +571,36 @@ export const installCapability = async (req: Request, res: Response) => {
       }
     }
 
-    const { output, exitCode } = await shellManager.execInShell(cap.installCommand, 120_000);
+    const { output: unameOutput } = await shellManager.execInShell(
+      "uname -s",
+      5_000,
+    );
+    const isDarwin = unameOutput.trim().includes("Darwin");
+    const installCommand = buildPrivilegeAwareInstallCommand(
+      getInstallCommandForOS(cap, isDarwin),
+      isDarwin,
+    );
+    const { output, exitCode } = await shellManager.execInShell(
+      installCommand,
+      120_000,
+    );
+
+    if (exitCode === 0) {
+      const user = res.locals.user;
+      const installed = new Set(user.configs.installedCapabilities ?? []);
+      installed.add(cap.name);
+      user.configs.installedCapabilities = Array.from(installed);
+      await user.save();
+    }
 
     return res.status(200).json({
       success: exitCode === 0,
       output,
       exitCode,
+      message:
+        exitCode === 0
+          ? `${cap.label} installed successfully`
+          : output.trim() || `${cap.label} installation exited with code ${exitCode}`,
       capability: { name: cap.name, label: cap.label },
     });
   } catch (err: any) {

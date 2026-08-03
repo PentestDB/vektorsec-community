@@ -48,6 +48,8 @@ export interface UserDoc extends mongoose.Document {
     installedCapabilities: string[];
     requireConsentForAllTools?: boolean;
     disableSafetyProtections?: boolean;
+    disabledAgentTools?: string[];
+    maxAgentIterations?: number;
     models?: ModelPresetDoc[];
     mcpTokens?: McpTokenDoc[];
   };
@@ -136,6 +138,12 @@ const UserSchema = new Schema({
     disabledAgentTools: {
       type: [{ type: String }],
       default: [],
+    },
+    maxAgentIterations: {
+      type: Number,
+      min: 5,
+      max: 200,
+      default: 25,
     },
     models: {
       type: [

@@ -41,13 +41,27 @@ export interface DiscoveredService {
 }
 
 export interface Vulnerability {
+  vulnerabilityId: string;
+  fingerprint: string;
   host: string;
   service?: string;
+  endpoint?: string;
   title: string;
   severity: "critical" | "high" | "medium" | "low" | "info";
+  cvssScore?: number;
+  cvssVector?: string;
+  cwe?: string;
   evidence: string;
+  stepsToReproduce: string[];
+  contextSummary: string;
+  impact?: string;
+  remediation?: string;
   exploited: boolean;
   cve?: string;
+  status: "open" | "confirmed" | "remediated" | "accepted";
+  source: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ActiveShell {
@@ -171,9 +185,14 @@ export class EngagementState {
         const svc = v.service ? `:${v.service}` : "";
         const exploited = v.exploited ? "EXPLOITED" : "not yet exploited";
         const cve = v.cve ? ` (${v.cve})` : "";
+        const scoring = [
+          v.cvssScore != null ? `CVSS ${v.cvssScore}` : "",
+          v.cwe ?? "",
+        ].filter(Boolean).join(", ");
         sections.push(
-          `- [${v.severity.toUpperCase()}] ${v.title} on ${v.host}${svc} — ${exploited}${cve}`,
+          `- [${v.severity.toUpperCase()}] ${v.title} on ${v.host}${svc} — ${exploited}${cve}${scoring ? ` — ${scoring}` : ""}`,
         );
+        if (v.contextSummary) sections.push(`  Context: ${v.contextSummary}`);
       }
     }
 

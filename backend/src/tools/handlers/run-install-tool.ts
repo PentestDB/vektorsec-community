@@ -3,6 +3,7 @@ import {
   getCapabilityByName,
   getInstallCommandForOS,
 } from "../../capabilities/registry";
+import { buildPrivilegeAwareInstallCommand } from "../../utils/installCommand";
 
 const runInstallTool: ToolDefinition = {
   name: "run_install_tool",
@@ -46,7 +47,10 @@ const runInstallTool: ToolDefinition = {
       // Assume Linux if detection fails (e.g. SSH disconnected)
     }
 
-    const installCmd = getInstallCommandForOS(cap, isDarwin);
+    const installCmd = buildPrivilegeAwareInstallCommand(
+      getInstallCommandForOS(cap, isDarwin),
+      isDarwin,
+    );
 
     if (isDarwin && /(^|&&\s*)brew\s/.test(installCmd)) {
       const { exitCode: brewCheck } = await ctx.runCommand("command -v brew", 5_000);

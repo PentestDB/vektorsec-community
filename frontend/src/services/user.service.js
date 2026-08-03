@@ -174,6 +174,16 @@ export const updateAgentToolsConfig = async (body) => {
   return res.data;
 };
 
+export const getAgentBehaviorConfig = async () => {
+  const res = await apiClient.get("/user/agent-behavior");
+  return res.data;
+};
+
+export const updateAgentBehaviorConfig = async (body) => {
+  const res = await apiClient.post("/user/agent-behavior", body);
+  return res.data;
+};
+
 export const getSwarmModels = async () => {
   const res = await apiClient.get("/user/get-swarm-models");
   return res.data;

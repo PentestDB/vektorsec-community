@@ -8,6 +8,7 @@ import { SSEWriter } from "./agent.service";
 import { EngagementState } from "./engagement-state";
 import { SwarmWinCondition } from "../models/Sessions/Sessions.model";
 import { AgentPromptConfig } from "../utils/copilot/prompts";
+import { parseToolArguments } from "../utils/toolArguments";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -189,9 +190,14 @@ export async function executeToolCall(
 
   let args: Record<string, any>;
   try {
-    args = JSON.parse(toolCall.arguments);
-  } catch {
-    const error = `Failed to parse tool arguments: ${toolCall.arguments}`;
+    const parsed = parseToolArguments(toolCall.arguments);
+    args = parsed.args;
+    // Keep the repaired form in the assistant trace as well. Otherwise the
+    // next model turn would receive the original truncated JSON again.
+    if (parsed.repaired) toolCall.arguments = JSON.stringify(args);
+  } catch (err: any) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const error = `Failed to parse tool arguments for '${toolCall.name}': ${detail}`;
     callbacks.onToolError(toolCall.id, error);
     return {
       toolCallId: toolCall.id,

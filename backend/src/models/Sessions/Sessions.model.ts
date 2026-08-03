@@ -206,6 +206,39 @@ export interface SessionArtifactDoc {
   metadata?: Record<string, string>;
 }
 
+export interface VulnerabilityChatMessageDoc {
+  messageId: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: Date;
+}
+
+export interface SessionVulnerabilityDoc {
+  vulnerabilityId: string;
+  fingerprint: string;
+  title: string;
+  host: string;
+  service?: string;
+  endpoint?: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  cvssScore?: number;
+  cvssVector?: string;
+  cwe?: string;
+  cve?: string;
+  description?: string;
+  evidence: string;
+  stepsToReproduce: string[];
+  contextSummary: string;
+  impact?: string;
+  remediation?: string;
+  exploited: boolean;
+  status: "open" | "confirmed" | "remediated" | "accepted";
+  source: string;
+  chatMessages: VulnerabilityChatMessageDoc[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface SessionDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   sessionId: string;
@@ -236,6 +269,8 @@ export interface SessionDoc extends mongoose.Document {
   mcpFindings?: SessionFindingDoc[];
   mcpContext?: McpContextDoc;
   mcpArtifacts?: SessionArtifactDoc[];
+  vulnerabilities?: SessionVulnerabilityDoc[];
+  vulnerabilityBackfillVersion?: number;
 }
 
 const ToolCallSchema = new Schema(
@@ -448,6 +483,54 @@ const SessionArtifactSchema = new Schema(
   { _id: false },
 );
 
+const VulnerabilityChatMessageSchema = new Schema(
+  {
+    messageId: { type: String, required: true },
+    role: { type: String, required: true, enum: ["user", "assistant"] },
+    content: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const SessionVulnerabilitySchema = new Schema(
+  {
+    vulnerabilityId: { type: String, required: true },
+    fingerprint: { type: String, required: true },
+    title: { type: String, required: true },
+    host: { type: String, default: "unknown" },
+    service: { type: String },
+    endpoint: { type: String },
+    severity: {
+      type: String,
+      required: true,
+      enum: ["info", "low", "medium", "high", "critical"],
+      default: "medium",
+    },
+    cvssScore: { type: Number, min: 0, max: 10 },
+    cvssVector: { type: String },
+    cwe: { type: String },
+    cve: { type: String },
+    description: { type: String },
+    evidence: { type: String, default: "" },
+    stepsToReproduce: { type: [String], default: [] },
+    contextSummary: { type: String, default: "" },
+    impact: { type: String },
+    remediation: { type: String },
+    exploited: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["open", "confirmed", "remediated", "accepted"],
+      default: "confirmed",
+    },
+    source: { type: String, default: "agent" },
+    chatMessages: { type: [VulnerabilityChatMessageSchema], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const SessionSchema = new Schema({
   uid: { type: mongoose.Types.ObjectId, required: true },
   sessionId: { type: String, required: true, unique: true },
@@ -594,6 +677,11 @@ const SessionSchema = new Schema({
     type: [SessionArtifactSchema],
     default: [],
   },
+  vulnerabilities: {
+    type: [SessionVulnerabilitySchema],
+    default: [],
+  },
+  vulnerabilityBackfillVersion: { type: Number, default: 0 },
 });
 
 SessionSchema.index({ workspaceId: 1, status: 1 });

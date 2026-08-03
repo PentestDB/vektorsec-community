@@ -9,6 +9,7 @@ import { getProvider, invoke_llm_streaming, ToolCallData } from "../utils/llm/pr
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { ExecutionContext, ToolResult } from "../tools/types";
 import UserModel from "../models/User/User.model";
+import { parseToolArguments } from "../utils/toolArguments";
 
 const MAX_SUBAGENT_ITERATIONS = 15;
 const MAX_SUBAGENT_WALL_CLOCK_MS = 10 * 60 * 1000; // 10 minutes
@@ -347,12 +348,15 @@ export class SubagentManager extends EventEmitter {
 
           let args: Record<string, any>;
           try {
-            args = JSON.parse(tc.arguments);
-          } catch {
+            const parsed = parseToolArguments(tc.arguments);
+            args = parsed.args;
+            if (parsed.repaired) tc.arguments = JSON.stringify(args);
+          } catch (err: any) {
+            const detail = err instanceof Error ? err.message : String(err);
             messages.push({
               id: uuidv4(),
               role: "tool",
-              content: `Failed to parse arguments: ${tc.arguments}`,
+              content: `Failed to parse tool arguments for '${tc.name}': ${detail}`,
               toolCallId: tc.id,
               toolName: tc.name,
               timestamp: new Date(),

@@ -30,6 +30,26 @@ export const getSessionHistory = async (sessionId) => {
   return res.data;
 };
 
+export const getVulnerabilities = async (sessionId) => {
+  const res = await apiClient.get(`/agent/session/${sessionId}/vulnerabilities`);
+  return res.data;
+};
+
+export const getVulnerability = async (sessionId, vulnerabilityId) => {
+  const res = await apiClient.get(
+    `/agent/session/${sessionId}/vulnerabilities/${vulnerabilityId}`,
+  );
+  return res.data;
+};
+
+export const chatAboutVulnerability = async ({ sessionId, vulnerabilityId, message }) => {
+  const res = await apiClient.post(
+    `/agent/session/${sessionId}/vulnerabilities/${vulnerabilityId}/chat`,
+    { message },
+  );
+  return res.data;
+};
+
 export const deleteSession = async ({ sessionId }) => {
   const res = await apiClient.post("/agent/delete-session", { sessionId });
   return res.data;

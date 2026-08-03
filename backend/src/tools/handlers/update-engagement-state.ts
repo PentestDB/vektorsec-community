@@ -2,6 +2,10 @@ import { ToolDefinition, ToolResult, ExecutionContext } from "../types";
 import { EngagementState } from "../../services/engagement-state";
 import SessionsModel from "../../models/Sessions/Sessions.model";
 import { sanitizeDirName, submitFlagToCtfd } from "../../services/ctf.service";
+import {
+  normalizeVulnerability,
+  upsertSessionVulnerability,
+} from "../../services/vulnerability.service";
 
 function str(v: any): string {
   return typeof v === "string" ? v.trim() : "";
@@ -47,7 +51,33 @@ const updateEngagementState: ToolDefinition = {
       data: {
         type: "object",
         description:
-          "The finding data. Shape depends on the action chosen.",
+          "The action-specific state data. For add_vulnerability include title, host/target, service or endpoint, severity, " +
+          "CVSS score/vector, CWE, evidence, stepsToReproduce, contextSummary, impact, remediation, and exploited status when known. " +
+          "For add_key_discovery provide title and/or description (discovery/value are accepted for compatibility).",
+        properties: {
+          // Shared/CTF fields. Keeping these explicit prevents models from
+          // guessing the shape of add_key_discovery calls while retaining the
+          // existing permissive schema for the other state actions.
+          title: { type: "string" },
+          discovery: { type: "string" },
+          value: { type: "string" },
+          description: { type: "string" },
+          host: { type: "string" },
+          target: { type: "string" },
+          service: { type: "string" },
+          endpoint: { type: "string" },
+          severity: { type: "string", enum: ["info", "low", "medium", "high", "critical"] },
+          cvssScore: { type: "number", minimum: 0, maximum: 10 },
+          cvssVector: { type: "string" },
+          cwe: { type: "string" },
+          cve: { type: "string" },
+          evidence: { type: "string" },
+          stepsToReproduce: { type: "array", items: { type: "string" } },
+          contextSummary: { type: "string" },
+          impact: { type: "string" },
+          remediation: { type: "string" },
+          exploited: { type: "boolean" },
+        },
         additionalProperties: true,
       },
     },
@@ -114,23 +144,33 @@ const updateEngagementState: ToolDefinition = {
         };
       }
 
-      case "add_vulnerability":
+      case "add_vulnerability": {
         if (!str(data.title)) {
           return { output: "add_vulnerability requires data.title", exitCode: 1 };
         }
-        state.vulnerabilities.push({
-          host: data.host ?? "unknown",
-          service: data.service,
-          title: data.title ?? "Untitled",
-          severity: data.severity ?? "medium",
-          evidence: data.evidence ?? "",
-          exploited: data.exploited ?? false,
-          cve: data.cve,
+        if (!ctx.sessionId) {
+          return { output: "add_vulnerability requires an active session", exitCode: 1 };
+        }
+        const normalized = normalizeVulnerability(data, {
+          source: ctx.agentRole === "swarm_agent"
+            ? `racer:${ctx.agentId ?? "unknown"}`
+            : `agent:${ctx.agentId ?? "orchestrator"}`,
         });
+        const persisted = await upsertSessionVulnerability(ctx.sessionId, normalized);
+        const existingIndex = state.vulnerabilities.findIndex(
+          (v) => v.vulnerabilityId === persisted.vulnerability.vulnerabilityId ||
+            v.fingerprint === persisted.vulnerability.fingerprint,
+        );
+        if (existingIndex >= 0) state.vulnerabilities[existingIndex] = persisted.vulnerability;
+        else state.vulnerabilities.push(persisted.vulnerability);
         return {
-          output: `Vulnerability "${data.title}" [${data.severity ?? "medium"}] added.`,
+          output:
+            `Vulnerability "${persisted.vulnerability.title}" [${persisted.vulnerability.severity}] ` +
+            `${persisted.created ? "added" : "updated"}.\n` +
+            `vulnerability_id: ${persisted.vulnerability.vulnerabilityId}`,
           exitCode: 0,
         };
+      }
 
       case "add_shell": {
         const shellHost = str(data.host) || "unknown";
@@ -405,7 +445,26 @@ const updateEngagementState: ToolDefinition = {
       }
 
       case "add_key_discovery": {
-        const discovery = str(data.discovery) || str(data.value) || "(empty)";
+        // CTF agents historically used `discovery`/`value`, while newer
+        // prompts naturally produce a titled record. Normalize all supported
+        // forms into the string-based in-memory state, but never record an
+        // empty placeholder: an empty discovery is indistinguishable from a
+        // successful update in the prompt and causes the next turn to lose
+        // the actual finding.
+        const title = str(data.title);
+        const description = str(data.description);
+        const legacyValue = str(data.discovery) || str(data.value);
+        const discovery =
+          legacyValue ||
+          [title, description].filter(Boolean).join(": ");
+        if (!discovery) {
+          return {
+            output:
+              "add_key_discovery requires data.title or data.description " +
+              "(data.discovery/data.value are also accepted).",
+            exitCode: 1,
+          };
+        }
         state.keyDiscoveries.push(discovery);
         return {
           output: `Key discovery recorded: ${discovery}`,

@@ -31,8 +31,9 @@ import { SubagentManager } from "./subagent.manager";
 import { SwarmManager, CtfSwarmContext, SwarmResult } from "./swarm.manager";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
+import { parseToolArguments } from "../utils/toolArguments";
+import { normalizeMaxAgentIterations } from "../utils/agentConfig";
 
-const MAX_ITERATIONS = 25;
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
 const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
 
@@ -448,6 +449,9 @@ export async function runAgentLoop(params: {
   const user = await UserModel.findById(session.uid).lean();
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
+  const maxAgentIterations = normalizeMaxAgentIterations(
+    user?.configs?.maxAgentIterations,
+  );
   const disabledAgentTools: string[] = session.disabledAgentTools ?? [];
 
   await setAgentState(sessionId, "running");
@@ -517,6 +521,7 @@ export async function runAgentLoop(params: {
   let iteration = 0;
   let lastPromptTokens: number | undefined;
   const newMessages: AgentMessageDoc[] = [];
+  let completedNormally = false;
 
   // ─── Resolve user model config for orchestrator + auto-spawn racers ──
   const userModels = await getUserModels(userId);
@@ -557,6 +562,29 @@ export async function runAgentLoop(params: {
 
   const engagementMode = session.ctfConfig?.ctfName ? "ctf" : "pentest";
   const engagementState = new EngagementState(engagementMode as "pentest" | "ctf");
+  engagementState.vulnerabilities = (session.vulnerabilities ?? []).map((vulnerability) => ({
+    vulnerabilityId: vulnerability.vulnerabilityId,
+    fingerprint: vulnerability.fingerprint,
+    host: vulnerability.host,
+    service: vulnerability.service,
+    endpoint: vulnerability.endpoint,
+    title: vulnerability.title,
+    severity: vulnerability.severity,
+    cvssScore: vulnerability.cvssScore,
+    cvssVector: vulnerability.cvssVector,
+    cwe: vulnerability.cwe,
+    evidence: vulnerability.evidence,
+    stepsToReproduce: vulnerability.stepsToReproduce,
+    contextSummary: vulnerability.contextSummary,
+    impact: vulnerability.impact,
+    remediation: vulnerability.remediation,
+    exploited: vulnerability.exploited,
+    cve: vulnerability.cve,
+    status: vulnerability.status,
+    source: vulnerability.source,
+    createdAt: vulnerability.createdAt,
+    updatedAt: vulnerability.updatedAt,
+  }));
   if (engagementMode === "ctf" && session.ctfConfig?.activeSolve) {
     const solve = session.ctfConfig.activeSolve;
     engagementState.challengeName = solve.name;
@@ -591,7 +619,7 @@ export async function runAgentLoop(params: {
   });
 
   try {
-    while (iteration < MAX_ITERATIONS) {
+    while (iteration < maxAgentIterations) {
       iteration++;
 
       if (await isPaused(sessionId)) {
@@ -691,7 +719,7 @@ export async function runAgentLoop(params: {
           challengeName: sessionCtfInfo?.activeSolve?.name,
         }, {
           iteration,
-          maxIterations: MAX_ITERATIONS,
+          maxIterations: maxAgentIterations,
           racerMaxIterations: swarmManager.getMaxIterations(),
         });
         // This system prompt is deliberately not persisted. It only applies
@@ -784,7 +812,7 @@ export async function runAgentLoop(params: {
           completionTokens: result.usage.completion_tokens ?? 0,
           contextLimit,
           iteration,
-          maxIterations: MAX_ITERATIONS,
+          maxIterations: maxAgentIterations,
         });
       }
 
@@ -848,6 +876,7 @@ export async function runAgentLoop(params: {
 
           continue;
         }
+        completedNormally = true;
         break;
       }
 
@@ -918,9 +947,9 @@ export async function runAgentLoop(params: {
         const batch = consentResults.map((cr) => ({
           toolCallId: cr.toolCallId,
           toolName: cr.toolName,
-          arguments: JSON.parse(
+          arguments: parseToolArguments(
             assistantToolCalls.find((tc) => tc.id === cr.toolCallId)?.arguments ?? "{}",
-          ),
+          ).args,
         }));
 
         await appendMessages(sessionId, newMessages);
@@ -932,9 +961,9 @@ export async function runAgentLoop(params: {
               pendingConsent: {
                 toolCallId: firstConsent.toolCallId,
                 toolName: firstConsent.toolName,
-                arguments: JSON.parse(
+                arguments: parseToolArguments(
                   assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
-                ),
+                ).args,
                 batch: batch.length > 1 ? batch : undefined,
               },
             },
@@ -960,6 +989,7 @@ export async function runAgentLoop(params: {
 
       const askedUser = toolResults.find((r) => r.toolName === "ask_user");
       if (askedUser) {
+        completedNormally = true;
         break;
       }
 
@@ -992,9 +1022,10 @@ export async function runAgentLoop(params: {
       }
     }
 
-    if (iteration >= MAX_ITERATIONS) {
-      sse.write("error", { message: `Agent reached maximum iteration limit (${MAX_ITERATIONS})` });
-    }
+    const reachedIterationLimit =
+      iteration >= maxAgentIterations &&
+      !completedNormally &&
+      !params.abortSignal?.aborted;
 
     // Wait for remaining subagents before ending
     if (spawnedSubagentIds.length > 0) {
@@ -1032,7 +1063,19 @@ export async function runAgentLoop(params: {
       sse.write("paused", { message: "Agent paused by user" });
     } else {
       await setAgentState(sessionId, "idle");
-      sse.write("done", { message: "Agent turn completed", iterations: iteration });
+      if (reachedIterationLimit) {
+        sse.write("iteration_limit", {
+          maxIterations: maxAgentIterations,
+          message: `The agent used all ${maxAgentIterations} configured turns.`,
+        });
+      }
+      sse.write("done", {
+        message: reachedIterationLimit
+          ? "Agent paused at the configured turn limit"
+          : "Agent turn completed",
+        iterations: iteration,
+        reachedIterationLimit,
+      });
     }
     sse.end();
   } catch (err: any) {

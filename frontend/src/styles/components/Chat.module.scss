@@ -231,6 +231,104 @@
   color: #ff6b6b;
 }
 
+/* ─── Iteration Limit ─────────────────────────────────────────── */
+
+.iterationLimitBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.65rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(142, 53, 255, 0.34);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(142, 53, 255, 0.13), rgba(74, 158, 255, 0.05));
+}
+
+.iterationLimitCopy {
+  min-width: 0;
+}
+
+.iterationLimitEyebrow {
+  margin-bottom: 0.2rem;
+  color: #b97bff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.iterationLimitTitle {
+  color: var(--primary-text, #fff);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.iterationLimitDescription {
+  max-width: 680px;
+  margin-top: 0.3rem;
+  color: var(--secondary-text, #999);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.iterationLimitActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
+.iterationContinueBtn,
+.iterationStopBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.iterationContinueBtn {
+  border: 1px solid rgba(142, 53, 255, 0.65);
+  background: #8e35ff;
+  color: #fff;
+
+  &:hover {
+    background: #9b4cff;
+    transform: translateY(-1px);
+  }
+}
+
+.iterationStopBtn {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--secondary-text, #aaa);
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: var(--primary-text, #fff);
+  }
+}
+
+@media (max-width: 760px) {
+  .iterationLimitBanner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .iterationLimitActions {
+    flex-wrap: wrap;
+  }
+}
+
 /* ─── Reasoning Block ────────────────────────────────────────── */
 
 .reasoningBlock {
@@ -711,7 +809,8 @@
   box-shadow: 0 10px 30px rgba(22, 119, 255, 0.06);
   align-self: flex-start;
   width: 100%;
-  max-width: 90%;
+  max-width: 100%;
+  box-sizing: border-box;
   margin: 0.5rem 0;
 
   .installInfo {
@@ -719,6 +818,7 @@
       display: flex;
       align-items: center;
       gap: 0.7rem;
+      min-width: 0;
     }
 
     .installTitleGroup {
@@ -740,6 +840,55 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+  }
+}
+
+.installActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.installPrimaryBtn,
+.installDismissBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  height: 2.1rem;
+  padding: 0 0.72rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.installPrimaryBtn {
+  border: 1px solid rgba(22, 119, 255, 0.55);
+  background: rgba(22, 119, 255, 0.18);
+  color: #69a7ff;
+
+  &:hover:not(:disabled) {
+    background: rgba(22, 119, 255, 0.28);
+    border-color: rgba(22, 119, 255, 0.75);
+  }
+}
+
+.installDismissBtn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--secondary-text, #999);
+
+  &:hover:not(:disabled) {
+    color: var(--primary-text, #fff);
+    border-color: rgba(255, 255, 255, 0.22);
   }
 }
 
@@ -776,12 +925,36 @@
 }
 
 .installError {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
   font-size: 0.72rem;
   color: #ff4d4f;
   margin-top: 0.4rem;
   padding: 0.3rem 0.5rem;
   background: rgba(255, 77, 79, 0.08);
   border-radius: 4px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 8rem;
+  overflow-y: auto;
+
+  strong {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .installBanner .installInfo .installHeader {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .installActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* ─── Manual Execution Block ──────────────────────────────────── */

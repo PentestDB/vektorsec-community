@@ -35,6 +35,8 @@ import {
   getBrowserAgentVNC,
   getAgentToolsConfig,
   updateAgentToolsConfig,
+  getAgentBehaviorConfig,
+  updateAgentBehaviorConfig,
   getSwarmModels,
   updateSwarmModels,
   getSubscriptionProviders,
@@ -95,6 +97,8 @@ router.get("/get-browser-agent-vnc", [verifySess], getBrowserAgentVNC);
 
 router.get("/get-agent-tools-config", [verifySess], getAgentToolsConfig);
 router.post("/update-agent-tools-config", [verifySess], updateAgentToolsConfig);
+router.get("/agent-behavior", [verifySess], getAgentBehaviorConfig);
+router.post("/agent-behavior", [verifySess], updateAgentBehaviorConfig);
 
 router.get("/get-swarm-models", [verifySess], getSwarmModels);
 router.post("/update-swarm-models", [verifySess], updateSwarmModels);

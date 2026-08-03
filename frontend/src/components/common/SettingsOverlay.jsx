@@ -9,6 +9,7 @@ import {
   TbDeviceDesktop,
   TbRadar,
   TbWorldWww,
+  TbAdjustmentsHorizontal,
 } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
@@ -20,6 +21,7 @@ import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
+import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
 
 const TABS = [
   {
@@ -43,6 +45,14 @@ const TABS = [
       "Configure reusable model presets and assign them to orchestrator, racers, and browser agent.",
     icon: TbBrain,
     component: ModelsPage,
+  },
+  {
+    key: "agent-behavior",
+    label: "Agent Behavior",
+    description:
+      "Configure how long autonomous agent runs can continue before pausing.",
+    icon: TbAdjustmentsHorizontal,
+    component: AgentBehaviorPage,
   },
   {
     key: "ssh",

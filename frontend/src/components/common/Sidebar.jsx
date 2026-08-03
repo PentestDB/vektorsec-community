@@ -12,10 +12,10 @@ import { setRecon, updateCurrentSession } from "@/store/user.slice";
 import { useRouter, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
-import { clearContext } from "@/services/agent.service";
+import { clearContext, getVulnerabilities } from "@/services/agent.service";
 import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
-import { FiMonitor } from "react-icons/fi";
+import { FiMonitor, FiShield } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { TbRadar, TbWorldWww } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi";
@@ -86,6 +86,11 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const { modal, message } = App.useApp();
 
   const { data: capabilitiesData } = useQuery("capabilities", getCapabilities);
+  const { data: vulnerabilitiesData } = useQuery(
+    ["vulnerabilities", sessionId],
+    () => getVulnerabilities(sessionId),
+    { enabled: !!sessionId, refetchInterval: 5000, retry: false },
+  );
   const requireConsent = capabilitiesData?.requireConsentForAllTools ?? false;
 
   const updateCapabilitiesMutation = useMutation(updateCapabilities, {
@@ -196,6 +201,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const isOnBurp = pathname?.includes("/burp");
   const isOnCaido = pathname?.includes("/caido");
   const isOnBrowserAgent = pathname?.includes("/browser-agent");
+  const isOnVulnerabilities = pathname?.includes("/vulnerabilities");
   const activeRacerPath = pathname?.match(/\/racer\/([^/]+)/)?.[1] ?? null;
   const activeRacerTokenUsage = useMemo(() => {
     if (!activeRacerPath) return null;
@@ -369,6 +375,17 @@ const Sidebar = ({ sessionId, workspaceId }) => {
               })}
             </div>
           )}
+
+          <div
+            onClick={() => router.push(`/session/${sessionId}/vulnerabilities`)}
+            className={isOnVulnerabilities ? styles.activeTab : styles.tab}
+          >
+            <FiShield />
+            <span style={{ flex: 1 }}>Vulnerabilities</span>
+            {(vulnerabilitiesData?.total ?? 0) > 0 && (
+              <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
+            )}
+          </div>
 
           <div
             onClick={navigateToVPN}

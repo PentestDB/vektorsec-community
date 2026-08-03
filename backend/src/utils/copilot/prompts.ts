@@ -576,6 +576,10 @@ Record these findings immediately when discovered:
 - Files created, downloaded, or analyzed
 - Approaches attempted and their outcomes
 - Flag submission attempts and results (CTF)
+
+For CTF key discoveries, call update_engagement_state with action="add_key_discovery" and data containing a non-empty title and/or description. Legacy data.discovery/data.value are also accepted. Do not send an empty discovery record.
+
+For every vulnerability, call update_engagement_state with action="add_vulnerability" and provide a report-ready record: title, affected host/target and service/endpoint, severity, CVSS score/vector when supportable, CWE, concise description, concrete evidence, ordered stepsToReproduce, a self-contained contextSummary, impact, remediation, exploited status, and CVE when applicable. Do not invent unknown values; omit them or state the uncertainty in the context summary.
 ${
   config.ctfConfig
     ? `

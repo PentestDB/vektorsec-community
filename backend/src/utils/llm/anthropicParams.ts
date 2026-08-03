@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type Anthropic from "@anthropic-ai/sdk";
+import { parseToolArguments } from "../toolArguments";
 
 /**
  * Builders for Anthropic native Messages API requests.
@@ -119,9 +120,9 @@ export function openaiToAnthropicMessages(
         for (const tc of am.tool_calls) {
           let input: Record<string, unknown> = {};
           try {
-            input = JSON.parse(tc.function.arguments);
+            input = parseToolArguments(tc.function.arguments).args;
           } catch {
-            /* ignore */
+            /* Keep malformed historical calls from breaking the request. */
           }
           blocks.push({
             type: "tool_use",

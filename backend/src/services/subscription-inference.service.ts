@@ -5,9 +5,7 @@ import path from "node:path";
 import type OpenAI from "openai";
 import type { ModelReasoningMode } from "../utils/modelMetadata";
 
-export type SubscriptionProvider =
-  | "codex-subscription"
-  | "claude-subscription";
+export type SubscriptionProvider = "codex-subscription" | "claude-subscription";
 
 export interface SubscriptionProviderStatus {
   provider: SubscriptionProvider;
@@ -52,11 +50,7 @@ export interface SubscriptionInferenceInput {
   abortSignal?: AbortSignal;
 }
 
-const CODEX_FALLBACK_MODELS = [
-  "gpt-5.6-sol",
-  "gpt-5.6-terra",
-  "gpt-5.6-luna",
-];
+const CODEX_FALLBACK_MODELS = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
 const CLAUDE_FALLBACK_MODELS = [
   "claude-fable-5",
   "claude-opus-5",
@@ -64,6 +58,9 @@ const CLAUDE_FALLBACK_MODELS = [
 ];
 const MAX_CAPTURE_BYTES = 20 * 1024 * 1024;
 const INFERENCE_TIMEOUT_MS = 10 * 60 * 1000;
+// One initial attempt plus at most three retries.
+const MAX_SUBSCRIPTION_ATTEMPTS = 4;
+const SUBSCRIPTION_RETRY_BASE_DELAY_MS = 500;
 const SUBSCRIPTION_ENV_ALLOWLIST = [
   "PATH",
   "HOME",
@@ -152,6 +149,7 @@ interface CommandResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  signal?: NodeJS.Signals | null;
 }
 
 function runCommand(
@@ -218,8 +216,13 @@ function runCommand(
         finish(new Error(`${command} produced too much diagnostic output`));
       }
     });
-    child.on("close", (exitCode) =>
-      finish(undefined, { stdout, stderr, exitCode: exitCode ?? -1 }),
+    child.on("close", (exitCode, signal) =>
+      finish(undefined, {
+        stdout,
+        stderr,
+        exitCode: exitCode ?? -1,
+        signal,
+      }),
     );
 
     child.stdin.end(options.input ?? "");
@@ -239,6 +242,144 @@ function parseJsonObject(value: unknown): Record<string, any> | null {
   } catch {
     return null;
   }
+}
+
+const FAILURE_EVENT_TYPES = new Set([
+  "error",
+  "turn.failed",
+  "turn_failed",
+  "response.failed",
+  "item.failed",
+  "item.error",
+]);
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  return values
+    .find(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    )
+    ?.trim();
+}
+
+function formatStructuredError(error: unknown): string | undefined {
+  if (typeof error === "string") return error.trim() || undefined;
+  if (!error || typeof error !== "object") return undefined;
+  const value = error as Record<string, any>;
+  const message = firstNonEmptyString(
+    value.message,
+    value.detail,
+    value.reason,
+    value.error,
+  );
+  if (!message) return undefined;
+  const code = firstNonEmptyString(value.code, value.type, value.status);
+  return code && !message.toLowerCase().includes(code.toLowerCase())
+    ? `${message} (${code})`
+    : message;
+}
+
+/**
+ * Extracts a useful failure from JSONL CLI output. Codex reports turn failures
+ * as structured events on stdout, so stderr is often empty even when the
+ * command exits non-zero. Keep this deliberately conservative: only explicit
+ * failure event types (or an error item) are treated as a process failure.
+ */
+export function parseSubscriptionCliError(
+  output: string,
+  provider: "Codex" | "Claude" = "Codex",
+): string | undefined {
+  const candidates = output
+    .split(/\r?\n/)
+    .map((line) => parseJsonObject(line))
+    .filter((event): event is Record<string, any> => Boolean(event));
+
+  // Claude's --output-format json is a single envelope, while Codex --json is
+  // JSONL. Parsing the complete value also covers the former.
+  const whole = parseJsonObject(output.trim());
+  if (whole) candidates.push(whole);
+
+  for (const event of candidates) {
+    const eventType = typeof event.type === "string" ? event.type : "";
+    const item = parseJsonObject(event.item);
+    const itemType = typeof item?.type === "string" ? item.type : "";
+    const isFailure =
+      FAILURE_EVENT_TYPES.has(eventType) ||
+      (eventType === "item.completed" &&
+        ["error", "failure", "failed"].includes(itemType)) ||
+      (event.status === "failed" && Boolean(event.error)) ||
+      event.is_error === true ||
+      (typeof event.subtype === "string" &&
+        event.subtype.toLowerCase().includes("error"));
+    if (!isFailure) continue;
+
+    const message =
+      formatStructuredError(event.error) ??
+      formatStructuredError(event) ??
+      formatStructuredError(item?.error) ??
+      formatStructuredError(item);
+    if (message) return `${provider}: ${message}`;
+  }
+  return undefined;
+}
+
+function formatCommandFailure(
+  provider: "Codex" | "Claude",
+  result: CommandResult,
+): string {
+  const structured = parseSubscriptionCliError(result.stdout, provider);
+  if (structured) return structured;
+  const stderr = result.stderr.trim();
+  if (stderr) return stderr;
+  if (result.signal) return `process terminated by ${result.signal}`;
+  return "no diagnostic output was provided by the CLI";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isRetryableSubscriptionError(error: unknown): boolean {
+  const message = errorMessage(error).toLowerCase();
+  if (
+    !message ||
+    /(?:cancelled|canceled|aborted|timed out|sigterm|sigkill)/i.test(message)
+  ) {
+    return false;
+  }
+
+  // These failures are deterministic and retrying only adds latency/usage.
+  if (
+    /(?:auth(?:entication|orization)?|login|unauthori[sz]ed|forbidden|permission denied|invalid_request|invalid argument|model .*?(?:does not exist|not found|unsupported|not supported)|schema|malformed|not installed)/i.test(
+      message,
+    )
+  ) {
+    return false;
+  }
+
+  // CLI process failures, structured upstream errors, and malformed/empty
+  // responses can be transient (for example a dropped subscription request).
+  return true;
+}
+
+function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const abort = () => {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      reject(new Error("subscription inference was cancelled"));
+    };
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
 }
 
 function normalizeResult(
@@ -283,6 +424,8 @@ function parseCodexOutput(
   stdout: string,
   model: string,
 ): SubscriptionInferenceResult {
+  const structuredError = parseSubscriptionCliError(stdout, "Codex");
+  if (structuredError) throw new Error(structuredError);
   let finalText = "";
   let usage: SubscriptionInferenceResult["usage"];
   for (const line of stdout.split(/\r?\n/)) {
@@ -317,6 +460,8 @@ function parseClaudeOutput(
   stdout: string,
   model: string,
 ): SubscriptionInferenceResult {
+  const structuredError = parseSubscriptionCliError(stdout, "Claude");
+  if (structuredError) throw new Error(structuredError);
   const envelope = parseJsonObject(stdout.trim());
   if (!envelope) {
     throw new Error("Claude did not return a JSON result envelope");
@@ -378,7 +523,7 @@ async function runCodexInference(
     });
     if (result.exitCode !== 0) {
       throw new Error(
-        `Codex exited with code ${result.exitCode}: ${result.stderr.trim() || "unknown error"}`,
+        `Codex exited with code ${result.exitCode}: ${formatCommandFailure("Codex", result)}`,
       );
     }
     return parseCodexOutput(result.stdout, input.model);
@@ -419,7 +564,7 @@ async function runClaudeInference(
     });
     if (result.exitCode !== 0) {
       throw new Error(
-        `Claude exited with code ${result.exitCode}: ${result.stderr.trim() || "unknown error"}`,
+        `Claude exited with code ${result.exitCode}: ${formatCommandFailure("Claude", result)}`,
       );
     }
     return parseClaudeOutput(result.stdout, input.model);
@@ -431,14 +576,39 @@ async function runClaudeInference(
 export async function invokeSubscriptionInference(
   input: SubscriptionInferenceInput,
 ): Promise<SubscriptionInferenceResult> {
-  return input.provider === "codex-subscription"
-    ? runCodexInference(input)
-    : runClaudeInference(input);
+  const runOnce = () =>
+    input.provider === "codex-subscription"
+      ? runCodexInference(input)
+      : runClaudeInference(input);
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_SUBSCRIPTION_ATTEMPTS; attempt += 1) {
+    try {
+      return await runOnce();
+    } catch (error) {
+      lastError = error;
+      const canRetry =
+        attempt < MAX_SUBSCRIPTION_ATTEMPTS &&
+        isRetryableSubscriptionError(error);
+      if (!canRetry) throw error;
+
+      const delayMs = SUBSCRIPTION_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(
+        `[subscription] ${input.provider} attempt ${attempt}/${MAX_SUBSCRIPTION_ATTEMPTS} failed; ` +
+          `retrying in ${delayMs}ms: ${errorMessage(error)}`,
+      );
+      await waitForRetry(delayMs, input.abortSignal);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function getCommandVersion(command: string): Promise<string | undefined> {
   try {
-    const result = await runCommand(command, ["--version"], { timeoutMs: 5_000 });
+    const result = await runCommand(command, ["--version"], {
+      timeoutMs: 5_000,
+    });
     return result.exitCode === 0 ? result.stdout.trim() : undefined;
   } catch {
     return undefined;

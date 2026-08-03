@@ -11,6 +11,7 @@ import SlashCommandResult from "./SlashCommandResult";
 import ManualExecutionBlock from "./ManualExecutionBlock";
 import ConsentBanner from "./ConsentBanner";
 import InstallSuggestionBanner from "./InstallSuggestionBanner";
+import IterationLimitBanner from "./IterationLimitBanner";
 import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
@@ -24,6 +25,7 @@ export default function ChatView({ sessionId }) {
   const shouldStickToBottomRef = useRef(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [installSuggestions, setInstallSuggestions] = useState([]);
+  const [iterationLimit, setIterationLimit] = useState(null);
   const queryClient = useQueryClient();
 
   const FAR_UP_THRESHOLD = 250;
@@ -43,6 +45,10 @@ export default function ChatView({ sessionId }) {
     queryClient.invalidateQueries(["session-info", sessionId]);
   }, [queryClient, sessionId]);
 
+  const handleIterationLimit = useCallback((data) => {
+    setIterationLimit(data);
+  }, []);
+
   const {
     messages,
     setMessages,
@@ -61,6 +67,7 @@ export default function ChatView({ sessionId }) {
     sessionId,
     onComplete: handleAgentComplete,
     onInstallSuggestion: handleInstallSuggestion,
+    onIterationLimit: handleIterationLimit,
   });
 
   const scrollToBottom = useCallback((behavior = "auto") => {
@@ -144,6 +151,7 @@ export default function ChatView({ sessionId }) {
       setPendingManualExecution(null);
       setSwarms([]);
       setTokenUsage(null);
+      setIterationLimit(null);
       abort();
     };
     window.addEventListener("context-cleared", handleContextCleared);
@@ -177,6 +185,7 @@ export default function ChatView({ sessionId }) {
 
   const handleSend = useCallback(
     (message) => {
+      setIterationLimit(null);
       if (message.startsWith("/")) {
         setMessages((prev) => [
           ...prev,
@@ -207,6 +216,11 @@ export default function ChatView({ sessionId }) {
     },
     [agentState, startStream, setMessages, burpAttachment, buildBurpMessage],
   );
+
+  const handleContinueAfterLimit = useCallback(() => {
+    setIterationLimit(null);
+    startStream({ message: "", endpoint: "resume" });
+  }, [startStream]);
 
   const handlePause = useCallback(async () => {
     try {
@@ -323,6 +337,14 @@ export default function ChatView({ sessionId }) {
           <ManualExecutionBlock
             pending={pendingManualExecution}
             onSubmit={handleManualOutput}
+          />
+        )}
+
+        {iterationLimit && (
+          <IterationLimitBanner
+            limit={iterationLimit.maxIterations}
+            onContinue={handleContinueAfterLimit}
+            onStop={() => setIterationLimit(null)}
           />
         )}
 

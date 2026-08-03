@@ -453,6 +453,31 @@ const commandHandlers: Record<string, CommandHandler> = {
       })
       .join("\n\n");
 
+    const structuredFindings = (session.vulnerabilities ?? []).map((v) => ({
+      id: v.vulnerabilityId,
+      title: v.title,
+      severity: v.severity,
+      cvssScore: v.cvssScore,
+      cvssVector: v.cvssVector,
+      cwe: v.cwe,
+      cve: v.cve,
+      host: v.host,
+      service: v.service,
+      endpoint: v.endpoint,
+      description: v.description,
+      contextSummary: v.contextSummary,
+      evidence: v.evidence,
+      stepsToReproduce: v.stepsToReproduce,
+      impact: v.impact,
+      remediation: v.remediation,
+      exploited: v.exploited,
+      status: v.status,
+    }));
+
+    const reportSource = structuredFindings.length
+      ? `${conversationText}\n\n<structured_vulnerabilities>\n${JSON.stringify(structuredFindings, null, 2)}\n</structured_vulnerabilities>`
+      : conversationText;
+
     sse.write("slash_command_ack", { command: "export", message: "Generating report..." });
 
     const result = await invoke_llm({
@@ -491,7 +516,7 @@ Any additional data, raw outputs, or notes.
 
 Use markdown formatting. Be thorough but concise.`,
         },
-        { role: "user", content: conversationText },
+        { role: "user", content: reportSource },
       ],
       temperature: 0.3,
       sessionId,

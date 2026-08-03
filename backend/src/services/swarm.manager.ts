@@ -33,6 +33,7 @@ import {
 } from "../utils/copilot/prompts";
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
+import { parseToolArguments } from "../utils/toolArguments";
 
 const MAX_SWARM_AGENT_ITERATIONS = 25;
 const DEFAULT_SWARM_TIMEOUT_MS = 15 * 60 * 1000;
@@ -844,12 +845,15 @@ ITERATION EFFICIENCY:
 
           let args: Record<string, any>;
           try {
-            args = JSON.parse(tc.arguments);
-          } catch {
+            const parsed = parseToolArguments(tc.arguments);
+            args = parsed.args;
+            if (parsed.repaired) tc.arguments = JSON.stringify(args);
+          } catch (err: any) {
+            const detail = err instanceof Error ? err.message : String(err);
             messages.push({
               id: uuidv4(),
               role: "tool",
-              content: `Failed to parse arguments: ${tc.arguments}`,
+              content: `Failed to parse tool arguments for '${tc.name}': ${detail}`,
               toolCallId: tc.id,
               toolName: tc.name,
               timestamp: new Date(),
