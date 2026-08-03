@@ -37,6 +37,9 @@ import {
   updateAgentToolsConfig,
   getSwarmModels,
   updateSwarmModels,
+  getSubscriptionProviders,
+  connectSubscriptionProvider,
+  testSubscriptionProvider,
 } from "../controllers/user.controller";
 import { uploadImageMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -95,5 +98,16 @@ router.post("/update-agent-tools-config", [verifySess], updateAgentToolsConfig);
 
 router.get("/get-swarm-models", [verifySess], getSwarmModels);
 router.post("/update-swarm-models", [verifySess], updateSwarmModels);
+router.get("/subscription-providers", [verifySess], getSubscriptionProviders);
+router.post(
+  "/subscription-providers/connect",
+  [verifySess],
+  connectSubscriptionProvider,
+);
+router.post(
+  "/subscription-providers/test",
+  [verifySess],
+  testSubscriptionProvider,
+);
 
 export { router as userRoutes };

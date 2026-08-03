@@ -21,6 +21,12 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 # Install Patchright Chromium for Magnitude browser agent
 RUN pnpm exec patchright install chromium
 
+# Docker cannot execute the host's macOS Codex binary. Install the matching
+# Linux CLI and let docker-compose mount only the host's file-based login.
+ARG CODEX_CLI_VERSION=0.146.0
+RUN npm install --global "@openai/codex@${CODEX_CLI_VERSION}" \
+    && codex --version
+
 COPY . .
 
 RUN mkdir -p /srv/data

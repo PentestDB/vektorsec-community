@@ -26,6 +26,7 @@ const ModelSetupGate = ({ children }) => {
     getModels,
     {
       staleTime: 15 * 1000,
+      retryOnMount: false,
     },
   );
 

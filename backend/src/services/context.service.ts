@@ -3,48 +3,11 @@ import { invoke_llm } from "../utils/llm/providers";
 import { getProvider } from "../utils/llm/providers";
 import { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import { EngagementState } from "./engagement-state";
+import { getModelContextLimit } from "../utils/modelMetadata";
 
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  "gpt-5.5": 1_000_000,
-  "gpt-5.4": 1_000_000,
-  "gpt-5.4-mini": 400_000,
-  "gpt-5.4-nano": 400_000,
-  "gpt-5.3-codex": 400_000,
-  "gpt-5.3-codex-spark": 400_000,
-  "gpt-5.2": 400_000,
-  "gpt-4.1": 1_000_000,
-  "gpt-4.1-mini": 1_000_000,
-  "gpt-4o": 128_000,
-  "gpt-4o-mini": 128_000,
-  "gpt-4-turbo": 128_000,
-  "gpt-4-turbo-preview": 128_000,
-  "gpt-4": 8_192,
-  "gpt-3.5-turbo": 16_385,
-  "gpt-5-nano": 128_000,
-  "claude-opus-4-7": 1_000_000,
-  "claude-mythos-preview": 1_000_000,
-  "claude-sonnet-4-6": 1_000_000,
-  "claude-opus-4-6": 1_000_000,
-  "claude-haiku-4-5": 200_000,
-  "claude-sonnet-4-5": 200_000,
-  "claude-sonnet-4-20250514": 200_000,
-  "claude-3-5-sonnet-20241022": 200_000,
-  "claude-3-opus-20240229": 200_000,
-  "claude-3-haiku-20240307": 200_000,
-  "MiniMax-M2": 204_800,
-};
-
-const DEFAULT_CONTEXT_LIMIT = 128_000;
 const SUMMARIZE_THRESHOLD = 0.70;
 const CHARS_PER_TOKEN_ESTIMATE = 3.5;
 const PRESERVE_RECENT_MESSAGES = 8;
-
-function getContextLimit(model: string): number {
-  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
-    if (model.includes(key)) return limit;
-  }
-  return DEFAULT_CONTEXT_LIMIT;
-}
 
 function estimateTokens(text: string | null): number {
   if (!text) return 0;
@@ -65,7 +28,7 @@ export async function shouldSummarize(
   lastPromptTokens?: number,
 ): Promise<boolean> {
   const config = await getProvider();
-  const limit = getContextLimit(config.model);
+  const limit = getModelContextLimit(config.model);
   const inputTokens = lastPromptTokens ?? estimateMessagesTokens(
     messages.map((m) => ({ role: m.role, content: m.content })),
   );
@@ -189,6 +152,7 @@ export async function summarizeMessages(
 
 export function messagesToOpenAI(
   messages: AgentMessageDoc[],
+  includeReasoningContent = false,
 ): OpenAI.Chat.ChatCompletionMessageParam[] {
   const toolResponseIds = new Set(
     messages.filter((m) => m.role === "tool" && m.toolCallId).map((m) => m.toolCallId!),
@@ -210,13 +174,21 @@ export function messagesToOpenAI(
       const validToolCalls = m.toolCalls.filter((tc) => toolResponseIds.has(tc.id));
 
       if (validToolCalls.length === 0) {
-        return {
+        const assistantMessage: OpenAI.Chat.ChatCompletionAssistantMessageParam & {
+          reasoning_content?: string;
+        } = {
           role: "assistant" as const,
           content: m.content ?? "",
         };
+        if (includeReasoningContent && m.reasoning) {
+          assistantMessage.reasoning_content = m.reasoning;
+        }
+        return assistantMessage;
       }
 
-      return {
+      const assistantMessage: OpenAI.Chat.ChatCompletionAssistantMessageParam & {
+        reasoning_content?: string;
+      } = {
         role: "assistant" as const,
         content: m.content,
         tool_calls: validToolCalls.map((tc) => ({
@@ -225,6 +197,10 @@ export function messagesToOpenAI(
           function: { name: tc.name, arguments: tc.arguments },
         })),
       };
+      if (includeReasoningContent && m.reasoning) {
+        assistantMessage.reasoning_content = m.reasoning;
+      }
+      return assistantMessage;
     }
 
     if (m.role === "tool") {
@@ -241,9 +217,13 @@ export function messagesToOpenAI(
       };
     }
 
-    return {
+    const message = {
       role: m.role as "system" | "user" | "assistant",
       content: m.content ?? "",
     };
+    if (includeReasoningContent && m.role === "assistant" && m.reasoning) {
+      return { ...message, reasoning_content: m.reasoning };
+    }
+    return message;
   });
 }

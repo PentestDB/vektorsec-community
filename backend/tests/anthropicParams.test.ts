@@ -48,26 +48,36 @@ test("non-streaming params map tools and set tool_choice", () => {
   assert.equal(params.tools?.[0]?.name, "run_command");
 });
 
-test("stream params without a thinking budget omit temperature and thinking", () => {
+test("adaptive models explicitly disable thinking when reasoning is off", () => {
   const params = buildAnthropicStreamParams(
     { model: "claude-opus-4-8", messages },
     null,
   );
   assert.equal("temperature" in params, false);
-  assert.equal("thinking" in params, false);
+  assert.deepEqual(params.thinking, { type: "disabled" });
   assert.equal(params.stream, true);
   assert.equal(params.max_tokens, 8192);
 });
 
 test("stream params with a thinking budget omit temperature but enable thinking", () => {
   const params = buildAnthropicStreamParams(
-    { model: "claude-opus-4-8", messages },
+    { model: "claude-opus-4-5", messages },
     10000,
   );
   assert.equal("temperature" in params, false);
   assert.deepEqual(params.thinking, { type: "enabled", budget_tokens: 10000 });
   // min(64000, max(16384, 10000 + 4096)) === 16384
   assert.equal(params.max_tokens, 16384);
+});
+
+test("Claude 5 uses adaptive thinking and output_config effort", () => {
+  const params = buildAnthropicStreamParams(
+    { model: "claude-opus-5", messages, reasoningMode: "xhigh" },
+    48000,
+  );
+  assert.deepEqual(params.thinking, { type: "adaptive" });
+  assert.deepEqual(params.output_config, { effort: "xhigh" });
+  assert.equal(params.max_tokens, 52096);
 });
 
 test("openaiToAnthropicMessages folds system turns and maps tool results", () => {
@@ -82,5 +92,35 @@ test("openaiToAnthropicMessages folds system turns and maps tool results", () =>
   assert.equal(mapped[1]?.role, "user");
   assert.deepEqual(mapped[1]?.content, [
     { type: "tool_result", tool_use_id: "call_1", content: "result" },
+  ]);
+});
+
+test("openaiToAnthropicMessages preserves image blocks", () => {
+  const { messages: mapped } = openaiToAnthropicMessages([
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "inspect" },
+        {
+          type: "image_url",
+          image_url: { url: "data:image/png;base64,AAAA" },
+        },
+        {
+          type: "image_url",
+          image_url: { url: "https://example.com/screenshot.png" },
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(mapped[0]?.content, [
+    { type: "text", text: "inspect" },
+    {
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: "AAAA" },
+    },
+    {
+      type: "image",
+      source: { type: "url", url: "https://example.com/screenshot.png" },
+    },
   ]);
 });

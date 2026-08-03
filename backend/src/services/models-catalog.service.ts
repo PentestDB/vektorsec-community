@@ -24,11 +24,24 @@ interface CacheEntry {
 
 let cache: CacheEntry | null = null;
 
-const CURATED_PROVIDERS: CatalogProvider[] = [
+export const CURATED_PROVIDERS: CatalogProvider[] = [
   {
     id: "openai",
     name: "OpenAI",
     models: [
+      model("openai/gpt-5.6-sol", "gpt-5.6-sol", "GPT-5.6 Sol", 1_050_000),
+      model(
+        "openai/gpt-5.6-terra",
+        "gpt-5.6-terra",
+        "GPT-5.6 Terra",
+        1_050_000,
+      ),
+      model(
+        "openai/gpt-5.6-luna",
+        "gpt-5.6-luna",
+        "GPT-5.6 Luna",
+        1_050_000,
+      ),
       model("openai/gpt-5.5", "gpt-5.5", "GPT-5.5", 1_000_000),
       model("openai/gpt-5.4", "gpt-5.4", "GPT-5.4", 1_000_000),
       model("openai/gpt-5.4-mini", "gpt-5.4-mini", "GPT-5.4 mini", 400_000),
@@ -49,6 +62,36 @@ const CURATED_PROVIDERS: CatalogProvider[] = [
     id: "anthropic",
     name: "Anthropic (Claude)",
     models: [
+      model(
+        "anthropic/claude-fable-5",
+        "claude-fable-5",
+        "Claude Fable 5",
+        1_000_000,
+      ),
+      model(
+        "anthropic/claude-opus-5",
+        "claude-opus-5",
+        "Claude Opus 5",
+        1_000_000,
+      ),
+      model(
+        "anthropic/claude-sonnet-5",
+        "claude-sonnet-5",
+        "Claude Sonnet 5",
+        1_000_000,
+      ),
+      model(
+        "anthropic/claude-mythos-5",
+        "claude-mythos-5",
+        "Claude Mythos 5 (limited access)",
+        1_000_000,
+      ),
+      model(
+        "anthropic/claude-opus-4-8",
+        "claude-opus-4-8",
+        "Claude Opus 4.8",
+        1_000_000,
+      ),
       model(
         "anthropic/claude-opus-4-7",
         "claude-opus-4-7",
@@ -89,6 +132,74 @@ const CURATED_PROVIDERS: CatalogProvider[] = [
         "anthropic/claude-sonnet-4-5",
         "claude-sonnet-4-5",
         "Claude Sonnet 4.5",
+        1_000_000,
+      ),
+    ],
+  },
+  {
+    id: "kimi",
+    name: "Kimi (Moonshot AI)",
+    models: [
+      model("kimi/kimi-k3", "kimi-k3", "Kimi K3", 1_000_000),
+      model(
+        "kimi/kimi-k2.7-code-highspeed",
+        "kimi-k2.7-code-highspeed",
+        "Kimi K2.7 Code Highspeed",
+        256_000,
+      ),
+      model(
+        "kimi/kimi-k2.7-code",
+        "kimi-k2.7-code",
+        "Kimi K2.7 Code",
+        256_000,
+      ),
+      model("kimi/kimi-k2.6", "kimi-k2.6", "Kimi K2.6", 256_000),
+    ],
+  },
+  {
+    id: "codex-subscription",
+    name: "Codex Subscription (local CLI)",
+    models: [
+      model(
+        "codex-subscription/gpt-5.6-sol",
+        "gpt-5.6-sol",
+        "GPT-5.6 Sol via Codex",
+        1_050_000,
+      ),
+      model(
+        "codex-subscription/gpt-5.6-terra",
+        "gpt-5.6-terra",
+        "GPT-5.6 Terra via Codex",
+        1_050_000,
+      ),
+      model(
+        "codex-subscription/gpt-5.6-luna",
+        "gpt-5.6-luna",
+        "GPT-5.6 Luna via Codex",
+        1_050_000,
+      ),
+    ],
+  },
+  {
+    id: "claude-subscription",
+    name: "Claude Subscription (local CLI)",
+    models: [
+      model(
+        "claude-subscription/claude-fable-5",
+        "claude-fable-5",
+        "Claude Fable 5 via Claude Code",
+        1_000_000,
+      ),
+      model(
+        "claude-subscription/claude-opus-5",
+        "claude-opus-5",
+        "Claude Opus 5 via Claude Code",
+        1_000_000,
+      ),
+      model(
+        "claude-subscription/claude-sonnet-5",
+        "claude-sonnet-5",
+        "Claude Sonnet 5 via Claude Code",
         1_000_000,
       ),
     ],
@@ -146,6 +257,12 @@ const CURATED_PROVIDERS: CatalogProvider[] = [
     name: "OpenRouter",
     models: [
       model(
+        "openrouter/moonshotai/kimi-k3",
+        "moonshotai/kimi-k3",
+        "Kimi K3 via OpenRouter",
+        1_000_000,
+      ),
+      model(
         "openrouter/minimax/minimax-m2.7",
         "minimax/minimax-m2.7",
         "MiniMax M2.7 via OpenRouter",
@@ -156,6 +273,30 @@ const CURATED_PROVIDERS: CatalogProvider[] = [
         "minimax/minimax-m2.7-highspeed",
         "MiniMax M2.7 highspeed via OpenRouter",
         204_800,
+      ),
+      model(
+        "openrouter/anthropic/claude-opus-5",
+        "anthropic/claude-opus-5",
+        "Claude Opus 5 via OpenRouter",
+        1_000_000,
+      ),
+      model(
+        "openrouter/anthropic/claude-sonnet-5",
+        "anthropic/claude-sonnet-5",
+        "Claude Sonnet 5 via OpenRouter",
+        1_000_000,
+      ),
+      model(
+        "openrouter/openai/gpt-5.6-sol",
+        "openai/gpt-5.6-sol",
+        "GPT-5.6 Sol via OpenRouter",
+        1_050_000,
+      ),
+      model(
+        "openrouter/openai/gpt-5.6-terra",
+        "openai/gpt-5.6-terra",
+        "GPT-5.6 Terra via OpenRouter",
+        1_050_000,
       ),
       model(
         "openrouter/anthropic/claude-opus-4.7",
@@ -224,50 +365,22 @@ function model(
   };
 }
 
-function titleCase(slug: string): string {
-  return slug
-    .split(/[-_]/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
 function transformModels(raw: any[]): CatalogProvider[] {
-  const grouped = new Map<string, { name: string; models: CatalogModel[] }>();
-
-  for (const m of raw) {
-    const id: string = m.id ?? "";
-    const slashIdx = id.indexOf("/");
-    if (slashIdx === -1) continue;
-
-    const providerId = id.slice(0, slashIdx);
-    const modelId = id.slice(slashIdx + 1);
-
-    if (!grouped.has(providerId)) {
-      grouped.set(providerId, { name: titleCase(providerId), models: [] });
-    }
-
-    grouped.get(providerId)!.models.push({
-      id,
-      modelId,
-      name: m.name ?? modelId,
+  const models = raw
+    .filter((m) => typeof m?.id === "string" && m.id.includes("/"))
+    .map((m) => ({
+      id: `openrouter/${m.id}`,
+      modelId: m.id,
+      name: m.name ?? m.id,
       contextLength: m.context_length ?? 0,
       pricing: {
         prompt: m.pricing?.prompt ?? "0",
         completion: m.pricing?.completion ?? "0",
       },
-    });
-  }
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Sort providers alphabetically, models by name within each provider
-  const providers = Array.from(grouped.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([id, data]) => ({
-      id,
-      name: data.name,
-      models: data.models.sort((a, b) => a.name.localeCompare(b.name)),
-    }));
-
-  return providers;
+  return [{ id: "openrouter", name: "OpenRouter", models }];
 }
 
 function mergeCuratedProviders(

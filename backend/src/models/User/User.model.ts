@@ -148,7 +148,7 @@ const UserSchema = new Schema({
           baseURL: { type: String },
           reasoningMode: {
             type: String,
-            enum: ["off", "low", "medium", "high", "xhigh"],
+            enum: ["off", "low", "medium", "high", "xhigh", "max"],
             default: "off",
           },
           isOrchestrator: { type: Boolean, default: false },

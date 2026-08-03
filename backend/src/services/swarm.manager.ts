@@ -16,11 +16,10 @@ import {
   invoke_llm_streaming,
   ToolCallData,
   ProviderConfig,
-  ProviderType,
   ReasoningMode,
   getProvider,
-  normalizeModelId,
   getUserModels,
+  presetToProviderConfig,
 } from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { ExecutionContext, ToolResult } from "../tools/types";
@@ -33,6 +32,7 @@ import {
   AgentPromptConfig,
 } from "../utils/copilot/prompts";
 import { EngagementState } from "./engagement-state";
+import { getModelContextLimit } from "../utils/modelMetadata";
 
 const MAX_SWARM_AGENT_ITERATIONS = 25;
 const DEFAULT_SWARM_TIMEOUT_MS = 15 * 60 * 1000;
@@ -54,34 +54,6 @@ function executeWithTimeout(
   ]);
 }
 
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  "gpt-5.5": 1_000_000,
-  "gpt-5.4": 1_000_000,
-  "gpt-5.4-mini": 400_000,
-  "gpt-5.4-nano": 400_000,
-  "gpt-5.3-codex": 400_000,
-  "gpt-5.3-codex-spark": 400_000,
-  "gpt-5.2": 400_000,
-  "gpt-4.1": 1_000_000,
-  "gpt-4.1-mini": 1_000_000,
-  "gpt-4o": 128_000,
-  "gpt-4o-mini": 128_000,
-  "gpt-4-turbo": 128_000,
-  "gpt-4": 8_192,
-  "gpt-3.5-turbo": 16_385,
-  "gpt-5-nano": 128_000,
-  "claude-opus-4-7": 1_000_000,
-  "claude-mythos-preview": 1_000_000,
-  "claude-sonnet-4-6": 1_000_000,
-  "claude-opus-4-6": 1_000_000,
-  "claude-haiku-4-5": 200_000,
-  "claude-sonnet-4-5": 200_000,
-  "claude-sonnet-4-20250514": 200_000,
-  "claude-3-5-sonnet-20241022": 200_000,
-  "claude-3-opus-20240229": 200_000,
-  "claude-3-haiku-20240307": 200_000,
-  "MiniMax-M2": 204_800,
-};
 
 export interface SwarmResult {
   swarmId: string;
@@ -113,13 +85,14 @@ export interface CtfSwarmContext {
   userNotes?: string;
 }
 
-interface ModelPreset {
+export interface ModelPreset {
+  id?: string;
   label: string;
   provider: string;
   model: string;
   apiKey?: string;
   baseURL?: string;
-  reasoningMode?: string;
+  reasoningMode?: ReasoningMode;
 }
 
 function truncateOutput(output: string): string {
@@ -131,13 +104,6 @@ function truncateOutput(output: string): string {
     `\n\n... [truncated ${cleaned.length - MAX_OUTPUT_CHARS} chars] ...\n\n` +
     cleaned.slice(-half)
   );
-}
-
-function getModelContextLimit(model: string): number {
-  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
-    if (model.includes(key)) return limit;
-  }
-  return 128_000;
 }
 
 function buildSwarmAgentPrompt(params: {
@@ -272,13 +238,7 @@ ${ctfContext.userNotes ? `\n<user_notes>\n${ctfContext.userNotes}\n</user_notes>
 async function buildProviderConfig(
   preset: ModelPreset,
 ): Promise<ProviderConfig> {
-  const defaultConfig = await getProvider();
-  return {
-    provider: preset.provider as ProviderType,
-    model: normalizeModelId(preset.model),
-    apiKey: preset.apiKey || defaultConfig.apiKey,
-    baseURL: preset.baseURL || undefined,
-  };
+  return presetToProviderConfig({ ...preset, id: preset.id || "runtime-racer" });
 }
 
 export class SwarmManager extends EventEmitter {
@@ -747,7 +707,7 @@ ITERATION EFFICIENCY:
           messages = preservedMessages;
         }
 
-        const openaiMessages = messagesToOpenAI(messages);
+        const openaiMessages = messagesToOpenAI(messages, providerConfig.provider === "kimi");
         const unconfiguredTools = getUnconfiguredToolNames();
         const tools = toolRegistry.toOpenAISchemas({
           agentRole: "swarm_agent",
@@ -756,6 +716,7 @@ ITERATION EFFICIENCY:
         });
 
         let assistantContent = "";
+        let assistantReasoning = "";
         let assistantToolCalls: ToolCallData[] = [];
 
         const racerNameTag = modelLabel.replace(/\s+/g, "_");
@@ -783,6 +744,7 @@ ITERATION EFFICIENCY:
           abortSignal,
           onDelta(delta) {
             if (delta.type === "reasoning" && delta.content) {
+              assistantReasoning += delta.content;
               sse.write("swarm_agent_progress", {
                 swarmId,
                 agentId,
@@ -852,6 +814,7 @@ ITERATION EFFICIENCY:
           id: uuidv4(),
           role: "assistant",
           content: assistantContent || null,
+          reasoning: assistantReasoning || undefined,
           toolCalls: assistantToolCalls.length ? assistantToolCalls : undefined,
           timestamp: new Date(),
           turnIndex: 0,

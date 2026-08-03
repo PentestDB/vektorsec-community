@@ -73,3 +73,31 @@ test("readModelRegistry round-trips the written registry", async () => {
   assert.equal(loaded.models.length, 1);
   assert.equal(loaded.models[0].model, "claude-opus-4-8");
 });
+
+test("keyless subscription presets and max reasoning survive normalization", async () => {
+  const store = await loadStore();
+  const registry = store.writeModelRegistry(
+    [
+      {
+        id: "codex-local",
+        label: "Codex local",
+        provider: "codex-subscription",
+        model: "gpt-5.6",
+        reasoningMode: "max",
+      },
+      {
+        id: "claude-local",
+        label: "Claude local",
+        provider: "claude-subscription",
+        model: "claude-opus-5-latest",
+        reasoningMode: "high",
+      },
+    ],
+    { orchestratorModelId: "codex-local", racerModelIds: ["claude-local"] },
+    false,
+  );
+  assert.equal(registry.models[0]?.model, "gpt-5.6-sol");
+  assert.equal(registry.models[0]?.apiKey, undefined);
+  assert.equal(registry.models[0]?.reasoningMode, "max");
+  assert.equal(registry.models[1]?.model, "claude-opus-5");
+});

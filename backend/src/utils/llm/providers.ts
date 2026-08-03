@@ -10,6 +10,11 @@ import {
   buildAnthropicMessageParams,
   buildAnthropicStreamParams,
 } from "./anthropicParams";
+import { normalizeModelId } from "../modelMetadata";
+import {
+  invokeSubscriptionInference,
+  isSubscriptionProvider,
+} from "../../services/subscription-inference.service";
 
 export type ProviderType =
   | "openai"
@@ -17,14 +22,19 @@ export type ProviderType =
   | "anthropic-compatible"
   | "openrouter"
   | "ollama"
-  | "openai-compatible";
+  | "openai-compatible"
+  | "google"
+  | "mistralai"
+  | "kimi"
+  | "codex-subscription"
+  | "claude-subscription";
 
 export interface ProviderConfig {
   provider: ProviderType;
   apiKey: string;
   model: string;
   baseURL?: string;
-  authMethod?: "api_key" | "oauth";
+  authMethod?: "api_key" | "oauth" | "subscription";
   oauthAccessToken?: string;
 }
 
@@ -35,6 +45,13 @@ const PROVIDER_DEFAULTS: Record<ProviderType, { baseURL: string }> = {
   openrouter: { baseURL: "https://openrouter.ai/api/v1" },
   ollama: { baseURL: "http://localhost:11434/v1" },
   "openai-compatible": { baseURL: "" },
+  google: {
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+  },
+  mistralai: { baseURL: "https://api.mistral.ai/v1" },
+  kimi: { baseURL: "https://api.moonshot.ai/v1" },
+  "codex-subscription": { baseURL: "" },
+  "claude-subscription": { baseURL: "" },
 };
 
 function isAnthropicApiProvider(provider: ProviderType): boolean {
@@ -146,32 +163,13 @@ async function loadProviderConfig(): Promise<ProviderConfig> {
   return {
     provider: "openai",
     apiKey: "",
-    model: "gpt-5.5",
+    model: "gpt-5.6-terra",
     baseURL: undefined,
     authMethod: "api_key",
   };
 }
 
-// ─── Model ID normalization ──────────────────────────────────────────
-
-const MODEL_ALIASES: Record<string, string> = {
-  "gpt-5.5-latest": "gpt-5.5",
-  "gpt-5.4-latest": "gpt-5.4",
-  "claude-opus-4.7": "claude-opus-4-7",
-  "claude-mythos": "claude-mythos-preview",
-  "claude-sonnet-4.6": "claude-sonnet-4-6",
-  "claude-opus-4.6": "claude-opus-4-6",
-  "claude-haiku-4.5": "claude-haiku-4-5",
-  "claude-sonnet-4.5": "claude-sonnet-4-5",
-  "claude-opus-4.5": "claude-opus-4-5",
-  "claude-opus-4.1": "claude-opus-4-1",
-};
-
-export function normalizeModelId(model: string): string {
-  if (!model) return model;
-  const lower = model.trim();
-  return MODEL_ALIASES[lower] ?? lower;
-}
+export { normalizeModelId } from "../modelMetadata";
 
 // ─── Provider cache ──────────────────────────────────────────────────
 
@@ -240,6 +238,15 @@ export async function presetToProviderConfig(
 ): Promise<ProviderConfig> {
   const model = normalizeModelId(preset.model);
 
+  if (isSubscriptionProvider(preset.provider)) {
+    return {
+      provider: preset.provider,
+      apiKey: "",
+      model,
+      authMethod: "subscription",
+    };
+  }
+
   if (preset.provider === "anthropic" && !preset.apiKey) {
     const oauthToken = await maybeRefreshOAuthToken();
     if (oauthToken) {
@@ -255,7 +262,6 @@ export async function presetToProviderConfig(
   }
 
   const providerType = preset.provider as ProviderType;
-  const isKeyless = providerType === "ollama";
 
   return {
     provider: providerType,
@@ -294,7 +300,13 @@ export type FinishReason =
   | "content_filter"
   | "error";
 
-export type ReasoningMode = "off" | "low" | "medium" | "high" | "xhigh";
+export type ReasoningMode =
+  | "off"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
 
 export interface InvokeOptions {
   messages: Array<OpenAI.Chat.ChatCompletionMessageParam>;
@@ -345,6 +357,7 @@ const ANTHROPIC_BUDGET_TOKENS: Record<Exclude<ReasoningMode, "off">, number> = {
   medium: 10000,
   high: 32000,
   xhigh: 48000,
+  max: 64000,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -397,7 +410,7 @@ function logRequest(
 
   console.log(
     `[inference] → provider=${config.provider} model=${config.model} auth=${config.authMethod ?? "api_key"}` +
-      ` key=${maskSecret(config.authMethod === "oauth" ? config.oauthAccessToken : config.apiKey)}` +
+      ` key=${maskSecret(config.authMethod === "oauth" ? config.oauthAccessToken : config.authMethod === "subscription" ? undefined : config.apiKey)}` +
       ` baseURL=${config.baseURL ?? "(default)"}` +
       ` | msgs=${msgCount} lastRole=${lastRole} chars=${totalChars}` +
       ` tools=${opts.tools?.length ?? 0} stream=${streaming}` +
@@ -439,6 +452,19 @@ function buildCompletionConfig(
   if (opts.tools?.length) {
     params.tools = opts.tools;
     params.tool_choice = "auto";
+  }
+
+  if (opts.reasoningMode && opts.reasoningMode !== "off") {
+    if (config.provider === "kimi") {
+      params.reasoning_effort =
+        opts.reasoningMode === "low"
+          ? "low"
+          : opts.reasoningMode === "max"
+            ? "max"
+            : "high";
+    } else if (config.provider === "openai") {
+      params.reasoning_effort = opts.reasoningMode;
+    }
   }
 
   if (
@@ -507,6 +533,7 @@ async function runAnthropicMessage(
       model: config.model,
       messages: opts.messages,
       tools: opts.tools,
+      reasoningMode: opts.reasoningMode,
     }),
   );
 
@@ -590,6 +617,25 @@ export async function invoke_llm(opts: InvokeOptions): Promise<InvokeResult> {
 
   logRequest(config, opts, false);
 
+  if (isSubscriptionProvider(config.provider)) {
+    const result = await invokeSubscriptionInference({
+      provider: config.provider,
+      model: config.model,
+      reasoningMode: opts.reasoningMode ?? "off",
+      messages: opts.messages,
+      tools: opts.tools,
+      format: opts.format,
+    });
+    const mapped: InvokeResult = {
+      ...result,
+      usage: result.usage,
+      provider: config.provider,
+      elapsedMs: Date.now() - start,
+    };
+    logResponse(config, mapped.elapsedMs, mapped);
+    return mapped;
+  }
+
   if (isAnthropicApiProvider(config.provider)) {
     return await runAnthropicMessage(config, opts, start);
   }
@@ -654,7 +700,12 @@ async function runAnthropicThinkingStream(
   const client = buildAnthropicClient(config);
 
   const params = buildAnthropicStreamParams(
-    { model: config.model, messages: opts.messages, tools: opts.tools },
+    {
+      model: config.model,
+      messages: opts.messages,
+      tools: opts.tools,
+      reasoningMode: opts.reasoningMode,
+    },
     budgetTokens,
   );
 
@@ -1104,8 +1155,45 @@ export async function invoke_llm_streaming(
   opts: StreamingInvokeOptions,
 ): Promise<InvokeResult> {
   const config = opts.providerOverride ?? (await getProvider());
-  const reasoningMode = opts.reasoningMode ?? "medium";
+  const reasoningMode = opts.reasoningMode ?? "off";
   const start = Date.now();
+
+  if (isSubscriptionProvider(config.provider)) {
+    logRequest(config, opts, true);
+    const result = await invokeSubscriptionInference({
+      provider: config.provider,
+      model: config.model,
+      reasoningMode,
+      messages: opts.messages,
+      tools: opts.tools,
+      format: opts.format,
+      abortSignal: opts.abortSignal,
+    });
+    if (result.reasoning) {
+      opts.onDelta({ type: "reasoning", content: result.reasoning });
+    }
+    if (result.content) {
+      opts.onDelta({ type: "text", content: result.content });
+    }
+    result.toolCalls.forEach((toolCall, index) => {
+      opts.onDelta({
+        type: "tool_call_start",
+        toolCall: { index, id: toolCall.id, name: toolCall.name },
+      });
+      opts.onDelta({
+        type: "tool_call_done",
+        toolCall: { index, ...toolCall },
+      });
+    });
+    const mapped: InvokeResult = {
+      ...result,
+      usage: result.usage,
+      provider: config.provider,
+      elapsedMs: Date.now() - start,
+    };
+    logResponse(config, mapped.elapsedMs, mapped);
+    return mapped;
+  }
 
   if (isAnthropicApiProvider(config.provider)) {
     const budget =
@@ -1134,9 +1222,17 @@ export async function invoke_llm_streaming(
       reasoningMode !== "off" &&
       (config.provider === "openai-compatible" ||
         config.provider === "openrouter" ||
-        config.provider === "ollama")
+        config.provider === "ollama" ||
+        config.provider === "kimi")
     ) {
-      params.reasoning_effort = reasoningMode;
+      params.reasoning_effort =
+        config.provider === "kimi"
+          ? reasoningMode === "low"
+            ? "low"
+            : reasoningMode === "max"
+              ? "max"
+              : "high"
+          : reasoningMode;
     }
 
     const stream = (await client.chat.completions.create(

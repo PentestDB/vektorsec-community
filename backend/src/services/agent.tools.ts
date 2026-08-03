@@ -3,10 +3,11 @@ import { ExecutionContext, ToolResult, AgentRole } from "../tools/types";
 import { ToolCallData } from "../utils/llm/providers";
 import { ShellManager, ShellPurpose } from "./shell.manager";
 import { SubagentManager } from "./subagent.manager";
-import { SwarmManager } from "./swarm.manager";
+import { SwarmManager, CtfSwarmContext, ModelPreset } from "./swarm.manager";
 import { SSEWriter } from "./agent.service";
 import { EngagementState } from "./engagement-state";
 import { SwarmWinCondition } from "../models/Sessions/Sessions.model";
+import { AgentPromptConfig } from "../utils/copilot/prompts";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -65,10 +66,15 @@ export function buildExecutionContext(params: {
   onChunk?: (chunk: string) => void;
   abortSignal?: AbortSignal;
   engagementState?: EngagementState;
+  swarmDefaults?: {
+    modelPresets: ModelPreset[];
+    ctfContext?: CtfSwarmContext;
+    agentPromptConfig?: AgentPromptConfig;
+  };
 }): ExecutionContext {
   const {
     sessionId, agentId, shellManager, subagentManager, swarmManager,
-    sse, userId, onChunk, abortSignal, engagementState,
+    sse, userId, onChunk, abortSignal, engagementState, swarmDefaults,
   } = params;
   const agentRole = params.agentRole ?? "main";
 
@@ -102,15 +108,40 @@ export function buildExecutionContext(params: {
           })
       : undefined,
     spawnSwarm: swarmManager && sse && userId
-      ? (swarmParams) =>
-          swarmManager.spawn({
+      ? async (swarmParams) => {
+          if (agentRole === "main" && !swarmDefaults?.modelPresets.length) {
+            throw new Error("No racer models are configured in Settings > Models.");
+          }
+
+          const modelPresets = swarmDefaults?.modelPresets;
+          const requestedSpecs = swarmParams.agents;
+          // The configured roster is authoritative: launch each selected racer
+          // once, using orchestrator-authored strategies where available.
+          const agentSpecs = modelPresets?.length
+            ? modelPresets.map((preset, index) => {
+                const requested = requestedSpecs[index] ?? requestedSpecs[0];
+                return {
+                  task: requested?.task ?? swarmParams.goal,
+                  context: [
+                    requested?.context,
+                    `Configured racer: ${preset.label}`,
+                  ].filter(Boolean).join("\n"),
+                };
+              })
+            : requestedSpecs;
+
+          return swarmManager.spawn({
             goal: swarmParams.goal,
-            agentSpecs: swarmParams.agents,
+            agentSpecs,
             winCondition: (swarmParams.winCondition as SwarmWinCondition) || "all_complete",
             timeoutMs: swarmParams.timeoutMinutes ? swarmParams.timeoutMinutes * 60 * 1000 : undefined,
             sse,
             userId,
-          })
+            modelPresets,
+            ctfContext: swarmDefaults?.ctfContext,
+            agentPromptConfig: swarmDefaults?.agentPromptConfig,
+          });
+        }
       : undefined,
     checkFindings: swarmManager
       ? () => swarmManager.checkAllFindings()

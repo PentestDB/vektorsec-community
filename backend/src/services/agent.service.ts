@@ -30,6 +30,7 @@ import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
 import { SwarmManager, CtfSwarmContext, SwarmResult } from "./swarm.manager";
 import { EngagementState } from "./engagement-state";
+import { getModelContextLimit } from "../utils/modelMetadata";
 
 const MAX_ITERATIONS = 25;
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
@@ -155,42 +156,6 @@ async function trackTokens(
   );
 }
 
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  "gpt-5.5": 1_000_000,
-  "gpt-5.4": 1_000_000,
-  "gpt-5.4-mini": 400_000,
-  "gpt-5.4-nano": 400_000,
-  "gpt-5.3-codex": 400_000,
-  "gpt-5.3-codex-spark": 400_000,
-  "gpt-5.2": 400_000,
-  "gpt-4.1": 1_000_000,
-  "gpt-4.1-mini": 1_000_000,
-  "gpt-4o": 128_000,
-  "gpt-4o-mini": 128_000,
-  "gpt-4-turbo": 128_000,
-  "gpt-4": 8_192,
-  "gpt-3.5-turbo": 16_385,
-  "gpt-5-nano": 128_000,
-  "claude-opus-4-7": 1_000_000,
-  "claude-mythos-preview": 1_000_000,
-  "claude-sonnet-4-6": 1_000_000,
-  "claude-opus-4-6": 1_000_000,
-  "claude-haiku-4-5": 200_000,
-  "claude-sonnet-4-5": 200_000,
-  "claude-sonnet-4-20250514": 200_000,
-  "claude-3-5-sonnet-20241022": 200_000,
-  "claude-3-opus-20240229": 200_000,
-  "claude-3-haiku-20240307": 200_000,
-  "MiniMax-M2": 204_800,
-};
-
-function getModelContextLimit(model: string): number {
-  for (const [key, limit] of Object.entries(MODEL_CONTEXT_LIMITS)) {
-    if (model.includes(key)) return limit;
-  }
-  return 128_000;
-}
-
 // ─── Build shell status context (injected after summarization) ──────
 
 import { ShellManager, ShellInfo } from "./shell.manager";
@@ -236,6 +201,18 @@ async function buildAgentPromptConfig(
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     envInfo,
   };
+
+  try {
+    const models = await getUserModels(userId);
+    promptConfig.racerModels = models.racers.map((r) => ({
+      label: r.label,
+      provider: r.provider,
+      model: r.model,
+    }));
+  } catch {
+    // Model setup is handled by the normal setup gate. Prompt construction
+    // should remain available for sessions created before configuration.
+  }
 
   let ctfConfig = session?.ctfConfig;
   if (!ctfConfig?.ctfName && session?.workspaceId) {
@@ -416,6 +393,12 @@ function upsertRacerOrchestratorPrompt(
   return false;
 }
 
+function removeRacerOrchestratorPrompt(messages: AgentMessageDoc[]): void {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].id === RACER_ORCHESTRATOR_PROMPT_ID) messages.splice(i, 1);
+  }
+}
+
 function appendSwarmResultMessages(
   messages: AgentMessageDoc[],
   newMessages: AgentMessageDoc[],
@@ -505,8 +488,21 @@ export async function runAgentLoop(params: {
 
   let messages = [...session.messages];
 
-  // Replace system message with one that has resolved environment info
-  if (envInfo && messages.length > 0 && messages[0].role === "system") {
+  // Racer coordination is transient execution context. Older versions stored
+  // this prompt in session history, where its mandatory-tool instruction could
+  // keep affecting normal chat after a swarm had finished.
+  const hadPersistedRacerPrompt = messages.some((m) => m.id === RACER_ORCHESTRATOR_PROMPT_ID);
+  removeRacerOrchestratorPrompt(messages);
+  if (hadPersistedRacerPrompt) {
+    await SessionsModel.updateOne(
+      { sessionId },
+      { $pull: { messages: { id: RACER_ORCHESTRATOR_PROMPT_ID } } },
+    );
+  }
+
+  // Refresh the system message on every turn so model/racer assignments changed
+  // in Settings are immediately visible to the orchestrator.
+  if (messages.length > 0 && messages[0].role === "system") {
     const updatedSysMsg = await buildSystemMessage(sessionId, userId, envInfo);
     messages[0] = updatedSysMsg;
   }
@@ -527,14 +523,6 @@ export async function runAgentLoop(params: {
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
   const orchestratorReasoningMode: ReasoningMode =
     (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
-
-  // Resume paused swarms first, or auto-spawn new racers
-  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-  const hasActiveSwarms = (session.swarms ?? []).some((sw: any) => sw.status === "running");
-  const hasPausedSwarms = (session.swarms ?? []).some((sw: any) => sw.status === "paused");
-  const hasCompletedSwarms = (session.swarms ?? []).some(
-    (sw: any) => sw.status === "completed" || sw.status === "timed_out",
-  );
 
   let ctfSwarmContext: CtfSwarmContext | undefined;
   const sessionCtf = session.ctfConfig;
@@ -557,76 +545,15 @@ export async function runAgentLoop(params: {
     };
   }
 
-  if (hasPausedSwarms) {
-    try {
-      const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
-      const resumedIds = await swarmManager.resumePausedSwarms({
-        sse,
-        userId,
-        agentPromptConfig: racerPromptConfig,
-        ctfContext: ctfSwarmContext,
-      });
-      spawnedSwarmIds.push(...resumedIds);
-    } catch (err: any) {
-      console.warn(`[agent] Resume paused swarms failed: ${err.message}`);
-    }
-  } else if (userModels.racers.length > 0 && lastUserMsg?.content && !hasActiveSwarms && hasCompletedSwarms) {
-    // Racers already ran — continue them with the new user guidance rather than spawning fresh ones.
-    // Each racer re-activates from its prior message history with the new guidance appended.
-    try {
-      const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
-      const continuedIds = await swarmManager.continueCompletedSwarms({
-        newGuidance: lastUserMsg.content,
-        sse,
-        userId,
-        agentPromptConfig: racerPromptConfig,
-        ctfContext: ctfSwarmContext,
-      });
-      spawnedSwarmIds.push(...continuedIds);
-    } catch (err: any) {
-      console.warn(`[agent] Continue racers failed: ${err.message}`);
-    }
-  } else if (userModels.racers.length > 0 && lastUserMsg?.content && !hasActiveSwarms) {
-    try {
-      const racerPresets = userModels.racers.map((r) => ({
-        label: r.label,
-        provider: r.provider,
-        model: r.model,
-        apiKey: r.apiKey,
-        baseURL: r.baseURL,
-        reasoningMode: r.reasoningMode,
-      }));
-
-      const swarmGoal = ctfSwarmContext
-        ? `Solve CTF challenge "${ctfSwarmContext.challengeName}" and find the flag.`
-        : lastUserMsg.content;
-
-      const swarmTask = ctfSwarmContext
-        ? `Solve the CTF challenge "${ctfSwarmContext.challengeName}". Find the flag and report it.`
-        : lastUserMsg.content!;
-
-      const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
-      const swarmId = await swarmManager.spawn({
-        goal: swarmGoal,
-        agentSpecs: racerPresets.map((rp) => ({
-          task: swarmTask,
-          context: ctfSwarmContext
-            ? `You are racing to solve this CTF challenge. Model: ${rp.label}.`
-            : `You are racing to solve the user's request. Model: ${rp.label}.`,
-        })),
-        winCondition: "first_success",
-        timeoutMs: 15 * 60 * 1000,
-        sse,
-        userId,
-        modelPresets: racerPresets,
-        ctfContext: ctfSwarmContext,
-        agentPromptConfig: racerPromptConfig,
-      });
-      spawnedSwarmIds.push(swarmId);
-    } catch (err: any) {
-      console.warn(`[agent] Auto-spawn racers failed: ${err.message}`);
-    }
-  }
+  const racerPresets = userModels.racers.map((r) => ({
+    label: r.label,
+    provider: r.provider,
+    model: r.model,
+    apiKey: r.apiKey,
+    baseURL: r.baseURL,
+    reasoningMode: r.reasoningMode,
+  }));
+  const racerPromptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
 
   const engagementMode = session.ctfConfig?.ctfName ? "ctf" : "pentest";
   const engagementState = new EngagementState(engagementMode as "pentest" | "ctf");
@@ -656,6 +583,11 @@ export async function runAgentLoop(params: {
     userId,
     abortSignal: params.abortSignal,
     engagementState,
+    swarmDefaults: {
+      modelPresets: racerPresets,
+      ctfContext: ctfSwarmContext,
+      agentPromptConfig: racerPromptConfig,
+    },
   });
 
   try {
@@ -753,7 +685,7 @@ export async function runAgentLoop(params: {
       if (racerOrchestratorMode) {
         const roster = swarmManager.getActiveRoster(spawnedSwarmIds);
         const sessionCtfInfo = session.ctfConfig;
-        const inserted = upsertRacerOrchestratorPrompt(messages, turnIndex, roster, {
+        upsertRacerOrchestratorPrompt(messages, turnIndex, roster, {
           sessionId,
           ctfName: sessionCtfInfo?.ctfName,
           challengeName: sessionCtfInfo?.activeSolve?.name,
@@ -762,16 +694,19 @@ export async function runAgentLoop(params: {
           maxIterations: MAX_ITERATIONS,
           racerMaxIterations: swarmManager.getMaxIterations(),
         });
-        if (inserted) {
-          newMessages.push(messages[messages.length - 1]);
-        }
+        // This system prompt is deliberately not persisted. It only applies
+        // while racers are active in the current execution loop.
+      } else {
+        removeRacerOrchestratorPrompt(messages);
+        removeRacerOrchestratorPrompt(newMessages);
       }
 
-      const openaiMessages = messagesToOpenAI(messages);
+      const openaiMessages = messagesToOpenAI(messages, orchestratorConfig.provider === "kimi");
       const unconfiguredTools = getUnconfiguredToolNames();
       const tools = racerOrchestratorMode
         ? toolRegistry.toOpenAISchemas({ agentRole: "orchestrator" })
         : toolRegistry.toOpenAISchemas({
+          agentRole: "main",
           disabledTools: disabledAgentTools,
           unconfiguredTools,
         });

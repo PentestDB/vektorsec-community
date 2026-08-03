@@ -16,10 +16,74 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 const DEFAULT_MAX_TOKENS = 8192;
 
+function openaiUserContentToAnthropic(
+  content: OpenAI.Chat.ChatCompletionUserMessageParam["content"],
+): string | Anthropic.ContentBlockParam[] {
+  if (typeof content === "string") return content;
+  const blocks: Anthropic.ContentBlockParam[] = [];
+  for (const part of content) {
+    if (part.type === "text") {
+      blocks.push({ type: "text", text: part.text });
+      continue;
+    }
+    if (part.type === "image_url") {
+      const url = part.image_url.url;
+      const dataMatch = url.match(
+        /^data:(image\/(?:jpeg|png|gif|webp));base64,(.+)$/s,
+      );
+      blocks.push({
+        type: "image",
+        source: dataMatch
+          ? {
+              type: "base64",
+              media_type: dataMatch[1] as
+                | "image/jpeg"
+                | "image/png"
+                | "image/gif"
+                | "image/webp",
+              data: dataMatch[2],
+            }
+          : { type: "url", url },
+      });
+      continue;
+    }
+    blocks.push({ type: "text", text: JSON.stringify(part) });
+  }
+  return blocks;
+}
+
 export interface AnthropicRequestInput {
   model: string;
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   tools?: OpenAI.Chat.ChatCompletionTool[];
+  reasoningMode?: "off" | "low" | "medium" | "high" | "xhigh" | "max";
+}
+
+function usesAdaptiveThinking(model: string): boolean {
+  return (
+    /claude-(fable|mythos|opus|sonnet)-5/.test(model) ||
+    /claude-opus-4-[678]/.test(model) ||
+    model.includes("claude-sonnet-4-6") ||
+    model.includes("claude-mythos-preview")
+  );
+}
+
+function requiresAdaptiveThinking(model: string): boolean {
+  return /claude-(fable|mythos)-5/.test(model);
+}
+
+function adaptiveControls(input: AnthropicRequestInput): Record<string, any> {
+  if (!usesAdaptiveThinking(input.model)) return {};
+  const mode = input.reasoningMode ?? "off";
+  if (mode === "off") {
+    return requiresAdaptiveThinking(input.model)
+      ? { thinking: { type: "adaptive" }, output_config: { effort: "low" } }
+      : { thinking: { type: "disabled" } };
+  }
+  return {
+    thinking: { type: "adaptive" },
+    output_config: { effort: mode },
+  };
 }
 
 export function openaiToAnthropicMessages(
@@ -36,8 +100,7 @@ export function openaiToAnthropicMessages(
     if (m.role === "user") {
       out.push({
         role: "user",
-        content:
-          typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+        content: openaiUserContentToAnthropic(m.content),
       });
       continue;
     }
@@ -114,8 +177,12 @@ export function buildAnthropicMessageParams(
 
   return {
     model: input.model,
-    max_tokens: DEFAULT_MAX_TOKENS,
+    max_tokens:
+      input.reasoningMode === "xhigh" || input.reasoningMode === "max"
+        ? 64000
+        : DEFAULT_MAX_TOKENS,
     messages,
+    ...adaptiveControls(input),
     ...(system ? { system } : {}),
     ...(tools ? { tools, tool_choice: { type: "auto" } } : {}),
   };
@@ -136,7 +203,9 @@ export function buildAnthropicStreamParams(
     stream: true,
     messages,
     ...(system ? { system } : {}),
-    ...(budgetTokens
+    ...(usesAdaptiveThinking(input.model)
+      ? adaptiveControls(input)
+      : budgetTokens
       ? { thinking: { type: "enabled", budget_tokens: budgetTokens } as const }
       : {}),
     ...(tools ? { tools, tool_choice: { type: "auto" } as const } : {}),

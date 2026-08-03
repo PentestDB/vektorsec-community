@@ -13,6 +13,11 @@ import {
   clearProviderCache,
   presetToProviderConfig,
 } from "../utils/llm/providers";
+import {
+  getSubscriptionProviderStatuses,
+  invokeSubscriptionInference,
+  isSubscriptionProvider,
+} from "../services/subscription-inference.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
 import {
   getAssignedModels,
@@ -170,11 +175,21 @@ export const updateAgentToolsConfig = async (req: Request, res: Response) => {
 
 // ─── Unified Models ──────────────────────────────────────────────────
 
+function modelForClient(model: any) {
+  return {
+    ...model,
+    apiKey: model.apiKey
+      ? `${model.apiKey.slice(0, 4)}${"•".repeat(8)}${model.apiKey.slice(-4)}`
+      : undefined,
+    hasApiKey: Boolean(model.apiKey),
+  };
+}
+
 export const getSwarmModels = async (req: Request, res: Response) => {
   try {
     const registry = readModelRegistry();
     return res.status(200).json({
-      models: registry.models,
+      models: registry.models.map(modelForClient),
       assignments: registry.assignments,
     });
   } catch (error) {
@@ -199,17 +214,151 @@ export const updateSwarmModels = async (req: Request, res: Response) => {
       });
     }
 
-    const registry = writeModelRegistry(models, assignments || {});
+    const existing = readModelRegistry();
+    const existingById = new Map(existing.models.map((model) => [model.id, model]));
+    const modelsWithPreservedSecrets = models.map((model: any) => {
+      const saved = existingById.get(model.id);
+      if (typeof model.apiKey === "string" && model.apiKey.includes("•")) {
+        return { ...model, apiKey: saved?.apiKey };
+      }
+      return model;
+    });
+
+    const registry = writeModelRegistry(
+      modelsWithPreservedSecrets,
+      assignments || {},
+    );
     clearProviderCache();
 
     return res.status(200).json({
       message: "Models updated",
-      models: registry.models,
+      models: registry.models.map(modelForClient),
       assignments: registry.assignments,
     });
   } catch (error) {
     console.log(error);
     return res.status(400).json({ message: "Failed to update models" });
+  }
+};
+
+export const getSubscriptionProviders = async (
+  _req: Request,
+  res: Response,
+) => {
+  try {
+    const providers = await getSubscriptionProviderStatuses();
+    return res.status(200).json({ providers });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: error?.message || "Failed to inspect subscription providers",
+    });
+  }
+};
+
+export const connectSubscriptionProvider = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const provider = String(req.body?.provider || "");
+    if (!isSubscriptionProvider(provider)) {
+      return res.status(400).json({ message: "Invalid subscription provider" });
+    }
+
+    const statuses = await getSubscriptionProviderStatuses();
+    const status = statuses.find((entry) => entry.provider === provider)!;
+    if (!status.installed || !status.authenticated) {
+      return res.status(409).json({
+        message: status.detail || `Run ${status.loginCommand} first`,
+        status,
+      });
+    }
+
+    const model = String(req.body?.model || status.defaultModel);
+    if (!status.models.includes(model)) {
+      return res.status(400).json({
+        message: `Unsupported ${provider} model: ${model}`,
+      });
+    }
+
+    const registry = readModelRegistry();
+    const existing = registry.models.find(
+      (entry) => entry.provider === provider && entry.model === model,
+    );
+    const id = existing?.id || `${provider}-${model}`;
+    const label =
+      String(req.body?.label || "") ||
+      (provider === "codex-subscription"
+        ? `Codex · ${model}`
+        : `Claude Code · ${model}`);
+    const preset = {
+      id,
+      label,
+      provider,
+      model,
+      reasoningMode: req.body?.reasoningMode || "high",
+    };
+    const models = existing
+      ? registry.models.map((entry) => (entry.id === id ? preset : entry))
+      : [...registry.models, preset];
+    const assignments = {
+      ...registry.assignments,
+      orchestratorModelId:
+        req.body?.assignOrchestrator === true ||
+        !registry.assignments.orchestratorModelId
+          ? id
+          : registry.assignments.orchestratorModelId,
+    };
+    const updated = writeModelRegistry(models, assignments);
+    clearProviderCache();
+
+    return res.status(200).json({
+      message: `${provider === "codex-subscription" ? "Codex" : "Claude Code"} subscription connected`,
+      model: updated.models.find((entry) => entry.id === id),
+      assignments: updated.assignments,
+      status,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: error?.message || "Failed to connect subscription provider",
+    });
+  }
+};
+
+export const testSubscriptionProvider = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const provider = String(req.body?.provider || "");
+    if (!isSubscriptionProvider(provider)) {
+      return res.status(400).json({ message: "Invalid subscription provider" });
+    }
+    const statuses = await getSubscriptionProviderStatuses();
+    const status = statuses.find((entry) => entry.provider === provider)!;
+    if (!status.authenticated) {
+      return res.status(409).json({
+        message: status.detail || `Run ${status.loginCommand} first`,
+      });
+    }
+    const model = String(req.body?.model || status.defaultModel);
+    const result = await invokeSubscriptionInference({
+      provider,
+      model,
+      reasoningMode: "low",
+      messages: [{ role: "user", content: "Reply with exactly: connected" }],
+      format: "text",
+    });
+    return res.status(200).json({
+      ok: result.content?.trim().toLowerCase().includes("connected") ?? false,
+      model: result.model,
+      content: result.content,
+      usage: result.usage,
+    });
+  } catch (error: any) {
+    return res.status(502).json({
+      message: error?.message || "Subscription inference test failed",
+    });
   }
 };
 
@@ -364,7 +513,12 @@ export const updateModelConfig = async (req: Request, res: Response) => {
 
     const env = readEnvFile();
     const hasOAuth = !!env.ANTHROPIC_OAUTH_ACCESS_TOKEN;
-    if (!apiKey && !(provider === "anthropic" && hasOAuth)) {
+    if (
+      !apiKey &&
+      !(provider === "anthropic" && hasOAuth) &&
+      provider !== "ollama" &&
+      !isSubscriptionProvider(provider)
+    ) {
       return res.status(400).json({ message: "API key is required" });
     }
 
@@ -377,6 +531,9 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       "mistralai",
       "ollama",
       "openai-compatible",
+      "kimi",
+      "codex-subscription",
+      "claude-subscription",
     ];
     if (!validProviders.includes(provider)) {
       return res.status(400).json({
@@ -386,11 +543,11 @@ export const updateModelConfig = async (req: Request, res: Response) => {
 
     if (
       reasoningMode &&
-      !["off", "low", "medium", "high", "xhigh"].includes(reasoningMode)
+      !["off", "low", "medium", "high", "xhigh", "max"].includes(reasoningMode)
     ) {
       return res.status(400).json({
         message:
-          "Invalid reasoning mode. Must be one of: off, low, medium, high, xhigh",
+          "Invalid reasoning mode. Must be one of: off, low, medium, high, xhigh, max",
       });
     }
 

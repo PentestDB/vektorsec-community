@@ -187,6 +187,24 @@ export const updateSwarmModels = async (body) => {
 export const getModels = getSwarmModels;
 export const updateModels = updateSwarmModels;
 
+export const getSubscriptionProviders = async () => {
+  const res = await apiClient.get("/user/subscription-providers");
+  return res.data;
+};
+
+export const connectSubscriptionProvider = async (body) => {
+  const res = await apiClient.post(
+    "/user/subscription-providers/connect",
+    body,
+  );
+  return res.data;
+};
+
+export const testSubscriptionProvider = async (body) => {
+  const res = await apiClient.post("/user/subscription-providers/test", body);
+  return res.data;
+};
+
 export const getMcpConfig = async () => {
   const res = await apiClient.get("/mcp/config");
   return res.data;

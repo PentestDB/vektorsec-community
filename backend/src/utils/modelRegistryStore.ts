@@ -2,8 +2,12 @@ import fs from "fs";
 import path from "path";
 import { deleteEnvVars, readEnvFile } from "./envWriter";
 import { getDataDir } from "./loadConfig";
+import {
+  ModelReasoningMode,
+  normalizeModelId,
+} from "./modelMetadata";
 
-export type ModelReasoningMode = "off" | "low" | "medium" | "high" | "xhigh";
+export type { ModelReasoningMode } from "./modelMetadata";
 
 export interface ModelPreset {
   id: string;
@@ -58,30 +62,27 @@ const VALID_PROVIDERS = new Set([
   "mistralai",
   "ollama",
   "openai-compatible",
+  "kimi",
+  "codex-subscription",
+  "claude-subscription",
 ]);
 
-const VALID_REASONING = new Set(["off", "low", "medium", "high", "xhigh"]);
-
-const MODEL_ALIASES: Record<string, string> = {
-  "gpt-5.5-latest": "gpt-5.5",
-  "gpt-5.4-latest": "gpt-5.4",
-  "claude-opus-4.7": "claude-opus-4-7",
-  "claude-mythos": "claude-mythos-preview",
-  "claude-sonnet-4.6": "claude-sonnet-4-6",
-  "claude-opus-4.6": "claude-opus-4-6",
-  "claude-haiku-4.5": "claude-haiku-4-5",
-  "claude-sonnet-4.5": "claude-sonnet-4-5",
-  "claude-opus-4.5": "claude-opus-4-5",
-  "claude-opus-4.1": "claude-opus-4-1",
-};
+const VALID_REASONING = new Set([
+  "off",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function normalizeModelId(model: unknown): string {
+function normalizeStoredModelId(model: unknown): string {
   const trimmed = asString(model);
-  return MODEL_ALIASES[trimmed] ?? trimmed;
+  return normalizeModelId(trimmed);
 }
 
 function normalizeReasoning(value: unknown): ModelReasoningMode {
@@ -138,7 +139,7 @@ function sanitizePreset(
 ): ModelPreset | null {
   const label = asString(raw.label);
   const provider = asString(raw.provider);
-  const model = normalizeModelId(raw.model);
+  const model = normalizeStoredModelId(raw.model);
   if (!label || !VALID_PROVIDERS.has(provider) || !model) return null;
 
   const requestedId = slugify(asString(raw.id));
@@ -236,7 +237,7 @@ function migrateLegacyModelConfig(env: Record<string, string>): ModelRegistry {
   const orchestratorId = addLegacyPreset(models, usedIds, dedupe, {
     label: asString(env.ORCHESTRATOR_NAME) || "Orchestrator",
     provider: asString(env.ORCHESTRATOR_PROVIDER),
-    model: normalizeModelId(env.ORCHESTRATOR_MODEL),
+    model: normalizeStoredModelId(env.ORCHESTRATOR_MODEL),
     apiKey: asString(env.ORCHESTRATOR_API_KEY) || undefined,
     baseURL: asString(env.ORCHESTRATOR_BASE_URL) || undefined,
     reasoningMode: normalizeReasoning(env.ORCHESTRATOR_REASONING_MODE),
@@ -247,7 +248,7 @@ function migrateLegacyModelConfig(env: Record<string, string>): ModelRegistry {
     const racerId = addLegacyPreset(models, usedIds, dedupe, {
       label: asString(env[`RACER_${i}_NAME`]) || `Racer ${i}`,
       provider: asString(env[`RACER_${i}_PROVIDER`]),
-      model: normalizeModelId(env[`RACER_${i}_MODEL`]),
+      model: normalizeStoredModelId(env[`RACER_${i}_MODEL`]),
       apiKey: asString(env[`RACER_${i}_API_KEY`]) || undefined,
       baseURL: asString(env[`RACER_${i}_BASE_URL`]) || undefined,
       reasoningMode: normalizeReasoning(env[`RACER_${i}_REASONING_MODE`]),
@@ -258,7 +259,7 @@ function migrateLegacyModelConfig(env: Record<string, string>): ModelRegistry {
   const browserId = addLegacyPreset(models, usedIds, dedupe, {
     label: "Browser Agent",
     provider: asString(env.MAGNITUDE_MODEL_PROVIDER),
-    model: normalizeModelId(env.MAGNITUDE_MODEL),
+    model: normalizeStoredModelId(env.MAGNITUDE_MODEL),
     apiKey: asString(env.MAGNITUDE_MODEL_API_KEY) || undefined,
     baseURL: asString(env.MAGNITUDE_MODEL_BASE_URL) || undefined,
     reasoningMode: "off",

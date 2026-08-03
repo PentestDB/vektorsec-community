@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import {
+  Alert,
   App,
   AutoComplete,
+  Button,
   Col,
   Empty,
   Form,
@@ -34,10 +36,11 @@ import Loader from "@/components/common/loader/Loader";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
-  exchangeAnthropicOAuth,
+  connectSubscriptionProvider,
   getAvailableModels,
   getModels,
-  initiateAnthropicOAuth,
+  getSubscriptionProviders,
+  testSubscriptionProvider,
   updateModels,
 } from "@/services/user.service";
 import {
@@ -54,9 +57,12 @@ const PROVIDER_OPTIONS = [
   { value: "mistralai", label: "Mistral AI" },
   { value: "ollama", label: "Ollama (Local)" },
   { value: "openai-compatible", label: "OpenAI-Compatible" },
+  { value: "kimi", label: "Kimi (Moonshot AI)" },
+  { value: "codex-subscription", label: "Codex Subscription (Local CLI)" },
+  { value: "claude-subscription", label: "Claude Subscription (Local CLI)" },
 ];
 
-const REASONING_OPTIONS = ["off", "low", "medium", "high", "xhigh"].map(
+const REASONING_OPTIONS = ["off", "low", "medium", "high", "xhigh", "max"].map(
   (value) => ({ value, label: value.toUpperCase() }),
 );
 
@@ -90,11 +96,27 @@ const PROVIDER_META = {
     keyURL: "https://ollama.com/library",
     keyLabel: "Browse Ollama models",
   },
+  kimi: {
+    keyURL: "https://platform.kimi.ai/",
+    keyLabel: "Get Kimi API Key",
+  },
 };
 
 const FALLBACK_MODELS = {
-  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-4.1"],
+  openai: [
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-4.1",
+  ],
   anthropic: [
+    "claude-fable-5",
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-mythos-preview",
     "claude-sonnet-4-6",
@@ -107,6 +129,9 @@ const FALLBACK_MODELS = {
     "MiniMax-M2",
   ],
   openrouter: [
+    "moonshotai/kimi-k3",
+    "anthropic/claude-opus-5",
+    "openai/gpt-5.6-sol",
     "minimax/minimax-m2.7",
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
@@ -114,6 +139,9 @@ const FALLBACK_MODELS = {
   google: ["gemini-2.0-flash", "gemini-2.0-pro"],
   mistralai: ["mistral-large-latest", "mistral-medium-latest"],
   ollama: ["llama3.3", "llama3.2", "qwen2.5-coder", "mistral"],
+  kimi: ["kimi-k3", "kimi-k2.7-code-highspeed", "kimi-k2.7-code", "kimi-k2.6"],
+  "codex-subscription": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+  "claude-subscription": ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
 };
 
 const EMPTY_MODEL = {
@@ -145,6 +173,10 @@ function needsBaseURL(provider) {
   return ["anthropic-compatible", "openai-compatible", "ollama"].includes(
     provider,
   );
+}
+
+function isSubscriptionProvider(provider) {
+  return ["codex-subscription", "claude-subscription"].includes(provider);
 }
 
 function baseURLPlaceholder(provider) {
@@ -264,7 +296,11 @@ const ModelModal = ({
         </Row>
 
         <Row gutter={14}>
-          <Col span={needsBaseURL(provider) ? 8 : 12}>
+          <Col
+            span={
+              needsBaseURL(provider) ? 8 : isSubscriptionProvider(provider) ? 16 : 12
+            }
+          >
             <Form.Item label="Reasoning" name="reasoningMode">
               <Select
                 options={REASONING_OPTIONS}
@@ -272,18 +308,20 @@ const ModelModal = ({
               />
             </Form.Item>
           </Col>
-          <Col span={needsBaseURL(provider) ? 8 : 12}>
-            <Form.Item label="API Key" name="apiKey">
-              <Input.Password
-                autoComplete="off"
-                placeholder={
-                  provider === "ollama"
-                    ? "Optional for local Ollama"
-                    : "Optional if using OAuth"
-                }
-              />
-            </Form.Item>
-          </Col>
+          {!isSubscriptionProvider(provider) && (
+            <Col span={needsBaseURL(provider) ? 8 : 12}>
+              <Form.Item label="API Key" name="apiKey">
+                <Input.Password
+                  autoComplete="off"
+                  placeholder={
+                    provider === "ollama"
+                      ? "Optional for local Ollama"
+                      : "API key"
+                  }
+                />
+              </Form.Item>
+            </Col>
+          )}
           {needsBaseURL(provider) && (
             <Col span={8}>
               <Form.Item
@@ -353,16 +391,23 @@ const ModelModal = ({
 const ModelsPage = () => {
   const { message, notification } = App.useApp();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery("unified-models", getModels);
+  const { data, isLoading, isError, refetch } = useQuery(
+    "unified-models",
+    getModels,
+    { retryOnMount: false },
+  );
   const { data: catalog } = useQuery("available-models", getAvailableModels, {
     staleTime: 6 * 60 * 60 * 1000,
     cacheTime: 6 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+  const { data: subscriptionData, isLoading: subscriptionLoading } = useQuery(
+    "subscription-providers",
+    getSubscriptionProviders,
+    { refetchOnWindowFocus: false, retry: false },
+  );
 
   const [editingModel, setEditingModel] = useState(null);
-  const [showCodeModal, setShowCodeModal] = useState(false);
-  const [oauthState, setOauthState] = useState(null);
 
   const models = data?.models || [];
   const assignments = data?.assignments || { racerModelIds: [] };
@@ -403,30 +448,32 @@ const ModelsPage = () => {
     },
   });
 
-  const initOAuthMutation = useMutation(initiateAnthropicOAuth, {
+  const connectSubscriptionMutation = useMutation(connectSubscriptionProvider, {
     onSuccess: (res) => {
-      setOauthState(res.state);
-      window.open(res.authorizationURL, "_blank", "noopener,noreferrer");
-      setShowCodeModal(true);
+      message.success(res.message || "Subscription provider connected");
+      queryClient.invalidateQueries("unified-models");
+      queryClient.invalidateQueries("subscription-providers");
     },
     onError: (err) => {
       notification.error({
-        message: "OAuth Error",
-        description: err?.response?.data?.message ?? "Failed to initiate OAuth",
+        message: "Connection failed",
+        description:
+          err?.response?.data?.message ??
+          "Failed to connect the local subscription provider",
       });
     },
   });
 
-  const exchangeOAuthMutation = useMutation(exchangeAnthropicOAuth, {
-    onSuccess: () => {
-      message.success("Claude account connected");
-      setShowCodeModal(false);
-      setOauthState(null);
+  const testSubscriptionMutation = useMutation(testSubscriptionProvider, {
+    onSuccess: (res) => {
+      if (res.ok) message.success(`${res.model} inference is working`);
+      else message.warning(`${res.model} responded, but the sanity reply was unexpected`);
     },
     onError: (err) => {
       notification.error({
-        message: "OAuth Error",
-        description: err?.response?.data?.message ?? "Failed to exchange code",
+        message: "Inference test failed",
+        description:
+          err?.response?.data?.message ?? "The local CLI inference test failed",
       });
     },
   });
@@ -439,6 +486,18 @@ const ModelsPage = () => {
   };
 
   if (isLoading) return <Loader />;
+
+  if (isError) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="Could not load model settings"
+        description="The backend did not return the model registry. Retry after checking the backend connection."
+        action={<Button onClick={() => refetch()}>Retry</Button>}
+      />
+    );
+  }
 
   const options = models.map((model) => ({
     value: model.id,
@@ -479,6 +538,97 @@ const ModelsPage = () => {
           presets can still be used by orchestrator/racers, but not by Browser
           Agent.
         </span>
+      </div>
+
+      <div className={styles.settingSectionHeader}>
+        <div className={styles.heading}>Use an Existing Subscription</div>
+        <div className={styles.divider} />
+      </div>
+      <div className={styles.mcpTokenList}>
+        {subscriptionLoading && <Loader />}
+        {(subscriptionData?.providers || []).map((provider) => {
+          const connected = models.some(
+            (model) => model.provider === provider.provider,
+          );
+          const displayName =
+            provider.provider === "codex-subscription"
+              ? "Codex"
+              : "Claude Code";
+          return (
+            <div key={provider.provider} className={styles.mcpTokenItem}>
+              <div className={styles.mcpTokenHeader}>
+                <div className={styles.mcpTokenTitle}>
+                  <ApiOutlined /> {displayName}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Tag color={provider.installed ? "green" : "default"}>
+                    {provider.installed ? provider.version : "NOT INSTALLED"}
+                  </Tag>
+                  <Tag color={provider.authenticated ? "green" : "warning"}>
+                    {provider.authenticated ? "SIGNED IN" : "SIGN-IN NEEDED"}
+                  </Tag>
+                  {connected && <Tag color="purple">CONFIGURED</Tag>}
+                </div>
+              </div>
+              <div className={styles.mcpTokenMeta}>
+                {provider.authenticated
+                  ? `Uses the existing ${displayName} login for normal Pentest Copilot inference. Default: ${provider.defaultModel}.`
+                  : provider.detail || `Run ${provider.loginCommand} on the backend host.`}
+              </div>
+              {provider.provider === "claude-subscription" && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: "0.68rem",
+                    color: "var(--secondary-text)",
+                  }}
+                >
+                  Local CLI control only. Confirm your use complies with
+                  Anthropic&apos;s current third-party product and subscription
+                  terms.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <PrimaryButton
+                  purpleFilled
+                  disabled={!provider.installed || !provider.authenticated}
+                  loading={
+                    connectSubscriptionMutation.isLoading &&
+                    connectSubscriptionMutation.variables?.provider ===
+                      provider.provider
+                  }
+                  onClick={() =>
+                    connectSubscriptionMutation.mutate({
+                      provider: provider.provider,
+                      model: provider.defaultModel,
+                    })
+                  }
+                  style={{ height: 30, fontSize: "0.72rem" }}
+                >
+                  {connected ? "Refresh Configuration" : `Use ${displayName}`}
+                </PrimaryButton>
+                {connected && provider.authenticated && (
+                  <PrimaryButton
+                    loading={
+                      testSubscriptionMutation.isLoading &&
+                      testSubscriptionMutation.variables?.provider ===
+                        provider.provider
+                    }
+                    onClick={() =>
+                      testSubscriptionMutation.mutate({
+                        provider: provider.provider,
+                        model: provider.defaultModel,
+                      })
+                    }
+                    style={{ height: 30, fontSize: "0.72rem" }}
+                  >
+                    Test Inference
+                  </PrimaryButton>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className={styles.settingSectionHeader}>
@@ -660,31 +810,6 @@ const ModelsPage = () => {
         </div>
       )}
 
-      <div style={{ marginTop: 16 }}>
-        <PrimaryButton
-          onClick={() => initOAuthMutation.mutate({})}
-          loading={initOAuthMutation.isLoading}
-          style={{ height: 30, fontSize: "0.72rem" }}
-        >
-          Connect Claude OAuth
-        </PrimaryButton>
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: "0.7rem",
-            color: "var(--secondary-text)",
-            lineHeight: 1.6,
-            maxWidth: 520,
-          }}
-        >
-          OAuth uses a Claude Pro/Max subscription and is intended for Claude
-          Code / claude.ai. Anthropic blocks subscription tokens for third-party
-          autonomous use, so the orchestrator typically returns{" "}
-          <code>429 rate_limit_error</code> on the first call. For a self-hosted
-          orchestrator, add a pay-as-you-go API key model instead.
-        </div>
-      </div>
-
       <ModelModal
         open={!!editingModel}
         initialValues={editingModel || EMPTY_MODEL}
@@ -701,49 +826,6 @@ const ModelsPage = () => {
         }}
       />
 
-      <Modal
-        title="Paste Authorization Code"
-        open={showCodeModal}
-        onCancel={() => setShowCodeModal(false)}
-        footer={null}
-        width={520}
-        centered
-        className={styles.modelModal}
-      >
-        <Form
-          layout="vertical"
-          onFinish={({ code }) =>
-            exchangeOAuthMutation.mutate({
-              code: code.trim(),
-              state: oauthState,
-            })
-          }
-        >
-          <Form.Item
-            label="Authorization Code"
-            name="code"
-            rules={[{ required: true }]}
-          >
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Row justify="end" gutter={8}>
-            <Col>
-              <PrimaryButton onClick={() => setShowCodeModal(false)}>
-                Cancel
-              </PrimaryButton>
-            </Col>
-            <Col>
-              <PrimaryButton
-                purple
-                htmlType="submit"
-                loading={exchangeOAuthMutation.isLoading}
-              >
-                Connect
-              </PrimaryButton>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
     </div>
   );
 };

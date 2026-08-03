@@ -2,10 +2,12 @@ import { ToolDefinition } from "../types";
 
 const spawnSwarm: ToolDefinition = {
   name: "spawn_swarm",
-  allowedRoles: ["swarm_agent"],
+  allowedRoles: ["main"],
   description:
-    "Launch a sub-swarm of parallel agents to race on a sub-task. Each agent runs on a different " +
-    "model and works independently. Agents can share findings with each other and spawn their own subagents. " +
+    "Launch the optional configured racer models for work that materially benefits from independent parallel approaches. " +
+    "Do not use for greetings, casual conversation, simple questions, or routine single-path tasks. " +
+    "Each racer runs on a different configured model and works independently. " +
+    "Agents can share findings with each other and spawn their own subagents. " +
     'Set win_condition to "first_success" if the first agent to succeed should end the race, ' +
     'or "all_complete" to wait for all agents to finish.',
   parameters: {
@@ -32,7 +34,9 @@ const spawnSwarm: ToolDefinition = {
           },
           required: ["task"],
         },
-        description: "Array of agent specifications. Each agent gets a different model from Swarm Models settings.",
+        description:
+          "Strategies for the configured racers. Provide one strategy per configured racer when useful; " +
+          "a single strategy is applied to the full configured roster.",
       },
       win_condition: {
         type: "string",
@@ -64,7 +68,7 @@ const spawnSwarm: ToolDefinition = {
         timeoutMinutes: timeout_minutes || undefined,
       });
       return {
-        output: `Swarm spawned successfully.\nswarm_id: ${swarmId}\ngoal: ${goal}\nagents: ${agents.length}\nwin_condition: ${win_condition || "all_complete"}\ntimeout: ${timeout_minutes ? `${timeout_minutes}min` : "none"}\n\nThe swarm is now running. Results will be provided when it completes.`,
+        output: `Swarm spawned successfully.\nswarm_id: ${swarmId}\ngoal: ${goal}\nstrategies: ${agents.length}\nwin_condition: ${win_condition || "all_complete"}\ntimeout: ${timeout_minutes ? `${timeout_minutes}min` : "none"}\n\nThe configured racer roster is now running. Results will be provided when it completes.`,
         exitCode: 0,
       };
     } catch (err: any) {

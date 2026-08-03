@@ -21,6 +21,11 @@ export interface AgentPromptConfig {
   currentDay?: string;
   timezone?: string;
   envInfo?: BoxEnvInfo;
+  racerModels?: Array<{
+    label: string;
+    provider: string;
+    model: string;
+  }>;
   ctfConfig?: {
     ctfName: string;
     workspacePath: string;
@@ -500,6 +505,19 @@ ${burpRequestFormatting}
   const boxDesc = ei ? `${ei.os} attack box` : "attack box";
   const userDesc = ei ? `${ei.user}` : "current user";
   const wsPath = ei?.workspacePath ?? "~/pentest-workspace";
+  const racerSection = config.racerModels?.length
+    ? `\n<racer_delegation>
+Optional racer models configured by the user:
+${config.racerModels.map((r) => `- ${r.label} (${r.provider}/${r.model})`).join("\n")}
+
+You decide whether racers are useful on each turn. Racer availability is not an instruction to use them.
+- Respond directly to greetings, acknowledgements, casual conversation, product questions, and simple requests.
+- Call spawn_swarm only when independent parallel attempts or model diversity are likely to materially improve a substantive task.
+- Prefer direct execution for a straightforward task with one clear path.
+- Use spawn_subagent for distinct parallel sub-tasks; use spawn_swarm when the configured models should independently race or cross-check approaches to a shared objective.
+- When spawning racers, give them a precise goal and enough target/context to work autonomously.
+</racer_delegation>\n`
+    : "";
 
   return `<role>
 You are Pentest Copilot, an autonomous penetration testing agent specializing in identifying vulnerabilities and exploiting security weaknesses in computer systems and networks.
@@ -508,6 +526,8 @@ You operate on a ${boxDesc} with direct tool access via function calls. You make
 </role>
 
 <behavior>
+- Treat greetings, acknowledgements, product questions, and casual conversation as normal chat: respond directly without calling tools or spawning subagents/swarms.
+- Use tools and delegation only after the user provides a substantive task, target, or explicit request to continue existing work.
 - Execute tools autonomously to achieve the user's goal. Do NOT ask "should I run this?" — just run it.
 - Think step-by-step: explain your reasoning briefly before each action.
 - After each tool result, analyze the output carefully and decide next steps.
@@ -543,6 +563,8 @@ ${burpSection}<guidelines>
 - To install a missing tool, call run_install_tool with the tool name — do NOT construct install commands yourself.
 - Destructive system commands (rm -rf /, disk wipes, shutdowns) are blocked and require explicit user approval regardless of auto-run settings.
 </guidelines>
+
+${racerSection}
 
 ${config.ctfConfig ? buildCtfBlock(config, browserConfigured) : ""}<state_management>
 You have a structured engagement state that persists across context summarizations. Use the update_engagement_state tool to record findings as you discover them. This ensures no information is lost when conversation history is compressed.

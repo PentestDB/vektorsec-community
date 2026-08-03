@@ -5,8 +5,6 @@ import {
   SearchOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import { AuthContextProvider } from "@/components/common/auth/AuthContext";
-
 import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useMutation, useQuery, useQueryClient } from "react-query";
@@ -105,7 +103,7 @@ const DashboardPage = () => {
   }
 
   return (
-    <AuthContextProvider>
+    <>
       <div className={styles.dashboardContainer}>
         <div className={styles.dashboardHeader}>
           <h1 className={styles.Title}>Workspaces</h1>
@@ -234,7 +232,7 @@ const DashboardPage = () => {
         setShow={setShow}
         close={() => setShow(false)}
       />
-    </AuthContextProvider>
+    </>
   );
 };
 

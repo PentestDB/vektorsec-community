@@ -5,6 +5,11 @@ services:
       - mongodb-data:/data/db
     ports:
       - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     restart: always
 
   redis:
@@ -13,22 +18,35 @@ services:
       - redis-data:/data
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     restart: always
 
   backend:
     build: ./backend
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/pentestcopilot
+      REDIS_URL: redis://redis:6379
+      CODEX_HOME: /root/.codex
     ports:
       - "8080:8080"
       - "6080:6080"
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
+      - backend-data:/srv/data
       - ./backend/.env:/srv/data/.env
-      - ./backend/model-registry.json:/srv/data/model-registry.json
       - ./config.toml:/srv/data/config.toml:ro
+      - ${CODEX_AUTH_FILE:-${HOME}/.codex/auth.json}:/root/.codex/auth.json
     depends_on:
-      - redis
-      - mongodb
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build:
@@ -60,6 +78,8 @@ volumes:
   mongodb-data:
     driver: local
   redis-data:
+    driver: local
+  backend-data:
     driver: local
   # kali-data:
   #   driver: local

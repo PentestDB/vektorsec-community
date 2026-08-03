@@ -49,6 +49,7 @@ Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
 - **Subagent parallelism** - spawn background agents to run tasks concurrently (e.g. directory brute-force + subdomain enum at the same time).
 - **Safety checks** - dangerous commands (recursive deletes, device writes, fork bombs) require explicit approval, even in auto-run mode.
 - **Bring your own model** - OpenAI, Anthropic (API key or OAuth), Google, Mistral, or any OpenAI-compatible endpoint.
+- **Use existing local subscriptions** - Pentest Copilot can use an authenticated Codex CLI in Docker or host mode, and Claude Code in host/developer mode, as normal inference providers while retaining its own tool and consent loop.
 
 ## Quick Start
 
@@ -59,6 +60,34 @@ cd pentest-copilot
 ```
 
 Open `http://localhost:3000`, register, and start a session.
+
+### Codex and Claude subscription inference
+
+Settings -> Models detects authenticated Codex and Claude Code CLIs. Authenticate
+once on the machine that runs the CLI:
+
+```bash
+codex login
+claude auth login
+```
+
+Then select **Use Codex** or **Use Claude Code**. The official CLI owns login,
+refresh, and subscription entitlement handling; Pentest Copilot does not copy
+or replay OAuth tokens. Subscription transports receive the same conversation
+history and function schemas as API providers and return the same assistant/tool
+call contract, so Pentest Copilot continues to execute tools and consent checks.
+
+The Docker backend includes the Linux Codex CLI and mounts only the host's
+file-based `~/.codex/auth.json`, following Codex's documented headless/Docker
+login transfer flow. Set `CODEX_AUTH_FILE` before `docker compose up` if your
+credential file lives elsewhere. The CLI may refresh that file during normal
+use; never commit or share it. Host Keychain-only credentials and Claude Code
+remain available only in developer/host mode until a host inference bridge is
+configured. Claude subscription use is local CLI control and must comply with
+Anthropic's current third-party product and subscription terms.
+
+Current first-class model families include GPT-5.6 Sol/Terra/Luna, Claude
+Fable/Opus/Sonnet 5, and Kimi K3 (direct Moonshot API or OpenRouter).
 
 `run.sh` handles config file generation, Docker builds, and container orchestration. On first run it prompts for your model provider and API key. Use `./run.sh start -q` to skip prompts on subsequent runs.
 

@@ -5,7 +5,7 @@ import { ShellManager } from "./shell.manager";
 import { SSEWriter, buildTraceTags } from "./agent.service";
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
-import { invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
+import { getProvider, invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { ExecutionContext, ToolResult } from "../tools/types";
 import UserModel from "../models/User/User.model";
@@ -190,6 +190,7 @@ export class SubagentManager extends EventEmitter {
     };
 
     let messages: AgentMessageDoc[] = [systemMsg, userMsg];
+    const providerConfig = await getProvider();
     const shellsCreated: string[] = [];
     let iteration = 0;
     let finalResult = "";
@@ -242,7 +243,7 @@ export class SubagentManager extends EventEmitter {
           if (shellStatusMsg) messages.push(shellStatusMsg);
         }
 
-        const openaiMessages = messagesToOpenAI(messages);
+        const openaiMessages = messagesToOpenAI(messages, providerConfig.provider === "kimi");
         const unconfiguredTools = getUnconfiguredToolNames();
         const tools = toolRegistry.toOpenAISchemas({
           excludeSubagent: true,
@@ -251,6 +252,7 @@ export class SubagentManager extends EventEmitter {
         });
 
         let assistantContent = "";
+        let assistantReasoning = "";
         let assistantToolCalls: ToolCallData[] = [];
 
         const { tags: traceTags, phase } = buildTraceTags("subagent", messages, [
@@ -268,8 +270,17 @@ export class SubagentManager extends EventEmitter {
           userId,
           tags: traceTags,
           generationName: `subagent-${subagentId}-${phase}-step-${iteration}`,
+          providerOverride: providerConfig,
           abortSignal,
           onDelta(delta) {
+            if (delta.type === "reasoning" && delta.content) {
+              assistantReasoning += delta.content;
+              sse.write("subagent_progress", {
+                subagentId,
+                type: "reasoning",
+                content: delta.content,
+              });
+            }
             if (delta.type === "text" && delta.content) {
               assistantContent += delta.content;
               sse.write("subagent_progress", {
@@ -305,6 +316,7 @@ export class SubagentManager extends EventEmitter {
           id: uuidv4(),
           role: "assistant",
           content: assistantContent || null,
+          reasoning: assistantReasoning || undefined,
           toolCalls: assistantToolCalls.length ? assistantToolCalls : undefined,
           timestamp: new Date(),
           turnIndex: 0,
