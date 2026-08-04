@@ -94,8 +94,10 @@ export const updateSafetyProtections = async (body) => {
   return res.data;
 };
 
-export const getVNCConfig = async () => {
-  const res = await apiClient.get("/user/get-vnc-config");
+export const getVNCConfig = async (sessionId) => {
+  const res = await apiClient.get("/user/get-vnc-config", {
+    params: sessionId ? { sessionId } : undefined,
+  });
   return res.data;
 };
 
@@ -109,13 +111,13 @@ export const resetVNCConfig = async (body) => {
   return res.data;
 };
 
-export const autoSetupVNC = async () => {
-  const res = await apiClient.post("/user/auto-setup-vnc");
+export const autoSetupVNC = async (body = {}) => {
+  const res = await apiClient.post("/user/auto-setup-vnc", body);
   return res.data;
 };
 
-export const diagnoseVNC = async () => {
-  const res = await apiClient.post("/user/diagnose-vnc");
+export const diagnoseVNC = async (body = {}) => {
+  const res = await apiClient.post("/user/diagnose-vnc", body);
   return res.data;
 };
 

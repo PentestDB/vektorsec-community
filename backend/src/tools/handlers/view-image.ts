@@ -1,6 +1,5 @@
 import { ToolDefinition } from "../types";
 import { invoke_llm } from "../../utils/llm/providers";
-import { WORKSPACE_DIR } from "../../utils/commandSafety";
 
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
 
@@ -48,7 +47,7 @@ const viewImage: ToolDefinition = {
     const rawPath =
       image_path.startsWith("/") || image_path.startsWith("~")
         ? image_path
-        : `${WORKSPACE_DIR}/${image_path}`;
+        : image_path;
 
     // Replace leading ~ with $HOME so shell expansion works inside double quotes
     const resolvedPath = rawPath.replace(/^~(?=\/|$)/, "$HOME");

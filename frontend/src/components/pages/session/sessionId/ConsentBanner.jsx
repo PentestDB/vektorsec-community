@@ -51,31 +51,46 @@ const highlighterCustomStyle = {
 };
 
 export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
-  const { toolName, args, safetyBlock } = pendingConsent;
+  const { toolName, safetyBlock, approvalReason } = pendingConsent;
+  const args = pendingConsent.args ?? pendingConsent.arguments;
   const config = CONSENT_CONFIG[toolName] ?? DEFAULT_CONFIG;
-  const code = config.getCode(args);
+  const actions = pendingConsent.batch?.length
+    ? pendingConsent.batch.map((action) => ({
+        ...action,
+        args: action.args ?? action.arguments,
+      }))
+    : [{ toolName, args, safetyBlock, approvalReason }];
+  const hasSafetyBlock = actions.some((action) => action.safetyBlock);
   const summary = getConsentSummary(toolName, safetyBlock);
 
-  const bannerClassName = safetyBlock
+  const bannerClassName = hasSafetyBlock
     ? `${styles.consentBanner} ${styles.consentBannerDanger}`
     : styles.consentBanner;
 
-  const BadgeIcon = safetyBlock ? WarningOutlined : ExclamationCircleOutlined;
-  const badgeLabel = safetyBlock ? "Safety Block" : "Approval";
+  const BadgeIcon = hasSafetyBlock ? WarningOutlined : ExclamationCircleOutlined;
+  const badgeLabel = hasSafetyBlock ? "Safety Block" : "Approval";
 
   return (
     <div className={bannerClassName}>
       <div className={styles.consentInfo}>
         <div className={styles.consentHeader}>
-          <div className={safetyBlock ? styles.consentBadgeDanger : styles.consentBadge}>
+          <div className={hasSafetyBlock ? styles.consentBadgeDanger : styles.consentBadge}>
             <BadgeIcon />
             <span>{badgeLabel}</span>
           </div>
           <div className={styles.consentTitleGroup}>
             <div className={styles.consentTitle}>
-              {safetyBlock ? "Potentially destructive command blocked" : config.title}
+              {actions.length > 1
+                ? `${actions.length} tool actions require approval`
+                : hasSafetyBlock
+                  ? "Potentially destructive command blocked"
+                  : config.title}
             </div>
-            <div className={styles.consentSubtitle}>{summary}</div>
+            <div className={styles.consentSubtitle}>
+              {actions.length > 1
+                ? "Approving will run every action listed below."
+                : approvalReason || summary}
+            </div>
           </div>
           <div className={styles.consentActions}>
             <button
@@ -96,18 +111,34 @@ export default function ConsentBanner({ pendingConsent, onApprove, onDeny }) {
             </button>
           </div>
         </div>
-        {code && (
-          <div className={styles.consentCodePreview}>
-            <SyntaxHighlighter
-              language={config.language}
-              style={oneDark}
-              customStyle={highlighterCustomStyle}
-              wrapLongLines
+        {actions.map((action, index) => {
+          const actionConfig = CONSENT_CONFIG[action.toolName] ?? DEFAULT_CONFIG;
+          const code = actionConfig.getCode(action.args);
+          return (
+            <div
+              key={action.toolCallId ?? `${action.toolName}-${index}`}
+              className={styles.consentCodePreview}
+              style={{ marginTop: index === 0 ? 0 : "0.65rem" }}
             >
-              {code}
-            </SyntaxHighlighter>
-          </div>
-        )}
+              {actions.length > 1 && (
+                <div style={{ marginBottom: "0.4rem", color: "var(--primary-text)", fontSize: "0.75rem" }}>
+                  <strong>{index + 1}. {action.toolName}</strong>
+                  {action.approvalReason && <span> — {action.approvalReason}</span>}
+                </div>
+              )}
+              {code && (
+                <SyntaxHighlighter
+                  language={actionConfig.language}
+                  style={oneDark}
+                  customStyle={highlighterCustomStyle}
+                  wrapLongLines
+                >
+                  {code}
+                </SyntaxHighlighter>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

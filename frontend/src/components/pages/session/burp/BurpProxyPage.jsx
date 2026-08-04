@@ -13,6 +13,8 @@ import {
   ThunderboltOutlined,
   SearchOutlined,
   CloseCircleOutlined,
+  SafetyCertificateOutlined,
+  CheckCircleFilled,
 } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { useQuery, useMutation } from "react-query";
@@ -26,6 +28,8 @@ import {
   repeaterSend,
   getProxyInterceptStatus,
   setProxyIntercept,
+  getBurpCaStatus,
+  configureBurpCa,
 } from "@/services/burp.service";
 import styles from "@/styles/components/BurpProxy.module.scss";
 
@@ -61,6 +65,8 @@ const BURP_INTEGRATION = {
     replaySend: repeaterSend,
     getInterceptStatus: getProxyInterceptStatus,
     setIntercept: setProxyIntercept,
+    getCaStatus: getBurpCaStatus,
+    configureCa: configureBurpCa,
   },
 };
 
@@ -596,6 +602,37 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION }) => {
     { enabled: integrationConnected && integration.interceptSupported, refetchOnWindowFocus: false, retry: false }
   );
 
+  const {
+    data: caStatus,
+    isLoading: caStatusLoading,
+    refetch: refetchCaStatus,
+  } = useQuery(
+    [`${integration.queryPrefix}-ca-status`],
+    services.getCaStatus,
+    {
+      enabled: integrationConnected && !!services.getCaStatus,
+      staleTime: 15_000,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: false,
+      retry: false,
+    }
+  );
+
+  const configureCaMutation = useMutation(services.configureCa, {
+    onSuccess: (status) => {
+      refetchCaStatus();
+      if (status?.trusted) {
+        message.success({ content: "Burp CA trusted by the Browser Agent", duration: 3 });
+      } else {
+        message.warning({ content: status?.message || "CA setup needs attention", duration: 4 });
+      }
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.message || "Failed to configure Burp CA trust";
+      message.error({ content: msg, duration: 5 });
+    },
+  });
+
   const interceptMutation = useMutation(
     (enabled) => services.setIntercept({ enabled }),
     {
@@ -853,6 +890,11 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION }) => {
           )}
         </div>
         <div className={styles.headerRight}>
+          {caStatus?.trusted && (
+            <div className={styles.caReadyBadge} title={caStatus.fingerprint || "Burp CA trusted"}>
+              <CheckCircleFilled /> HTTPS ready
+            </div>
+          )}
           {integration.interceptSupported && <div className={styles.interceptToggle}>
             <span>Intercept</span>
             <Switch
@@ -873,6 +915,40 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION }) => {
           </Button>
         </div>
       </div>
+
+      {services.getCaStatus && !caStatusLoading && !caStatus?.trusted && (
+        <div className={styles.caSetupCard}>
+          <div className={styles.caSetupIcon}>
+            <SafetyCertificateOutlined />
+          </div>
+          <div className={styles.caSetupCopy}>
+            <strong>{caStatus?.needsRefresh ? "Refresh Burp HTTPS trust" : "Enable HTTPS interception"}</strong>
+            <span>
+              {caStatus?.message || "Trust Burp's CA in the isolated Browser Agent profile."}
+            </span>
+            {caStatus?.fingerprint && (
+              <code title={caStatus.fingerprint}>SHA-256 {caStatus.fingerprint}</code>
+            )}
+          </div>
+          <Button
+            type="primary"
+            size="small"
+            icon={<SafetyCertificateOutlined />}
+            loading={configureCaMutation.isLoading}
+            disabled={!caStatus?.certificateAvailable}
+            onClick={() => configureCaMutation.mutate()}
+            className={styles.caSetupButton}
+          >
+            {caStatus?.needsRefresh ? "Refresh CA trust" : "Configure in one click"}
+          </Button>
+        </div>
+      )}
+
+      {services.getCaStatus && caStatusLoading && (
+        <div className={styles.caCheckingBar}>
+          <Spin size="small" /> Checking HTTPS interception readiness…
+        </div>
+      )}
 
       <div className={styles.filterBar}>
         <Input

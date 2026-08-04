@@ -4,6 +4,7 @@ import { formatMagnitudeError } from "../../utils/magnitudeError";
 import { presetToProviderConfig } from "../../utils/llm/providers";
 import { getAssignedModels } from "../../utils/modelRegistryStore";
 import { resolveMagnitudeLlmConfig } from "../../utils/magnitudeLlm";
+import { getBurpBrowserHome } from "../../services/burp-ca.service";
 import { z } from "zod";
 
 const magnitudeBrowser: ToolDefinition = {
@@ -90,12 +91,13 @@ const magnitudeBrowser: ToolDefinition = {
       const { startBrowserAgent } = await import("magnitude-core");
       const llm = resolveMagnitudeLlmConfig(providerConfig);
 
-      const launchOptions: any = { headless };
+      const browserEnv = { ...process.env, HOME: getBurpBrowserHome() };
+      const launchOptions: any = { headless, env: browserEnv };
       if (proxyUrl) {
         launchOptions.proxy = { server: proxyUrl };
       }
       if (!headless) {
-        launchOptions.env = { ...process.env, DISPLAY: normalizedDisplay };
+        launchOptions.env = { ...browserEnv, DISPLAY: normalizedDisplay };
       }
 
       const agentConfig: any = {

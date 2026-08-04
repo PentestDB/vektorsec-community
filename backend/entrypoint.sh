@@ -5,6 +5,13 @@ DISPLAY="${DISPLAY:-:99}"
 VNC_RFB_PORT="${BROWSER_AGENT_VNC_RFB_PORT:-5999}"
 NOVNC_PORT="${BROWSER_AGENT_NOVNC_PORT:-6080}"
 
+# OpenVPN on a local work host needs a tun device. Docker Desktop supplies the
+# kernel support, but minimal containers may not have the device node yet.
+if [ ! -e /dev/net/tun ]; then
+  mkdir -p /dev/net
+  mknod /dev/net/tun c 10 200 2>/dev/null || true
+fi
+
 # Start virtual framebuffer
 Xvfb "$DISPLAY" -screen 0 1280x800x24 -ac +extension GLX +render -noreset &
 sleep 1

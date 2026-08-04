@@ -17,7 +17,7 @@ import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
 import { FiMonitor, FiShield } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
-import { TbRadar, TbWorldWww } from "react-icons/tb";
+import { TbPlugConnected, TbRadar, TbWorldWww } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi";
 import {
   LoadingOutlined,
@@ -91,7 +91,8 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     () => getVulnerabilities(sessionId),
     { enabled: !!sessionId, refetchInterval: 5000, retry: false },
   );
-  const requireConsent = capabilitiesData?.requireConsentForAllTools ?? false;
+  const toolExecutionMode = capabilitiesData?.toolExecutionMode ??
+    (capabilitiesData?.requireConsentForAllTools ? "requires_consent" : "auto");
 
   const updateCapabilitiesMutation = useMutation(updateCapabilities, {
     onSuccess: () => {
@@ -102,9 +103,9 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     },
   });
 
-  const handleToggleConsent = () => {
+  const handleExecutionModeChange = (mode) => {
     updateCapabilitiesMutation.mutate({
-      requireConsentForAllTools: !requireConsent,
+      toolExecutionMode: mode,
     });
   };
 
@@ -202,6 +203,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const isOnCaido = pathname?.includes("/caido");
   const isOnBrowserAgent = pathname?.includes("/browser-agent");
   const isOnVulnerabilities = pathname?.includes("/vulnerabilities");
+  const isOnConnection = pathname?.includes("/connection");
   const activeRacerPath = pathname?.match(/\/racer\/([^/]+)/)?.[1] ?? null;
   const activeRacerTokenUsage = useMemo(() => {
     if (!activeRacerPath) return null;
@@ -229,8 +231,15 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           </button>
         </div>
 
+        <Tooltip
+          placement="right"
+          title={toolExecutionMode === "auto"
+            ? "Run automatically; built-in destructive-action protections still ask."
+            : toolExecutionMode === "auto_approve"
+              ? "AI reviews every action and asks whenever it is unsafe or uncertain."
+              : "Ask before every tool action."}
+        >
         <div
-          onClick={handleToggleConsent}
           style={{
             display: "flex",
             alignItems: "center",
@@ -243,35 +252,34 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             background: "var(--secondary-bg)",
             border: "1px solid var(--border-subtle)",
             borderRadius: 6,
-            cursor: "pointer",
+            cursor: "default",
             userSelect: "none",
             transition: "all 0.15s",
           }}
         >
-          <span style={{ whiteSpace: "nowrap" }}>
-            {requireConsent ? "Ask consent" : "Auto run"}
-          </span>
-          <div style={{
-            width: 28,
-            height: 14,
-            borderRadius: 7,
-            backgroundColor: requireConsent ? "#d29922" : "#7ee787",
-            position: "relative",
-            transition: "background-color 0.2s",
-            flexShrink: 0,
-          }}>
-            <div style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              backgroundColor: "#fff",
-              position: "absolute",
-              top: 2,
-              left: requireConsent ? 16 : 2,
-              transition: "left 0.2s",
-            }} />
-          </div>
+          <FiShield size={12} style={{ flexShrink: 0 }} />
+          <select
+            aria-label="Tool execution mode"
+            value={toolExecutionMode}
+            disabled={updateCapabilitiesMutation.isLoading}
+            onChange={(event) => handleExecutionModeChange(event.target.value)}
+            style={{
+              minWidth: 0,
+              width: "100%",
+              color: "var(--primary-text)",
+              background: "transparent",
+              border: 0,
+              outline: 0,
+              cursor: "pointer",
+              fontSize: "0.72rem",
+            }}
+          >
+            <option value="auto">Auto run</option>
+            <option value="auto_approve">Auto approve (AI)</option>
+            <option value="requires_consent">Requires consent</option>
+          </select>
         </div>
+        </Tooltip>
 
         <AgentToolsPanel sessionId={sessionId} />
 
@@ -385,6 +393,14 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             {(vulnerabilitiesData?.total ?? 0) > 0 && (
               <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
             )}
+          </div>
+
+          <div
+            onClick={() => router.push(`/session/${sessionId}/connection`)}
+            className={isOnConnection ? styles.activeTab : styles.tab}
+          >
+            <TbPlugConnected />
+            Connection
           </div>
 
           <div

@@ -22,6 +22,8 @@ export interface McpTokenDoc {
   revokedAt?: Date | null;
 }
 
+export type ToolExecutionMode = "auto" | "auto_approve" | "requires_consent";
+
 export interface UserDoc extends mongoose.Document {
   email: string;
   name: string;
@@ -47,6 +49,7 @@ export interface UserDoc extends mongoose.Document {
     capabilities: string[];
     installedCapabilities: string[];
     requireConsentForAllTools?: boolean;
+    toolExecutionMode?: ToolExecutionMode;
     disableSafetyProtections?: boolean;
     disabledAgentTools?: string[];
     maxAgentIterations?: number;
@@ -130,6 +133,11 @@ const UserSchema = new Schema({
     requireConsentForAllTools: {
       type: Boolean,
       default: false,
+    },
+    toolExecutionMode: {
+      type: String,
+      enum: ["auto", "auto_approve", "requires_consent"],
+      default: "auto",
     },
     disableSafetyProtections: {
       type: Boolean,

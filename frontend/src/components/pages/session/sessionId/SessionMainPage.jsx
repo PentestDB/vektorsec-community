@@ -5,7 +5,7 @@ import { notification } from "antd";
 import ChatView from "./ChatView";
 import ShellPanel from "@/components/shells/ShellPanel";
 import useShellSocket from "@/hooks/useShellSocket";
-import { reconnectSSH } from "@/services/agent.service";
+import { reconnectWorkHost } from "@/services/agent.service";
 
 const SessionMainPage = ({ session_id }) => {
   const [shellPanelWidth, setShellPanelWidth] = useState(45);
@@ -20,18 +20,18 @@ const SessionMainPage = ({ session_id }) => {
     });
   }, []);
 
-  const handleReconnectSSH = useCallback(async () => {
+  const handleReconnectHost = useCallback(async () => {
     try {
-      await reconnectSSH(session_id);
+      await reconnectWorkHost(session_id);
       notification.success({
-        message: "SSH Reconnect",
+        message: "Workspace reconnected",
         description: "Reconnection initiated",
         duration: 3,
         placement: "bottomRight",
       });
     } catch (err) {
       notification.error({
-        message: "SSH Reconnect Failed",
+        message: "Workspace reconnect failed",
         description: err?.response?.data?.message ?? err.message ?? "Unknown error",
         duration: 5,
         placement: "bottomRight",
@@ -134,7 +134,7 @@ const SessionMainPage = ({ session_id }) => {
             resizeShell={resizeShell}
             connectionStatus={connectionStatus}
             wsConnected={wsConnected}
-            onReconnectSSH={handleReconnectSSH}
+            onReconnectHost={handleReconnectHost}
           />
         </div>
       </div>

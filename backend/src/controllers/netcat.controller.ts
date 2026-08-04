@@ -11,22 +11,21 @@ import {
   updateNetcatSession,
 } from "../utils/redis/store";
 import { v4 as uuidv4 } from "uuid";
-import { execSSHCommand } from "../services/ssh.service";
+import { execOnWorkHost, shellEscape } from "../services/work-host.service";
 
 const netcatOperations = {
-  async start(params: { ip: string; port: any; netcat_id: any }) {
-    const output = await execSSHCommand(`nohup nc -nlvp ${params.port} > /tmp/nc_${params.netcat_id}.log 2>&1 &`);
+  async start(params: { sessionId: string; port: number; netcat_id: string }) {
+    const output = await execOnWorkHost(params.sessionId, `nohup nc -nlvp ${params.port} > /tmp/nc_${params.netcat_id}.log 2>&1 &`);
     return { running_port: params.port, output };
   },
-  async sendInput(params: { ip: string; netcat_id: any; input: string }) {
-    return execSSHCommand(`echo "${params.input}" >> /tmp/nc_input_${params.netcat_id}`);
+  async sendInput(params: { sessionId: string; netcat_id: string; input: string }) {
+    return execOnWorkHost(params.sessionId, `printf '%s\n' ${shellEscape(params.input)} >> /tmp/nc_input_${params.netcat_id}`);
   },
-  async stop(params: { ip: string; netcat_id: any }) {
-    return execSSHCommand(`kill $(lsof -t -i:${params.netcat_id}) 2>/dev/null || true`);
+  async stop(params: { sessionId: string; port: number }) {
+    return execOnWorkHost(params.sessionId, `kill $(lsof -t -i:${params.port}) 2>/dev/null || true`);
   },
 };
 import { requireActiveSession } from "../services/session.helpers";
-import { getUserContainerIp } from "../services/task.helpers";
 import { initNetcatSession } from "../services/session.services";
 
 export const initiateNetcat = async (req: Request, res: Response) => {
@@ -168,14 +167,6 @@ export const startNetcat = async (req: Request, res: Response) => {
       port: port,
     });
 
-    const containerIp = await getUserContainerIp(userId);
-
-    if (!containerIp) {
-      return res.status(400).json({
-        message: "Exploit Box is not running",
-      });
-    }
-
     const netcatSession = await getNetcatSession(netcat_id);
 
     if (!netcatSession) {
@@ -184,9 +175,16 @@ export const startNetcat = async (req: Request, res: Response) => {
       });
     }
 
+    const ownerSessionId = String(netcatSession.main_session_id || session_id || "");
+    const owner = await requireActiveSession(userId, ownerSessionId, res);
+    if (!owner) return;
+    const parsedPort = Number.parseInt(String(netcatSession.port), 10);
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      return res.status(400).json({ message: "Invalid port" });
+    }
     const data = await netcatOperations.start({
-      ip: containerIp,
-      port: netcatSession.port,
+      sessionId: ownerSessionId,
+      port: parsedPort,
       netcat_id: netcat_id,
     });
 
@@ -226,18 +224,16 @@ export const sendNetcatInput = async (req: Request, res: Response) => {
       });
     }
 
-    const containerIp = await getUserContainerIp(userId);
-
-    if (!containerIp) {
-      return res.status(400).json({
-        message: "Exploit Box is not running",
-      });
-    }
-
     await storeNetcatInput({ netcat_id, input });
 
+    const netcatSession: any = await getNetcatSession(netcat_id);
+    if (!netcatSession) return res.status(404).json({ message: "Netcat session not found" });
+    const ownerSessionId = String(netcatSession.main_session_id || "");
+    const owner = await requireActiveSession(userId, ownerSessionId, res);
+    if (!owner) return;
+
     const response = await netcatOperations.sendInput({
-      ip: containerIp,
+      sessionId: ownerSessionId,
       netcat_id: netcat_id,
       input: input,
     });
@@ -319,17 +315,19 @@ export const stopNetcat = async (req: Request, res: Response) => {
       });
     }
 
-    const containerIp = await getUserContainerIp(userId);
-
-    if (!containerIp) {
-      return res.status(400).json({
-        message: "Exploit Box is not running",
-      });
+    const netcatSession: any = await getNetcatSession(netcat_id);
+    if (!netcatSession) return res.status(404).json({ message: "Netcat session not found" });
+    const ownerSessionId = String(netcatSession.main_session_id || session_id || "");
+    const owner = await requireActiveSession(userId, ownerSessionId, res);
+    if (!owner) return;
+    const parsedPort = Number.parseInt(String(netcatSession.port), 10);
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      return res.status(400).json({ message: "Invalid listener port" });
     }
 
     const response = await netcatOperations.stop({
-      ip: containerIp,
-      netcat_id: netcat_id,
+      sessionId: ownerSessionId,
+      port: parsedPort,
     });
 
     if (!response) {

@@ -5,8 +5,6 @@ import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
 import {
   TbTools,
   TbBrain,
-  TbTerminal2,
-  TbDeviceDesktop,
   TbRadar,
   TbWorldWww,
   TbAdjustmentsHorizontal,
@@ -15,8 +13,6 @@ import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
-import SSHPage from "@/components/pages/settings/SSH";
-import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
@@ -53,20 +49,6 @@ const TABS = [
       "Configure how long autonomous agent runs can continue before pausing.",
     icon: TbAdjustmentsHorizontal,
     component: AgentBehaviorPage,
-  },
-  {
-    key: "ssh",
-    label: "SSH / Exploit Box",
-    icon: TbTerminal2,
-    component: SSHPage,
-  },
-  {
-    key: "gui",
-    label: "GUI / VNC",
-    description:
-      "Set up a remote desktop on your exploit box for graphical tools.",
-    icon: TbDeviceDesktop,
-    component: GUISettingsPage,
   },
   {
     key: "burp",

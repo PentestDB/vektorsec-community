@@ -11,6 +11,16 @@ export const getBurpConnectionStatus = async () => {
   return res.data;
 };
 
+export const getBurpCaStatus = async () => {
+  const res = await apiClient.get("/burp/ca/status");
+  return res.data;
+};
+
+export const configureBurpCa = async () => {
+  const res = await apiClient.post("/burp/ca/configure");
+  return res.data;
+};
+
 export const getBurpProxyHistory = async ({
   page = 1,
   pageSize = 20,

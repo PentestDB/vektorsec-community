@@ -3,15 +3,15 @@
 import React, { useState } from "react";
 import { ApiOutlined, DisconnectOutlined, ReloadOutlined } from "@ant-design/icons";
 
-export default function ConnectionStatusBar({ connectionStatus, wsConnected, onReconnectSSH }) {
-  const sshOk = connectionStatus?.sshConnected;
+export default function ConnectionStatusBar({ connectionStatus, wsConnected, onReconnectHost }) {
+  const hostOk = connectionStatus?.hostConnected ?? connectionStatus?.sshConnected ?? false;
   const [reconnecting, setReconnecting] = useState(false);
 
   const handleReconnect = async () => {
-    if (reconnecting || !onReconnectSSH) return;
+    if (reconnecting || !onReconnectHost) return;
     setReconnecting(true);
     try {
-      await onReconnectSSH();
+      await onReconnectHost();
     } finally {
       setTimeout(() => setReconnecting(false), 2000);
     }
@@ -30,15 +30,15 @@ export default function ConnectionStatusBar({ connectionStatus, wsConnected, onR
       color: "#8b949e",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        {sshOk ? (
+        {hostOk ? (
           <ApiOutlined style={{ color: "#7ee787", fontSize: 12 }} />
         ) : (
           <DisconnectOutlined style={{ color: "#f85149", fontSize: 12 }} />
         )}
-        <span style={{ color: sshOk ? "#7ee787" : "#f85149" }}>
-          SSH {sshOk ? "Connected" : "Disconnected"}
+        <span style={{ color: hostOk ? "#7ee787" : "#f85149" }}>
+          Host {hostOk ? "Connected" : "Disconnected"}
         </span>
-        {!sshOk && onReconnectSSH && (
+        {!hostOk && onReconnectHost && (
           <button
             onClick={handleReconnect}
             disabled={reconnecting}
@@ -78,7 +78,7 @@ export default function ConnectionStatusBar({ connectionStatus, wsConnected, onR
         <span>WS {wsConnected ? "Connected" : "Disconnected"}</span>
       </div>
 
-      {connectionStatus?.lastError && !sshOk && (
+      {connectionStatus?.lastError && !hostOk && (
         <>
           <div style={{
             width: 1,

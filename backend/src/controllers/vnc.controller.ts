@@ -1,9 +1,8 @@
 import { Response, Request } from "express";
-import ssh2 from "ssh2";
-import { executeCommand, generateRandomPassword } from "../utils/fileUtils";
-import { buildSSHConfig } from "../utils/sshConfig";
-import { readEnvFile, updateEnvVars } from "../utils/envWriter";
+import { readEnvFile } from "../utils/envWriter";
 import { getVncDisplay, getVncRfbPort, getWebsockifyPort } from "../config/constants";
+import { requireActiveSession } from "../services/session.helpers";
+import { execOnWorkHost, resolveSessionWorkHost } from "../services/work-host.service";
 import {
   writeVncPasswordCmd,
   hasVncPassword,
@@ -31,6 +30,14 @@ function pickVncPath(raw: string): string {
 
 export const getVNCCredentials = async (req: Request, res: Response) => {
   try {
+    const userId = res.locals.userId;
+    const { session_id: sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ message: "Invalid session id" });
+    }
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
     const VNC_DISPLAY = getVncDisplay();
     const VNC_RFBPORT = getVncRfbPort();
     const WEBSOCKIFY_PORT = getWebsockifyPort();
@@ -52,24 +59,15 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
     }
 
     if (vncMode === "auto" && setupDone && savedHost && savedPassword) {
-      const sshConfig = buildSSHConfig();
-      const sshClient = new ssh2.Client();
-
-      sshClient
-        .on("ready", async () => {
-          try {
-            const exec = (cmd: string) => executeCommand(sshClient, cmd);
-            const execWithOutput = (cmd: string): Promise<string> => {
-              return new Promise((resolve, reject) => {
-                sshClient.exec(cmd, (err, stream) => {
-                  if (err) return reject(err);
-                  let out = "";
-                  stream
-                    .on("close", () => resolve(out))
-                    .on("data", (d: Buffer) => { out += d.toString(); })
-                    .stderr.on("data", (d: Buffer) => { out += d.toString(); });
-                });
-              });
+      try {
+            const target = await resolveSessionWorkHost(sessionId);
+            const exec = async (cmd: string) => {
+              const result = await execOnWorkHost(sessionId, cmd, 120_000);
+              if (result.code !== 0) throw new Error(result.stderr || result.stdout || `Command failed (${result.code})`);
+            };
+            const execWithOutput = async (cmd: string) => {
+              const result = await execOnWorkHost(sessionId, cmd, 120_000);
+              return `${result.stdout}${result.stderr}`;
             };
 
             // Detect which VNC binary is available
@@ -85,10 +83,10 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
 
             // Kill all existing VNC/Xvfb for a clean start
             await exec(
-              "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
-              "pkill -f x11vnc 2>/dev/null || true; " +
-              "pkill -f 'Xvfb' 2>/dev/null || true; " +
-              "for display in {1..99}; do vncserver -kill \":$display\" 2>/dev/null || true; done"
+              `vncserver -kill "${VNC_DISPLAY}" 2>/dev/null || true; ` +
+              `pkill -f '[x]11vnc.*-display ${VNC_DISPLAY}.*-rfbport ${VNC_RFBPORT}' 2>/dev/null || true; ` +
+              `pkill -f '[X]vfb ${VNC_DISPLAY}' 2>/dev/null || true; ` +
+              `pkill -f '[X](vnc|tigervnc).*${VNC_DISPLAY}.*rfbport ${VNC_RFBPORT}' 2>/dev/null || true`
             );
 
             // Set password. Fall back to no VNC auth when the box has no working
@@ -135,32 +133,20 @@ export const getVNCCredentials = async (req: Request, res: Response) => {
 
             await new Promise((resolve) => setTimeout(resolve, 1000));
 
-            sshClient.end();
-
-            const vncURL = baseUrlOverride || `${savedHost}:${savedPort}`;
+            const runtimeHost = target.kind === "ssh" ? target.sshProfile?.host || savedHost : "localhost";
+            const vncURL = baseUrlOverride || `${runtimeHost}:${savedPort}`;
             return res.status(200).json({
               vncURL,
               password: savedPassword,
+              workHost: target.kind,
             });
           } catch (error: any) {
             const msg = error?.message || String(error);
             console.error("VNC start error:", msg);
-            sshClient.end();
             return res.status(400).json({
               message: `Failed to start VNC session: ${msg}`,
             });
           }
-        })
-        .on("error", (err: any) => {
-          const msg = err?.message || String(err);
-          console.error("SSH connection error during VNC:", msg);
-          return res.status(400).json({
-            message: `Cannot connect to exploit box via SSH: ${msg}`,
-          });
-        });
-
-      sshClient.connect(sshConfig);
-      return;
     }
 
     return res.status(400).json({

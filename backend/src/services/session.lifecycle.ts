@@ -1,5 +1,6 @@
 import { ShellManager } from "./shell.manager";
 import SessionsModel from "../models/Sessions/Sessions.model";
+import { resolveSessionWorkHost } from "./work-host.service";
 
 class SessionLifecycleManager {
   private shellManagers: Map<string, ShellManager> = new Map();
@@ -12,17 +13,19 @@ class SessionLifecycleManager {
     let mgr = this.shellManagers.get(sessionId);
     if (mgr) return mgr;
 
-    mgr = new ShellManager(sessionId);
+    mgr = new ShellManager(sessionId, () => resolveSessionWorkHost(sessionId));
     this.shellManagers.set(sessionId, mgr);
 
-    mgr.on("connection_status", async (status: { sshConnected: boolean; error?: string }) => {
+    mgr.on("connection_status", async (status: { sshConnected: boolean; hostConnected?: boolean; kind?: "local" | "ssh"; error?: string }) => {
       try {
         await SessionsModel.updateOne(
           { sessionId },
           {
             $set: {
               "connectionState.sshConnected": status.sshConnected,
-              ...(status.sshConnected ? { "connectionState.lastConnectedAt": new Date() } : {}),
+              "connectionState.hostConnected": status.hostConnected ?? status.sshConnected,
+              ...(status.kind ? { "connectionState.hostKind": status.kind } : {}),
+              ...(status.hostConnected || status.sshConnected ? { "connectionState.lastConnectedAt": new Date() } : {}),
               ...(status.error ? { "connectionState.lastError": status.error } : {}),
             },
           },

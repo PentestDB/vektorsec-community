@@ -47,19 +47,20 @@ import {
 } from "@/services/user.service";
 
 const AUTO_SETUP_STEPS = [
-  { title: "Connecting to exploit box", icon: <CloudServerOutlined /> },
+  { title: "Connecting to workspace host", icon: <CloudServerOutlined /> },
   { title: "Installing VNC & GUI packages", icon: <SettingOutlined /> },
   { title: "Configuring VNC server", icon: <DesktopOutlined /> },
   { title: "Starting VNC server (DISPLAY=:89)", icon: <PlayCircleOutlined /> },
   { title: "Starting noVNC proxy", icon: <ApiOutlined /> },
 ];
 
-const GUISettingsPage = () => {
+const GUISettingsPage = ({ sessionId }) => {
   const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const [advForm] = Form.useForm();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery("vnc-config", getVNCConfig);
+  const vncQueryKey = ["vnc-config", sessionId || "global"];
+  const { data, isLoading } = useQuery(vncQueryKey, () => getVNCConfig(sessionId));
   const [setupMode, setSetupMode] = useState(null);
   const [currentStep, setCurrentStep] = useState(-1);
   const [diagResults, setDiagResults] = useState(null);
@@ -74,7 +75,7 @@ const GUISettingsPage = () => {
     onError: (err) => {
       notification.error({
         message: "Diagnostics Failed",
-        description: err?.response?.data?.message ?? "Could not run diagnostics. Check SSH settings.",
+        description: err?.response?.data?.message ?? "Could not run diagnostics. Check the workspace connection.",
       });
     },
   });
@@ -91,39 +92,45 @@ const GUISettingsPage = () => {
     onError: (err) => {
       notification.error({
         message: "Repair Failed",
-        description: err?.response?.data?.message ?? "Could not repair VNC. Check SSH settings.",
+        description: err?.response?.data?.message ?? "Could not repair VNC. Check the workspace connection.",
       });
     },
   });
 
-  const saveMutation = useMutation(updateVNCConfig, {
-    onSuccess: () => {
-      message.success("VNC configuration saved");
-      queryClient.invalidateQueries("vnc-config");
+  const saveMutation = useMutation(
+    (body) => updateVNCConfig({ ...body, ...(sessionId ? { sessionId } : {}) }),
+    {
+      onSuccess: () => {
+        message.success("VNC configuration saved");
+        queryClient.invalidateQueries(vncQueryKey);
+      },
+      onError: (err) => {
+        notification.error({
+          message: "Error",
+          description: err?.response?.data?.message ?? "Failed to save VNC config",
+        });
+      },
     },
-    onError: (err) => {
-      notification.error({
-        message: "Error",
-        description: err?.response?.data?.message ?? "Failed to save VNC config",
-      });
-    },
-  });
+  );
 
-  const resetMutation = useMutation(resetVNCConfig, {
-    onSuccess: () => {
-      message.success("VNC configuration reset");
-      queryClient.invalidateQueries("vnc-config");
-      form.resetFields();
-      setSetupMode(null);
-      setCurrentStep(-1);
+  const resetMutation = useMutation(
+    (body) => resetVNCConfig({ ...body, ...(sessionId ? { sessionId } : {}) }),
+    {
+      onSuccess: () => {
+        message.success("VNC configuration reset");
+        queryClient.invalidateQueries(vncQueryKey);
+        form.resetFields();
+        setSetupMode(null);
+        setCurrentStep(-1);
+      },
+      onError: (err) => {
+        notification.error({
+          message: "Error",
+          description: err?.response?.data?.message ?? "Failed to reset",
+        });
+      },
     },
-    onError: (err) => {
-      notification.error({
-        message: "Error",
-        description: err?.response?.data?.message ?? "Failed to reset",
-      });
-    },
-  });
+  );
 
   const autoSetupMutation = useMutation(autoSetupVNC, {
     onMutate: () => {
@@ -142,7 +149,7 @@ const GUISettingsPage = () => {
     onSuccess: (data) => {
       setCurrentStep(AUTO_SETUP_STEPS.length);
       message.success("VNC setup completed! You can now use the GUI tab.");
-      queryClient.invalidateQueries("vnc-config");
+      queryClient.invalidateQueries(vncQueryKey);
     },
     onError: (err, _vars, interval) => {
       if (interval) clearInterval(interval);
@@ -151,7 +158,7 @@ const GUISettingsPage = () => {
         message: "Auto-Setup Failed",
         description:
           err?.response?.data?.message ??
-          "Failed to auto-setup VNC. Make sure SSH is configured and the exploit box has internet access.",
+          "Failed to auto-setup VNC. Make sure the workspace host is reachable and has internet access.",
         duration: 8,
       });
     },
@@ -185,7 +192,7 @@ const GUISettingsPage = () => {
   };
 
   const handleAutoSetup = () => {
-    autoSetupMutation.mutate();
+    autoSetupMutation.mutate({ sessionId });
   };
 
   return (
@@ -206,7 +213,7 @@ const GUISettingsPage = () => {
             size="small"
             icon={<SearchOutlined />}
             loading={diagnoseMutation.isLoading}
-            onClick={() => diagnoseMutation.mutate()}
+            onClick={() => diagnoseMutation.mutate({ sessionId })}
           >
             Diagnose
           </Button>
@@ -273,7 +280,7 @@ const GUISettingsPage = () => {
                 size="small"
                 icon={<ToolOutlined />}
                 loading={repairMutation.isLoading}
-                onClick={() => repairMutation.mutate({ fix: "all" })}
+                onClick={() => repairMutation.mutate({ sessionId, fix: "all" })}
                 style={{
                   background: "var(--primary-purple, #7c3aed)",
                   borderColor: "var(--primary-purple, #7c3aed)",
@@ -461,7 +468,7 @@ const GUISettingsPage = () => {
             <InfoCircleOutlined />
             <span>
               A GUI desktop lets you use graphical tools (browsers, Burp Suite, etc.) on
-              your exploit box. Choose how to set it up:
+              your workspace host. Choose how to set it up:
             </span>
           </div>
 
@@ -499,9 +506,9 @@ const GUISettingsPage = () => {
             <InfoCircleOutlined />
             <span>
               This will install a VNC server (TigerVNC / Xvnc) and noVNC web client on
-              your exploit box via SSH.               A lightweight GUI session (xterm) is started by
+              your selected workspace host. A lightweight GUI session (xterm) is started by
               default; if Xfce or Openbox is available it will be used instead. DISPLAY=:89
-              is always set. Requires internet access on the exploit box and SSH to be configured.
+              is always set. The workspace host must have internet access.
             </span>
           </div>
 
@@ -560,7 +567,7 @@ const GUISettingsPage = () => {
           <div className={styles.infoBox}>
             <InfoCircleOutlined />
             <span>
-              If you already have a VNC/noVNC server running on your exploit box,
+              If you already have a VNC/noVNC server running on your workspace host,
               enter the connection details below.
             </span>
           </div>
@@ -668,7 +675,7 @@ const GUISettingsPage = () => {
             The GUI session is accessible from the <code>/gui</code> tab in any session.
           </li>
           <li>
-            SSH / Exploit Box must be configured before auto-setup can work.
+            Select and save the workspace host before running one-click setup.
           </li>
         </ul>
       </div>

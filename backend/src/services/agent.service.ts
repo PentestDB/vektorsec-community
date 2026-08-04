@@ -20,11 +20,11 @@ import {
   executeToolCalls,
   executeConsentedTool,
   buildExecutionContext,
+  buildPendingConsentBatch,
   ToolExecutionCallbacks,
 } from "./agent.tools";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { buildSystemPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/copilot/prompts";
-import { WORKSPACE_DIR } from "../utils/commandSafety";
 import UserModel from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
@@ -33,6 +33,7 @@ import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
 import { normalizeMaxAgentIterations } from "../utils/agentConfig";
+import { createAiToolSafetyEvaluator } from "./tool-approval.service";
 
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
 const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
@@ -448,6 +449,8 @@ export async function runAgentLoop(params: {
 
   const user = await UserModel.findById(session.uid).lean();
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
+  const toolExecutionMode = user?.configs?.toolExecutionMode ??
+    (requireConsentForAllTools ? "requires_consent" : "auto");
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
   const maxAgentIterations = normalizeMaxAgentIterations(
     user?.configs?.maxAgentIterations,
@@ -477,7 +480,7 @@ export async function runAgentLoop(params: {
       const parts = envOut.trim().split("|||");
       if (parts.length >= 4) {
         const home = parts[1];
-        const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
+        const resolvedWs = shellManager.remoteWorkspaceDir.replace(/^~/, home);
         envInfo = {
           user: parts[0],
           home,
@@ -528,6 +531,13 @@ export async function runAgentLoop(params: {
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
   const orchestratorReasoningMode: ReasoningMode =
     (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
+  const toolSafetyEvaluator = toolExecutionMode === "auto_approve"
+    ? createAiToolSafetyEvaluator({
+        provider: orchestratorConfig,
+        userId: session.uid.toString(),
+        abortSignal: params.abortSignal,
+      })
+    : undefined;
 
   let ctfSwarmContext: CtfSwarmContext | undefined;
   const sessionCtf = session.ctfConfig;
@@ -893,8 +903,9 @@ export async function runAgentLoop(params: {
         onToolError(id, error) {
           sse.write("tool_error", { id, error });
         },
-        onConsentRequired(id, name, args, safetyBlock) {
-          sse.write("consent_required", { id, name, args, safetyBlock: safetyBlock ?? false });
+        onConsentRequired(id, name, args, safetyBlock, approvalReason) {
+          // Emitted once as a complete batch below. Streaming individual
+          // requests here could briefly hide siblings behind one approval.
         },
         onInstallSuggestion(suggestion) {
           sse.write("install_suggestion", suggestion);
@@ -908,6 +919,8 @@ export async function runAgentLoop(params: {
         executionCtx,
         requireConsentForAllTools,
         disableSafetyProtections,
+        toolExecutionMode,
+        toolSafetyEvaluator,
       );
 
       // Track spawned subagents and swarms
@@ -944,13 +957,17 @@ export async function runAgentLoop(params: {
         }
 
         const firstConsent = consentResults[0];
-        const batch = consentResults.map((cr) => ({
-          toolCallId: cr.toolCallId,
-          toolName: cr.toolName,
-          arguments: parseToolArguments(
-            assistantToolCalls.find((tc) => tc.id === cr.toolCallId)?.arguments ?? "{}",
-          ).args,
-        }));
+        const batch = buildPendingConsentBatch(consentResults, assistantToolCalls);
+        const firstBatchItem = batch[0];
+
+        sse.write("consent_required", {
+          id: firstBatchItem.toolCallId,
+          name: firstBatchItem.toolName,
+          args: firstBatchItem.arguments,
+          safetyBlock: firstBatchItem.safetyBlock,
+          approvalReason: firstBatchItem.approvalReason,
+          batch: batch.length > 1 ? batch : undefined,
+        });
 
         await appendMessages(sessionId, newMessages);
         await SessionsModel.updateOne(
@@ -964,6 +981,8 @@ export async function runAgentLoop(params: {
                 arguments: parseToolArguments(
                   assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
                 ).args,
+                safetyBlock: firstBatchItem.safetyBlock,
+                approvalReason: firstBatchItem.approvalReason,
                 batch: batch.length > 1 ? batch : undefined,
               },
             },

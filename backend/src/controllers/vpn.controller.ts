@@ -1,7 +1,11 @@
 import { Response, Request } from "express";
 import { Client as SSHClient } from "ssh2";
-import { buildSSHConfig } from "../utils/sshConfig";
 import { requireActiveSession } from "../services/session.helpers";
+import {
+  connectSSH,
+  execOnWorkHost,
+  resolveSessionWorkHost,
+} from "../services/work-host.service";
 import path from "path";
 import fs from "fs";
 import { KALI_DATA_DIR } from "../config/constants";
@@ -216,27 +220,31 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
     }
     console.log("[vpn/connect] 4 profile found", { path: profile.path });
 
-    console.log("[vpn/connect] 5 building ssh config...");
-    const sshConfig = buildSSHConfig();
+    console.log("[vpn/connect] 5 resolving workspace work host...");
+    const target = await resolveSessionWorkHost(session_id);
     let ssh: SSHClient | null = null;
 
     try {
-      console.log("[vpn/connect] 6 connecting ssh...");
-      ssh = await withTimeout(
-        sshConnectPromise(sshConfig),
-        15000,
-        "SSH connect for VPN"
-      );
-      console.log("[vpn/connect] 7 ssh connected", { profile: safeName });
-
+      if (target.kind === "local") {
+        const preflight = await execOnWorkHost(
+          session_id,
+          "command -v openvpn >/dev/null 2>&1 && test -c /dev/net/tun",
+          5_000,
+        );
+        if (preflight.code !== 0) {
+          return res.status(400).json({
+            message:
+              "Local VPN requires OpenVPN and /dev/net/tun. Rebuild the backend and start it with NET_ADMIN (the bundled Docker Compose configuration includes both).",
+          });
+        }
+      }
       const remotePath = `/tmp/vpn-${safeName}.ovpn`;
-      console.log("[vpn/connect] 8 uploading profile to remote...");
-      await withTimeout(
-        uploadFileViaSftp(ssh, profile.path, remotePath),
-        30000,
-        "Upload profile to remote"
-      );
-      console.log("[vpn/connect] 9 profile uploaded to remote host", { remotePath });
+      if (target.kind === "ssh") {
+        ssh = await withTimeout(connectSSH(target.sshConfig!, 15_000), 15_000, "SSH connect for VPN");
+        await withTimeout(uploadFileViaSftp(ssh, profile.path, remotePath), 30_000, "Upload profile to work host");
+      } else {
+        await fs.promises.copyFile(profile.path, remotePath);
+      }
 
       const logFile = `/tmp/openvpn-${safeName}.log`;
       const pidFile = `/tmp/openvpn-${safeName}.pid`;
@@ -254,24 +262,29 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
         "fi",
       ].join("\n");
 
-      const localScriptPath = path.join(VPN_DIR, `vpn-start-${safeName}.sh`);
-      fs.writeFileSync(localScriptPath, scriptContent, "utf8");
-      try {
-        await withTimeout(
-          uploadFileViaSftp(ssh, localScriptPath, scriptPath),
-          10000,
-          "Upload start script"
-        );
-      } finally {
-        fs.unlinkSync(localScriptPath);
+      if (target.kind === "ssh") {
+        const localScriptPath = path.join(VPN_DIR, `vpn-start-${safeName}.sh`);
+        fs.writeFileSync(localScriptPath, scriptContent, "utf8");
+        try {
+          await withTimeout(uploadFileViaSftp(ssh!, localScriptPath, scriptPath), 10_000, "Upload start script");
+        } finally {
+          fs.unlinkSync(localScriptPath);
+        }
+        ssh!.end();
+        ssh = null;
+      } else {
+        await fs.promises.writeFile(scriptPath, scriptContent, { mode: 0o700 });
       }
 
-      const startCmd = sudoWrap(scriptPath, sshConfig, true);
+      const privilege = target.kind === "ssh"
+        ? target.sshConfig!
+        : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
+      const startCmd = sudoWrap(scriptPath, privilege, true);
 
-      console.log("[vpn/connect] 10 starting openvpn...", { profile: safeName });
+      console.log("[vpn/connect] 10 starting openvpn...", { profile: safeName, host: target.kind });
       const { stdout, stderr, code } = await withTimeout(
-        sshExecPromise(ssh, startCmd),
-        25000,
+        execOnWorkHost(session_id, startCmd, 25_000),
+        25_000,
         "OpenVPN start"
       );
       console.log("[vpn/connect] 11 openvpn start completed", {
@@ -280,9 +293,6 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
         stdout,
         stderr,
       });
-
-      ssh.end();
-      ssh = null;
 
       if (code === 0 && stdout.includes("STARTED")) {
         console.log("[vpn/connect] 12 success, sending response");
@@ -323,10 +333,8 @@ export const disconnectVPNConnection = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, session_id, res);
     if (!session) return;
 
-    const sshConfig = buildSSHConfig();
-    const ssh = await sshConnectPromise(sshConfig);
-
-    try {
+    const target = await resolveSessionWorkHost(session_id);
+    {
       let rawCmd: string;
 
       if (pid) {
@@ -339,8 +347,9 @@ export const disconnectVPNConnection = async (req: Request, res: Response) => {
         return res.status(400).json({ message: "Provide either pid or profile_name" });
       }
 
-      const killCmd = sudoWrap(rawCmd, sshConfig);
-      const { stdout, code } = await sshExecPromise(ssh, killCmd);
+      const privilege = target.kind === "ssh" ? target.sshConfig! : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
+      const killCmd = sudoWrap(rawCmd, privilege);
+      const { stdout } = await execOnWorkHost(session_id, killCmd, 15_000);
 
       if (stdout.trim().includes("KILLED")) {
         return res.status(200).json({ message: "VPN connection terminated" });
@@ -349,8 +358,6 @@ export const disconnectVPNConnection = async (req: Request, res: Response) => {
       } else {
         return res.status(400).json({ message: "Failed to disconnect VPN" });
       }
-    } finally {
-      ssh.end();
     }
   } catch (err) {
     console.log(err);
@@ -372,15 +379,12 @@ export const disconnectAllVPN = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, session_id, res);
     if (!session) return;
 
-    const sshConfig = buildSSHConfig();
-    const ssh = await sshConnectPromise(sshConfig);
-
-    try {
+    const target = await resolveSessionWorkHost(session_id);
+    {
       const rawCmd = "pkill openvpn 2>/dev/null; rm -f /tmp/openvpn-*.pid /tmp/vpn-*.ovpn; echo 'DONE'";
-      const { code } = await sshExecPromise(ssh, sudoWrap(rawCmd, sshConfig));
+      const privilege = target.kind === "ssh" ? target.sshConfig! : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
+      await execOnWorkHost(session_id, sudoWrap(rawCmd, privilege), 15_000);
       return res.status(200).json({ message: "All VPN connections terminated" });
-    } finally {
-      ssh.end();
     }
   } catch (err) {
     console.log(err);
@@ -402,11 +406,8 @@ export const getVPNStatus = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, session_id, res);
     if (!session) return;
 
-    const sshConfig = buildSSHConfig();
-    const ssh = await sshConnectPromise(sshConfig);
-
-    try {
-      const { stdout: pgrepOut, code: pgrepCode } = await sshExecPromise(ssh, "pgrep -a openvpn 2>/dev/null");
+    {
+      const { stdout: pgrepOut, code: pgrepCode } = await execOnWorkHost(session_id, "pgrep -a openvpn 2>/dev/null", 10_000);
 
       if (pgrepCode !== 0 || !pgrepOut.trim()) {
         return res.status(200).json({
@@ -440,7 +441,7 @@ export const getVPNStatus = async (req: Request, res: Response) => {
       }
 
       // Get tun interfaces and IPs
-      const { stdout: ifOut } = await sshExecPromise(ssh, "ip -4 addr show 2>/dev/null | grep -E '(^[0-9]+:|inet )' || true");
+      const { stdout: ifOut } = await execOnWorkHost(session_id, "ip -4 addr show 2>/dev/null | grep -E '(^[0-9]+:|inet )' || true", 10_000);
       const tunInterfaces: Array<{ iface: string; ip: string }> = [];
       const ifLines = ifOut.split("\n");
       let currentIface = "";
@@ -466,8 +467,6 @@ export const getVPNStatus = async (req: Request, res: Response) => {
         connections: enrichedConnections,
         message: `${enrichedConnections.length} VPN connection(s) active`,
       });
-    } finally {
-      ssh.end();
     }
   } catch (err) {
     console.log(err);

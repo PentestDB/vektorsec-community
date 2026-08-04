@@ -15,8 +15,11 @@ import { sessionLifecycle } from "./session.lifecycle";
 import { toolRegistry } from "../tools/registry";
 import { ToolResult } from "../tools/types";
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
-import { buildSSHConfig } from "../utils/sshConfig";
-import { execSSHCommand } from "./ssh.service";
+import {
+  connectSSH,
+  execOnWorkHost,
+  resolveSessionWorkHost,
+} from "./work-host.service";
 import { KALI_DATA_DIR } from "../config/constants";
 import {
   readModelRegistry,
@@ -357,39 +360,6 @@ function sudoWrap(
   return `sudo -n ${run}`;
 }
 
-function sshConnectPromise(
-  sshConfig: ReturnType<typeof buildSSHConfig>,
-): Promise<SSHClient> {
-  return new Promise((resolve, reject) => {
-    const ssh = new SSHClient();
-    ssh.on("ready", () => resolve(ssh));
-    ssh.on("error", (err) => reject(err));
-    ssh.connect(sshConfig);
-  });
-}
-
-function sshExecPromise(
-  ssh: SSHClient,
-  command: string,
-): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    ssh.exec(command, (err, stream) => {
-      if (err) return reject(err);
-      let stdout = "";
-      let stderr = "";
-      stream.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      stream.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-      stream.on("close", (code: number) => {
-        resolve({ stdout, stderr, code });
-      });
-    });
-  });
-}
-
 function uploadFileViaSftp(
   ssh: SSHClient,
   localPath: string,
@@ -505,6 +475,7 @@ function sessionSummary(session: any) {
 
 async function collectPlatformHealth(
   component = "all",
+  sessionId?: string,
 ): Promise<HealthCheckResult[]> {
   const env = readEnvFile();
   const checks: HealthCheckResult[] = [];
@@ -514,44 +485,37 @@ async function collectPlatformHealth(
       : [component];
 
   if (selected.includes("ssh") || selected.includes("shell")) {
-    const missing = [
-      !env.SSH_HOST && "SSH_HOST",
-      !env.SSH_PORT && "SSH_PORT",
-      !env.SSH_USERNAME && "SSH_USERNAME",
-      !env.SSH_PASSWORD &&
-        !env.SSH_PRIVATE_KEY &&
-        "SSH_PASSWORD or SSH_PRIVATE_KEY",
-    ].filter(Boolean) as string[];
-    if (missing.length > 0) {
+    if (!sessionId) {
       checks.push({
-        component: "ssh",
+        component: "work_host",
         status: "missing",
         canAutoRepair: false,
-        summary: "SSH is not fully configured",
-        missingItems: missing,
-        nextAction:
-          "Run platform_setup with ssh settings or configure SSH / Exploit Box in Settings.",
+        summary: "engagement_id is required to check a workspace work host",
+        missingItems: ["engagement_id"],
+        nextAction: "Pass the active engagement_id and retry.",
       });
     } else {
       try {
-        const whoami = (await execSSHCommand("whoami", 8000)).trim();
+        const target = await resolveSessionWorkHost(sessionId);
+        const result = await execOnWorkHost(sessionId, "whoami", 8_000);
+        const whoami = result.stdout.trim();
         checks.push({
-          component: "ssh",
+          component: "work_host",
           status: "ready",
           canAutoRepair: false,
-          summary: `SSH connected as ${whoami}`,
+          summary: `${target.kind} work host ready as ${whoami} in ${target.workFolder}`,
           missingItems: [],
           nextAction: "None",
         });
       } catch (error: any) {
         checks.push({
-          component: "ssh",
+          component: "work_host",
           status: "unreachable",
           canAutoRepair: false,
-          summary: `SSH connection failed: ${error.message || error}`,
+          summary: `Work host connection failed: ${error.message || error}`,
           missingItems: [],
           nextAction:
-            "Verify the attack box is running and the SSH credentials are correct.",
+            "Open Connection and verify the workspace host and folder.",
         });
       }
     }
@@ -691,9 +655,11 @@ async function collectPlatformHealth(
       });
     } else {
       try {
-        await execSSHCommand(
+        if (!sessionId) throw new Error("engagement_id is required");
+        await execOnWorkHost(
+          sessionId,
           "command -v openvpn >/dev/null 2>&1 && echo READY || echo MISSING",
-          8000,
+          8_000,
         );
         checks.push({
           component: "vpn",
@@ -708,9 +674,9 @@ async function collectPlatformHealth(
           component: "vpn",
           status: "unreachable",
           canAutoRepair: true,
-          summary: `VPN prerequisites could not be verified over SSH: ${error.message || error}`,
+          summary: `VPN prerequisites could not be verified on the work host: ${error.message || error}`,
           missingItems: [],
-          nextAction: "Fix SSH first, then rerun platform_health.",
+          nextAction: "Verify the workspace work host, then rerun platform_health.",
         });
       }
     }
@@ -815,9 +781,11 @@ function buildRepairSteps(
   return mapping[component] || "";
 }
 
-async function applyRepair(component: string): Promise<string> {
+async function applyRepair(component: string, sessionId?: string): Promise<string> {
   if (component === "vpn") {
-    await execSSHCommand(
+    if (!sessionId) throw new Error("engagement_id is required to repair VPN on a work host");
+    await execOnWorkHost(
+      sessionId,
       "command -v openvpn >/dev/null 2>&1 || " +
         "(export DEBIAN_FRONTEND=noninteractive && sudo apt-get update -qq && sudo apt-get install -y -qq openvpn)",
       120_000,
@@ -828,7 +796,7 @@ async function applyRepair(component: string): Promise<string> {
   if (component === "all") {
     const results: string[] = [];
     try {
-      results.push(await applyRepair("vpn"));
+      results.push(await applyRepair("vpn", sessionId));
     } catch (error: any) {
       results.push(`VPN repair skipped: ${error.message || error}`);
     }
@@ -961,19 +929,18 @@ async function connectVpnProfile(sessionId: string, profileName: string) {
     throw new Error(`VPN profile not found: ${safeName}`);
   }
 
-  const sshConfig = buildSSHConfig();
-  const ssh = await withTimeout(
-    sshConnectPromise(sshConfig),
-    15000,
-    "SSH connect for VPN",
-  );
+  const target = await resolveSessionWorkHost(sessionId);
+  let ssh: SSHClient | null = null;
   try {
     const remotePath = `/tmp/vpn-${safeName}.ovpn`;
-    await withTimeout(
-      uploadFileViaSftp(ssh, profile.path, remotePath),
-      30000,
-      "Upload VPN profile",
-    );
+    if (target.kind === "ssh") {
+      ssh = await connectSSH(target.sshConfig!, 15_000);
+      await withTimeout(uploadFileViaSftp(ssh, profile.path, remotePath), 30000, "Upload VPN profile");
+    } else {
+      const preflight = await execOnWorkHost(sessionId, "command -v openvpn >/dev/null 2>&1 && test -c /dev/net/tun", 5_000);
+      if (preflight.code !== 0) throw new Error("Local VPN requires OpenVPN, /dev/net/tun, and NET_ADMIN");
+      await fs.promises.copyFile(profile.path, remotePath);
+    }
 
     const logFile = `/tmp/openvpn-${safeName}.log`;
     const pidFile = `/tmp/openvpn-${safeName}.pid`;
@@ -991,21 +958,24 @@ async function connectVpnProfile(sessionId: string, profileName: string) {
       "fi",
     ].join("\n");
 
-    const localScriptPath = path.join(VPN_DIR, `vpn-start-${safeName}.sh`);
-    fs.writeFileSync(localScriptPath, scriptContent, "utf8");
-    try {
-      await withTimeout(
-        uploadFileViaSftp(ssh, localScriptPath, scriptPath),
-        10000,
-        "Upload VPN start script",
-      );
-    } finally {
-      fs.unlinkSync(localScriptPath);
+    if (target.kind === "ssh") {
+      const localScriptPath = path.join(VPN_DIR, `vpn-start-${safeName}.sh`);
+      fs.writeFileSync(localScriptPath, scriptContent, "utf8");
+      try {
+        await withTimeout(uploadFileViaSftp(ssh!, localScriptPath, scriptPath), 10000, "Upload VPN start script");
+      } finally {
+        fs.unlinkSync(localScriptPath);
+      }
+      ssh!.end();
+      ssh = null;
+    } else {
+      await fs.promises.writeFile(scriptPath, scriptContent, { mode: 0o700 });
     }
 
-    const startCmd = sudoWrap(scriptPath, sshConfig, true);
+    const privilege = target.kind === "ssh" ? target.sshConfig! : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
+    const startCmd = sudoWrap(scriptPath, privilege, true);
     const { stdout, stderr, code } = await withTimeout(
-      sshExecPromise(ssh, startCmd),
+      execOnWorkHost(sessionId, startCmd, 25_000),
       25000,
       "VPN start",
     );
@@ -1018,14 +988,13 @@ async function connectVpnProfile(sessionId: string, profileName: string) {
         `Failed to start VPN "${safeName}"`,
     );
   } finally {
-    ssh.end();
+    ssh?.end();
   }
 }
 
-async function disconnectVpnConnection(pid?: string, profileName?: string) {
-  const sshConfig = buildSSHConfig();
-  const ssh = await sshConnectPromise(sshConfig);
-  try {
+async function disconnectVpnConnection(sessionId: string, pid?: string, profileName?: string) {
+  const target = await resolveSessionWorkHost(sessionId);
+  {
     let rawCommand = "";
     if (pid) {
       rawCommand = `kill ${parseInt(pid, 10)} 2>/dev/null && echo 'KILLED'`;
@@ -1037,24 +1006,15 @@ async function disconnectVpnConnection(pid?: string, profileName?: string) {
       rawCommand =
         "pkill openvpn 2>/dev/null; rm -f /tmp/openvpn-*.pid /tmp/vpn-*.ovpn; echo 'DONE'";
     }
-    const { stdout } = await sshExecPromise(
-      ssh,
-      sudoWrap(rawCommand, sshConfig),
-    );
+    const privilege = target.kind === "ssh" ? target.sshConfig! : { username: process.getuid?.() === 0 ? "root" : process.env.USER };
+    const { stdout } = await execOnWorkHost(sessionId, sudoWrap(rawCommand, privilege), 15_000);
     return stdout.trim();
-  } finally {
-    ssh.end();
   }
 }
 
-async function vpnStatus() {
-  const sshConfig = buildSSHConfig();
-  const ssh = await sshConnectPromise(sshConfig);
-  try {
-    const { stdout: pgrepOut, code } = await sshExecPromise(
-      ssh,
-      "pgrep -a openvpn 2>/dev/null",
-    );
+async function vpnStatus(sessionId: string) {
+  {
+    const { stdout: pgrepOut, code } = await execOnWorkHost(sessionId, "pgrep -a openvpn 2>/dev/null", 10_000);
     if (code !== 0 || !pgrepOut.trim()) {
       return {
         success: false,
@@ -1081,8 +1041,6 @@ async function vpnStatus() {
       connections,
       message: `${connections.length} VPN connection(s) active`,
     };
-  } finally {
-    ssh.end();
   }
 }
 
@@ -1142,6 +1100,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       description:
         "Check whether SSH, shell, Burp, Caido, Magnitude, VPN, and Google search are correctly configured and reachable.",
       inputSchema: {
+        engagement_id: z.string().optional(),
         component: z
           .enum([
             "all",
@@ -1156,8 +1115,9 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
           .optional(),
       },
     },
-    async ({ component = "all" }) => {
-      const health = await collectPlatformHealth(component);
+    async ({ component = "all", engagement_id }) => {
+      if (engagement_id) await getOwnedSession(user, engagement_id);
+      const health = await collectPlatformHealth(component, engagement_id);
       const text = health
         .map((item) => `- ${item.component}: ${item.status} — ${item.summary}`)
         .join("\n");
@@ -1238,6 +1198,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       description:
         "Explain or apply repair steps for Burp, Magnitude, VPN, SSH, shell, or Google search setup issues.",
       inputSchema: {
+        engagement_id: z.string().optional(),
         component: z.enum([
           "all",
           "ssh",
@@ -1251,9 +1212,11 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         mode: z.enum(["explain", "apply_safe", "apply"]).default("explain"),
       },
     },
-    async ({ component, mode }) => {
+    async ({ component, mode, engagement_id }) => {
+      if (engagement_id) await getOwnedSession(user, engagement_id);
       const health = await collectPlatformHealth(
         component === "all" ? "all" : component,
+        engagement_id,
       );
       if (mode === "explain") {
         return textResult(buildRepairSteps(component, health), { health });
@@ -1261,10 +1224,11 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
 
       const outcome = await withSerializedLock(
         `repair:${component}`,
-        async () => applyRepair(component),
+        async () => applyRepair(component, engagement_id),
       );
       const after = await collectPlatformHealth(
         component === "all" ? "all" : component,
+        engagement_id,
       );
       return textResult(
         `${outcome}\n\nPost-repair health:\n${after.map((item) => `- ${item.component}: ${item.status}`).join("\n")}`,
@@ -1924,12 +1888,12 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
 
       if (action === "disconnect") {
         const outcome = await withSerializedLock("vpn_disconnect", async () =>
-          disconnectVpnConnection(pid, profile_name),
+          disconnectVpnConnection(engagement_id, pid, profile_name),
         );
         return textResult(`VPN disconnect result: ${outcome}`);
       }
 
-      const status = await vpnStatus();
+      const status = await vpnStatus(engagement_id);
       return textResult(
         status.message,
         status as unknown as Record<string, unknown>,

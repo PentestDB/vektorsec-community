@@ -3,6 +3,7 @@ import { IncomingMessage } from "http";
 import { Server } from "http";
 import { sessionLifecycle } from "./session.lifecycle";
 import { ShellManager } from "./shell.manager";
+import SessionsModel from "../models/Sessions/Sessions.model";
 
 interface ShellSocketClient {
   ws: WebSocket;
@@ -116,6 +117,17 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
 
     if (!userId) {
       send(ws, "error", { message: "Unauthorized" });
+      ws.close();
+      return;
+    }
+
+    const ownedSession = await SessionsModel.exists({
+      sessionId,
+      uid: userId,
+      status: "active",
+    });
+    if (!ownedSession) {
+      send(ws, "error", { message: "Session not found" });
       ws.close();
       return;
     }

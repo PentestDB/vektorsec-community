@@ -50,6 +50,95 @@
   gap: 0.65rem;
 }
 
+.caReadyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--bugbase-green);
+  background: rgba(16, 202, 0, 0.07);
+  border: 1px solid rgba(16, 202, 0, 0.18);
+  border-radius: 4px;
+  padding: 0.16rem 0.45rem;
+  font-size: 0.58rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.caSetupCard {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.55rem 1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(159, 89, 255, 0.28);
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(112, 39, 199, 0.11), rgba(112, 39, 199, 0.035));
+  flex-shrink: 0;
+}
+
+.caSetupIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 5px;
+  color: #b884ff;
+  background: rgba(112, 39, 199, 0.16);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.caSetupCopy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.12rem;
+
+  strong {
+    color: var(--primary-text);
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--secondary-text);
+    font-size: 0.62rem;
+    line-height: 1.4;
+  }
+
+  code {
+    max-width: 520px;
+    overflow: hidden;
+    color: var(--secondary-text-500);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.5rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.caSetupButton {
+  height: 1.65rem !important;
+  padding: 0 0.7rem !important;
+  border-radius: 4px !important;
+  font-size: 0.62rem !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+
+.caCheckingBar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--secondary-text-500);
+  font-size: 0.6rem;
+  flex-shrink: 0;
+}
+
 .interceptToggle {
   display: flex;
   align-items: center;

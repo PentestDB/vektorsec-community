@@ -1,8 +1,6 @@
 import axios, { AxiosInstance } from "axios";
 import * as cheerio from "cheerio";
-import { Client as SSHClient } from "ssh2";
-import { buildSSHConfig } from "../utils/sshConfig";
-import { WORKSPACE_DIR } from "../utils/commandSafety";
+import { execOnWorkspaceHost, resolveWorkspaceWorkHost } from "./work-host.service";
 
 const CHALLENGE_DETAIL_CONCURRENCY = 8;
 const CHALLENGE_SYNC_CONCURRENCY = 4;
@@ -31,75 +29,18 @@ export interface SyncProgressEvent {
 
 export type ProgressCallback = (event: SyncProgressEvent) => void;
 
-class SSHSession {
-  private client: SSHClient | null = null;
-  private ready = false;
-
+class WorkHostSession {
+  constructor(private readonly workspaceId: string) {}
   async connect(): Promise<void> {
-    const config = buildSSHConfig();
-    return new Promise((resolve, reject) => {
-      const client = new SSHClient();
-      client
-        .on("ready", () => {
-          this.client = client;
-          this.ready = true;
-          resolve();
-        })
-        .on("error", (err) => {
-          this.ready = false;
-          reject(err);
-        })
-        .on("close", () => {
-          this.ready = false;
-        })
-        .connect({ ...config, keepaliveInterval: 10_000, readyTimeout: 30_000 });
-    });
+    await resolveWorkspaceWorkHost(this.workspaceId);
   }
-
   async exec(command: string): Promise<string> {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        if (!this.client || !this.ready) {
-          console.warn("[CTF] SSH session lost, reconnecting...");
-          try { this.client?.end(); } catch {}
-          this.client = null;
-          await this.connect();
-        }
-        return await this.doExec(command);
-      } catch (err: any) {
-        this.ready = false;
-        if (attempt === 3) throw err;
-        const delay = 1500 * attempt;
-        console.warn(`[CTF] SSH exec attempt ${attempt} failed, retrying in ${delay}ms...`);
-        await sleep(delay);
-        try { this.client?.end(); } catch {}
-        this.client = null;
-      }
-    }
-    throw new Error("SSH exec failed after retries");
+    const result = await execOnWorkspaceHost(this.workspaceId, command);
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || `Command failed (${result.code})`);
+    return `${result.stdout}${result.stderr}`;
   }
-
-  private doExec(command: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      this.client!.exec(command, (err, stream) => {
-        if (err) {
-          this.ready = false;
-          return reject(err);
-        }
-        let output = "";
-        stream.on("data", (data: Buffer) => { output += data.toString(); });
-        stream.stderr.on("data", (data: Buffer) => { output += data.toString(); });
-        stream.on("close", () => resolve(output));
-      });
-    });
-  }
-
   close(): void {
-    if (this.client) {
-      try { this.client.end(); } catch {}
-      this.client = null;
-      this.ready = false;
-    }
+    // Commands own their short-lived transport; there is nothing to retain.
   }
 }
 
@@ -285,6 +226,7 @@ export async function fetchChallenges(
 }
 
 export async function syncToWorkspace(
+  workspaceId: string,
   ctfName: string,
   challenges: CTFdChallenge[],
   ctfdBaseURL: string,
@@ -292,19 +234,18 @@ export async function syncToWorkspace(
   token?: string,
   onProgress?: ProgressCallback,
 ): Promise<{ synced: number; updated: number; skipped: number }> {
-  const ssh = new SSHSession();
+  const ssh = new WorkHostSession(workspaceId);
   try {
     await ssh.connect();
   } catch (err: any) {
     throw new Error(
-      `Exploit box SSH is not reachable. Configure Settings > SSH or start the built-in Kali container. ` +
-      `Current target: ${process.env.SSH_HOST || "localhost"}:${process.env.SSH_PORT || "4242"}. ` +
+      `The workspace work host is not reachable or its folder is unavailable. ` +
       `${err?.code ? `(${err.code})` : ""}`,
     );
   }
 
   try {
-    return await doSync(ssh, ctfName, challenges, ctfdBaseURL, cookie, token, onProgress);
+    return await doSync(workspaceId, ssh, ctfName, challenges, ctfdBaseURL, cookie, token, onProgress);
   } finally {
     ssh.close();
   }
@@ -332,7 +273,8 @@ async function mapLimit<T, R>(
 }
 
 async function doSync(
-  ssh: SSHSession,
+  workspaceId: string,
+  ssh: WorkHostSession,
   ctfName: string,
   challenges: CTFdChallenge[],
   ctfdBaseURL: string,
@@ -343,10 +285,9 @@ async function doSync(
   const safeCTFName = sanitizeDirName(ctfName);
   const baseURL = ctfdBaseURL.replace(/\/+$/, "");
 
-  // Resolve ~ to actual home path so it works inside quotes
-  const home = (await ssh.exec("echo $HOME")).trim();
-  const resolvedWorkspace = WORKSPACE_DIR.replace(/^~/, home);
-  const ctfDir = `${resolvedWorkspace}/${safeCTFName}`;
+  // Work-host commands already start in the workspace folder. Relative paths
+  // avoid accidentally quoting away remote ~/ expansion.
+  const ctfDir = safeCTFName;
 
   console.log(`[CTF] Starting sync for "${ctfName}" -> ${ctfDir}`);
 
@@ -364,7 +305,7 @@ async function doSync(
 
   let completed = 0;
   const actions = await mapLimit(challenges, CHALLENGE_SYNC_CONCURRENCY, async (ch) => {
-    const workerSsh = new SSHSession();
+    const workerSsh = new WorkHostSession(workspaceId);
     await workerSsh.connect();
     try {
       const action = await syncChallenge(workerSsh, ch, ctfDir, baseURL, curlAuth, existingDirs);
@@ -401,7 +342,7 @@ async function doSync(
 }
 
 async function syncChallenge(
-  ssh: SSHSession,
+  ssh: WorkHostSession,
   ch: CTFdChallenge,
   ctfDir: string,
   baseURL: string,
@@ -455,13 +396,13 @@ async function syncChallenge(
   return didUpdate ? "updated" : "skipped";
 }
 
-async function writeChallengeTxt(ssh: SSHSession, challengeDir: string, content: string): Promise<void> {
+async function writeChallengeTxt(ssh: WorkHostSession, challengeDir: string, content: string): Promise<void> {
   const escaped = content.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
   await ssh.exec(`printf '%s' '${escaped}' > "${challengeDir}/challenge.txt"`);
 }
 
 async function downloadChallengeFile(
-  ssh: SSHSession,
+  ssh: WorkHostSession,
   challengeDir: string,
   filePath: string,
   baseURL: string,

@@ -14,8 +14,7 @@ import {
   fetchSolvedChallengeNames,
   detectFlagFormat,
 } from "../services/ctf.service";
-import { execSSHCommand } from "../services/ssh.service";
-import { WORKSPACE_DIR } from "../utils/commandSafety";
+import { execOnWorkspaceHost } from "../services/work-host.service";
 
 function computeTimeToSolveSec(startedAt: unknown, solvedAt: unknown): number | null {
   if (!startedAt || !solvedAt) return null;
@@ -140,6 +139,7 @@ export const syncCtf = async (req: Request, res: Response) => {
     const challenges = await fetchChallenges(url, sessionCookie, apiToken, onProgress);
 
     const result = await syncToWorkspace(
+      workspaceId,
       ctfName,
       challenges,
       url,
@@ -354,10 +354,9 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
     }> = [];
 
     try {
-      const home = (await execSSHCommand("echo $HOME")).trim();
-      const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
-      const indexPath = `${resolvedWs}/${safeCTFName}/challenges.json`;
-      const raw = await execSSHCommand(`cat "${indexPath}" 2>/dev/null || echo "[]"`);
+      const indexPath = `${safeCTFName}/challenges.json`;
+      const result = await execOnWorkspaceHost(workspaceId, `cat "${indexPath}" 2>/dev/null || echo "[]"`);
+      const raw = `${result.stdout}${result.stderr}`;
       challenges = JSON.parse(raw.trim());
     } catch (err: any) {
       console.warn("[CTF] Failed to read challenges.json from attack box:", err.message);
@@ -502,10 +501,9 @@ export const submitFlag = async (req: Request, res: Response) => {
     if (!resolvedId) {
       const safeCTFName = sanitizeDirName(workspace.ctfConfig.ctfName);
       try {
-        const home = (await execSSHCommand("echo $HOME")).trim();
-        const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
-        const indexPath = `${resolvedWs}/${safeCTFName}/challenges.json`;
-        const raw = await execSSHCommand(`cat "${indexPath}" 2>/dev/null || echo "[]"`);
+        const indexPath = `${safeCTFName}/challenges.json`;
+        const result = await execOnWorkspaceHost(workspaceId, `cat "${indexPath}" 2>/dev/null || echo "[]"`);
+        const raw = `${result.stdout}${result.stderr}`;
         const challs = JSON.parse(raw.trim());
         const match = challs.find((c: any) => c.name === challengeName);
         if (match?.id) resolvedId = match.id;

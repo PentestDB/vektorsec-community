@@ -6,8 +6,7 @@ import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/prov
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";
 import { sanitizeDirName } from "./ctf.service";
-import { execSSHCommand } from "./ssh.service";
-import { WORKSPACE_DIR } from "../utils/commandSafety";
+import { execOnWorkHost } from "./work-host.service";
 
 export interface SlashCommandDef {
   name: string;
@@ -652,19 +651,17 @@ Use markdown formatting. Be thorough but concise.`,
       return;
     }
 
-    let home: string;
-    let resolvedWs: string;
     let ctfDir: string;
 
     try {
-      home = (await execSSHCommand("echo $HOME")).trim();
-      resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
-      ctfDir = `${resolvedWs}/${safeCTFName}`;
+      const probe = await execOnWorkHost(sessionId, "pwd", 10_000);
+      if (probe.code !== 0) throw new Error(probe.stderr || "Work host unavailable");
+      ctfDir = safeCTFName;
     } catch (err: any) {
       sse.write("slash_command_result", {
         command: "solve",
         success: false,
-        content: "Cannot connect to the attack box via SSH. Configure SSH settings first.",
+        content: "Cannot access this workspace's work host and folder. Open Connection and verify the host.",
       });
       sse.write("done", { message: "Slash command completed" });
       sse.end();
@@ -673,7 +670,8 @@ Use markdown formatting. Be thorough but concise.`,
 
     let challenges: Array<{ id?: number; name: string; category: string; value: number; safeDir: string; connection_info?: string }> = [];
     try {
-      const raw = await execSSHCommand(`cat "${ctfDir}/challenges.json" 2>/dev/null || echo "[]"`);
+      const result = await execOnWorkHost(sessionId, `cat "${ctfDir}/challenges.json" 2>/dev/null || echo "[]"`);
+      const raw = `${result.stdout}${result.stderr}`;
       challenges = JSON.parse(raw.trim());
     } catch {
       sse.write("slash_command_result", {
@@ -753,14 +751,16 @@ Use markdown formatting. Be thorough but concise.`,
 
     let challengeTxt = "";
     try {
-      challengeTxt = await execSSHCommand(`cat "${challengeDir}/challenge.txt" 2>/dev/null`);
+      const result = await execOnWorkHost(sessionId, `cat "${challengeDir}/challenge.txt" 2>/dev/null`);
+      challengeTxt = `${result.stdout}${result.stderr}`;
     } catch {
       challengeTxt = `Challenge: ${challenge.name}\nCategory: ${challenge.category}\nPoints: ${challenge.value}`;
     }
 
     let files: string[] = [];
     try {
-      const lsOut = await execSSHCommand(`ls -1 "${challengeDir}" 2>/dev/null`);
+      const result = await execOnWorkHost(sessionId, `ls -1 "${challengeDir}" 2>/dev/null`);
+      const lsOut = `${result.stdout}${result.stderr}`;
       files = lsOut.split("\n").map((l) => l.trim()).filter((l) => l && l !== "challenge.txt");
     } catch {}
 
