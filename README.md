@@ -32,9 +32,9 @@ Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
 
 <a href="https://www.star-history.com/?repos=bugbasesecurity%2Fpentest-copilot&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&theme=dark&legend=top-left&sealed_token=djR45bEiztqPFNr3t5SgwUQJwT_7qTeZj_9Wyqzm6naWHjQGHa-ZSivZf_ip0Ij0rINH_-YS18IH6Io5OsJjM2jUQBMGUP1RCDC0zdqC97eQM7rGc_qDmr1V-0o1q7g2cGiFBj21honXtbEGe7Icq5rZ72qep4DbIqdb87L6MHHaac6a3PojbvPsIdlw" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left&sealed_token=djR45bEiztqPFNr3t5SgwUQJwT_7qTeZj_9Wyqzm6naWHjQGHa-ZSivZf_ip0Ij0rINH_-YS18IH6Io5OsJjM2jUQBMGUP1RCDC0zdqC97eQM7rGc_qDmr1V-0o1q7g2cGiFBj21honXtbEGe7Icq5rZ72qep4DbIqdb87L6MHHaac6a3PojbvPsIdlw" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left&sealed_token=djR45bEiztqPFNr3t5SgwUQJwT_7qTeZj_9Wyqzm6naWHjQGHa-ZSivZf_ip0Ij0rINH_-YS18IH6Io5OsJjM2jUQBMGUP1RCDC0zdqC97eQM7rGc_qDmr1V-0o1q7g2cGiFBj21honXtbEGe7Icq5rZ72qep4DbIqdb87L6MHHaac6a3PojbvPsIdlw" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&theme=dark&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
  </picture>
 </a>
 
