@@ -15,10 +15,18 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 
-/** Escape a string for use inside single-quoted sh -c "..." so brew/apt etc. from .zprofile are available. */
-function escapeForLoginShell(command: string): string {
+/**
+ * Wrap a command in a login shell so PATH additions from .zprofile/.bashrc
+ * (brew, apt-installed tooling, language version managers) are available.
+ *
+ * $SHELL must not be used bare: it is routinely unset in containers and over
+ * non-interactive SSH, and the wrapper then degrades to ` -l -c '…'`, so the
+ * shell tries to execute "-l" as a program and every command fails with
+ * "/bin/sh: 1: -l: not found". Fall back to bash, then sh, when it is empty.
+ */
+export function escapeForLoginShell(command: string): string {
   const escaped = command.replace(/'/g, "'\\''");
-  return `$SHELL -l -c '${escaped}'`;
+  return `"\${SHELL:-$(command -v bash || command -v sh)}" -l -c '${escaped}'`;
 }
 
 export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
