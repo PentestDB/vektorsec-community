@@ -25,6 +25,18 @@ export const WEBSOCKIFY_PORT = 9020;
 export const VNC_DISPLAY_NUM = 89;
 export const WEBSOCKIFY_TARGET = "localhost:5989";
 
+// The Magnitude browser agent runs its own VNC stack, separate from the Kali
+// GUI one above. Kept in sync with backend/entrypoint.sh.
+export function getBrowserAgentDisplay(): string {
+  return process.env.DISPLAY || ":99";
+}
+export function getBrowserAgentRfbPort(): number {
+  return parseInt(process.env.BROWSER_AGENT_VNC_RFB_PORT || "5999", 10);
+}
+export function getBrowserAgentNovncPort(): number {
+  return parseInt(process.env.BROWSER_AGENT_NOVNC_PORT || "6080", 10);
+}
+
 export const KALI_API_PORT = 5000;
 export const KALI_API_PATH = "/api";
 

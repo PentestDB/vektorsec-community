@@ -17,7 +17,7 @@ import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
 import { FiMonitor, FiShield } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
-import { TbPlugConnected, TbRadar, TbWorldWww } from "react-icons/tb";
+import { TbPlugConnected, TbRadar, TbTopologyStar3, TbWorldWww } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi";
 import {
   LoadingOutlined,
@@ -180,6 +180,18 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     router.push(`/session/${sessionId}/caido`);
   };
 
+  const navigateToMythic = () => {
+    const mythicId = `${sessionId}/mythic`;
+    let updatedSess = [...sessions];
+    const exists = updatedSess.find((s) => s.id === mythicId);
+    if (!exists) {
+      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
+      updatedSess.push({ id: mythicId, is_main: false, is_active: true, type: "mythic" });
+      dispatch(updateSessions(updatedSess));
+    }
+    router.push(`/session/${sessionId}/mythic`);
+  };
+
   const navigateToBrowserAgent = () => {
     const baId = `${sessionId}/browser-agent`;
     let updatedSess = [...sessions];
@@ -201,6 +213,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const isOnGUI = pathname?.includes("/gui");
   const isOnBurp = pathname?.includes("/burp");
   const isOnCaido = pathname?.includes("/caido");
+  const isOnMythic = pathname?.includes("/mythic");
   const isOnBrowserAgent = pathname?.includes("/browser-agent");
   const isOnVulnerabilities = pathname?.includes("/vulnerabilities");
   const isOnConnection = pathname?.includes("/connection");
@@ -433,6 +446,14 @@ const Sidebar = ({ sessionId, workspaceId }) => {
           >
             <TbRadar />
             Caido
+          </div>
+
+          <div
+            onClick={navigateToMythic}
+            className={isOnMythic ? styles.activeTab : styles.tab}
+          >
+            <TbTopologyStar3 />
+            Mythic C2
           </div>
 
           <div

@@ -7,7 +7,11 @@ import {
   getVncDisplay,
   getVncRfbPort,
   getWebsockifyPort,
+  getBrowserAgentDisplay,
+  getBrowserAgentRfbPort,
+  getBrowserAgentNovncPort,
 } from "../config/constants";
+import { isPortListening } from "../utils/tcpProbe";
 import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
 import {
   clearProviderCache,
@@ -20,6 +24,7 @@ import {
 } from "../services/subscription-inference.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
 import { getBurpBrowserHome } from "../services/burp-ca.service";
+import { normalizeMythicUrl } from "../services/mythic.client";
 import { requireActiveSession } from "../services/session.helpers";
 import {
   getAssignedModels,
@@ -2017,6 +2022,51 @@ export const updateCaidoConfig = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Mythic C2 Configuration ─────────────────────────────────────────
+
+export const getMythicConfig = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    return res.status(200).json({
+      url: env.MYTHIC_URL || "",
+      tokenConfigured: !!env.MYTHIC_API_TOKEN,
+      insecureTls: String(env.MYTHIC_INSECURE_TLS || "").toLowerCase() === "true",
+      configured: !!env.MYTHIC_URL && !!env.MYTHIC_API_TOKEN,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get Mythic config" });
+  }
+};
+
+export const updateMythicConfig = async (req: Request, res: Response) => {
+  try {
+    const { url, token, insecureTls } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ message: "URL is required" });
+    }
+
+    const updates: Record<string, string> = {
+      MYTHIC_URL: normalizeMythicUrl(String(url)),
+      MYTHIC_INSECURE_TLS: insecureTls === true || insecureTls === "true" ? "true" : "false",
+    };
+
+    // Only overwrite the token when one was actually submitted, so the settings
+    // form can round-trip without the client ever seeing the stored value.
+    if (token !== undefined) {
+      updates.MYTHIC_API_TOKEN = String(token || "");
+    }
+
+    updateEnvVars(updates);
+
+    return res.status(200).json({ message: "Mythic configuration updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update Mythic config" });
+  }
+};
+
 // ─── Magnitude Browser Agent Configuration ───────────────────────────
 
 export const getMagnitudeConfig = async (_req: Request, res: Response) => {
@@ -2187,19 +2237,36 @@ export const getBrowserAgentVNC = async (_req: Request, res: Response) => {
     const env = readEnvFile();
     const magnitudeEnabled = env.MAGNITUDE_ENABLED === "true";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
-    const novncPort = process.env.BROWSER_AGENT_NOVNC_PORT || "6080";
+    const display = env.MAGNITUDE_DISPLAY || getBrowserAgentDisplay();
+    const novncPort = String(getBrowserAgentNovncPort());
 
     const fs = await import("fs");
     const inDocker = fs.existsSync("/.dockerenv");
 
+    // Probe the stack instead of assuming it is up because we are in Docker.
+    // x11vnc dies whenever Xvfb fails, which leaves websockify happily serving
+    // the noVNC page with nothing behind it — the client then renders a bare
+    // "Failed to connect to server" with no explanation.
+    const [rfbUp, novncUp] = inDocker
+      ? await Promise.all([
+          isPortListening(getBrowserAgentRfbPort()),
+          isPortListening(getBrowserAgentNovncPort()),
+        ])
+      : [false, false];
+
+    const vncRunning = inDocker && rfbUp && novncUp;
+
     return res.status(200).json({
+      // `available` stays config-intent (headed mode requested); `vncRunning`
+      // reports whether the stream is actually serviceable right now.
       available: magnitudeEnabled && !headless,
       enabled: magnitudeEnabled,
       headless,
       display,
       novncPort,
-      vncRunning: inDocker,
+      vncRunning,
+      rfbUp,
+      novncUp,
       mode: inDocker ? "docker" : "dev",
     });
   } catch (error) {

@@ -320,6 +320,18 @@ export async function execOnWorkspaceHost(
   return execOnResolvedWorkHost(target, command, timeoutMs);
 }
 
+/**
+ * Prepended to every command run on a work host.
+ *
+ * Non-interactive SSH (`ssh host 'cmd'`) does not source ~/.bashrc or ~/.profile,
+ * so tools installed under ~/.local/bin or ~/go/bin are invisible to the agent even
+ * though they resolve fine in an interactive login shell. That applies to anything
+ * installed without root — pipx, `go install`, and the AWS CLI's `-b ~/.local/bin`
+ * mode all land there. Prepending (not appending) means a user-local build wins over
+ * an older system copy of the same tool.
+ */
+const WORK_HOST_PATH_PREFIX = 'export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"';
+
 export async function execOnResolvedWorkHost(
   target: ResolvedWorkHost,
   command: string,
@@ -328,7 +340,8 @@ export async function execOnResolvedWorkHost(
   const folder = target.kind === "local"
     ? shellEscape(expandLocalFolder(target.workFolder))
     : shellFolderExpression(target.workFolder);
-  const inFolder = `mkdir -p -- ${folder} && cd -- ${folder} && ${command}`;
+  const inFolder =
+    `${WORK_HOST_PATH_PREFIX}; mkdir -p -- ${folder} && cd -- ${folder} && ${command}`;
   if (target.kind === "local") {
     try {
       const result = await execAsync(inFolder, {

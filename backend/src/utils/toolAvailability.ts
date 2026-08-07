@@ -15,6 +15,17 @@ const CAIDO_TOOLS = [
   "caido_oast",
 ];
 
+export const MYTHIC_TOOLS = [
+  "mythic_callbacks",
+  "mythic_task",
+  "mythic_task_results",
+  "mythic_pivot",
+  "mythic_payload",
+  "mythic_listener",
+  "mythic_loot",
+  "mythic_graphql",
+];
+
 /**
  * Returns tool names that are NOT configured (missing required env/settings).
  * These tools should be excluded from the LLM context and greyed out in the UI.
@@ -31,6 +42,11 @@ export function getUnconfiguredToolNames(): string[] {
   const caidoConfigured = !!env.CAIDO_URL && !!env.CAIDO_PAT;
   if (!caidoConfigured) {
     unconfigured.push(...CAIDO_TOOLS);
+  }
+
+  const mythicConfigured = !!env.MYTHIC_URL && !!env.MYTHIC_API_TOKEN;
+  if (!mythicConfigured) {
+    unconfigured.push(...MYTHIC_TOOLS);
   }
 
   const magnitudeConfigured = env.MAGNITUDE_ENABLED === "true";

@@ -53,6 +53,51 @@ export function sanitizeDirName(name: string): string {
     .substring(0, 200);
 }
 
+/**
+ * CTFd page routes people naturally copy out of the address bar. Only these are
+ * stripped, so CTFd instances hosted under a sub-path (https://host/ctf) keep
+ * working — blindly discarding the whole path would break them.
+ */
+const CTFD_PAGE_ROUTES = new Set([
+  "challenges",
+  "scoreboard",
+  "users",
+  "teams",
+  "team",
+  "login",
+  "register",
+  "settings",
+  "profile",
+  "notifications",
+  "setup",
+]);
+
+/**
+ * Normalises a user-entered CTFd URL to the instance root: adds a scheme if
+ * missing, drops query/hash, and removes a trailing page route such as
+ * `/challenges` (the page you are usually looking at when you copy the URL).
+ */
+export function normalizeCtfdUrl(input: string): string {
+  let raw = (input || "").trim();
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return raw.replace(/\/+$/, "");
+  }
+
+  const segments = parsed.pathname.split("/").filter(Boolean);
+  while (segments.length > 0 && CTFD_PAGE_ROUTES.has(segments[segments.length - 1].toLowerCase())) {
+    segments.pop();
+  }
+
+  const path = segments.length > 0 ? `/${segments.join("/")}` : "";
+  return `${parsed.origin}${path}`.replace(/\/+$/, "");
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -117,15 +162,94 @@ export async function loginWithCredentials(
   return { sessionCookie, ctfName };
 }
 
-export async function verifyToken(url: string, token: string): Promise<string> {
+export class CtfConnectError extends Error {
+  constructor(
+    message: string,
+    /** Machine-readable cause so callers can decide whether it is fatal. */
+    readonly code: "bad_url" | "bad_token" | "not_available" | "unreachable",
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "CtfConnectError";
+  }
+}
+
+async function fetchCtfName(baseURL: string): Promise<string> {
+  try {
+    const pageRes = await axios.get(baseURL, {
+      timeout: 10_000,
+      headers: { "User-Agent": "PentestCopilot/1.0" },
+    });
+    const $ = cheerio.load(pageRes.data);
+    return $("title").text().trim().replace(/\s*\|.*$/, "") || "CTF";
+  } catch {
+    return "CTF";
+  }
+}
+
+export interface VerifyTokenResult {
+  ctfName: string;
+  /**
+   * False when the token is valid but CTFd will not serve challenges yet —
+   * typically because the event has not started, or (in team mode) the account
+   * has not joined a team. The workspace is still usable; sync succeeds later.
+   */
+  challengesAvailable: boolean;
+  /** Human-readable reason when challengesAvailable is false. */
+  unavailableReason?: string;
+}
+
+export async function verifyToken(url: string, token: string): Promise<VerifyTokenResult> {
   const baseURL = url.replace(/\/+$/, "");
   const client = buildClient(baseURL, undefined, token);
-  const res = await client.get("/api/v1/challenges", { params: { limit: 1 } });
-  if (!res.data?.success) throw new Error("API token verification failed");
 
-  const pageRes = await axios.get(baseURL, { timeout: 10_000, headers: { "User-Agent": "PentestCopilot/1.0" } });
-  const $ = cheerio.load(pageRes.data);
-  return $("title").text().trim().replace(/\s*\|.*$/, "") || "CTF";
+  try {
+    const res = await client.get("/api/v1/challenges", { params: { limit: 1 } });
+    if (!res.data?.success) {
+      throw new CtfConnectError("CTFd rejected the API token.", "bad_token");
+    }
+    return { ctfName: await fetchCtfName(baseURL), challengesAvailable: true };
+  } catch (err: any) {
+    if (err instanceof CtfConnectError) throw err;
+
+    const status = err?.response?.status;
+
+    if (status === 404) {
+      throw new CtfConnectError(
+        "No CTFd API found at that URL. Use the site root (for example https://ctf.example.com), not a page like /challenges.",
+        "bad_url",
+        404,
+      );
+    }
+
+    if (status === 401) {
+      throw new CtfConnectError(
+        "CTFd rejected the API token. Generate a new token in your CTFd profile settings.",
+        "bad_token",
+        401,
+      );
+    }
+
+    // 403 with an accepted token means CTFd is withholding challenges rather
+    // than refusing the credential — the event has not opened, or team mode
+    // requires joining a team first. Connect anyway and let the user sync later.
+    if (status === 403) {
+      return {
+        ctfName: await fetchCtfName(baseURL),
+        challengesAvailable: false,
+        unavailableReason:
+          "CTFd is not serving challenges yet. This usually means the event has not started, " +
+          "or the CTF runs in team mode and your account has not joined a team. " +
+          "Use Sync Challenges once it opens.",
+      };
+    }
+
+    throw new CtfConnectError(
+      `Could not reach the CTFd API (${err?.message ?? "unknown error"}).`,
+      "unreachable",
+      status,
+    );
+  }
 }
 
 /**
@@ -172,7 +296,29 @@ export async function fetchChallenges(
   const client = buildClient(baseURL, cookie, token);
 
   console.log(`[CTF] Fetching challenge list from ${baseURL}...`);
-  const listRes = await client.get("/api/v1/challenges");
+  let listRes;
+  try {
+    listRes = await client.get("/api/v1/challenges");
+  } catch (err: any) {
+    const status = err?.response?.status;
+    // Same distinction as verifyToken: 403 means CTFd is withholding challenges
+    // (event not open, or team mode with no team), not that auth is broken.
+    if (status === 403) {
+      throw new CtfConnectError(
+        "CTFd is not serving challenges yet — the event may not have started, or you need to join a team first.",
+        "not_available",
+        403,
+      );
+    }
+    if (status === 401) {
+      throw new CtfConnectError(
+        "CTFd rejected the stored credentials. Re-authenticate this workspace.",
+        "bad_token",
+        401,
+      );
+    }
+    throw err;
+  }
   if (!listRes.data?.success) throw new Error("Failed to fetch challenges from CTFd");
 
   const rawChallenges: any[] = listRes.data.data || [];
@@ -686,4 +832,216 @@ function extractSetCookies(setCookies: string[] | undefined): string {
 function stripHtml(html: string): string {
   const $ = cheerio.load(html);
   return $.text().trim();
+}
+
+// ─── Challenge focus ─────────────────────────────────────────────────
+
+export interface FocusedChallenge {
+  name: string;
+  safeDir: string;
+  category: string;
+  points: number;
+  challengeDir: string;
+  challengeTxt: string;
+  files: string[];
+}
+
+export type FocusChallengeResult =
+  | { ok: true; challenge: FocusedChallenge }
+  | { ok: false; reason: FocusFailureReason; message: string; candidates?: string[] };
+
+export type FocusFailureReason =
+  | "session_not_found"
+  | "no_ctf"
+  | "work_host_unavailable"
+  | "not_synced"
+  | "no_match"
+  | "ambiguous";
+
+/**
+ * Points a session at a specific CTF challenge: resolves the challenge from the
+ * work host's synced `challenges.json`, records it as the session's activeSolve
+ * and opens a solveHistory entry.
+ *
+ * Shared by the `/solve` slash command and the workspace-level "solve all" so
+ * both produce identical session state. Returns a result object rather than
+ * writing to SSE, since only the slash command has a client attached.
+ */
+export async function focusSessionOnChallenge(params: {
+  sessionId: string;
+  query: string;
+  userNotes?: string;
+  /**
+   * Mirror the choice onto the workspace's single activeSolve field. Correct for
+   * an interactive `/solve`, but meaningless during a bulk start where every
+   * session targets a different challenge and the last writer would simply win.
+   */
+  syncWorkspaceActiveSolve?: boolean;
+}): Promise<FocusChallengeResult> {
+  const { sessionId, query, userNotes = "", syncWorkspaceActiveSolve = false } = params;
+
+  const SessionsModel = (await import("../models/Sessions/Sessions.model")).default;
+  const WorkspaceModel = (await import("../models/Workspace/Workspace.model")).default;
+  const { execOnWorkHost } = await import("./work-host.service");
+
+  const session = await SessionsModel.findOne({ sessionId });
+  if (!session) {
+    return { ok: false, reason: "session_not_found", message: "Session not found." };
+  }
+
+  let ctfConfig: any = session.ctfConfig;
+  if (!ctfConfig?.ctfName && session.workspaceId) {
+    const workspace = await WorkspaceModel.findOne({ workspaceId: session.workspaceId }).lean();
+    if (workspace?.ctfConfig?.ctfName) ctfConfig = workspace.ctfConfig;
+  }
+  if (!ctfConfig?.ctfName) {
+    return {
+      ok: false,
+      reason: "no_ctf",
+      message: "No CTF connected. Connect to a CTFd instance first.",
+    };
+  }
+
+  const ctfDir = sanitizeDirName(ctfConfig.ctfName);
+
+  try {
+    const probe = await execOnWorkHost(sessionId, "pwd", 10_000);
+    if (probe.code !== 0) throw new Error(probe.stderr || "Work host unavailable");
+  } catch {
+    return {
+      ok: false,
+      reason: "work_host_unavailable",
+      message:
+        "Cannot access this workspace's work host and folder. Open Connection and verify the host.",
+    };
+  }
+
+  let challenges: Array<{
+    id?: number;
+    name: string;
+    category: string;
+    value: number;
+    safeDir: string;
+    connection_info?: string;
+  }> = [];
+  try {
+    const result = await execOnWorkHost(sessionId, `cat "${ctfDir}/challenges.json" 2>/dev/null || echo "[]"`);
+    challenges = JSON.parse(`${result.stdout}${result.stderr}`.trim());
+  } catch {
+    return {
+      ok: false,
+      reason: "not_synced",
+      message: "No challenges synced yet. Run sync from the CTF settings panel first.",
+    };
+  }
+  if (challenges.length === 0) {
+    return {
+      ok: false,
+      reason: "not_synced",
+      message: "No challenges synced yet. Run sync from the CTF settings panel first.",
+    };
+  }
+
+  const queryLower = query.trim().toLowerCase();
+  let matched = challenges.filter((c) => c.name.toLowerCase() === queryLower);
+  if (matched.length === 0) matched = challenges.filter((c) => c.safeDir.toLowerCase() === queryLower);
+  if (matched.length === 0) matched = challenges.filter((c) => c.name.toLowerCase().includes(queryLower));
+  if (matched.length === 0) matched = challenges.filter((c) => c.safeDir.toLowerCase().includes(queryLower));
+
+  if (matched.length === 0) {
+    return {
+      ok: false,
+      reason: "no_match",
+      message: `No challenge matching "${query}" found.`,
+      candidates: challenges.map((c) => `${c.name} (${c.category}, ${c.value} pts)`),
+    };
+  }
+  if (matched.length > 1) {
+    const exact = matched.filter((c) => c.name.toLowerCase() === queryLower);
+    if (exact.length === 1) {
+      matched = exact;
+    } else {
+      return {
+        ok: false,
+        reason: "ambiguous",
+        message: `Multiple challenges match "${query}". Be more specific.`,
+        candidates: matched.map((c) => `${c.name} (${c.category}, ${c.value} pts)`),
+      };
+    }
+  }
+
+  const challenge = matched[0];
+  const challengeDir = `${ctfDir}/${challenge.safeDir}`;
+
+  let challengeTxt = "";
+  try {
+    const result = await execOnWorkHost(sessionId, `cat "${challengeDir}/challenge.txt" 2>/dev/null`);
+    challengeTxt = `${result.stdout}${result.stderr}`;
+  } catch {
+    challengeTxt = `Challenge: ${challenge.name}\nCategory: ${challenge.category}\nPoints: ${challenge.value}`;
+  }
+
+  let files: string[] = [];
+  try {
+    const result = await execOnWorkHost(sessionId, `ls -1 "${challengeDir}" 2>/dev/null`);
+    files = `${result.stdout}${result.stderr}`
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && l !== "challenge.txt");
+  } catch {}
+
+  const activeSolve = {
+    name: challenge.name,
+    safeDir: challenge.safeDir,
+    challengeTxt,
+    files,
+    category: challenge.category || undefined,
+    points: challenge.value || undefined,
+    connectionInfo: challenge.connection_info || undefined,
+    userNotes: userNotes || undefined,
+    setAt: new Date(),
+  };
+
+  const update: any = { $set: { "ctfConfig.activeSolve": activeSolve } };
+
+  const existing = await SessionsModel.findOne({ sessionId }).select("ctfConfig.solveHistory").lean();
+  const alreadyTracked = (existing?.ctfConfig?.solveHistory ?? []).some(
+    (r: any) => r.challengeName === challenge.name,
+  );
+  if (!alreadyTracked) {
+    update.$push = {
+      "ctfConfig.solveHistory": {
+        challengeName: challenge.name,
+        challengeId: challenge.id || undefined,
+        safeDir: challenge.safeDir,
+        category: challenge.category || "",
+        status: "solving",
+        attempts: 0,
+        startedAt: new Date(),
+        submittedToCtfd: false,
+      },
+    };
+  }
+
+  await SessionsModel.updateOne({ sessionId }, update);
+
+  if (syncWorkspaceActiveSolve && session.workspaceId) {
+    await WorkspaceModel.updateOne(
+      { workspaceId: session.workspaceId },
+      { $set: { "ctfConfig.activeSolve": activeSolve } },
+    ).catch(() => {});
+  }
+
+  return {
+    ok: true,
+    challenge: {
+      name: challenge.name,
+      safeDir: challenge.safeDir,
+      category: challenge.category || "",
+      points: challenge.value || 0,
+      challengeDir,
+      challengeTxt,
+      files,
+    },
+  };
 }

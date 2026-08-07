@@ -27,6 +27,7 @@ import {
 } from "../utils/modelRegistryStore";
 import { getMagnitudeModelIssue } from "../utils/magnitudeLlm";
 import { getCaidoHealth } from "./caido.client";
+import { getMythicHealth } from "./mythic.client";
 import {
   abortSession,
   hasActiveController,
@@ -481,7 +482,7 @@ async function collectPlatformHealth(
   const checks: HealthCheckResult[] = [];
   const selected =
     component === "all"
-      ? ["ssh", "shell", "burp", "caido", "magnitude", "vpn", "google_search"]
+      ? ["ssh", "shell", "burp", "caido", "mythic", "magnitude", "vpn", "google_search"]
       : [component];
 
   if (selected.includes("ssh") || selected.includes("shell")) {
@@ -589,6 +590,34 @@ async function collectPlatformHealth(
         nextAction: health.connected
           ? "None"
           : "Start the local instance, bind it to an address WSL can reach, and verify CAIDO_URL/CAIDO_PAT.",
+      });
+    }
+  }
+
+  if (selected.includes("mythic")) {
+    if (!env.MYTHIC_URL || !env.MYTHIC_API_TOKEN) {
+      checks.push({
+        component: "mythic",
+        status: "missing",
+        canAutoRepair: false,
+        summary: "Mythic C2 is not configured",
+        missingItems: ["MYTHIC_URL", "MYTHIC_API_TOKEN"],
+        nextAction: "Set the Mythic URL and API token in Settings -> Mythic C2.",
+      });
+    } else {
+      const health = await getMythicHealth();
+      checks.push({
+        component: "mythic",
+        status: health.connected ? "ready" : "unreachable",
+        canAutoRepair: false,
+        summary: health.connected
+          ? `Reachable (${health.url})${health.operation ? ` — operation "${health.operation}"` : ""}, ` +
+            `${health.callbackCount ?? 0} callback(s)`
+          : `Configured but unreachable: ${health.error || "connection failed"}`,
+        missingItems: [],
+        nextAction: health.connected
+          ? "None"
+          : "Start Mythic, confirm the URL is reachable from Pentest Copilot, and verify the API token.",
       });
     }
   }
@@ -1785,6 +1814,45 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
         intercept_action,
       });
       return textResult(formatToolResult(result), structured);
+    },
+  );
+
+  registerMcpTool(
+    server,
+    user,
+    "mythic",
+    {
+      description:
+        "Operate the configured Mythic C2 server. Actions map onto the same tools the agent uses: " +
+        "callbacks, task, task_results, pivot, payload, listener, loot, graphql. All C2 state stays in Mythic. " +
+        "Actions that task an implant, open a pivot, build a payload or write to a target are consent-gated " +
+        'and require "Allow Consent-Gated MCP Tools" to be enabled.',
+      inputSchema: {
+        engagement_id: z.string(),
+        agent_id: z.string().optional(),
+        action: z.enum([
+          "callbacks",
+          "task",
+          "task_results",
+          "pivot",
+          "payload",
+          "listener",
+          "loot",
+          "graphql",
+        ]),
+        // Forwarded verbatim to the underlying tool; see each tool's own schema.
+        args: z.record(z.any()).optional(),
+      },
+    },
+    async ({ engagement_id, agent_id = "mcp", action, args = {} }) => {
+      const { result } = await executeLowLevelTool(
+        engagement_id,
+        agent_id,
+        `mythic_${action}`,
+        args as Record<string, unknown>,
+      );
+      const structured = toolResultPayload(result, { action, ...args });
+      return textResult(formatToolResult(result), structured, result.exitCode !== 0);
     },
   );
 

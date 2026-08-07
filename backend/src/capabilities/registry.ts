@@ -1429,6 +1429,353 @@ Python: requests-html (JS rendering), PyJWT (JWT decode/encode)`,
   ],
 };
 
+const cloudBucket: CapabilityBucket = {
+  id: "cloud",
+  label: "Cloud",
+  description:
+    "Cloud provider CLIs plus enumeration, privilege-escalation, secrets-scanning and container-registry tooling for AWS, GCP, Azure, Alibaba, DigitalOcean and Kubernetes.",
+  promptContext: `Cloud capabilities available:
+- aws: aws sts get-caller-identity — always identify the principal first. Key CTF verbs:
+  s3 ls/cp --no-sign-request, ec2 describe-snapshots --owner-ids all --filters Name=status,Values=completed,
+  ec2 copy-snapshot + register-image (mount a public EBS snapshot), sns subscribe, secretsmanager get-secret-value,
+  ssm get-parameters-by-path, lambda get-function, sts assume-role. Add --region to sweep all regions.
+- gcloud / gsutil: gcloud auth activate-service-account --key-file=sa.json; gsutil ls gs://bucket.
+  Many GCP challenges are solved with raw curl against googleapis.com using a metadata Bearer token —
+  see storage.googleapis.com, secretmanager.googleapis.com and iamcredentials.googleapis.com
+  (generateAccessToken for service-account impersonation).
+- az: az account show; az storage blob list. SAS-URL manipulation is a recurring Azure challenge theme.
+- aliyun / doctl: Alibaba Cloud and DigitalOcean CLIs — Cloud Village hosts challenges on both.
+- kubectl: kubectl get pods/secrets -A; kubectl auth can-i --list — for exposed kubeconfigs and SA tokens.
+- enumerate-iam: enumerate-iam --access-key AKIA... --secret-key ... — brute-force which API calls a
+  leaked key can make. Run this FIRST whenever you obtain unknown AWS credentials.
+- pacu: automated AWS exploitation framework; run_recon / iam__privesc_scan modules.
+- cloudfox: cloudfox aws --profile p all-checks — fast attack-path enumeration.
+- scout / prowler: full multi-cloud security posture audits (slower, very thorough).
+- s3scanner: s3scanner scan -b bucketname — find open/misconfigured buckets.
+- trufflehog / gitleaks: scan repos, filesystems and container layers for leaked cloud credentials.
+- crane / regctl: pull and inspect container images and layers WITHOUT a docker daemon —
+  crane export <image> - | tar -tv; the flag is often in a stale ECR/GCR image layer.
+- checkov / cloudsplaining: analyse Terraform and IAM policies for the intended misconfiguration.
+- roadrecon: Azure AD / Entra ID enumeration.
+- cloud-python: a venv python with boto3, google-cloud-*, azure-* and kubernetes preloaded.
+  Use it for anything the CLIs can't express: cloud-python script.py
+Metadata endpoints worth remembering (SSRF targets):
+  AWS   http://169.254.169.254/latest/meta-data/iam/security-credentials/ (IMDSv2 needs a PUT token)
+  GCP   http://metadata.google.internal/computeMetadata/v1/ with header 'Metadata-Flavor: Google'
+  Azure http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01 with 'Metadata: true'`,
+  capabilities: [
+    {
+      name: "aws",
+      type: "binary",
+      bucket: "cloud",
+      label: "AWS CLI v2",
+      description:
+        "Official AWS CLI. The single most-used tool in Cloud Village CTFs — S3, EC2 snapshots, SNS, Secrets Manager, SSM, Lambda, STS.",
+      usageHint: "aws sts get-caller-identity; aws s3 ls s3://bucket --no-sign-request",
+      installCommand:
+        "curl -fsSL 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o /tmp/awscliv2.zip && unzip -qo /tmp/awscliv2.zip -d /tmp && /tmp/aws/install --update",
+      installCommandDarwin: "brew install awscli",
+      checkCommand: "which aws",
+      size: "120 MB",
+    },
+    {
+      name: "gcloud",
+      type: "binary",
+      bucket: "cloud",
+      label: "Google Cloud SDK",
+      description:
+        "gcloud, gsutil and bq. Service-account activation, GCS bucket access, Secret Manager, Cloud Build artifacts.",
+      usageHint: "gcloud auth activate-service-account --key-file=sa.json; gsutil ls gs://bucket",
+      installCommand:
+        "curl -fsSL 'https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz' -o /tmp/gcloud.tgz && tar -xzf /tmp/gcloud.tgz -C /opt && /opt/google-cloud-sdk/install.sh -q --path-update false && ln -sf /opt/google-cloud-sdk/bin/gcloud /opt/google-cloud-sdk/bin/gsutil /opt/google-cloud-sdk/bin/bq /usr/local/bin/",
+      installCommandDarwin: "brew install --cask google-cloud-sdk",
+      checkCommand: "which gcloud",
+      size: "200 MB",
+    },
+    {
+      name: "az",
+      type: "binary",
+      bucket: "cloud",
+      label: "Azure CLI",
+      description:
+        "Azure CLI. Storage blobs, SAS URLs, key vaults, managed identity — the core Azure challenge surface.",
+      usageHint: "az account show; az storage blob list --account-name acct -c container",
+      installCommand: "curl -fsSL https://aka.ms/InstallAzureCLIDeb | bash",
+      installCommandDarwin: "brew install azure-cli",
+      checkCommand: "which az",
+      size: "100 MB",
+    },
+    {
+      name: "aliyun",
+      type: "binary",
+      bucket: "cloud",
+      label: "Alibaba Cloud CLI",
+      description: "Alibaba Cloud CLI. Cloud Village explicitly hosts challenges on Alibaba Cloud.",
+      usageHint: "aliyun oss ls; aliyun ecs DescribeInstances",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/aliyun/aliyun-cli/releases/latest | grep -o 'https://[^\"]*aliyun-cli-linux-[0-9.]*-amd64\\.tgz' | head -1)\" -o /tmp/aliyun.tgz && tar -xzf /tmp/aliyun.tgz -C /usr/local/bin aliyun",
+      checkCommand: "which aliyun",
+      size: "30 MB",
+    },
+    {
+      name: "doctl",
+      type: "binary",
+      bucket: "cloud",
+      label: "DigitalOcean CLI",
+      description: "DigitalOcean CLI. Spaces buckets, droplets, and DO-hosted Cloud Village challenges.",
+      usageHint: "doctl compute droplet list; doctl auth init",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/digitalocean/doctl/releases/latest | grep -o 'https://[^\\\"]*linux-amd64.tar.gz' | head -1)\" -o /tmp/doctl.tgz && tar -xzf /tmp/doctl.tgz -C /usr/local/bin doctl",
+      installCommandDarwin: "brew install doctl",
+      checkCommand: "which doctl",
+      size: "15 MB",
+    },
+    {
+      name: "kubectl",
+      type: "binary",
+      bucket: "cloud",
+      label: "kubectl",
+      description:
+        "Kubernetes CLI. For exposed kubeconfigs, service-account tokens, and container-escape challenges.",
+      usageHint: "kubectl auth can-i --list; kubectl get secrets -A -o yaml",
+      installCommand:
+        "curl -fsSL \"https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl\" -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl",
+      installCommandDarwin: "brew install kubectl",
+      checkCommand: "which kubectl",
+      size: "50 MB",
+    },
+    {
+      name: "enumerate-iam",
+      type: "binary",
+      bucket: "cloud",
+      label: "enumerate-iam",
+      description:
+        "Brute-forces which AWS API calls a set of credentials is permitted to make. Run first on any leaked key pair.",
+      usageHint: "enumerate-iam --access-key AKIA... --secret-key ...",
+      installCommand:
+        "git clone --depth 1 https://github.com/andresriancho/enumerate-iam.git /opt/enumerate-iam && python3 -m venv /opt/enumerate-iam/venv && /opt/enumerate-iam/venv/bin/pip install -r /opt/enumerate-iam/requirements.txt && printf '#!/bin/sh\\nexec env PYTHONPATH=/opt/enumerate-iam /opt/enumerate-iam/venv/bin/python /opt/enumerate-iam/enumerate-iam.py \"$@\"\\n' > /usr/local/bin/enumerate-iam && chmod +x /usr/local/bin/enumerate-iam",
+      checkCommand: "which enumerate-iam",
+      size: "50 MB",
+    },
+    {
+      name: "pacu",
+      type: "binary",
+      bucket: "cloud",
+      label: "Pacu",
+      description:
+        "AWS exploitation framework by Rhino Security. Recon and IAM privilege-escalation modules.",
+      usageHint: "pacu; then: run iam__enum_permissions / run iam__privesc_scan",
+      installCommand: "pipx install pacu || python3 -m pip install --break-system-packages pacu",
+      checkCommand: "which pacu",
+      size: "80 MB",
+    },
+    {
+      name: "cloudfox",
+      type: "binary",
+      bucket: "cloud",
+      label: "CloudFox",
+      description:
+        "BishopFox attack-path enumeration for AWS/Azure/GCP. Fastest way to map what a credential can reach.",
+      usageHint: "cloudfox aws --profile ctf all-checks",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/BishopFox/cloudfox/releases/latest | grep -o 'https://[^\"]*cloudfox-linux-amd64\\.zip' | head -1)\" -o /tmp/cf.zip && unzip -qo /tmp/cf.zip -d /tmp/cf && install -m755 \"$(find /tmp/cf -name cloudfox -type f | head -1)\" /usr/local/bin/cloudfox",
+      installCommandDarwin: "brew install cloudfox",
+      checkCommand: "which cloudfox",
+      size: "40 MB",
+    },
+    {
+      name: "scout",
+      type: "binary",
+      bucket: "cloud",
+      label: "ScoutSuite",
+      description: "Multi-cloud security auditing. Full posture report across AWS, Azure, GCP, Alibaba.",
+      usageHint: "scout aws --profile ctf",
+      installCommand: "pipx install scoutsuite || python3 -m pip install --break-system-packages scoutsuite",
+      checkCommand: "which scout",
+      size: "60 MB",
+    },
+    {
+      name: "prowler",
+      type: "binary",
+      bucket: "cloud",
+      label: "Prowler",
+      description: "Deep multi-cloud security assessment with hundreds of checks. Thorough but slow.",
+      usageHint: "prowler aws --profile ctf",
+      installCommand: "pipx install prowler || python3 -m pip install --break-system-packages prowler",
+      checkCommand: "which prowler",
+      size: "100 MB",
+    },
+    {
+      name: "s3scanner",
+      type: "binary",
+      bucket: "cloud",
+      label: "S3Scanner",
+      description: "Finds open and misconfigured S3-compatible buckets and dumps their contents.",
+      usageHint: "s3scanner scan -b bucket-name",
+      installCommand: "pipx install s3scanner || python3 -m pip install --break-system-packages s3scanner",
+      checkCommand: "which s3scanner",
+      size: "10 MB",
+    },
+    {
+      name: "cloudsplaining",
+      type: "binary",
+      bucket: "cloud",
+      label: "Cloudsplaining",
+      description: "IAM policy analysis. Flags over-permissive policies and privilege-escalation paths.",
+      usageHint: "cloudsplaining scan-policy-file --input-file policy.json",
+      installCommand: "pipx install cloudsplaining || python3 -m pip install --break-system-packages cloudsplaining",
+      checkCommand: "which cloudsplaining",
+      size: "20 MB",
+    },
+    {
+      name: "roadrecon",
+      type: "binary",
+      bucket: "cloud",
+      label: "ROADrecon",
+      description: "Azure AD / Entra ID enumeration and offline exploration of tenant data.",
+      usageHint: "roadrecon auth -u user@tenant -p pass; roadrecon gather",
+      installCommand: "pipx install roadrecon || python3 -m pip install --break-system-packages roadrecon",
+      checkCommand: "which roadrecon",
+      size: "40 MB",
+    },
+    {
+      name: "trufflehog",
+      type: "binary",
+      bucket: "cloud",
+      label: "TruffleHog",
+      description:
+        "Verified secret scanning across git history, filesystems, S3 buckets and container images.",
+      usageHint: "trufflehog filesystem ./dir --only-verified; trufflehog git https://repo",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/trufflesecurity/trufflehog/releases/latest | grep -o 'https://[^\\\"]*linux_amd64.tar.gz' | head -1)\" -o /tmp/th.tgz && tar -xzf /tmp/th.tgz -C /usr/local/bin trufflehog",
+      installCommandDarwin: "brew install trufflehog",
+      checkCommand: "which trufflehog",
+      size: "40 MB",
+    },
+    {
+      name: "gitleaks",
+      type: "binary",
+      bucket: "cloud",
+      label: "Gitleaks",
+      description: "Fast git-history secret scanner. Catches keys committed then deleted.",
+      usageHint: "gitleaks detect --source . -v",
+      installCommand:
+        "curl -fsSL \"$(curl -fsSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep -o 'https://[^\\\"]*linux_x64.tar.gz' | head -1)\" -o /tmp/gl.tgz && tar -xzf /tmp/gl.tgz -C /usr/local/bin gitleaks",
+      installCommandDarwin: "brew install gitleaks",
+      checkCommand: "which gitleaks",
+      size: "15 MB",
+    },
+    {
+      name: "crane",
+      type: "binary",
+      bucket: "cloud",
+      label: "crane",
+      description:
+        "Pull, inspect and export container images without a docker daemon. For ECR/GCR image-layer challenges.",
+      usageHint: "crane manifest <image>; crane export <image> - | tar -tv",
+      installCommand:
+        "curl -fsSL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz -o /tmp/crane.tgz && tar -xzf /tmp/crane.tgz -C /usr/local/bin crane",
+      installCommandDarwin: "brew install crane",
+      checkCommand: "which crane",
+      size: "20 MB",
+    },
+    {
+      name: "regctl",
+      type: "binary",
+      bucket: "cloud",
+      label: "regctl",
+      description: "Registry client for inspecting image manifests, layers and blobs across registries.",
+      usageHint: "regctl image inspect <image>; regctl blob get <repo> <digest>",
+      installCommand:
+        "curl -fsSL https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 -o /usr/local/bin/regctl && chmod +x /usr/local/bin/regctl",
+      checkCommand: "which regctl",
+      size: "15 MB",
+    },
+    {
+      name: "checkov",
+      type: "binary",
+      bucket: "cloud",
+      label: "Checkov",
+      description:
+        "Static analysis for Terraform/CloudFormation/Kubernetes IaC. Points straight at the planted misconfiguration.",
+      usageHint: "checkov -f main.tf",
+      installCommand: "pipx install checkov || python3 -m pip install --break-system-packages checkov",
+      checkCommand: "which checkov",
+      size: "60 MB",
+    },
+    {
+      name: "yq",
+      type: "binary",
+      bucket: "cloud",
+      label: "yq",
+      description: "YAML/JSON processor. Parsing kubeconfigs, CloudFormation, GitHub Actions workflows.",
+      usageHint: "yq '.clusters[].cluster.server' kubeconfig.yaml",
+      installCommand:
+        "curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq",
+      installCommandDarwin: "brew install yq",
+      checkCommand: "which yq",
+      size: "10 MB",
+    },
+    {
+      name: "firefox_decrypt",
+      type: "binary",
+      bucket: "cloud",
+      label: "firefox_decrypt",
+      description:
+        "Decrypts saved credentials from a Firefox profile (logins.json + key4.db). Used in Cloud Village 2024.",
+      usageHint: "firefox_decrypt /path/to/profile",
+      installCommand:
+        "git clone --depth 1 https://github.com/unode/firefox_decrypt.git /opt/firefox_decrypt && printf '#!/bin/sh\\nexec python3 /opt/firefox_decrypt/firefox_decrypt.py \"$@\"\\n' > /usr/local/bin/firefox_decrypt && chmod +x /usr/local/bin/firefox_decrypt",
+      checkCommand: "which firefox_decrypt",
+      size: "5 MB",
+    },
+    {
+      name: "boto3",
+      type: "python_package",
+      bucket: "cloud",
+      label: "boto3",
+      description:
+        "AWS SDK for Python. For anything the CLI can't express — unsigned requests, cross-region sweeps, custom signing.",
+      usageHint: "import boto3; boto3.client('s3', region_name='us-east-1')",
+      installCommand: "python3 -m pip install --break-system-packages boto3 botocore",
+      checkCommand: "python3 -c 'import boto3'",
+      size: "20 MB",
+    },
+    {
+      name: "google-cloud-storage",
+      type: "python_package",
+      bucket: "cloud",
+      label: "google-cloud SDK (Python)",
+      description: "GCP SDK for Python — storage, auth and generic API client for token-based access.",
+      installCommand:
+        "python3 -m pip install --break-system-packages google-cloud-storage google-auth google-api-python-client",
+      checkCommand: "python3 -c 'import google.cloud.storage'",
+      size: "30 MB",
+    },
+    {
+      name: "azure-identity",
+      type: "python_package",
+      bucket: "cloud",
+      label: "azure SDK (Python)",
+      description: "Azure SDK for Python — identity, blob storage and resource management.",
+      installCommand:
+        "python3 -m pip install --break-system-packages azure-identity azure-storage-blob azure-mgmt-resource",
+      checkCommand: "python3 -c 'import azure.identity'",
+      size: "30 MB",
+    },
+    {
+      name: "kubernetes",
+      type: "python_package",
+      bucket: "cloud",
+      label: "kubernetes (Python)",
+      description: "Kubernetes API client for Python. Scripted cluster enumeration from a stolen token.",
+      installCommand: "python3 -m pip install --break-system-packages kubernetes",
+      checkCommand: "python3 -c 'import kubernetes'",
+      size: "15 MB",
+    },
+  ],
+};
+
 export const capabilityBuckets: CapabilityBucket[] = [
   coreBucket,
   networkBucket,
@@ -1438,6 +1785,7 @@ export const capabilityBuckets: CapabilityBucket[] = [
   forensicsBucket,
   stegoBucket,
   webBucket,
+  cloudBucket,
 ];
 
 export const allCapabilities: Capability[] = capabilityBuckets.flatMap(
@@ -1533,7 +1881,12 @@ export function buildDetectionScript(capabilityNames: string[]): string {
       `echo -n "${cap.name}:"; ${cap.checkCommand} > /dev/null 2>&1 && echo "yes" || echo "no"`
     );
   }
-  return checks.join(" ; ");
+  // Detection runs over non-interactive SSH, which does not source ~/.bashrc, so
+  // user-local installs (~/.local/bin from pipx and root-less installers, ~/go/bin
+  // from `go install`) would otherwise be reported as missing even when present.
+  // Must match the prefix used in work-host.service.ts so detection and execution agree.
+  const pathPrefix = 'export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"';
+  return [pathPrefix, ...checks].join(" ; ");
 }
 
 export function parseDetectionOutput(

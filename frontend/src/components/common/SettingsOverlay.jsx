@@ -6,6 +6,7 @@ import {
   TbTools,
   TbBrain,
   TbRadar,
+  TbTopologyStar3,
   TbWorldWww,
   TbAdjustmentsHorizontal,
 } from "react-icons/tb";
@@ -15,6 +16,7 @@ import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
+import MythicSettingsPage from "@/components/pages/settings/MythicSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
@@ -63,6 +65,14 @@ const TABS = [
     description: "Configure URL, token, and proxy settings.",
     icon: TbRadar,
     component: CaidoSettingsPage,
+  },
+  {
+    key: "mythic",
+    label: "Mythic C2",
+    description:
+      "Connect a Mythic command-and-control server for post-exploitation and pivoting.",
+    icon: TbTopologyStar3,
+    component: MythicSettingsPage,
   },
   {
     key: "magnitude",

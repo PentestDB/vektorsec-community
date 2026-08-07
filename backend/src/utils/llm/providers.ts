@@ -26,6 +26,7 @@ export type ProviderType =
   | "google"
   | "mistralai"
   | "kimi"
+  | "bedrock"
   | "codex-subscription"
   | "claude-subscription";
 
@@ -50,9 +51,35 @@ const PROVIDER_DEFAULTS: Record<ProviderType, { baseURL: string }> = {
   },
   mistralai: { baseURL: "https://api.mistral.ai/v1" },
   kimi: { baseURL: "https://api.moonshot.ai/v1" },
+  // Region-specific; resolved at call time by bedrockBaseURL().
+  bedrock: { baseURL: "" },
   "codex-subscription": { baseURL: "" },
   "claude-subscription": { baseURL: "" },
 };
+
+export const DEFAULT_BEDROCK_REGION = "us-east-1";
+
+/**
+ * AWS Bedrock exposes an OpenAI-compatible endpoint authenticated with a
+ * long-term Bedrock API key as a bearer token, so it rides the standard OpenAI
+ * client path — no SigV4 signing required.
+ *
+ * The region is part of the hostname. An explicit baseURL always wins; failing
+ * that we read BEDROCK_REGION / AWS_REGION, then fall back to us-east-1.
+ */
+export function bedrockBaseURL(baseURL?: string): string {
+  if (baseURL) return baseURL.replace(/\/+$/, "");
+
+  let region = DEFAULT_BEDROCK_REGION;
+  try {
+    const env = readEnvFile();
+    region = env.BEDROCK_REGION || env.AWS_REGION || DEFAULT_BEDROCK_REGION;
+  } catch {
+    // Env file unreadable — the default region still yields a valid endpoint.
+  }
+
+  return `https://bedrock-runtime.${region}.amazonaws.com/openai/v1`;
+}
 
 function isAnthropicApiProvider(provider: ProviderType): boolean {
   return provider === "anthropic" || provider === "anthropic-compatible";
@@ -62,6 +89,7 @@ function defaultBaseURLForProvider(
   provider: ProviderType,
   baseURL?: string,
 ): string | undefined {
+  if (provider === "bedrock") return bedrockBaseURL(baseURL);
   if (baseURL) return baseURL;
   if (provider === "anthropic-compatible") return undefined;
   return PROVIDER_DEFAULTS[provider]?.baseURL || undefined;

@@ -25,6 +25,55 @@ const CONSENT_CONFIG = {
     getCode: (args) => args?.input ?? "",
     language: "bash",
   },
+  mythic_task: {
+    title: "Tasking a live C2 implant requires approval",
+    getCode: (args) => {
+      const target =
+        args?.callback_display_id != null
+          ? `# target: Mythic callback ${args.callback_display_id}`
+          : "";
+      const command = `${args?.command ?? ""} ${args?.params ?? ""}`.trim();
+      return [target, command].filter(Boolean).join("\n");
+    },
+    language: "bash",
+  },
+  mythic_pivot: {
+    title: "Opening a network pivot requires approval",
+    getCode: (args) =>
+      [
+        `# ${args?.action ?? "pivot"} on Mythic callback ${args?.callback_display_id ?? "?"}`,
+        args?.port ? `port: ${args.port}` : "",
+        args?.remote_ip ? `forward to: ${args.remote_ip}:${args.remote_port ?? "?"}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    language: "bash",
+  },
+  mythic_payload: {
+    title: "Building or fetching an implant requires approval",
+    getCode: (args) =>
+      args?.definition ?? `${args?.action ?? ""} ${args?.save_path ?? args?.agent_file_id ?? ""}`.trim(),
+    language: "json",
+  },
+  mythic_listener: {
+    title: "Changing a C2 listener requires approval",
+    getCode: (args) => `${args?.action ?? ""} ${args?.profile_name ?? ""}`.trim(),
+    language: "text",
+  },
+  mythic_loot: {
+    title: "Writing a file to a target host requires approval",
+    getCode: (args) =>
+      [
+        `# Mythic callback ${args?.callback_display_id ?? "?"}`,
+        `${args?.local_path ?? "?"} → ${args?.remote_path ?? "?"}`,
+      ].join("\n"),
+    language: "bash",
+  },
+  mythic_graphql: {
+    title: "Raw C2 mutation requires approval",
+    getCode: (args) => args?.query ?? "",
+    language: "graphql",
+  },
 };
 
 const DEFAULT_CONFIG = {
@@ -39,6 +88,10 @@ function getConsentSummary(toolName, safetyBlock) {
   if (toolName === "run_python_script") return "Review script";
   if (toolName === "run_install_tool") return "Review install";
   if (toolName === "write_to_shell") return "Review shell input";
+  if (toolName === "mythic_task") return "Review C2 tasking";
+  if (toolName === "mythic_pivot") return "Review network pivot";
+  if (toolName === "mythic_loot") return "Review file write to target";
+  if (toolName?.startsWith("mythic_")) return "Review C2 action";
   return "Review action";
 }
 

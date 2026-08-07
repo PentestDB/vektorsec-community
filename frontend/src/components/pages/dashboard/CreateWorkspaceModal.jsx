@@ -76,34 +76,68 @@ const CreateWorkspaceModal = ({ show, setShow, close }) => {
           ? { url: values.ctfUrl, apiToken: values.apiToken }
           : { url: values.ctfUrl, username: values.username, password: values.password };
 
-      await connectCtf(createdWorkspaceId, connectBody);
+      const connectResult = await connectCtf(createdWorkspaceId, connectBody);
+
+      const finish = (notify) => {
+        queryClient.invalidateQueries(["get-user-workspaces"]);
+        notify();
+        router.push(`/workspace/${createdWorkspaceId}`);
+        handleClose();
+      };
+
+      // The CTF is connected but not serving challenges yet (not started, or
+      // team mode with no team). The workspace is valid — keep it and let the
+      // user sync from the workspace page once the event opens.
+      if (connectResult?.challengesAvailable === false) {
+        finish(() =>
+          message.info(
+            connectResult.unavailableReason ||
+              "Connected, but challenges aren't available yet. Use Sync Challenges once the CTF starts.",
+            8,
+          ),
+        );
+        return;
+      }
+
       setSyncStatus("Connected! Syncing challenges...");
 
-      await new Promise((resolve, reject) => {
-        syncCtfStream(
-          createdWorkspaceId,
-          (event) => {
-            if (event.phase === "fetch") {
-              setSyncStatus(`Fetching challenges... ${event.current || ""}/${event.total || "?"}`);
-            } else if (event.phase === "sync") {
-              setSyncStatus(`Syncing: ${event.name || ""} (${event.current}/${event.total})`);
-            } else if (event.phase === "done") {
-              setSyncStatus(`Done! ${event.total} challenges synced.`);
-            } else if (event.phase === "error") {
-              reject(new Error(event.detail || "Sync failed"));
-            }
-          },
-          resolve,
-          reject,
+      try {
+        await new Promise((resolve, reject) => {
+          syncCtfStream(
+            createdWorkspaceId,
+            (event) => {
+              if (event.phase === "fetch") {
+                setSyncStatus(`Fetching challenges... ${event.current || ""}/${event.total || "?"}`);
+              } else if (event.phase === "sync") {
+                setSyncStatus(`Syncing: ${event.name || ""} (${event.current}/${event.total})`);
+              } else if (event.phase === "done") {
+                setSyncStatus(`Done! ${event.total} challenges synced.`);
+              } else if (event.phase === "error") {
+                reject(new Error(event.detail || "Sync failed"));
+              }
+            },
+            resolve,
+            reject,
+          );
+        });
+      } catch (syncErr) {
+        // Connection already saved — a sync failure must not discard the
+        // workspace. Hand the user their workspace with the reason instead.
+        finish(() =>
+          message.warning(
+            `Connected, but syncing challenges failed: ${syncErr?.message || "unknown error"}. You can retry with Sync Challenges.`,
+            8,
+          ),
         );
-      });
+        return;
+      }
 
-      queryClient.invalidateQueries(["get-user-workspaces"]);
-      message.success("Workspace created and CTF synced!");
-      router.push(`/workspace/${createdWorkspaceId}`);
-      handleClose();
+      finish(() => message.success("Workspace created and CTF synced!"));
     } catch (err) {
-      message.error(err?.message || "Failed to connect to CTF");
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to connect to CTF",
+        8,
+      );
       setSyncStatus("");
     } finally {
       setSyncing(false);

@@ -73,6 +73,23 @@ export interface ActiveShell {
   obtainedVia?: string;
 }
 
+/**
+ * A C2 callback the agent is currently working through. Lives here — not in Mongo —
+ * so the agent keeps track of its own implants across a long engagement; Mythic
+ * remains the system of record for everything about them.
+ */
+export interface ActiveImplant {
+  callbackDisplayId: number;
+  host: string;
+  user?: string;
+  domain?: string;
+  os?: string;
+  integrityLevel?: string;
+  agentType?: string;
+  /** host:port of a live SOCKS proxy through this implant, if one is open. */
+  socksProxy?: string;
+}
+
 // ─── CTF types ──────────────────────────────────────────────────────
 
 export interface FlagAttempt {
@@ -98,6 +115,7 @@ export class EngagementState {
   services: DiscoveredService[] = [];
   vulnerabilities: Vulnerability[] = [];
   shells: ActiveShell[] = [];
+  implants: ActiveImplant[] = [];
 
   // CTF fields
   challengeName?: string;
@@ -132,6 +150,7 @@ export class EngagementState {
       this.credentials.length === 0 &&
       this.vulnerabilities.length === 0 &&
       this.shells.length === 0 &&
+      this.implants.length === 0 &&
       this.flagAttempts.length === 0 &&
       this.distfiles.length === 0 &&
       this.keyDiscoveries.length === 0 &&
@@ -206,9 +225,34 @@ export class EngagementState {
       }
     }
 
+    if (this.implants.length) {
+      sections.push("## Mythic C2 Implants");
+      for (const i of this.implants) {
+        const principal = [i.domain, i.user].filter(Boolean).join("\\") || "?";
+        const integrity = i.integrityLevel ? ` [${i.integrityLevel}]` : "";
+        const agent = i.agentType ? ` via ${i.agentType}` : "";
+        const socks = i.socksProxy ? ` — SOCKS at ${i.socksProxy}` : "";
+        sections.push(
+          `- callback ${i.callbackDisplayId}: ${principal}@${i.host}${integrity}${agent}${socks}`,
+        );
+      }
+    }
+
     this.renderShared(sections);
     sections.push("</engagement_state>");
     return sections.join("\n");
+  }
+
+  /** Insert-or-merge an implant by callback display id. */
+  upsertImplant(implant: ActiveImplant): void {
+    const existing = this.implants.find(
+      (i) => i.callbackDisplayId === implant.callbackDisplayId,
+    );
+    if (existing) {
+      Object.assign(existing, implant);
+      return;
+    }
+    this.implants.push(implant);
   }
 
   private renderCtfState(): string {

@@ -24,3 +24,10 @@ ssh-keys/
 # ── Editor / OS ──
 **/.DS_Store
 **/.vscode
+
+# ── Local agent/tooling state ──
+/.claude/
+/.codex-tmp/
+
+# ── Generated deliverables (decks, reports) ──
+/output/
