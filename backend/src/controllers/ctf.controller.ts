@@ -727,18 +727,43 @@ export const startSolvingAll = async (req: Request, res: Response) => {
         skipped.push({ name: ch.name, reason: "no session" });
         continue;
       }
-      if (session.agentState === "running" && hasActiveController(session.sessionId)) {
+      // Only a live in-process controller means genuinely running. A DB state of
+      // "running" with no controller is stale (the process died, or the server
+      // restarted) and must be restartable rather than skipped forever.
+      if (hasActiveController(session.sessionId)) {
         skipped.push({ name: ch.name, reason: "already running" });
         continue;
       }
       started.push({ sessionId: session.sessionId, name: ch.name });
     }
 
-    // Dispatch without awaiting: the client gets the plan back immediately and
-    // watches progress through each session's own history.
-    for (const target of started) {
-      void runSolveDetached(target.sessionId, target.name, userId);
+    // Stale "running" state blocks the UI and hides the fact that nothing is
+    // actually executing. Any session we are about to start has no live
+    // controller (checked above), so clear it before dispatching.
+    if (started.length > 0) {
+      await SessionsModel.updateMany(
+        { sessionId: { $in: started.map((t) => t.sessionId) }, agentState: "running" },
+        { $set: { agentState: "idle" } },
+      );
     }
+
+    // Dispatch in a bounded pool rather than all at once. Each agent opens SSH
+    // shells on the workspace host, and sshd's defaults (MaxStartups 10:30:100,
+    // MaxSessions 10) start dropping connections past ten concurrent — which
+    // strands agents with no shell and no output. Override with
+    // CTF_SOLVE_ALL_CONCURRENCY=0 for unlimited.
+    const configured = parseInt(process.env.CTF_SOLVE_ALL_CONCURRENCY ?? "6", 10);
+    const limit = Number.isFinite(configured) && configured > 0 ? configured : started.length;
+
+    void (async () => {
+      const queue = [...started];
+      const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+        for (let next = queue.shift(); next; next = queue.shift()) {
+          await runSolveDetached(next.sessionId, next.name, userId);
+        }
+      });
+      await Promise.allSettled(workers);
+    })();
 
     return res.status(200).json({
       started: started.length,

@@ -75,6 +75,12 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "kimi-k2.7-code": 256_000,
   "kimi-k2.6": 256_000,
   "MiniMax-M2": 204_800,
+  "MiniMax-M2.1": 204_800,
+  "MiniMax-M2.1-highspeed": 204_800,
+  "MiniMax-M2.5": 204_800,
+  "MiniMax-M2.5-highspeed": 204_800,
+  "MiniMax-M2.7": 204_800,
+  "MiniMax-M2.7-highspeed": 204_800,
 };
 
 export const DEFAULT_CONTEXT_LIMIT = 128_000;

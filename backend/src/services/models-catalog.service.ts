@@ -270,6 +270,38 @@ export const CURATED_PROVIDERS: CatalogProvider[] = [
     ],
   },
   {
+    // MiniMax speaks the Anthropic Messages API, so these route through the
+    // Anthropic client path with the MiniMax base URL applied automatically.
+    // The same models remain listed under "Anthropic-Compatible" for anyone
+    // pointing at a self-hosted or proxied endpoint.
+    id: "minimax",
+    name: "MiniMax",
+    models: [
+      model("minimax/MiniMax-M2.7", "MiniMax-M2.7", "MiniMax M2.7", 204_800),
+      model(
+        "minimax/MiniMax-M2.7-highspeed",
+        "MiniMax-M2.7-highspeed",
+        "MiniMax M2.7 highspeed",
+        204_800,
+      ),
+      model("minimax/MiniMax-M2.5", "MiniMax-M2.5", "MiniMax M2.5", 204_800),
+      model(
+        "minimax/MiniMax-M2.5-highspeed",
+        "MiniMax-M2.5-highspeed",
+        "MiniMax M2.5 highspeed",
+        204_800,
+      ),
+      model("minimax/MiniMax-M2.1", "MiniMax-M2.1", "MiniMax M2.1", 204_800),
+      model(
+        "minimax/MiniMax-M2.1-highspeed",
+        "MiniMax-M2.1-highspeed",
+        "MiniMax M2.1 highspeed",
+        204_800,
+      ),
+      model("minimax/MiniMax-M2", "MiniMax-M2", "MiniMax M2", 204_800),
+    ],
+  },
+  {
     id: "anthropic-compatible",
     name: "Anthropic-Compatible",
     models: [
