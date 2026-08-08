@@ -9,7 +9,7 @@
   max-height: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--bg-primary, #0a0a0a);
+  background: var(--bg-primary, #0d1117);
 }
 
 .messagesArea {
@@ -49,17 +49,17 @@
   transform: translateX(-50%);
   padding: 0.4rem 1rem;
   border-radius: 10px;
-  border: 1px solid rgba(142, 53, 255);
-  background: rgba(142, 53, 255, 0.9);
-  color: var(--primary-text, #fff);
+  border: 1px solid rgba(0, 242, 254, 0.5);
+  background: rgba(0, 242, 254, 0.9);
+  color: #000000;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
   font-size: 11px;
-  font-weight: 500;
-  box-shadow: 0 2px 12px rgba(142, 53, 255, 0.2);
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0, 242, 254, 0.25);
   transition: background 0.15s, transform 0.15s, box-shadow 0.15s, border-color 0.15s;
   z-index: 10;
 
@@ -69,10 +69,10 @@
   }
 
   &:hover {
-    background: rgba(142, 53, 255, 0.25);
-    border-color: rgba(142, 53, 255, 0.6);
+    background: rgba(0, 242, 254, 0.3);
+    border-color: #00f2fe;
     transform: translateX(-50%) scale(1.03);
-    box-shadow: 0 4px 16px rgba(142, 53, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 242, 254, 0.4);
   }
 
   @media (max-width: 768px) {
@@ -205,7 +205,37 @@
   &::after {
     content: "▊";
     animation: blink 0.8s step-end infinite;
-    color: var(--accent-color, #4a9eff);
+    color: #00f2fe;
+  }
+}
+
+// Chat response options - actionable cards / buttons for AI suggestions
+.assistantMessage {
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.65rem;
+    margin: 0.1rem 0.15rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 242, 254, 0.4);
+    background: rgba(0, 242, 254, 0.06);
+    color: #00f2fe;
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(0, 242, 254, 0.14);
+      border-color: #00f2fe;
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(0, 242, 254, 0.3);
+    }
+  }
+
+  li > a {
+    margin: 0;
   }
 }
 
@@ -242,9 +272,9 @@
   box-sizing: border-box;
   margin: 0.65rem 0;
   padding: 1rem 1.1rem;
-  border: 1px solid rgba(142, 53, 255, 0.34);
+  border: 1px solid rgba(0, 242, 254, 0.4);
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(142, 53, 255, 0.13), rgba(74, 158, 255, 0.05));
+  background: linear-gradient(135deg, rgba(0, 242, 254, 0.12), rgba(0, 230, 118, 0.05));
 }
 
 .iterationLimitCopy {
@@ -253,7 +283,7 @@
 
 .iterationLimitEyebrow {
   margin-bottom: 0.2rem;
-  color: #b97bff;
+  color: #00f2fe;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -297,13 +327,16 @@
 }
 
 .iterationContinueBtn {
-  border: 1px solid rgba(142, 53, 255, 0.65);
-  background: #8e35ff;
-  color: #fff;
+  border: 1px solid rgba(0, 242, 254, 0.6);
+  background: linear-gradient(135deg, #00f2fe, #00d2ff);
+  color: #000000;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
 
   &:hover {
-    background: #9b4cff;
+    background: linear-gradient(135deg, #00d2ff, #00b8d9);
+    color: #000000;
     transform: translateY(-1px);
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.5);
   }
 }
 
@@ -334,15 +367,15 @@
 .reasoningBlock {
   width: 100%;
   margin: 0.25rem 0;
-  border: 1px solid rgba(250, 200, 50, 0.12);
+  border: 1px solid rgba(0, 242, 254, 0.16);
   border-radius: 8px;
   overflow: hidden;
-  background: rgba(250, 200, 50, 0.03);
+  background: rgba(0, 242, 254, 0.03);
   transition: border-color 0.2s;
 }
 
 .reasoningStreaming {
-  border-color: rgba(250, 200, 50, 0.25);
+  border-color: rgba(0, 242, 254, 0.3);
 
   .reasoningIcon {
     animation: pulse 1.5s ease infinite;
@@ -361,27 +394,27 @@
   transition: background 0.15s;
 
   &:hover {
-    background: rgba(250, 200, 50, 0.05);
+    background: rgba(0, 242, 254, 0.05);
   }
 }
 
 .reasoningIcon {
   font-size: 0.82rem;
-  color: #e8c547;
+  color: #00f2fe;
 }
 
 .reasoningLabel {
   font-weight: 600;
-  color: #e8c547;
+  color: #00f2fe;
   font-size: 0.78rem;
 }
 
 .reasoningLive {
   font-size: 0.68rem;
-  color: #e8c547;
+  color: #00f2fe;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
-  background: rgba(232, 197, 71, 0.1);
+  background: rgba(0, 242, 254, 0.1);
   animation: pulse 1.5s ease infinite;
 }
 
@@ -401,10 +434,10 @@
 }
 
 .reasoningContent {
-  border-top: 1px solid rgba(250, 200, 50, 0.08);
+  border-top: 1px solid rgba(0, 242, 254, 0.1);
   max-height: 400px;
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(13, 17, 23, 0.5);
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -437,9 +470,11 @@
   width: 100%;
   min-width: 0;
   margin: 0.25rem 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 10px;
+  background: #161b22;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px rgba(0, 242, 254, 0.03);
 }
 
 .toolCallHeader {
@@ -454,7 +489,7 @@
   transition: background 0.15s;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0, 242, 254, 0.04);
   }
 }
 
@@ -495,9 +530,10 @@
 
 .toolCallName {
   font-weight: 600;
-  color: var(--accent-color, #4a9eff);
+  color: #00f2fe;
   font-family: "JetBrains Mono", monospace;
   font-size: 0.78rem;
+  text-shadow: 0 0 8px rgba(0, 242, 254, 0.3);
 }
 
 .toolCallArgs {
@@ -517,13 +553,13 @@
 }
 
 .toolCallRunning {
-  color: #faad14;
-  background: rgba(250, 173, 20, 0.1);
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.1);
 }
 
 .toolCallSuccess {
-  color: #52c41a;
-  background: rgba(82, 196, 26, 0.1);
+  color: #00e676;
+  background: rgba(0, 230, 118, 0.12);
 }
 
 .toolCallError {
@@ -532,10 +568,10 @@
 }
 
 .toolCallCodePreview {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(0, 242, 254, 0.12);
   max-height: 300px;
   overflow: auto;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(13, 17, 23, 0.6);
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -566,7 +602,7 @@
 }
 
 .toolCallOutputSection {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(0, 242, 254, 0.12);
 }
 
 .toolCallOutputHeader {
@@ -1491,10 +1527,11 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 0.5rem 0.75rem;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
   &:focus-within {
-    border-color: var(--accent-color, #4a9eff);
+    border-color: #00f2fe;
+    box-shadow: 0 0 0 1px #00f2fe, 0 0 18px rgba(0, 242, 254, 0.25);
   }
 
   textarea {
@@ -1542,11 +1579,13 @@
 }
 
 .sendButton {
-  background: #4a9eff;
-  color: #fff;
+  background: linear-gradient(135deg, #00f2fe, #00d2ff);
+  color: #000000;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.35);
 
   &:hover:not(:disabled) {
-    background: #5aadff;
+    background: linear-gradient(135deg, #00d2ff, #00b8d9);
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.6);
   }
 }
 
@@ -1574,30 +1613,89 @@
     border-radius: 50%;
 
     &.ready {
-      background: #52c41a;
+      background: #00e676;
     }
 
     &.running {
-      background: #52c41a;
+      background: #00e676;
       animation: pulse 1.5s ease infinite;
     }
 
     &.paused {
-      background: #faad14;
+      background: #00f2fe;
     }
 
     &.waitingConsent {
-      background: #faad14;
+      background: #00f2fe;
       animation: pulse 1.5s ease infinite;
     }
   }
 
   .statusReady {
-    color: #52c41a;
+    color: #00e676;
   }
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+/* ─── Suggested Actions (interactive AI action buttons) ──────────── */
+
+.suggestedActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0.5rem 0;
+  align-items: flex-start;
+}
+
+.suggestedActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 242, 254, 0.4);
+  background: rgba(22, 27, 34, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #c9d6e6;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: fit-content;
+  max-width: 100%;
+
+  &:hover:not(:disabled) {
+    border-color: #00f2fe;
+    background: rgba(0, 242, 254, 0.1);
+    color: #ffffff;
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.3);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .suggestedActionIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0, 242, 254, 0.12);
+    border: 1px solid rgba(0, 242, 254, 0.4);
+    color: #00f2fe;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
 }

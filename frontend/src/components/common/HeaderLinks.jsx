@@ -20,6 +20,7 @@ import {
 import { logout } from "@/store/user.slice";
 import CopilotLogo from "./CopilotLogo";
 import SettingsOverlay from "./SettingsOverlay";
+import { FaCoins } from "react-icons/fa";
 
 const CTF_STATUS = {
   solved: { icon: <CheckCircleFilled />, label: "Solved", cls: "ctfStatusSolved" },
@@ -120,9 +121,23 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
           </>
         )}
         <div className={styles.options}>
+          <div className={styles.tokenWidget}>
+            <FaCoins className={styles.tokenIcon} />
+            <span className={styles.tokenLabel}>Tokens</span>
+            <span className={styles.tokenValue}>
+              {(user?.credits ?? 10000).toLocaleString()}
+            </span>
+            <button
+              type="button"
+              className={styles.topUpBtn}
+              onClick={() => router.push("/topup")}
+            >
+              + Top Up
+            </button>
+          </div>
           <div className={styles.username}>{user.name}</div>
           <a
-            href="https://github.com/bugbasesecurity/pentest-copilot"
+            href="https://github.com/PentestDB"
             target="_blank"
             rel="noopener noreferrer"
             className={styles.headerIconBtn}

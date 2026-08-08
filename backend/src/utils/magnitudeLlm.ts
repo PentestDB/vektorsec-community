@@ -49,8 +49,26 @@ export function getMagnitudeModelIssue(
       "openrouter",
       "openai-compatible",
       "ollama",
+      "deepseek",
     ].includes(provider)
   ) {
+  const providerMap: Record<string, string> = {
+    anthropic: "anthropic",
+    openai: "openai",
+    google: "google-ai",
+    openrouter: "openai-generic",
+    "openai-compatible": "openai-generic",
+    ollama: "openai-generic",
+    deepseek: "openai-generic",
+  };
+  const defaultBaseURL =
+    config.provider === "openrouter"
+      ? "https://openrouter.ai/api/v1"
+      : config.provider === "ollama"
+        ? "http://localhost:11434/v1"
+        : config.provider === "deepseek"
+          ? "https://api.deepseek.com/v1"
+          : "";
     return (
       "This provider is not supported by the Browser Agent. Select an " +
       "OpenAI-compatible preset if this provider exposes an OpenAI-compatible API."

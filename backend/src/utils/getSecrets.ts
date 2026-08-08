@@ -14,7 +14,11 @@ const OPTIONAL_KEYS = new Set([
   "LANGFUSE_PUBLIC_KEY",
   "LANGFUSE_SECRET_KEY",
   "LANGFUSE_BASE_URL",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_ADMIN_IDS",
 ]);
+
+
 
 const getSecrets = async (key: string) => {
   const secret = process.env[key];

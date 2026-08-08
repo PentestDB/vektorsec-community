@@ -42,8 +42,8 @@
 
   &:focus,
   &:focus-within {
-    border-color: var(--primary-purple) !important;
-    box-shadow: 0 0 0 2px rgba(153, 51, 255, 0.15) !important;
+    border-color: #00f2fe !important;
+    box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.15) !important;
   }
 
   :global(.ant-input) {
@@ -153,12 +153,12 @@
 }
 
 .installedCount {
-  color: #52c41a;
+  color: #00e676;
 }
 
 .selectAllBtn {
   font-size: 0.8rem;
-  color: var(--primary-purple);
+  color: #00f2fe;
   cursor: pointer;
   font-weight: 500;
   padding: 0.25rem 0.5rem;
@@ -166,7 +166,7 @@
   transition: background 0.15s;
 
   &:hover {
-    background: rgba(127, 86, 217, 0.1);
+    background: rgba(0, 242, 254, 0.1);
   }
 }
 
@@ -249,7 +249,7 @@
 }
 
 .installedIcon {
-  color: #52c41a;
+  color: #00e676;
   font-size: 0.9rem;
 }
 
@@ -284,8 +284,8 @@
 
 .capCmd {
   font-size: 0.7rem;
-  color: var(--primary-purple);
-  background: rgba(127, 86, 217, 0.08);
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.08);
   padding: 0 4px;
   border-radius: 3px;
 }

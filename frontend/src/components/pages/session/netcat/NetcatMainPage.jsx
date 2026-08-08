@@ -76,7 +76,16 @@ const NetcatMainPage = ({ netcat_id, port }) => {
               <Input placeholder="Enter port number" />
             </Form.Item>
 
-            <PrimaryButton purple htmlType="submit">
+            <PrimaryButton
+              htmlType="submit"
+              style={{
+                background: "linear-gradient(135deg, #00f2fe, #00d2ff)",
+                border: "1px solid #00f2fe",
+                color: "#000000",
+                fontWeight: 600,
+                boxShadow: "0 0 10px rgba(0, 242, 254, 0.3)",
+              }}
+            >
               Start Netcat
             </PrimaryButton>
           </Form>

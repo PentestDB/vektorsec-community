@@ -18,6 +18,7 @@ import checkFindings from "./handlers/check-findings";
 import sendToBurp from "./handlers/send-to-burp";
 import burpIntruder from "./handlers/burp-intruder";
 import burpCollaborator from "./handlers/burp-collaborator";
+import oobListener from "./handlers/oob-listener";
 // import burpProxyControl from "./handlers/burp-proxy-control";
 import burpProxyHistory from "./handlers/burp-proxy-history";
 import sendToCaidoReplay from "./handlers/send-to-caido-replay";
@@ -33,6 +34,21 @@ import bumpRacer from "./handlers/bump-racer";
 import broadcastToRacers from "./handlers/broadcast-to-racers";
 import readRacerTrace from "./handlers/read-racer-trace";
 import waitForRacers from "./handlers/wait-for-racers";
+import runSecurityTool from "./handlers/run-security-tool";
+import trackAttackChain from "./handlers/track-attack-chain";
+import storeTargetMemory from "./handlers/store-target-memory";
+import collectEvidence from "./handlers/collect-evidence";
+import generateReport from "./handlers/generate-report";
+import routeModel from "./handlers/route-model";
+import checkScope from "./handlers/check-scope";
+import requestApproval from "./handlers/request-approval";
+import approveCommand from "./handlers/approve-command";
+import runAsyncTask from "./handlers/run-async-task";
+import getTaskStatus from "./handlers/get-task-status";
+import queryKnowledge from "./handlers/query-knowledge";
+import auditLog from "./handlers/audit-log";
+import vaultManage from "./handlers/vault-manage";
+
 
 class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -113,6 +129,7 @@ toolRegistry.register(checkFindings);
 toolRegistry.register(sendToBurp);
 toolRegistry.register(burpIntruder);
 toolRegistry.register(burpCollaborator);
+toolRegistry.register(oobListener);
 // toolRegistry.register(burpProxyControl);
 toolRegistry.register(burpProxyHistory);
 toolRegistry.register(sendToCaidoReplay);
@@ -128,3 +145,19 @@ toolRegistry.register(bumpRacer);
 toolRegistry.register(broadcastToRacers);
 toolRegistry.register(readRacerTrace);
 toolRegistry.register(waitForRacers);
+toolRegistry.register(runSecurityTool);
+toolRegistry.register(trackAttackChain);
+toolRegistry.register(storeTargetMemory);
+toolRegistry.register(collectEvidence);
+toolRegistry.register(generateReport);
+toolRegistry.register(routeModel);
+toolRegistry.register(checkScope);
+toolRegistry.register(requestApproval);
+toolRegistry.register(approveCommand);
+toolRegistry.register(runAsyncTask);
+toolRegistry.register(getTaskStatus);
+toolRegistry.register(queryKnowledge);
+toolRegistry.register(auditLog);
+toolRegistry.register(vaultManage);
+
+

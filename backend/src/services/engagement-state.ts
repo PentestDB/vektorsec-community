@@ -62,6 +62,8 @@ export interface Vulnerability {
   source: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Related vulnerabilityIds chained with this finding. */
+  links?: string[];
 }
 
 export interface ActiveShell {
@@ -193,6 +195,9 @@ export class EngagementState {
           `- [${v.severity.toUpperCase()}] ${v.title} on ${v.host}${svc} — ${exploited}${cve}${scoring ? ` — ${scoring}` : ""}`,
         );
         if (v.contextSummary) sections.push(`  Context: ${v.contextSummary}`);
+        if (v.links?.length) {
+          sections.push(`  Chained with: ${v.links.join(", ")}`);
+        }
       }
     }
 

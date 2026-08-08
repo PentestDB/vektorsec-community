@@ -2,34 +2,24 @@ import { v4 as uuidv4 } from "uuid";
 import { EventEmitter } from "events";
 import SessionsModel, { AgentMessageDoc, SubagentStatus } from "../models/Sessions/Sessions.model";
 import { ShellManager } from "./shell.manager";
-import { SSEWriter, buildTraceTags } from "./agent.service";
+import { SSEWriter, buildTraceTags, trackTokens } from "./agent.service";
+
 import { toolRegistry } from "../tools/registry";
 import { getUnconfiguredToolNames } from "../utils/toolAvailability";
 import { getProvider, invoke_llm_streaming, ToolCallData } from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
-import { ExecutionContext, ToolResult } from "../tools/types";
+import { ExecutionContext } from "../tools/types";
+
 import UserModel from "../models/User/User.model";
 import { parseToolArguments } from "../utils/toolArguments";
+import { executeWithTimeout } from "../utils/executeWithTimeout";
+import { normalizeMaxSubagentIterations } from "../utils/agentConfig";
 
-const MAX_SUBAGENT_ITERATIONS = 15;
 const MAX_SUBAGENT_WALL_CLOCK_MS = 10 * 60 * 1000; // 10 minutes
+
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
-const DEFAULT_TOOL_TIMEOUT_MS = 60_000;
 
-function executeWithTimeout(
-  toolDef: import("../tools/types").ToolDefinition,
-  args: Record<string, any>,
-  ctx: import("../tools/types").ExecutionContext,
-): Promise<ToolResult> {
-  const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
-  return Promise.race([
-    toolDef.execute(args, ctx),
-    new Promise<ToolResult>((_, reject) =>
-      setTimeout(() => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)), timeoutMs),
-    ),
-  ]);
-}
 
 export interface SubagentResult {
   subagentId: string;
@@ -61,7 +51,7 @@ function buildSubagentSystemPrompt(task: string, parentSessionId: string, envInf
   const userDesc = envInfo ? ` as ${envInfo.user}` : "";
 
   return `<role>
-You are a Pentest Copilot subagent. You are a specialized parallel worker launched by the main agent to investigate a specific aspect of a penetration test.
+You are a VektorSec subagent. You are a specialized parallel worker launched by the main agent to investigate a specific aspect of a penetration test.
 </role>
 
 <task>
@@ -111,8 +101,11 @@ export class SubagentManager extends EventEmitter {
     task: string;
     sse: SSEWriter;
     userId: string;
+    maxIterations?: number;
   }): Promise<string> {
     const subagentId = `sub_${uuidv4().slice(0, 8)}`;
+    const maxIterations = normalizeMaxSubagentIterations(params.maxIterations);
+
 
     await SessionsModel.updateOne(
       { sessionId: this.sessionId },
@@ -151,7 +144,9 @@ export class SubagentManager extends EventEmitter {
       sse: params.sse,
       userId: params.userId,
       abortSignal: abortCtrl.signal,
+      maxIterations,
     })
+
       .catch((err) => {
         console.error(`[SubagentManager] Subagent ${subagentId} loop error:`, err);
       })
@@ -168,8 +163,10 @@ export class SubagentManager extends EventEmitter {
     sse: SSEWriter;
     userId: string;
     abortSignal: AbortSignal;
+    maxIterations: number;
   }): Promise<void> {
-    const { subagentId, task, sse, userId, abortSignal } = params;
+    const { subagentId, task, sse, userId, abortSignal, maxIterations } = params;
+
 
     const session = await SessionsModel.findOne({ sessionId: this.sessionId }).lean();
     const disabledAgentTools: string[] = session?.disabledAgentTools ?? [];
@@ -229,7 +226,8 @@ export class SubagentManager extends EventEmitter {
     });
 
     try {
-      while (iteration < MAX_SUBAGENT_ITERATIONS) {
+      while (iteration < maxIterations) {
+
         iteration++;
         if (abortSignal.aborted) break;
 
@@ -313,7 +311,20 @@ export class SubagentManager extends EventEmitter {
 
         assistantToolCalls = result.toolCalls;
 
+        // Track subagent token usage into the parent session so billing / usage
+        // limits reflect the full cost of parallel subagents, not just the main
+        // orchestrator loop.
+        if (result.usage) {
+          await trackTokens(
+            this.sessionId,
+            result.usage.prompt_tokens ?? 0,
+            result.usage.completion_tokens ?? 0,
+            result.usage.total_tokens ?? 0,
+          );
+        }
+
         const assistantMsg: AgentMessageDoc = {
+
           id: uuidv4(),
           role: "assistant",
           content: assistantContent || null,
@@ -434,9 +445,10 @@ export class SubagentManager extends EventEmitter {
         }
       }
 
-      if (!finalResult && iteration >= MAX_SUBAGENT_ITERATIONS) {
-        finalResult = `Subagent reached max iterations (${MAX_SUBAGENT_ITERATIONS}). Last assistant response:\n${messages.filter((m) => m.role === "assistant").pop()?.content ?? "none"}`;
+      if (!finalResult && iteration >= maxIterations) {
+        finalResult = `Subagent reached max iterations (${maxIterations}). Last assistant response:\n${messages.filter((m) => m.role === "assistant").pop()?.content ?? "none"}`;
       }
+
 
       if (!finalResult && abortSignal.aborted) {
         finalResult = `Subagent was aborted (wall-clock timeout or manual cancel). Last assistant response:\n${messages.filter((m) => m.role === "assistant").pop()?.content ?? "none"}`;

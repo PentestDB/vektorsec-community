@@ -26,6 +26,7 @@ export type ProviderType =
   | "google"
   | "mistralai"
   | "kimi"
+  | "deepseek"
   | "codex-subscription"
   | "claude-subscription";
 
@@ -50,6 +51,7 @@ const PROVIDER_DEFAULTS: Record<ProviderType, { baseURL: string }> = {
   },
   mistralai: { baseURL: "https://api.mistral.ai/v1" },
   kimi: { baseURL: "https://api.moonshot.ai/v1" },
+  deepseek: { baseURL: "https://api.deepseek.com/v1" },
   "codex-subscription": { baseURL: "" },
   "claude-subscription": { baseURL: "" },
 };
@@ -291,6 +293,10 @@ export interface ToolCallData {
   id: string;
   name: string;
   arguments: string;
+  // Provider-specific passthrough that must be echoed back verbatim on the
+  // next turn. Gemini puts its required `thought_signature` here (under
+  // extra_content.google); dropping it makes multi-turn tool calls 400.
+  extraContent?: unknown;
 }
 
 export type FinishReason =
@@ -1243,8 +1249,16 @@ export async function invoke_llm_streaming(
     let reasoningParts: string[] = [];
     let toolCallAccumulators: Map<
       number,
-      { id: string; name: string; argParts: string[] }
+      { id: string; name: string; argParts: string[]; extraContent?: unknown }
     > = new Map();
+    // Gemini streams each parallel tool call with `index` undefined (only a
+    // distinct `id` per call). Falling back to `index ?? 0` collapses them all
+    // into slot 0 and concatenates their arguments into invalid JSON. Resolve a
+    // stable slot from `id` when `index` is absent, routing arg-only
+    // continuation chunks to the most recent call.
+    const toolIdToIndex = new Map<string, number>();
+    let syntheticToolIndex = 0;
+    let lastToolIndex = -1;
     let finishReason: FinishReason = "stop";
     let usage: OpenAI.Completions.CompletionUsage | undefined;
     let model = config.model;
@@ -1290,7 +1304,20 @@ export async function invoke_llm_streaming(
 
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
-          const idx = tc.index ?? 0;
+          let idx: number;
+          if (typeof tc.index === "number") {
+            idx = tc.index;
+          } else if (tc.id) {
+            // A new id starts a new call; a repeated id continues it.
+            if (!toolIdToIndex.has(tc.id)) {
+              toolIdToIndex.set(tc.id, syntheticToolIndex++);
+            }
+            idx = toolIdToIndex.get(tc.id)!;
+          } else {
+            // No index and no id: continuation of the most recent call.
+            idx = lastToolIndex >= 0 ? lastToolIndex : 0;
+          }
+          lastToolIndex = idx;
 
           if (!toolCallAccumulators.has(idx)) {
             toolCallAccumulators.set(idx, {
@@ -1307,6 +1334,11 @@ export async function invoke_llm_streaming(
           const acc = toolCallAccumulators.get(idx)!;
           if (tc.id) acc.id = tc.id;
           if (tc.function?.name) acc.name = tc.function.name;
+
+          // Gemini streams its required thought_signature under extra_content;
+          // keep the latest non-null value so we can echo it back next turn.
+          const rawTc = tc as unknown as { extra_content?: unknown };
+          if (rawTc.extra_content != null) acc.extraContent = rawTc.extra_content;
 
           if (tc.function?.arguments) {
             acc.argParts.push(tc.function.arguments);
@@ -1326,6 +1358,7 @@ export async function invoke_llm_streaming(
         id: acc.id,
         name: acc.name,
         arguments: acc.argParts.join(""),
+        ...(acc.extraContent != null ? { extraContent: acc.extraContent } : {}),
       };
       toolCalls.push(tc);
       opts.onDelta({ type: "tool_call_done", toolCall: { index: idx, ...tc } });

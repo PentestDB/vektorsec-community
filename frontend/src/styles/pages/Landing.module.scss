@@ -21,7 +21,30 @@
 }
 
 .wholeWrap {
-  background: var(--navbar-bg);
+  // VektorSec Cyber Turquoise theme - scoped to the landing page only.
+  --primary-purple: #00f2fe;
+  --purple-background: rgba(0, 242, 254, 0.08);
+  --primary-bg: #0b0f19;
+  --secondary-bg: #0d1117;
+  --black-bg: #0d1117;
+  --primary-text: #ffffff;
+  --secondary-text: #94a3b8;
+  --purple-bg: rgba(0, 242, 254, 0.25);
+  --filled-purple: #00e676;
+  --filled-purple-100: rgba(0, 230, 118, 0.47);
+  --filled-purple-50: rgba(0, 230, 118, 0.31);
+  --filled-pink: #00d2ff;
+  --purple-bg-100: rgba(0, 242, 254, 0.1);
+  --primary-purple-100: rgba(0, 242, 254, 0.1);
+  --navbar-bg: #0b0f19;
+  --card-bg: #161b22;
+  --border-color: rgba(0, 242, 254, 0.2);
+  --border-color-100: rgba(0, 242, 254, 0.18);
+  --border-subtle: rgba(0, 242, 254, 0.12);
+  --border-default: rgba(0, 242, 254, 0.22);
+  --surface-hover: rgba(0, 242, 254, 0.05);
+  --surface-active: rgba(0, 242, 254, 0.09);
+  background: #0b0f19;
   position: relative;
   overflow: hidden;
 
@@ -71,10 +94,10 @@
           transform: translate(-50%, -50%);
           background: none;
           border-radius: 50%;
-          border: 0.5px solid rgba(#fff, 0.06);
-          background: var(--navbar-bg);
-          box-shadow: 0px 0px 4px 0.5px rgba(#c3c3c3, 0.15),
-            0px 0px 4px 0.5px rgba(#c3c3c3, 0.15) inset;
+          border: 0.5px solid rgba(0, 242, 254, 0.12);
+          background: #0b0f19;
+          box-shadow: 0px 0px 4px 0.5px rgba(0, 242, 254, 0.14),
+            0px 0px 4px 0.5px rgba(0, 242, 254, 0.14) inset;
         }
 
         .orbit1 {
@@ -215,6 +238,7 @@
           backdrop-filter: brightness(0%);
           box-shadow: 0 0 20px 70px var(--navbar-bg),
             0 0 40px 50px var(--navbar-bg);
+          border: 1px solid rgba(0, 242, 254, 0.18);
           border-radius: 5rem;
         }
       }
@@ -235,7 +259,7 @@
           width: 2.5rem;
           height: 2.5rem;
           border-radius: 50%;
-          border: 0.5px solid rgba(#fff, 0.4);
+          border: 0.5px solid rgba(0, 242, 254, 0.45);
           position: absolute;
           top: 50%;
           left: 50%;
@@ -251,7 +275,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            color: #fff;
+            color: #d9fbff;
             font-size: 1.2rem;
 
             @include responsive(tablet1) {
@@ -262,44 +286,44 @@
       }
 
       .planet1 {
-        background: #d74d00;
+        background: #00f2fe;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 16px 3px rgba(#d74d00, 0.4);
+        box-shadow: 0px 0px 16px 3px rgba(0, 242, 254, 0.45);
       }
 
       .planet2 {
-        background: #b9d700;
+        background: #00e676;
         top: 50%;
         right: 0;
         transform: translate(50%, -50%);
-        box-shadow: 0px 0px 16px 3px rgba(#b9d700, 0.4);
+        box-shadow: 0px 0px 16px 3px rgba(0, 230, 118, 0.45);
       }
       .planet3 {
-        background: #da08ec;
+        background: #00d2ff;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 16px 3px rgba(#da08ec, 0.4);
+        box-shadow: 0px 0px 16px 3px rgba(0, 210, 255, 0.45);
       }
       .planet4 {
-        background: #089aec;
+        background: #00f2fe;
         top: 50%;
         right: 0;
         transform: translate(50%, -50%);
-        box-shadow: 0px 0px 16px 3px rgba(#089aec, 0.4);
+        box-shadow: 0px 0px 16px 3px rgba(0, 242, 254, 0.45);
       }
       .planet6 {
-        background: #d7c100;
+        background: #00d2ff;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 16px 3px rgba(#d7c100, 0.4);
+        box-shadow: 0px 0px 16px 3px rgba(0, 210, 255, 0.45);
       }
 
       .planet5 {
-        background: #00d7a3;
+        background: #00e676;
         top: 50%;
         left: 0;
-        box-shadow: 0px 0px 16px 3px rgba(#00d7a3, 0.4);
+        box-shadow: 0px 0px 16px 3px rgba(0, 230, 118, 0.45);
       }
 
       .fadeforeground {
@@ -310,9 +334,9 @@
         height: 120vh;
         background: linear-gradient(
           180deg,
-          #000000 0%,
-          rgba(0, 0, 0, 0.05) 50%,
-          #000000 100%
+          #0b0f19 0%,
+          rgba(0, 242, 254, 0.03) 50%,
+          #0b0f19 100%
         );
         z-index: 1;
       }
@@ -347,8 +371,8 @@
             background: linear-gradient(
               135deg,
               #ffffff 0%,
-              #ffffff 40%,
-              var(--primary-purple) 100%
+              #ffffff 35%,
+              #00f2fe 100%
             );
             background-clip: text;
             -webkit-background-clip: text;
@@ -400,22 +424,28 @@
           }
 
           .tagline {
-            color: var(--secondary-text);
+            color: #00f2fe;
             text-align: center;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            letter-spacing: 0.1em;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            letter-spacing: 0.14em;
             text-transform: uppercase;
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            border-radius: 999px;
+            padding: 0.5rem 1.15rem;
+            background: rgba(0, 242, 254, 0.06);
+            box-shadow: 0 0 16px rgba(0, 242, 254, 0.18);
+            width: fit-content;
             animation: fadeInUp 0.8s ease 0.05s both;
 
             @include responsive(tablet2) {
-              font-size: 0.8rem;
+              font-size: 0.72rem;
             }
           }
 
           .cc {
-            color: rgba(#fff, 0.35);
+            color: rgba(0, 242, 254, 0.55);
             text-align: center;
             font-size: 0.8rem;
             font-weight: 400;
@@ -448,16 +478,17 @@
               border-radius: 2rem;
               font-size: 0.9rem;
               font-weight: 500;
-              color: rgba(255, 255, 255, 0.85);
-              background: rgba(255, 255, 255, 0.06);
-              border: 1px solid rgba(255, 255, 255, 0.2);
+              color: rgba(224, 250, 255, 0.9);
+              background: rgba(0, 242, 254, 0.06);
+              border: 1px solid rgba(0, 242, 254, 0.45);
               text-decoration: none;
               transition: all 0.2s ease;
 
               &:hover {
-                color: #fff;
-                background: rgba(255, 255, 255, 0.12);
-                border-color: rgba(255, 255, 255, 0.3);
+                color: #ffffff;
+                background: rgba(0, 242, 254, 0.14);
+                border-color: #00f2fe;
+                box-shadow: 0 0 18px rgba(0, 242, 254, 0.25);
               }
             }
 
@@ -678,6 +709,7 @@
           align-items: center;
           justify-content: center;
           background-color: var(--filled-purple);
+          box-shadow: 0 0 14px rgba(0, 230, 118, 0.25);
         }
 
         .featureContent {
@@ -863,20 +895,20 @@
     }
 
     .bbLogoText {
-      background-color: #ca4246;
+      background-color: #00f2fe;
 
       background-image: linear-gradient(
         45deg,
-        #ca4246 16.666%,
-        #e16541 16.666%,
-        #e16541 33.333%,
-        #f18f43 33.333%,
-        #f18f43 50%,
-        #8b9862 50%,
-        #8b9862 66.666%,
-        #476098 66.666%,
-        #476098 83.333%,
-        #a7489b 83.333%
+        #00f2fe 16.666%,
+        #00e676 16.666%,
+        #00e676 33.333%,
+        #00d2ff 33.333%,
+        #00d2ff 50%,
+        #00f2fe 50%,
+        #00f2fe 66.666%,
+        #00e676 66.666%,
+        #00e676 83.333%,
+        #00d2ff 83.333%
       );
 
       background-size: 100%;
@@ -919,7 +951,7 @@
     width: 28rem;
     height: 28rem;
     border-radius: 50%;
-    background: rgba(#a100f2, 0.1);
+    background: rgba(0, 242, 254, 0.09);
     top: 16rem;
     left: -5rem;
     filter: blur(120px);
@@ -951,6 +983,7 @@
     top: 70rem;
     left: unset;
     right: -15rem;
+    background: rgba(0, 230, 118, 0.08);
   }
 
   .purpleBlurCircle5 {
@@ -968,6 +1001,7 @@
     right: 0;
     height: 45rem;
     width: 25rem;
+    background: rgba(0, 230, 118, 0.07);
   }
 
   .purpleBlurCircle7 {
@@ -1043,5 +1077,40 @@
   }
   60% {
     transform: translateY(-5px);
+  }
+}
+
+// --- CTA Buttons (Cyber Turquoise) -----------------------------------
+.ctaPrimary {
+  background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+  border: 1px solid #00f2fe !important;
+  color: #000000 !important;
+  font-weight: 600;
+  box-shadow: 0 0 18px rgba(0, 242, 254, 0.35);
+
+  &:hover {
+    background: linear-gradient(135deg, #00d2ff, #00b8d9) !important;
+    border-color: #00f2fe !important;
+    color: #000000 !important;
+    box-shadow: 0 0 28px rgba(0, 242, 254, 0.55);
+  }
+
+  &:active {
+    background: linear-gradient(135deg, #00b8d9, #00a0c0) !important;
+    border-color: #00f2fe !important;
+    color: #000000 !important;
+  }
+}
+
+.ctaSecondary {
+  background: rgba(0, 242, 254, 0.06) !important;
+  border: 1px solid rgba(0, 242, 254, 0.45) !important;
+  color: #e0faff !important;
+
+  &:hover {
+    background: rgba(0, 242, 254, 0.14) !important;
+    border-color: #00f2fe !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.25);
   }
 }

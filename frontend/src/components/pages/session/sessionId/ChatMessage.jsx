@@ -103,7 +103,67 @@ function findToolOutput(toolCallId, allMessages) {
   );
 }
 
-const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
+// Strip markdown formatting so action buttons show clean readable text:
+//   "**TP-LINK ADSL2+ router**"  ->  "TP-LINK ADSL2+ router"
+//   "[Scan /admin](...)"         ->  "Scan /admin"
+//   "`nmap -sV`"                 ->  "nmap -sV"
+function stripMarkdown(text) {
+  return text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/^#+\s*/, "")
+    .replace(/^>\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Detect "suggested actions" lists in assistant markdown so they can be
+// rendered as clickable command buttons. Supports numbered lists
+// ("1. x", "1) x"), dash bullets ("- x", "* x") and unicode bullets
+// ("• x", "◦ x"). Scans from the end so options listed under a closing
+// question ("What should I do next?") are captured.
+function detectSuggestedActions(content) {
+  if (!content || typeof content !== "string") return [];
+  const lines = content.split("\n").map((l) => l.trim());
+  const actions = [];
+  let scanning = false;
+  let skipped = 0;
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line) continue;
+    const m =
+      line.match(/^\d+[.)]\s+(.+)$/) ||
+      line.match(/^[-*•◦]\s+(.+)$/);
+    if (m) {
+      scanning = true;
+      skipped = 0;
+      const item = stripMarkdown(m[1]);
+      if (item.length >= 3 && item.length <= 90) {
+        actions.unshift(item);
+      }
+      if (actions.length >= 5) break;
+    } else if (scanning) {
+      // Stop unless this is a single short label/question line (e.g.
+      // "ตอนนี้อยากให้ผมทำอะไรต่อครับ?") sitting between list items.
+      if (actions.length === 0 || skipped >= 1) break;
+      if (line.length <= 90 && /[:?]$/.test(line)) {
+        skipped += 1;
+      } else {
+        break;
+      }
+    }
+  }
+
+  return actions.slice(0, 5);
+}
+
+const ChatMessage = React.memo(function ChatMessage({ message, allMessages, onSendAction, agentState }) {
   const { role, content, streaming, isError, isSummary, toolCalls, reasoning, reasoningStreaming, burpMeta } = message;
 
   if (role === "tool") {
@@ -158,6 +218,8 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
   }
 
   if (role === "assistant") {
+    const suggestedActions = !streaming ? detectSuggestedActions(content) : [];
+
     return (
       <div className={styles.message}>
         {reasoning && (
@@ -189,6 +251,22 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages }) {
               };
           return <ToolCallBlock key={tc.id} message={toolMsg} />;
         })}
+        {suggestedActions.length > 0 && onSendAction && (
+          <div className={styles.suggestedActions}>
+            {suggestedActions.map((action, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className={styles.suggestedActionBtn}
+                disabled={agentState === "running"}
+                onClick={() => onSendAction(action)}
+              >
+                <span className={styles.suggestedActionIcon}>+</span>
+                <span>{action}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }

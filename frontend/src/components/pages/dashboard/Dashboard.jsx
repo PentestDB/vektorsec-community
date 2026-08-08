@@ -22,9 +22,9 @@ import { useEffect } from "react";
 import { resetSessions } from "@/store/user.slice";
 
 const TYPE_CONFIG = {
-  ctf: { label: "CTF", color: "#f59e0b", icon: <FiFlag size={14} /> },
-  pentest: { label: "Pentest", color: "#8b5cf6", icon: <FiShield size={14} /> },
-  general: { label: "General", color: "#6b7280", icon: <FiFolder size={14} /> },
+  ctf: { label: "CTF", color: "#00f2fe", icon: <FiFlag size={14} /> },
+  pentest: { label: "Pentest", color: "#00e676", icon: <FiShield size={14} /> },
+  general: { label: "General", color: "#7dd3fc", icon: <FiFolder size={14} /> },
 };
 
 const DashboardPage = () => {
@@ -61,6 +61,19 @@ const DashboardPage = () => {
         (w.workspaceId || "").toLowerCase().includes(term)
     );
   }, [workspacesData, searchTerm]);
+
+  const summaryStats = useMemo(() => {
+    const ws = workspacesData || [];
+    const totalSessions = ws.reduce(
+      (sum, w) => sum + (w.sessions?.total || 0),
+      0
+    );
+    const active = ws.filter(
+      (w) => (w.sessions?.running || 0) > 0 || (w.sessions?.waiting || 0) > 0
+    ).length;
+    const tokens = user?.credits ?? 10000;
+    return { total: ws.length, active, sessions: totalSessions, tokens };
+  }, [workspacesData, user]);
 
   const deleteWorkspaceMutation = useMutation(deleteWorkspace, {
     onSuccess: (data) => {
@@ -116,9 +129,37 @@ const DashboardPage = () => {
               allowClear
               className={styles.searchBox}
             />
-            <PrimaryButton purple onClick={() => setShow(true)}>
+            <PrimaryButton
+              className={styles.newWorkspaceBtn}
+              onClick={() => setShow(true)}
+            >
               <PlusOutlined /> New Workspace
             </PrimaryButton>
+          </div>
+        </div>
+
+        <div className={styles.statsBar}>
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>Active Workspaces</span>
+            <span className={styles.statCardValue}>{summaryStats.active}</span>
+            <span className={styles.statCardSub}>
+              of {summaryStats.total} workspaces
+            </span>
+          </div>
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>Total Sessions</span>
+            <span className={styles.statCardValue}>{summaryStats.sessions}</span>
+            <span className={styles.statCardSub}>across all workspaces</span>
+          </div>
+          <div className={styles.statCard}>
+            <span className={styles.statCardLabel}>AI Credit Usage</span>
+            <span className={styles.statCardValue}>
+              {summaryStats.tokens.toLocaleString()}
+            </span>
+            <span className={styles.statCardSub}>tokens available</span>
+            <span className={`${styles.statBadge} ${styles.statBadgeGood}`}>
+              Good
+            </span>
           </div>
         </div>
 
@@ -157,6 +198,15 @@ const DashboardPage = () => {
                 const typeConf = TYPE_CONFIG[workspace.type] || TYPE_CONFIG.general;
                 const sessions = workspace.sessions || {};
                 const hasActivity = sessions.running > 0 || sessions.waiting > 0;
+                const ctfUrl = workspace.ctfConfig?.url;
+                let targetLabel = "Not configured";
+                if (ctfUrl) {
+                  try {
+                    targetLabel = new URL(ctfUrl).hostname;
+                  } catch {
+                    targetLabel = ctfUrl;
+                  }
+                }
 
                 return (
                   <div
@@ -164,6 +214,21 @@ const DashboardPage = () => {
                     className={`${styles.workspaceCard} ${hasActivity ? styles.activeCard : ""}`}
                     onClick={() => router.push(`/workspace/${workspace.workspaceId}`)}
                   >
+                    <div className={styles.cardStatus}>
+                      <span
+                        className={`${styles.statusDot} ${
+                          hasActivity
+                            ? styles.statusDotActive
+                            : sessions.total > 0
+                            ? styles.statusDotIdle
+                            : styles.statusDotEmpty
+                        }`}
+                      />
+                      <span className={styles.statusLabel}>
+                        {hasActivity ? "Active" : sessions.total > 0 ? "Idle" : "Empty"}
+                      </span>
+                    </div>
+
                     <div className={styles.cardHeader}>
                       <div className={styles.cardTitleRow}>
                         <span className={styles.cardIcon}>{typeConf.icon}</span>
@@ -195,6 +260,21 @@ const DashboardPage = () => {
                       <span className={styles.cardDate}>
                         {moment(workspace.createdAt).format("MMM D, YYYY")}
                       </span>
+                    </div>
+
+                    <div className={styles.cardDetails}>
+                      <div className={styles.detailRow}>
+                        <span className={styles.detailKey}>Model</span>
+                        <span className={styles.detailValue}>DeepSeek</span>
+                      </div>
+                      <div className={styles.detailRow}>
+                        <span className={styles.detailKey}>Sessions</span>
+                        <span className={styles.detailValue}>{sessions.total || 0}</span>
+                      </div>
+                      <div className={styles.detailRow}>
+                        <span className={styles.detailKey}>Target</span>
+                        <span className={styles.detailValue}>{targetLabel}</span>
+                      </div>
                     </div>
 
                     <div className={styles.sessionStats}>

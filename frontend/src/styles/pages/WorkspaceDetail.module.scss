@@ -1,7 +1,7 @@
 @import "../_variables";
 
 .container {
-  background: var(--primary-bg);
+  background: #0d1117;
   min-height: 100vh;
 }
 
@@ -10,8 +10,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.5rem;
-  background: var(--primary-bg);
-  border-bottom: 1px solid var(--border-subtle);
+  background: #0d1117;
+  border-bottom: 1px solid rgba(0, 242, 254, 0.12);
   gap: 1rem;
   flex-wrap: wrap;
 }
@@ -25,20 +25,53 @@
 .backBtn {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  background: none;
-  border: 1px solid var(--border-subtle);
-  border-radius: 5px;
-  padding: 0.25rem 0.5rem;
-  color: var(--secondary-text);
-  font-size: 0.7rem;
+  gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 0.3rem 0.7rem;
+  color: #c9d6e6;
+  font-size: 0.72rem;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: all 0.2s ease;
   white-space: nowrap;
 
   &:hover {
-    border-color: var(--border-default);
-    color: var(--primary-text);
+    border-color: rgba(0, 242, 254, 0.6);
+    color: #00f2fe;
+    background: rgba(0, 242, 254, 0.08);
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+  }
+}
+
+// Connect CTF button - minimal cyan border with glow
+.connectCtfBtn {
+  background: rgba(0, 242, 254, 0.06) !important;
+  border: 1px solid rgba(0, 242, 254, 0.45) !important;
+  color: #00f2fe !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
+
+  &:hover {
+    background: rgba(0, 242, 254, 0.14) !important;
+    border-color: #00f2fe !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.35);
+  }
+}
+
+// New Session button - neon cyan gradient with dark text + glow
+.newSessionBtn {
+  background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+  border: 1px solid #00f2fe !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+
+  &:hover {
+    background: linear-gradient(135deg, #00d2ff, #00b8d9) !important;
+    color: #000000 !important;
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.55);
   }
 }
 
@@ -130,15 +163,15 @@
 }
 
 .flagFormat {
-  background: rgba(153, 51, 255, 0.08);
-  color: var(--primary-purple);
+  background: rgba(0, 242, 254, 0.08);
+  color: #00f2fe;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   font-size: 0.68rem;
 }
 
 .syncStatusInline {
-  color: var(--primary-purple);
+  color: #00f2fe;
   font-size: 0.68rem;
   font-weight: 500;
 }
@@ -202,6 +235,55 @@
   padding: 1rem 1.5rem;
 }
 
+// ─── Workspace metrics summary bar ───────────────────────────────────
+.metricsBar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.875rem;
+  padding: 1rem 1.5rem 0;
+}
+
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  background: rgba(22, 27, 34, 0.8);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px rgba(0, 242, 254, 0.03);
+}
+
+.metricLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b9bb0;
+}
+
+.metricValue {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #e6edf3;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricValueSm {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e6edf3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metricSub {
+  font-size: 0.72rem;
+  color: #6b7a90;
+}
+
 .sectionHeader {
   display: flex;
   align-items: center;
@@ -255,51 +337,61 @@
 
 // Non-CTF session table
 .sessionTable {
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 12px;
   overflow: hidden;
+  background: #161b22;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
 }
 
 .sessionTableHeader {
   display: grid;
-  grid-template-columns: minmax(280px, 3fr) 100px 120px 140px;
+  grid-template-columns: minmax(240px, 2.4fr) 130px 110px 110px 140px;
   gap: 0.7rem;
-  padding: 0.6rem 1rem;
-  background: var(--secondary-bg);
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 0.65rem 1rem;
+  background: rgba(13, 17, 23, 0.9);
+  border-bottom: 1px solid rgba(0, 242, 254, 0.12);
   font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--secondary-text);
+  color: #8b9bb0;
 }
 
 .sessionTableRow {
   display: grid;
-  grid-template-columns: minmax(280px, 3fr) 100px 120px 140px;
+  grid-template-columns: minmax(240px, 2.4fr) 130px 110px 110px 140px;
   gap: 0.7rem;
-  padding: 0.55rem 1rem;
+  padding: 0.6rem 1rem;
   align-items: center;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 0.78rem;
-  transition: background 0.1s;
+  transition: all 0.2s ease;
   cursor: pointer;
+  background: #161b22;
 
   &:last-child {
     border-bottom: none;
   }
 
   &:hover {
-    background: var(--surface-hover);
+    background: rgba(22, 27, 34, 0.92);
+    box-shadow: inset 0 0 0 1px rgba(0, 242, 254, 0.35),
+      0 0 18px rgba(0, 242, 254, 0.08);
   }
 }
 
 .sessionTableRowRunning {
-  background: rgba(16, 202, 0, 0.03);
-  border-left: 2px solid rgba(16, 202, 0, 0.5);
+  background: rgba(0, 230, 118, 0.03);
+  border-left: 2px solid rgba(0, 230, 118, 0.5);
 
   &:hover {
-    background: rgba(16, 202, 0, 0.06);
+    background: rgba(0, 230, 118, 0.06);
+  }
+
+  .stateDot {
+    animation: runningPulse 1.4s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(0, 230, 118, 0.7);
   }
 }
 
@@ -344,32 +436,83 @@
 .agentStateBadge {
   display: inline-flex;
   align-items: center;
+  gap: 0.3rem;
   font-size: 0.68rem;
-  font-weight: 500;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
   white-space: nowrap;
 }
 
 .agentState_running {
-  color: var(--bugbase-green);
-  background: var(--bugbase-green-100);
+  color: #00e676;
+  background: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+
+  &::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #00e676;
+    box-shadow: 0 0 6px rgba(0, 230, 118, 0.7);
+    animation: runningPulse 1.4s ease-in-out infinite;
+  }
 }
 
 .agentState_idle {
-  color: var(--secondary-text);
-  background: var(--surface-hover);
+  color: #7dd3fc;
+  background: rgba(0, 242, 254, 0.1);
+  border: 1px solid rgba(0, 242, 254, 0.2);
 }
 
 .agentState_paused {
-  color: var(--yellow);
-  background: var(--yellow-700);
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.22);
 }
 
 .agentState_waiting_consent,
 .agentState_waiting_manual_execution {
-  color: var(--orange);
-  background: var(--orange-700);
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+}
+
+@keyframes runningPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.sessionEngineCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.engineTag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.1);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.engineTokens {
+  font-size: 0.68rem;
+  color: #7d8ca3;
+  font-variant-numeric: tabular-nums;
 }
 
 .sessionDateCol {
@@ -387,15 +530,22 @@
 .openBtn {
   font-size: 0.68rem !important;
   height: 24px !important;
-  padding: 0 8px !important;
-  border-radius: 4px !important;
-  color: #79c0ff !important;
-  border-color: rgba(121, 192, 255, 0.45) !important;
-  background: rgba(121, 192, 255, 0.08) !important;
+  padding: 0 10px !important;
+  border-radius: 6px !important;
+  color: #00f2fe !important;
+  border-color: rgba(0, 242, 254, 0.5) !important;
+  background: rgba(0, 242, 254, 0.1) !important;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.15);
 
   &:hover {
-    border-color: #79c0ff !important;
-    background: rgba(121, 192, 255, 0.14) !important;
+    color: #000000 !important;
+    border-color: #00f2fe !important;
+    background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.45);
   }
 }
 

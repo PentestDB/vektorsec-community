@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { ApiOutlined, DisconnectOutlined, ReloadOutlined } from "@ant-design/icons";
+import { FiTerminal } from "react-icons/fi";
 import ShellTabBar from "./ShellTabBar";
 import ShellTerminal from "./ShellTerminal";
 
@@ -55,27 +56,27 @@ export default function ShellPanel({
       display: "flex",
       flexDirection: "column",
       height: "100%",
-      backgroundColor: "#111111",
-      borderLeft: "1px solid rgba(255, 255, 255, 0.06)",
+      backgroundColor: "#0d1117",
+      borderLeft: "1px solid rgba(0, 242, 254, 0.12)",
     }}>
       <div style={{
         display: "flex",
         alignItems: "center",
         gap: 14,
         padding: "5px 12px",
-        backgroundColor: "#0a0a0a",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+        backgroundColor: "#0d1117",
+        borderBottom: "1px solid rgba(0, 242, 254, 0.12)",
         fontSize: 11,
         fontFamily: "'JetBrains Mono', monospace",
         color: "#a1a1a1",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           {sshOk ? (
-            <ApiOutlined style={{ color: "#10ca00", fontSize: 12 }} />
+            <ApiOutlined style={{ color: "#00e676", fontSize: 12 }} />
           ) : (
             <DisconnectOutlined style={{ color: "#ff3e3e", fontSize: 12 }} />
           )}
-          <span style={{ color: sshOk ? "#10ca00" : "#ff3e3e" }}>
+          <span style={{ color: sshOk ? "#00e676" : "#ff3e3e" }}>
             SSH {sshOk ? "Connected" : "Disconnected"}
           </span>
           {!sshOk && onReconnectSSH && (
@@ -84,9 +85,9 @@ export default function ShellPanel({
               disabled={reconnecting}
               style={{
                 background: "none",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
+                border: "1px solid rgba(0, 242, 254, 0.35)",
                 borderRadius: 4,
-                color: reconnecting ? "#6d6d6d" : "#8e35ff",
+                color: reconnecting ? "#6d6d6d" : "#00f2fe",
                 cursor: reconnecting ? "not-allowed" : "pointer",
                 padding: "1px 6px",
                 fontSize: 10,
@@ -105,7 +106,7 @@ export default function ShellPanel({
         <div style={{
           width: 1,
           height: 12,
-          backgroundColor: "rgba(255, 255, 255, 0.08)",
+          backgroundColor: "rgba(0, 242, 254, 0.15)",
         }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -113,7 +114,7 @@ export default function ShellPanel({
             width: 5,
             height: 5,
             borderRadius: "50%",
-            backgroundColor: wsConnected ? "#10ca00" : "#ff3e3e",
+            backgroundColor: wsConnected ? "#00e676" : "#ff3e3e",
           }} />
           <span>WS {wsConnected ? "Connected" : "Disconnected"}</span>
         </div>
@@ -162,22 +163,39 @@ export default function ShellPanel({
             fontFamily: "'JetBrains Mono', monospace",
             flexDirection: "column",
             gap: 12,
+            position: "relative",
           }}>
-            <p>No active shells</p>
+            <FiTerminal
+              style={{
+                position: "absolute",
+                fontSize: 150,
+                color: "rgba(0, 242, 254, 0.05)",
+              }}
+            />
+            <p style={{ position: "relative", margin: 0 }}>No active shells</p>
             <button
               onClick={handleSpawnShell}
               style={{
-                padding: "6px 16px",
+                position: "relative",
+                padding: "7px 18px",
                 borderRadius: 6,
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                backgroundColor: "rgba(142, 53, 255, 0.1)",
-                color: "#ffffff",
+                border: "1px solid #00f2fe",
+                background: "linear-gradient(135deg, #00f2fe, #00d2ff)",
+                color: "#000000",
                 cursor: "pointer",
                 fontSize: 13,
+                fontWeight: 600,
+                boxShadow: "0 0 12px rgba(0, 242, 254, 0.35)",
                 transition: "all 150ms ease",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "rgba(142, 53, 255, 0.2)"}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "rgba(142, 53, 255, 0.1)"}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "linear-gradient(135deg, #00d2ff, #00b8d9)";
+                e.currentTarget.style.boxShadow = "0 0 22px rgba(0, 242, 254, 0.6)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "linear-gradient(135deg, #00f2fe, #00d2ff)";
+                e.currentTarget.style.boxShadow = "0 0 12px rgba(0, 242, 254, 0.35)";
+              }}
             >
               Spawn Shell
             </button>

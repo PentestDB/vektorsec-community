@@ -4,9 +4,9 @@ import React, { useState } from "react";
 import { PlusOutlined, CloseOutlined, DownOutlined, UpOutlined } from "@ant-design/icons";
 
 const CREATOR_COLOR = {
-  user: "#8e35ff",
-  agent: "#10ca00",
-  subagent: "#c10aad",
+  user: "#00f2fe",
+  agent: "#00e676",
+  subagent: "#00d2ff",
 };
 
 function ShellPill({ shell, isActive, onSelect, onClose }) {
@@ -28,9 +28,9 @@ function ShellPill({ shell, isActive, onSelect, onClose }) {
         fontSize: 11,
         fontFamily: "'JetBrains Mono', monospace",
         cursor: isClosed ? "default" : "pointer",
-        backgroundColor: isActive ? "rgba(142, 53, 255, 0.12)" : "transparent",
+        backgroundColor: isActive ? "rgba(0, 242, 254, 0.12)" : "transparent",
         color: isClosed ? "#6d6d6d" : isActive ? "#ffffff" : "#a1a1a1",
-        border: isActive ? "1px solid rgba(142, 53, 255, 0.3)" : "1px solid transparent",
+        border: isActive ? "1px solid rgba(0, 242, 254, 0.4)" : "1px solid transparent",
         opacity: isClosed ? 0.4 : 1,
         whiteSpace: "nowrap",
         textDecoration: isClosed ? "line-through" : "none",
@@ -73,8 +73,8 @@ export default function ShellTabBar({
 
   return (
     <div style={{
-      backgroundColor: "#0a0a0a",
-      borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+      backgroundColor: "#0d1117",
+      borderBottom: "1px solid rgba(0, 242, 254, 0.12)",
       flexShrink: 0,
     }}>
       <div style={{

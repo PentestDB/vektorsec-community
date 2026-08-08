@@ -21,7 +21,7 @@ export function buildMcpEndpoint(baseUrl: string): string {
 
 export function buildMcpConfigTemplate(baseUrl: string, token: string): string {
   return [
-    "name: pentest-copilot",
+    "name: vektorsec",
     "transport:",
     "  type: http",
     `  url: ${buildMcpEndpoint(baseUrl)}`,

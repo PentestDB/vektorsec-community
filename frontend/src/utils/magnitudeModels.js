@@ -5,6 +5,7 @@ const SUPPORTED_MAGNITUDE_PROVIDERS = new Set([
   "openrouter",
   "openai-compatible",
   "ollama",
+  "deepseek",
 ]);
 
 export function getMagnitudeModelIssue(model) {

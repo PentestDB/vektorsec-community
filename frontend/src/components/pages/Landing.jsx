@@ -140,7 +140,7 @@ const LandingPage = () => {
                 <h1>Everything Hackers</h1>
                 <h1>Love</h1>
                 <p>
-                  Pentest Copilot takes you through each step of the journey,
+                  VektorSec takes you through each step of the journey,
                   making your life easier.
                 </p>
               </div>
@@ -148,16 +148,16 @@ const LandingPage = () => {
 
             <div className={styles.mainContainer}>
               <div className={styles.wrapper}>
-                <p className={styles.tagline}>BugBase Presents</p>
-                <h1>Pentest Copilot</h1>
+                <p className={styles.tagline}>NEXT-GEN AI PENTEST PLATFORM</p>
+                <h1>VektorSec</h1>
                 <p>
-                  Your ultimate ethical hacking assistant, copilot utilizes
-                  context to give directed results. From analysing web apps to
-                  root shells, it&apos;s got you covered.
+                  Autonomous AI Security Operations &amp; Penetration Testing
+                  Agent. Integrated with Telegram Bot &amp; Cloud Scanning
+                  Workers. Pay-as-you-go starting at cheap rates.
                 </p>
                 <div className={styles.viewOptions}>
                   <PrimaryButton
-                    white
+                    className={styles.ctaPrimary}
                     style={{
                       borderRadius: "2rem",
                       display: "flex",
@@ -168,11 +168,12 @@ const LandingPage = () => {
                       height: "2.75rem",
                       fontSize: "0.95rem",
                     }}
-                    onClick={() => router.push(`/login`)}
+                    onClick={() => router.push(`/register`)}
                   >
-                    Get Started <FiArrowRight />
+                    Get Started Free <FiArrowRight />
                   </PrimaryButton>
                   <PrimaryButton
+                    className={styles.ctaSecondary}
                     style={{
                       borderRadius: "2rem",
                       display: "flex",
@@ -182,19 +183,14 @@ const LandingPage = () => {
                       padding: "0 2rem",
                       height: "2.75rem",
                       fontSize: "0.95rem",
-                      borderColor: "rgba(255,255,255,0.2)",
+                      borderColor: "rgba(0, 242, 254, 0.45)",
                     }}
-                    onClick={() =>
-                      window.open(
-                        "https://github.com/bugbasesecurity/pentest-copilot/wiki",
-                        "_blank"
-                      )
-                    }
+                    onClick={() => router.push(`/pricing`)}
                   >
-                    Documentation
+                    Top Up &amp; Pricing
                   </PrimaryButton>
                   <a
-                    href="https://github.com/bugbasesecurity/pentest-copilot"
+                    href="https://github.com/PentestDB"
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.githubStarBtn}
@@ -203,7 +199,7 @@ const LandingPage = () => {
                     <span>Star on GitHub</span>
                   </a>
                 </div>
-                <p className={styles.cc}>Don't Hack Solo</p>
+                <p className={styles.cc}>Automate Your Security Workflow Today</p>
               </div>
             </div>
           </div>
@@ -212,7 +208,7 @@ const LandingPage = () => {
               <TextBox
                 title={"Updated Tools"}
                 description={
-                  "Pentest Copilot is equipped with the latest 2023 ExploitDB lookups and utilises the MITRE framework."
+                  "VektorSec is equipped with the latest 2023 ExploitDB lookups and utilises the MITRE framework."
                 }
                 alignment="right"
                 className={styles.featureBox}
@@ -220,7 +216,7 @@ const LandingPage = () => {
               <TextBox
                 title={"Intuitive Thinking"}
                 description={
-                  "Pentest Copilot eliminates redundant research and the need to constantly refer to the internet and documentation."
+                  "VektorSec eliminates redundant research and the need to constantly refer to the internet and documentation."
                 }
                 alignment="right"
                 className={styles.featureBox}
@@ -240,7 +236,7 @@ const LandingPage = () => {
               <TextBox
                 title={"No More Rabbit Holes"}
                 description={
-                  "Thanks to intelligent contextual analysis, Pentest Copilot helps you avoid wasted time by steering clear."
+                  "Thanks to intelligent contextual analysis, VektorSec helps you avoid wasted time by steering clear."
                 }
                 alignment="left"
                 className={styles.featureBox}
@@ -248,7 +244,7 @@ const LandingPage = () => {
               <TextBox
                 title={"Payload Generation"}
                 description={
-                  "Say goodbye to manual payload generation. Pentest Copilot automatically generates staged."
+                  "Say goodbye to manual payload generation. VektorSec automatically generates staged."
                 }
                 alignment="left"
                 className={styles.featureBox}
@@ -257,7 +253,7 @@ const LandingPage = () => {
             <TextBox
               title={"Formatted Command Generation"}
               description={
-                "No more struggling with complex command syntax. Pentest Copilot automatically generates."
+                "No more struggling with complex command syntax. VektorSec automatically generates."
               }
               alignment="center"
               className={styles.absoluteBox}
@@ -405,7 +401,7 @@ const LandingPage = () => {
             <div className={styles.titleSection}>
               <h1>Ultimate Hacker Experience</h1>
               <p>
-                These are features that make pentest copilot more accessible to
+                These are features that make VektorSec more accessible to
                 people, ease of use, better experience etc.
               </p>
             </div>
@@ -476,32 +472,32 @@ const copilotFeatures = [
     icon: <TbPlugConnected size={"2em"} />,
     title: "Secure VPN Integration",
     description:
-      "Seamlessly connect Pentest Copilot to your remote server by providing your VPN file. Copilot runs commands on the isolated sandbox domain, ensuring secure and precise execution of your tests.",
+      "Seamlessly connect VektorSec to your remote server by providing your VPN file. VektorSec runs commands on the isolated sandbox domain, ensuring secure and precise execution of your tests.",
   },
 
   {
     icon: <DeploymentUnitOutlined style={{ fontSize: "2rem" }} />,
     title: "Total Control at Your Fingertips",
     description:
-      "Pause and resume your sessions on-demand. Pentest Copilot respects your flexibility and adapts to your schedule.",
+      "Pause and resume your sessions on-demand. VektorSec respects your flexibility and adapts to your schedule.",
   },
   {
     icon: <ClusterOutlined style={{ fontSize: "2rem" }} />,
     title: "Parallel Command Processing",
     description:
-      "When multiple tasks need to be performed simultaneously, Pentest Copilot spawns multiple sub-process instances, ensuring tasks like GoBuster and Nikto run in parallel. Say goodbye to waiting.",
+      "When multiple tasks need to be performed simultaneously, VektorSec spawns multiple sub-process instances, ensuring tasks like GoBuster and Nikto run in parallel. Say goodbye to waiting.",
   },
   {
     icon: <AiOutlineCloudServer size={"2em"} />,
     title: "Local or Cloud, the Choice is Yours",
     description:
-      "Whether you prefer running commands on your own system or utilizing the managed sandbox cloud environment, Pentest Copilot offers the flexibility you need.",
+      "Whether you prefer running commands on your own system or utilizing the managed sandbox cloud environment, VektorSec offers the flexibility you need.",
   },
   {
     icon: <DeleteRowOutlined style={{ fontSize: "2rem" }} />,
     title: "Kali Linux Not Required",
     description:
-      "Pentest Copilot frees you from the hassle of installing Kali Linux. You can get started right away, no matter your preferred operating system.",
+      "VektorSec frees you from the hassle of installing Kali Linux. You can get started right away, no matter your preferred operating system.",
   },
 ];
 
@@ -516,28 +512,28 @@ const futureItems = [
   {
     title: "Foothold",
     description:
-      "Gain access effortlessly as Pentest Copilot automatically identifies the exploit, suggests and creates the payload, and executes it, catching a reverse shell. It's like having a skilled hacker by your side.",
+      "Gain access effortlessly as VektorSec automatically identifies the exploit, suggests and creates the payload, and executes it, catching a reverse shell. It's like having a skilled hacker by your side.",
     alignment: "left",
     image: feature2,
   },
   {
     title: "Privilege Escalation and Lateral Movement",
     description:
-      "Once a shell is obtained, Pentest Copilot goes further, running scripts to identify points of privilege escalation and enabling lateral movement. You'll uncover hidden vulnerabilities and maximise your impact.",
+      "Once a shell is obtained, VektorSec goes further, running scripts to identify points of privilege escalation and enabling lateral movement. You'll uncover hidden vulnerabilities and maximise your impact.",
     alignment: "left",
     image: feature3,
   },
   {
     title: "Uncover Hidden Treasures",
     description:
-      "Pentest Copilot excels at data extraction, helping you locate critical files and extract them, empowering you to unveil sensitive information.",
+      "VektorSec excels at data extraction, helping you locate critical files and extract them, empowering you to unveil sensitive information.",
     alignment: "left",
     image: feature4,
   },
   {
     title: "Leave No Trace Behind",
     description:
-      "When your pentest is complete, Pentest Copilot doesn't stop. It suggests ways to persist on the machine and cleans up any tracks you may have left behind. You'll be an invisible force, leaving no trace of your presence.",
+      "When your pentest is complete, VektorSec doesn't stop. It suggests ways to persist on the machine and cleans up any tracks you may have left behind. You'll be an invisible force, leaving no trace of your presence.",
     alignment: "right",
     image: feature5,
   },
@@ -547,31 +543,31 @@ const copilotProcess = [
   {
     title: "Updated Tools",
     description:
-      "Pentest Copilot is equipped with the latest 2023 ExploitDB lookups and utilises the MITRE framework.",
+      "VektorSec is equipped with the latest 2023 ExploitDB lookups and utilises the MITRE framework.",
     icon: icon1,
   },
   {
     title: "Intuitive Thinking",
     description:
-      "Pentest Copilot eliminates redundant research and the need to constantly refer to the internet and documentation.",
+      "VektorSec eliminates redundant research and the need to constantly refer to the internet and documentation.",
     icon: icon2,
   },
   {
     title: "No More Rabbit Holes",
     description:
-      "Thanks to intelligent contextual analysis, Pentest Copilot helps you avoid wasted time by steering clear.",
+      "Thanks to intelligent contextual analysis, VektorSec helps you avoid wasted time by steering clear.",
     icon: icon3,
   },
   {
     title: "Formatted Command Generation",
     description:
-      "No more struggling with complex command syntax. Pentest Copilot automatically generates.",
+      "No more struggling with complex command syntax. VektorSec automatically generates.",
     icon: icon4,
   },
   {
     title: "Payload Generation",
     description:
-      "Say goodbye to manual payload generation. Pentest Copilot automatically generates staged.",
+      "Say goodbye to manual payload generation. VektorSec automatically generates staged.",
     icon: icon5,
   },
 ];

@@ -14,7 +14,7 @@ const NoAccess = () => {
         className={styles.noAccessImage}
         />
         <h1>You are on the waitlist!</h1>
-        <p>Exciting things are on the horizon! Stay tuned, and we&apos;ll keep you updated on your access to Pentest Copilot. Thank you for your interest!!</p>
+        <p>Exciting things are on the horizon! Stay tuned, and we&apos;ll keep you updated on your access to VektorSec. Thank you for your interest!!</p>
         </div>
   )
 }

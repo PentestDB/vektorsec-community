@@ -1,0 +1,416 @@
+@import "../_variables";
+
+.docsShell {
+  min-height: 100vh;
+  background: #0d1117;
+  color: #e6edf3;
+}
+
+// ─── Header ──────────────────────────────────────────────────────────
+.docsHeader {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 56px;
+  padding: 0 1.5rem;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 242, 254, 0.15);
+
+  .brandLink {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+
+  .headerLabel {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #00f2fe;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid rgba(0, 242, 254, 0.3);
+    border-radius: 999px;
+    background: rgba(0, 242, 254, 0.06);
+  }
+
+  .backLink {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: #8b9bb0;
+    text-decoration: none;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      color: #00f2fe;
+      border-color: rgba(0, 242, 254, 0.5);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+    }
+  }
+}
+
+// ─── Body grid ───────────────────────────────────────────────────────
+.docsBody {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 200px;
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 4rem;
+}
+
+// ─── Left sidebar ────────────────────────────────────────────────────
+.leftSidebar {
+  position: sticky;
+  top: 72px;
+  align-self: start;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+
+  .sidebarTitle {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8b9bb0;
+    margin-bottom: 0.75rem;
+    padding: 0 0.5rem;
+  }
+
+  .sidebarNav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .navItem {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: none;
+    border-left: 2px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #8b9bb0;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    .navIcon {
+      color: #00f2fe;
+      flex-shrink: 0;
+    }
+
+    &:hover {
+      background: rgba(0, 242, 254, 0.06);
+      color: #e6edf3;
+    }
+  }
+
+  .navItemActive {
+    background: #161b22;
+    color: #00f2fe;
+    border-left-color: #00f2fe;
+    box-shadow: inset 0 0 10px rgba(0, 242, 254, 0.05),
+      0 0 10px rgba(0, 242, 254, 0.08);
+  }
+}
+
+// ─── Main content ────────────────────────────────────────────────────
+.mainContent {
+  min-width: 0;
+  max-width: 760px;
+}
+
+.hero {
+  padding: 1.25rem 0 1.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(0, 242, 254, 0.15);
+
+  .heroTitle {
+    margin: 0 0 0.5rem;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #ffffff 10%, #00f2fe 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .heroSub {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #8b9bb0;
+  }
+}
+
+.section {
+  scroll-margin-top: 72px;
+}
+
+// ─── Markdown elements ───────────────────────────────────────────────
+.mdH2 {
+  margin: 2rem 0 0.9rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #00f2fe;
+  text-shadow: 0 0 14px rgba(0, 242, 254, 0.35);
+  scroll-margin-top: 72px;
+}
+
+.mdH3 {
+  margin: 1.5rem 0 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e6edf3;
+}
+
+.mdP {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #c9d6e6;
+}
+
+.mdUl,
+.mdOl {
+  margin: 0 0 0.85rem;
+  padding-left: 1.4rem;
+}
+
+.mdLi {
+  margin: 0.4rem 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: #c9d6e6;
+}
+
+.mdStrong {
+  color: #00f2fe;
+  font-weight: 600;
+}
+
+.mdLink {
+  color: #00f2fe;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 242, 254, 0.3);
+
+  &:hover {
+    color: #ffffff;
+    border-bottom-color: #00f2fe;
+  }
+}
+
+.mdInlineCode {
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(0, 242, 254, 0.1);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  color: #00f2fe;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82em;
+}
+
+.mdBlockquote {
+  margin: 1rem 0;
+  padding: 0.7rem 1rem;
+  border-left: 3px solid #00f2fe;
+  border-radius: 0 8px 8px 0;
+  background: rgba(0, 242, 254, 0.05);
+  box-shadow: inset 3px 0 8px rgba(0, 242, 254, 0.12),
+    0 0 14px rgba(0, 242, 254, 0.05);
+
+  p {
+    margin: 0;
+    color: #a5e9f2;
+    font-size: 0.86rem;
+  }
+}
+
+// ─── Code block with copy button ─────────────────────────────────────
+.codeBlock {
+  margin: 1rem 0;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #161b22;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px rgba(0, 242, 254, 0.02);
+
+  .codeHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid rgba(0, 242, 254, 0.12);
+    background: rgba(13, 17, 23, 0.6);
+
+    .codeLang {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #00f2fe;
+    }
+
+    .copyBtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.15rem 0.5rem;
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      border-radius: 6px;
+      background: transparent;
+      color: #8b9bb0;
+      font-size: 0.66rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        color: #00f2fe;
+        border-color: rgba(0, 242, 254, 0.6);
+        box-shadow: 0 0 8px rgba(0, 242, 254, 0.2);
+      }
+    }
+
+    .copyBtnDone {
+      color: #00e676;
+      border-color: rgba(0, 230, 118, 0.5);
+    }
+  }
+
+  .codePre {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: #c9d6e6;
+
+    code {
+      font-family: inherit;
+    }
+  }
+}
+
+// ─── Table ───────────────────────────────────────────────────────────
+.mdTable {
+  width: 100%;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  overflow: hidden;
+  border-radius: 8px;
+
+  .mdThead {
+    background: rgba(0, 242, 254, 0.06);
+  }
+
+  .mdTh {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    color: #00f2fe;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid rgba(0, 242, 254, 0.2);
+  }
+
+  .mdTd {
+    padding: 0.55rem 0.8rem;
+    color: #c9d6e6;
+    border-bottom: 1px solid rgba(0, 242, 254, 0.1);
+  }
+}
+
+// ─── Right TOC ───────────────────────────────────────────────────────
+.rightToc {
+  position: sticky;
+  top: 72px;
+  align-self: start;
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+
+  .tocTitle {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #8b9bb0;
+    margin-bottom: 0.75rem;
+  }
+
+  .tocNav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .tocItem {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border: none;
+    border-left: 2px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: #6b7a90;
+    font-size: 0.75rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: #00f2fe;
+    }
+  }
+
+  .tocItemActive {
+    color: #00f2fe;
+    border-left-color: #00f2fe;
+  }
+}
+
+// ─── Responsive ──────────────────────────────────────────────────────
+@include responsive(tablet4) {
+  .docsBody {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  .rightToc {
+    display: none;
+  }
+}
+
+@include responsive(tablet2) {
+  .docsBody {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 1rem 1rem 3rem;
+  }
+
+  .leftSidebar {
+    display: none;
+  }
+}
+

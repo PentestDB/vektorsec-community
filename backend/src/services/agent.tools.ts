@@ -9,24 +9,11 @@ import { EngagementState } from "./engagement-state";
 import { SwarmWinCondition } from "../models/Sessions/Sessions.model";
 import { AgentPromptConfig } from "../utils/copilot/prompts";
 import { parseToolArguments } from "../utils/toolArguments";
+import { executeWithTimeout } from "../utils/executeWithTimeout";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
-const DEFAULT_TOOL_TIMEOUT_MS = 60_000; // 1 min hard cap if no timeoutMs on the definition
 
-function executeWithTimeout(
-  toolDef: import("../tools/types").ToolDefinition,
-  args: Record<string, any>,
-  ctx: ExecutionContext,
-): Promise<ToolResult> {
-  const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
-  return Promise.race([
-    toolDef.execute(args, ctx),
-    new Promise<ToolResult>((_, reject) =>
-      setTimeout(() => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)), timeoutMs),
-    ),
-  ]);
-}
 
 export interface ToolExecutionCallbacks {
   onToolStart: (toolCallId: string, toolName: string, args: Record<string, any>) => void;
@@ -72,11 +59,15 @@ export function buildExecutionContext(params: {
     ctfContext?: CtfSwarmContext;
     agentPromptConfig?: AgentPromptConfig;
   };
+  maxSubagentIterations?: number;
+  maxSwarmIterations?: number;
 }): ExecutionContext {
   const {
     sessionId, agentId, shellManager, subagentManager, swarmManager,
     sse, userId, onChunk, abortSignal, engagementState, swarmDefaults,
+    maxSubagentIterations, maxSwarmIterations,
   } = params;
+
   const agentRole = params.agentRole ?? "main";
 
   return {
@@ -106,8 +97,10 @@ export function buildExecutionContext(params: {
             task,
             sse,
             userId,
+            maxIterations: maxSubagentIterations,
           })
       : undefined,
+
     spawnSwarm: swarmManager && sse && userId
       ? async (swarmParams) => {
           if (agentRole === "main" && !swarmDefaults?.modelPresets.length) {
@@ -141,7 +134,9 @@ export function buildExecutionContext(params: {
             modelPresets,
             ctfContext: swarmDefaults?.ctfContext,
             agentPromptConfig: swarmDefaults?.agentPromptConfig,
+            maxIterations: maxSwarmIterations,
           });
+
         }
       : undefined,
     checkFindings: swarmManager

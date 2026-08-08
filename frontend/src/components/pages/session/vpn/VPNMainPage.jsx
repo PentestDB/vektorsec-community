@@ -132,7 +132,7 @@ const VPNMainPage = ({ sessionId }) => {
         </div>
         <div className={styles.headerRight}>
           <Upload {...uploadProps}>
-            <PrimaryButton purple icon={<FiUpload />} loading={uploading} size="small">
+            <PrimaryButton className={styles.primaryBtn} icon={<FiUpload />} loading={uploading} size="small">
               Add VPN Profile
             </PrimaryButton>
           </Upload>

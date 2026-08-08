@@ -46,7 +46,10 @@ export interface ExecutionContext {
   waitForRacers?: (seconds: number) => Promise<void>;
   onOutput?: (chunk: string) => void;
   engagementState?: EngagementState;
+  /** Abort signal for the current tool call (timeout or caller cancellation). */
+  abortSignal?: AbortSignal;
 }
+
 
 export interface ToolDefinition {
   name: string;

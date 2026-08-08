@@ -41,31 +41,35 @@
 .purpleButton {
   display: flex;
   gap: 0.5rem;
-  background-color: rgba(142, 53, 255, 0.12) !important;
+  background-color: rgba(0, 242, 254, 0.1) !important;
   color: var(--primary-text) !important;
-  border: 1px solid var(--primary-purple) !important;
+  border: 1px solid #00f2fe !important;
 
   &:hover {
-    background-color: rgba(142, 53, 255, 0.22) !important;
-    border-color: var(--primary-purple) !important;
+    background-color: rgba(0, 242, 254, 0.18) !important;
+    border-color: #00f2fe !important;
     color: var(--primary-text) !important;
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
   }
 }
 
 .purpleFilledButton {
-  background-color: var(--filled-purple) !important;
-  border: 1px solid var(--filled-purple) !important;
-  color: var(--primary-text) !important;
+  background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+  border: 1px solid #00f2fe !important;
+  color: #000000 !important;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
 
   &:hover {
-    background-color: #7a2de6 !important;
-    border-color: #7a2de6 !important;
-    color: var(--primary-text) !important;
+    background: linear-gradient(135deg, #00d2ff, #00b8d9) !important;
+    border-color: #00f2fe !important;
+    color: #000000 !important;
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.55);
   }
 
   &:active {
-    background-color: #6b26cc !important;
-    border-color: #6b26cc !important;
+    background: linear-gradient(135deg, #00b8d9, #00a0c0) !important;
+    border-color: #00f2fe !important;
   }
 }
 
@@ -251,7 +255,7 @@
 .headerLinkWrapper {
   height: 3.2rem;
   flex-shrink: 0;
-  background-color: var(--primary-bg);
+  background-color: #0d1117;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -551,18 +555,20 @@
 }
 
 .featureCardContainer {
-  background: var(--surface-hover);
-  border: 1px solid var(--border-subtle);
+  background: var(--card-bg);
+  border: 1px solid rgba(0, 242, 254, 0.2);
   border-radius: 8px;
   cursor: pointer;
   padding: 1rem;
   margin: 0.5rem 1rem;
   transition: all var(--transition-default);
   max-width: 60rem;
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.06);
 
   &:hover {
-    border-color: var(--border-default);
+    border-color: rgba(0, 242, 254, 0.5);
     background: var(--surface-active);
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.12);
   }
 
   .featureCardTitle {
@@ -597,10 +603,11 @@
 
   background: linear-gradient(
     93deg,
-    rgba(#8e35ff, 0.2) 0%,
-    rgba(#8e35ff, 0) 100%
+    rgba(0, 242, 254, 0.18) 0%,
+    rgba(0, 242, 254, 0) 100%
   );
   border-color: var(--primary-purple);
+  box-shadow: 0 0 18px rgba(0, 242, 254, 0.15);
 
   .featureCardDescription {
     -webkit-line-clamp: 10;
@@ -637,3 +644,56 @@
     line-height: 1.5;
   }
 }
+
+// ─── Header Token Widget ─────────────────────────────────────────────
+.tokenWidget {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 242, 254, 0.06);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+
+  .tokenIcon {
+    color: #00f2fe;
+    font-size: 0.9rem;
+    filter: drop-shadow(0 0 4px rgba(0, 242, 254, 0.6));
+  }
+
+  .tokenLabel {
+    font-size: 0.68rem;
+    color: #8b9bb0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .tokenValue {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #e6edf3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .topUpBtn {
+    margin-left: 0.2rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: transparent;
+    border: 1px solid rgba(0, 242, 254, 0.55);
+    color: #00f2fe;
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(0, 242, 254, 0.15);
+      color: #ffffff;
+      border-color: #00f2fe;
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+    }
+  }
+}
+

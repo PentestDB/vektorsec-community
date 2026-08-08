@@ -7,7 +7,8 @@ import SessionsModel, {
   SwarmStatus,
 } from "../models/Sessions/Sessions.model";
 import { ShellManager } from "./shell.manager";
-import { SSEWriter, buildTraceTags } from "./agent.service";
+import { SSEWriter, buildTraceTags, trackTokens } from "./agent.service";
+
 import { SubagentManager } from "./subagent.manager";
 import { FindingsBus, Finding } from "./findings-bus";
 import { toolRegistry } from "../tools/registry";
@@ -22,7 +23,8 @@ import {
   presetToProviderConfig,
 } from "../utils/llm/providers";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
-import { ExecutionContext, ToolResult } from "../tools/types";
+import { ExecutionContext } from "../tools/types";
+
 import UserModel from "../models/User/User.model";
 import {
   buildFileHints,
@@ -34,26 +36,15 @@ import {
 import { EngagementState } from "./engagement-state";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
+import { executeWithTimeout } from "../utils/executeWithTimeout";
+import { normalizeMaxSwarmIterations, DEFAULT_MAX_SWARM_ITERATIONS } from "../utils/agentConfig";
 
-const MAX_SWARM_AGENT_ITERATIONS = 25;
+
 const DEFAULT_SWARM_TIMEOUT_MS = 15 * 60 * 1000;
+
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
-const DEFAULT_TOOL_TIMEOUT_MS = 60_000;
 
-function executeWithTimeout(
-  toolDef: import("../tools/types").ToolDefinition,
-  args: Record<string, any>,
-  ctx: import("../tools/types").ExecutionContext,
-): Promise<import("../tools/types").ToolResult> {
-  const timeoutMs = toolDef.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
-  return Promise.race([
-    toolDef.execute(args, ctx),
-    new Promise<import("../tools/types").ToolResult>((_, reject) =>
-      setTimeout(() => reject(new Error(`Tool '${toolDef.name}' timed out after ${timeoutMs / 1000}s`)), timeoutMs),
-    ),
-  ]);
-}
 
 
 export interface SwarmResult {
@@ -130,7 +121,7 @@ function buildSwarmAgentPrompt(params: {
     : `- Report all findings using report_finding so the orchestrator gets a complete picture.`;
 
   return `<role>
-You are a Pentest Copilot swarm agent (${modelLabel}). You are one of several agents racing in parallel to achieve a shared goal, each running on a different model.
+You are a VektorSec swarm agent (${modelLabel}). You are one of several agents racing in parallel to achieve a shared goal, each running on a different model.
 </role>
 
 <swarm_goal>
@@ -286,9 +277,12 @@ export class SwarmManager extends EventEmitter {
     modelPresets?: ModelPreset[];
     ctfContext?: CtfSwarmContext;
     agentPromptConfig?: AgentPromptConfig;
+    maxIterations?: number;
   }): Promise<string> {
     const swarmId = `swarm_${uuidv4().slice(0, 8)}`;
     const { goal, agentSpecs, winCondition, timeoutMs, sse, userId } = params;
+    const maxIterations = normalizeMaxSwarmIterations(params.maxIterations);
+
 
     let presets: ModelPreset[] = params.modelPresets ? [...params.modelPresets] : [];
 
@@ -374,7 +368,9 @@ export class SwarmManager extends EventEmitter {
       abortSignal: abortCtrl.signal,
       agentPromptConfig: params.agentPromptConfig,
       ctfContext: params.ctfContext,
+      maxIterations,
     })
+
       .catch((err) => {
         console.error(`[SwarmManager] Swarm ${swarmId} error:`, err);
       })
@@ -403,8 +399,11 @@ export class SwarmManager extends EventEmitter {
     ctfContext?: CtfSwarmContext;
     agentPromptConfig?: AgentPromptConfig;
     engagementState?: EngagementState;
+    maxIterations?: number;
   }): Promise<void> {
     const { swarmId, goal, agents, winCondition, sse, userId, abortSignal } = params;
+    const maxIterations = normalizeMaxSwarmIterations(params.maxIterations);
+
     const findingsBus = new FindingsBus();
     this.findingsBuses.set(swarmId, findingsBus);
     const cancelEvent = { cancelled: false };
@@ -425,8 +424,10 @@ export class SwarmManager extends EventEmitter {
         engagementState: engState,
         ctfContext: params.ctfContext,
         agentPromptConfig: params.agentPromptConfig,
+        maxIterations,
       }),
     );
+
 
     const results = await Promise.allSettled(agentPromises);
 
@@ -535,12 +536,15 @@ export class SwarmManager extends EventEmitter {
     agentPromptConfig?: AgentPromptConfig;
     resumeMessages?: AgentMessageDoc[];
     engagementState?: EngagementState;
+    maxIterations?: number;
   }): Promise<{ status: string; result: string; isWinner: boolean }> {
     const {
       swarmId, goal, agent, winCondition, findingsBus,
       cancelEvent, sse, userId, abortSignal,
     } = params;
     const { agentId, task, context, modelLabel, preset } = agent;
+    const maxIterations = normalizeMaxSwarmIterations(params.maxIterations);
+
 
     const providerConfig = await buildProviderConfig(preset);
 
@@ -568,7 +572,8 @@ FLAG SUBMISSION — CRITICAL:
 - Both calls are required: confirm_flag for submission, report_finding to signal success.
 
 ITERATION EFFICIENCY:
-- You have a MAXIMUM of ${MAX_SWARM_AGENT_ITERATIONS} iterations. Every iteration counts.
+- You have a MAXIMUM of ${maxIterations} iterations. Every iteration counts.
+
 - Use PARALLEL tool calls whenever possible — call multiple independent tools in a single turn.
 - Do NOT waste iterations on unnecessary confirmations or redundant checks.
 - If an approach isn't working after 2-3 attempts, pivot immediately to a different technique.
@@ -678,7 +683,8 @@ ITERATION EFFICIENCY:
     });
 
     try {
-      while (iteration < MAX_SWARM_AGENT_ITERATIONS) {
+      while (iteration < maxIterations) {
+
         iteration++;
         const liveState = this.liveAgentState.get(liveKey);
         if (liveState) {
@@ -798,6 +804,10 @@ ITERATION EFFICIENCY:
           const promptTokens = result.usage.prompt_tokens ?? 0;
           const completionTokens = result.usage.completion_tokens ?? 0;
           const totalTokens = result.usage.total_tokens ?? (promptTokens + completionTokens);
+          // Track swarm agent token usage into the parent session so billing /
+          // usage limits reflect the full cost of racer agents, not just the
+          // main orchestrator loop.
+          await trackTokens(this.sessionId, promptTokens, completionTokens, totalTokens);
           sse.write("swarm_agent_token_usage", {
             swarmId,
             agentId,
@@ -807,9 +817,11 @@ ITERATION EFFICIENCY:
             totalTokens,
             contextLimit: getModelContextLimit(result.model || providerConfig.model),
             iteration,
-            maxIterations: MAX_SWARM_AGENT_ITERATIONS,
+            maxIterations,
           });
+
         }
+
 
         messages.push({
           id: uuidv4(),
@@ -952,9 +964,10 @@ ITERATION EFFICIENCY:
         if (isWinner) break;
       }
 
-      if (!finalResult && iteration >= MAX_SWARM_AGENT_ITERATIONS) {
-        finalResult = `Agent reached max iterations (${MAX_SWARM_AGENT_ITERATIONS}). Last response:\n${messages.filter((m) => m.role === "assistant").pop()?.content ?? "none"}`;
+      if (!finalResult && iteration >= maxIterations) {
+        finalResult = `Agent reached max iterations (${maxIterations}). Last response:\n${messages.filter((m) => m.role === "assistant").pop()?.content ?? "none"}`;
       }
+
       const abortReason = (abortSignal as any).reason;
       const wasPaused = abortSignal.aborted && abortReason === "paused";
 
@@ -1079,8 +1092,9 @@ ITERATION EFFICIENCY:
   }
 
   getMaxIterations(): number {
-    return MAX_SWARM_AGENT_ITERATIONS;
+    return DEFAULT_MAX_SWARM_ITERATIONS;
   }
+
 
   getActiveRoster(swarmIds: string[]): Array<{ agentId: string; modelLabel: string; swarmId: string }> {
     const roster: Array<{ agentId: string; modelLabel: string; swarmId: string }> = [];

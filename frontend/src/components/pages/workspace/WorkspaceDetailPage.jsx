@@ -28,11 +28,11 @@ import { useConfirmPopUp } from "@/components/common/ConfirmPopUp";
 import ChallengeTable from "@/components/common/ChallengeTable";
 
 const STATE_DOT = {
-  running: { color: "#10ca00", label: "Running" },
-  idle: { color: "#6b7280", label: "Idle" },
-  paused: { color: "#d29922", label: "Paused" },
-  waiting_consent: { color: "#d29922", label: "Waiting" },
-  waiting_manual_execution: { color: "#d29922", label: "Waiting" },
+  running: { color: "#00e676", label: "Running" },
+  idle: { color: "#00f2fe", label: "Idle" },
+  paused: { color: "#38bdf8", label: "Paused" },
+  waiting_consent: { color: "#38bdf8", label: "Waiting" },
+  waiting_manual_execution: { color: "#38bdf8", label: "Waiting" },
 };
 
 const WorkspaceDetailPage = ({ workspaceId }) => {
@@ -194,6 +194,22 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   const ctfConnected = workspace?.ctf?.connected;
   const sessions = workspace?.sessions || [];
 
+  const activeSessions = sessions.filter((s) => s.agentState === "running").length;
+  const idleSessions = sessions.filter((s) => s.agentState === "idle").length;
+  const tokensUsed = sessions.reduce((sum, s) => sum + (s.totalTokens || 0), 0);
+  const ctfMeta = workspace?.ctf;
+  const targetInfo = isCTF && ctfMeta?.ctfName
+    ? ctfMeta.ctfName
+    : isCTF && ctfMeta?.url
+    ? (() => {
+        try {
+          return new URL(ctfMeta.url).hostname;
+        } catch {
+          return ctfMeta.url;
+        }
+      })()
+    : "Not configured";
+
   const solvedCount = challenges.filter(
     (c) => c.status === "solved" || c.status === "submitted",
   ).length;
@@ -290,8 +306,8 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
             <div className={styles.titleRow}>
               <h1>{workspace.name}</h1>
               <Tag className={styles.typeBadge} color={
-                workspace.type === "ctf" ? "#f59e0b" :
-                workspace.type === "pentest" ? "#8b5cf6" : "#6b7280"
+                workspace.type === "ctf" ? "#00f2fe" :
+                workspace.type === "pentest" ? "#00e676" : "#7dd3fc"
               }>
                 {workspace.type?.toUpperCase()}
               </Tag>
@@ -351,16 +367,40 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           )}
           {isCTF && !ctfConnected && (
             <PrimaryButton
-              white
               onClick={() => setShowCtfConnect(true)}
-              className={styles.compactBtn}
+              className={`${styles.compactBtn} ${styles.connectCtfBtn}`}
             >
               <LinkOutlined /> Connect CTF
             </PrimaryButton>
           )}
-          <PrimaryButton purple onClick={() => setShowNewSession(true)} className={styles.compactBtn}>
+          <PrimaryButton
+            onClick={() => setShowNewSession(true)}
+            className={`${styles.compactBtn} ${styles.newSessionBtn}`}
+          >
             <PlusOutlined /> New Session
           </PrimaryButton>
+        </div>
+      </div>
+
+      <div className={styles.metricsBar}>
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>Active Sessions</span>
+          <span className={styles.metricValue}>{activeSessions}</span>
+          <span className={styles.metricSub}>{idleSessions} idle</span>
+        </div>
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>Target / Scope</span>
+          <span className={styles.metricValueSm} title={targetInfo}>
+            {targetInfo}
+          </span>
+          <span className={styles.metricSub}>
+            {isCTF ? "CTF event" : "workspace scope"}
+          </span>
+        </div>
+        <div className={styles.metricCard}>
+          <span className={styles.metricLabel}>Tokens Used</span>
+          <span className={styles.metricValue}>{tokensUsed.toLocaleString()}</span>
+          <span className={styles.metricSub}>in this workspace</span>
         </div>
       </div>
 
@@ -413,6 +453,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           <div className={styles.sessionTable}>
             <div className={styles.sessionTableHeader}>
               <span>Session</span>
+              <span>Engine</span>
               <span>Status</span>
               <span>Created</span>
               <span style={{ textAlign: "right" }}>Actions</span>
@@ -436,6 +477,12 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
                     {session.description && (
                       <span className={styles.sessionDescInline}>{session.description}</span>
                     )}
+                  </span>
+                  <span className={styles.sessionEngineCell}>
+                    <span className={styles.engineTag}>DeepSeek</span>
+                    <span className={styles.engineTokens}>
+                      {(session.totalTokens || 0).toLocaleString()} tokens
+                    </span>
                   </span>
                   <span>
                     <span className={`${styles.agentStateBadge} ${styles[`agentState_${session.agentState || "idle"}`]}`}>

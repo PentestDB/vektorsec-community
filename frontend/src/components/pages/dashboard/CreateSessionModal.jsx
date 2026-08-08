@@ -31,7 +31,7 @@ const CreateSessionModal = ({ show, setShow, close }) => {
       show={show}
       setShow={setShow}
       heading="Create new workspace"
-      subheading="Navigate the path to security excellence with Pentest Copilot"
+      subheading="Navigate the path to security excellence with VektorSec"
       onCancel={close}
       footer={false}
       destroyOnClose

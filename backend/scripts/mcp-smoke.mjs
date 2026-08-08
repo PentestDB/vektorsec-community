@@ -11,7 +11,7 @@ if (!token) {
 }
 
 const client = new Client(
-  { name: "pentest-copilot-smoke", version: "1.0.0" },
+  { name: "vektorsec-smoke", version: "1.0.0" },
   { capabilities: {} },
 );
 

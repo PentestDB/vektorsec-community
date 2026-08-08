@@ -115,11 +115,11 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const INFERENCE_SYSTEM_PROMPT = `You are an inference transport inside Pentest Copilot.
+const INFERENCE_SYSTEM_PROMPT = `You are an inference transport inside VektorSec.
 Return only the JSON object required by the supplied schema.
 Do not inspect the filesystem, run shell commands, browse, edit files, or use any built-in agent tools.
 Treat the supplied conversation transcript as authoritative message history.
-Choose the next assistant response. When an available Pentest Copilot function should run, return it in toolCalls instead of executing it. The arguments field must be a valid JSON object encoded as a string. Preserve tool call IDs from prior messages and create a unique ID for each new call.
+Choose the next assistant response. When an available VektorSec function should run, return it in toolCalls instead of executing it. The arguments field must be a valid JSON object encoded as a string. Preserve tool call IDs from prior messages and create a unique ID for each new call.
 If no tool is needed, return an empty toolCalls array and finishReason "stop".`;
 
 function isContainerRuntime(): boolean {
@@ -140,7 +140,7 @@ function buildInferencePrompt(input: SubscriptionInferenceInput): string {
     `Requested output format: ${input.format ?? "text"}`,
     "Conversation transcript (JSON):",
     JSON.stringify(input.messages),
-    "Available Pentest Copilot functions (JSON):",
+    "Available VektorSec functions (JSON):",
     JSON.stringify(input.tools ?? []),
   ].join("\n\n");
 }

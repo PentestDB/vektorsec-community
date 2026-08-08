@@ -25,7 +25,7 @@ const StatusBadge = ({ status, submittedToCtfd }) => {
   if (status === "flag_found") {
     return (
       <span className={`${styles.statusBadge} ${styles.statusFound}`}>
-        <RobotOutlined /> Copilot found
+        <RobotOutlined /> VektorSec found
       </span>
     );
   }
@@ -240,7 +240,7 @@ const ChallengeTable = ({
           options={[
             { value: "all", label: "All status" },
             { value: "solving", label: "Solving" },
-            { value: "flag_found", label: "Copilot found" },
+            { value: "flag_found", label: "VektorSec found" },
             { value: "incorrect", label: "Incorrect" },
             { value: "solved", label: "Solved" },
             { value: "pending", label: "Pending" },

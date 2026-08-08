@@ -63,6 +63,7 @@ const VALID_PROVIDERS = new Set([
   "ollama",
   "openai-compatible",
   "kimi",
+  "deepseek",
   "codex-subscription",
   "claude-subscription",
 ]);

@@ -525,15 +525,27 @@
   }
 
   :global(.ant-btn-primary) {
-    background: var(--filled-purple) !important;
-    border-color: var(--filled-purple) !important;
-    color: var(--primary-text) !important;
+    background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+    border-color: #00f2fe !important;
+    color: #000000 !important;
+    font-weight: 600;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
 
     &:hover,
     &:focus {
-      background: #7a2de6 !important;
-      border-color: #7a2de6 !important;
+      background: linear-gradient(135deg, #00d2ff, #00b8d9) !important;
+      border-color: #00f2fe !important;
+      color: #000000 !important;
+      box-shadow: 0 0 18px rgba(0, 242, 254, 0.55);
     }
+  }
+
+  :global(.ant-form-item-required::before) {
+    color: #00f2fe !important;
+  }
+
+  :global(.ant-form-item-label > label.ant-form-item-required) {
+    color: #e6edf3 !important;
   }
 }
 
@@ -783,8 +795,8 @@
 
   code {
     font-size: 0.7rem;
-    color: var(--primary-purple);
-    background: rgba(127, 86, 217, 0.08);
+    color: #00f2fe;
+    background: rgba(0, 242, 254, 0.08);
     padding: 1px 4px;
     border-radius: 3px;
   }

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { App, Tooltip } from "antd";
 import styles from "@/styles/pages/Session.module.scss";
 import Image from "next/image";
@@ -10,12 +10,14 @@ import rect from "@/assets/sidebar/rect.svg";
 import { useDispatch, useSelector } from "react-redux";
 import { setRecon, updateCurrentSession } from "@/store/user.slice";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import { getMenuItems } from "@/services/menu.service";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
 import { clearContext, getVulnerabilities } from "@/services/agent.service";
 import AgentToolsPanel from "@/components/session/AgentToolsPanel";
 import { updateSessions } from "@/store/user.slice";
-import { FiMonitor, FiShield } from "react-icons/fi";
+import { FiMonitor, FiShield, FiLock, FiLink } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { TbRadar, TbWorldWww } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi";
@@ -28,6 +30,7 @@ import {
 } from "@ant-design/icons";
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
+import FeedbackModal from "@/components/common/FeedbackModal";
 
 const EMPTY_RACERS = [];
 
@@ -78,12 +81,103 @@ const RACER_STATUS = {
   timed_out: { icon: <CloseCircleOutlined style={{ fontSize: 8 }} />, color: "#d29922" },
 };
 
+// Admin-managed session-page navigation tabs. URLs use a {sessionId}
+// placeholder substituted at render time. The same list is seeded into the DB
+// on first run so admins can manage these from the Admin Panel. Used as the
+// fallback when the menu API is unreachable.
+const DEFAULT_SESSION_MENUS = [
+  {
+    label: "Orchestrator",
+    url: "/session/{sessionId}",
+    order: -1,
+  },
+  {
+    label: "Vulnerabilities",
+    url: "/session/{sessionId}/vulnerabilities",
+    order: 0,
+  },
+  { label: "VPN", url: "/session/{sessionId}/vpn", order: 1, locked: true },
+  { label: "GUI", url: "/session/{sessionId}/gui", order: 2, locked: true },
+  { label: "Burp", url: "/session/{sessionId}/burp", order: 3, locked: true },
+  { label: "Caido", url: "/session/{sessionId}/caido", order: 4, locked: true },
+  {
+    label: "Browser Agent",
+    url: "/session/{sessionId}/browser-agent",
+    order: 5,
+  },
+];
+
+/** A session menu item whose URL is the base chat page (e.g. Orchestrator). */
+function isChatMenuUrl(url) {
+  return String(url || "").replace(/\/+$/, "") === "/session/{sessionId}";
+}
+
+/**
+ * Substitute the active session id and classify the route so the sidebar can
+ * keep its special behaviors (lock icons, Pro-plan tooltips, badges, redux
+ * navigation handlers).
+ */
+function resolveSessionNavUrl(m, sessionId) {
+  const raw = String(m.url || "");
+  const url =
+    raw.replaceAll("{sessionId}", sessionId) || `/session/${sessionId}`;
+  let kind = "link";
+  if (isChatMenuUrl(raw)) kind = "chat";
+  else if (url.endsWith("/vulnerabilities")) kind = "vulnerabilities";
+  else if (url.endsWith("/vpn")) kind = "vpn";
+  else if (url.endsWith("/gui")) kind = "gui";
+  else if (url.endsWith("/burp")) kind = "burp";
+  else if (url.endsWith("/caido")) kind = "caido";
+  else if (url.endsWith("/browser-agent")) kind = "browser-agent";
+  return { url, kind };
+}
+
 const Sidebar = ({ sessionId, workspaceId }) => {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [customMenus, setCustomMenus] = useState([]);
+  const [sessionMenus, setSessionMenus] = useState([]);
+
+  // Admin-managed menu links (Content → Menu Links) shown in the sidebar.
+  useEffect(() => {
+    let cancelled = false;
+    getMenuItems("all")
+      .then((data) => {
+        if (!cancelled)
+          setCustomMenus(
+            Array.isArray(data?.menus)
+              ? data.menus.filter((m) => m.placement !== "session")
+              : []
+          );
+      })
+      .catch(() => {
+        // Not configured — no custom links.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Admin-managed session navigation tabs (Content → Menu Links → Session
+  // Sidebar). Falls back to the built-in defaults when empty/unreachable.
+  useEffect(() => {
+    let cancelled = false;
+    getMenuItems("session")
+      .then((data) => {
+        if (!cancelled)
+          setSessionMenus(Array.isArray(data?.menus) ? data.menus : []);
+      })
+      .catch(() => {
+        // Falls back to DEFAULT_SESSION_MENUS.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { data: capabilitiesData } = useQuery("capabilities", getCapabilities);
   const { data: vulnerabilitiesData } = useQuery(
@@ -209,6 +303,80 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   }, [activeRacerPath, allRacers]);
   const contextUsageForTab = activeRacerTokenUsage || orchestratorTokenUsage;
 
+  // Session navigation tabs come from the admin-managed menus (placement
+  // "session"). When the DB has none (or the API is unreachable) we fall back
+  // to the built-in defaults so the sidebar keeps working.
+  const chatMenu = sessionMenus.find((m) => isChatMenuUrl(m.url));
+  const sessionNavItems =
+    sessionMenus.length > 0
+      ? sessionMenus
+          .filter((m) => !isChatMenuUrl(m.url))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      : DEFAULT_SESSION_MENUS;
+
+  const renderSessionNavItem = (m) => {
+    const { url, kind } = resolveSessionNavUrl(m, sessionId);
+    const isActive =
+      kind === "chat"
+        ? isOnWorkspace
+        : kind === "vulnerabilities"
+        ? isOnVulnerabilities
+        : kind === "vpn"
+        ? isOnVPN
+        : kind === "gui"
+        ? isOnGUI
+        : kind === "burp"
+        ? isOnBurp
+        : kind === "caido"
+        ? isOnCaido
+        : kind === "browser-agent"
+        ? isOnBrowserAgent
+        : pathname === url || pathname?.startsWith(`${url}/`);
+    const handleClick = () => {
+      if (kind === "vpn") return navigateToVPN();
+      if (kind === "gui") return navigateToGUI();
+      if (kind === "burp") return navigateToBurp();
+      if (kind === "caido") return navigateToCaido();
+      if (kind === "browser-agent") return navigateToBrowserAgent();
+      router.push(url);
+    };
+    const icon =
+      kind === "vulnerabilities" ? (
+        <FiShield />
+      ) : kind === "gui" ? (
+        <FiMonitor />
+      ) : kind === "burp" || kind === "caido" ? (
+        <TbRadar />
+      ) : kind === "browser-agent" ? (
+        <TbWorldWww />
+      ) : kind === "vpn" ? (
+        <Image src={vpn} width={14} height={14} alt="" />
+      ) : (
+        <FiLink />
+      );
+    const tabContent = (
+      <div
+        onClick={handleClick}
+        className={isActive ? styles.activeTab : styles.tab}
+      >
+        {icon}
+        <span style={{ flex: 1 }}>{m.label}</span>
+        {kind === "vulnerabilities" && (vulnerabilitiesData?.total ?? 0) > 0 && (
+          <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
+        )}
+        {m.locked && <FiLock className={styles.lockIcon} size={12} />}
+      </div>
+    );
+    const key = m._id || url;
+    return m.locked ? (
+      <Tooltip key={key} title="Upgrade to Pro Plan to unlock" placement="right">
+        {tabContent}
+      </Tooltip>
+    ) : (
+      <div key={key}>{tabContent}</div>
+    );
+  };
+
   return (
     <div className={styles.sidebar}>
       <div className={styles.createNew}>
@@ -302,13 +470,15 @@ const Sidebar = ({ sessionId, workspaceId }) => {
               </div>
             ))}
 
-          <div
-            onClick={() => router.push(`/session/${sessionId}`)}
-            className={isOnWorkspace ? styles.activeTab : styles.tab}
-          >
-            <Image src={quad} width={14} height={14} alt="" />
-            Orchestrator
-          </div>
+          {(chatMenu || sessionMenus.length === 0) && (
+            <div
+              onClick={() => router.push(`/session/${sessionId}`)}
+              className={isOnWorkspace ? styles.activeTab : styles.tab}
+            >
+              <Image src={quad} width={14} height={14} alt="" />
+              {chatMenu?.label || "Orchestrator"}
+            </div>
+          )}
 
           {allRacers.length > 0 && (
             <div className={styles.racerSection}>
@@ -376,58 +546,63 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             </div>
           )}
 
-          <div
-            onClick={() => router.push(`/session/${sessionId}/vulnerabilities`)}
-            className={isOnVulnerabilities ? styles.activeTab : styles.tab}
-          >
-            <FiShield />
-            <span style={{ flex: 1 }}>Vulnerabilities</span>
-            {(vulnerabilitiesData?.total ?? 0) > 0 && (
-              <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
-            )}
-          </div>
-
-          <div
-            onClick={navigateToVPN}
-            className={isOnVPN ? styles.activeTab : styles.tab}
-          >
-            <Image src={vpn} width={14} height={14} alt="" />
-            VPN
-          </div>
-
-          <div
-            onClick={navigateToGUI}
-            className={isOnGUI ? styles.activeTab : styles.tab}
-          >
-            <FiMonitor />
-            GUI
-          </div>
-
-          <div
-            onClick={navigateToBurp}
-            className={isOnBurp ? styles.activeTab : styles.tab}
-          >
-            <TbRadar />
-            Burp
-          </div>
-
-          <div
-            onClick={navigateToCaido}
-            className={isOnCaido ? styles.activeTab : styles.tab}
-          >
-            <TbRadar />
-            Caido
-          </div>
-
-          <div
-            onClick={navigateToBrowserAgent}
-            className={isOnBrowserAgent ? styles.activeTab : styles.tab}
-          >
-            <TbWorldWww />
-            Browser Agent
-          </div>
+          {sessionNavItems.map((m) => renderSessionNavItem(m))}
         </div>
       </div>
+
+      {customMenus.length > 0 && (
+        <div
+          style={{
+            padding: "0.5rem 0.75rem",
+            borderTop: "1px solid var(--border-subtle)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.65rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              color: "var(--secondary-text)",
+              marginBottom: "0.35rem",
+            }}
+          >
+            Quick Links
+          </div>
+          {customMenus.map((m) =>
+            m.openInNewTab ? (
+              <a
+                key={m._id}
+                href={m.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "block",
+                  padding: "0.35rem 0.25rem",
+                  fontSize: "0.78rem",
+                  color: "var(--secondary-text)",
+                  textDecoration: "none",
+                }}
+              >
+                {m.label}
+              </a>
+            ) : (
+              <Link
+                key={m._id}
+                href={m.url}
+                style={{
+                  display: "block",
+                  padding: "0.35rem 0.25rem",
+                  fontSize: "0.78rem",
+                  color: "var(--secondary-text)",
+                  textDecoration: "none",
+                }}
+              >
+                {m.label}
+              </Link>
+            )
+          )}
+        </div>
+      )}
 
       <div className={styles.additionalOptions}>
         {contextUsageForTab && <ContextUsageIndicator tokenUsage={contextUsageForTab} />}
@@ -458,16 +633,13 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             <MdOutlineDeleteSweep size={15} />
             Clear Context
           </div>
-          <div
-            className={styles.options}
-            onClick={() => window.open("https://github.com/bugbasesecurity/pentest-copilot/wiki", "_blank")}
-          >
+          <div className={styles.options}>
             <Image src={docs} width={14} height={14} alt="" />
             Documentation
           </div>
           <div
             className={styles.options}
-            onClick={() => window.open("https://forms.gle/7nB4HbRVRMCYHqmy6", "_blank")}
+            onClick={() => setFeedbackOpen(true)}
           >
             <Image src={help} width={14} height={14} alt="" />
             Share Feedback
@@ -475,6 +647,10 @@ const Sidebar = ({ sessionId, workspaceId }) => {
         </div>
       </div>
 
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
     </div>
   );
 };

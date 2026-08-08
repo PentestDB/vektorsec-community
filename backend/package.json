@@ -1,7 +1,7 @@
 {
-  "name": "pentest-copilot",
+  "name": "vektorsec",
   "version": "1.0.0",
-  "description": "BugBase Pentest Copilot",
+  "description": "VektorSec",
   "main": "src/server.ts",
   "engines": {
     "node": ">=22",
@@ -20,9 +20,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bugbasesecurity/pentest-copilot.git"
+    "url": "git+https://github.com/PentestDB/vektorsec.git"
   },
-  "author": "BugBase",
+  "author": "VektorSec",
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "0.78.0",

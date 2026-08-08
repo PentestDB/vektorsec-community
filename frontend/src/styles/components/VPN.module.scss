@@ -87,10 +87,11 @@
 }
 
 .cardActive {
-  background: rgba(16, 202, 0, 0.04);
-  border: 1px solid rgba(16, 202, 0, 0.35);
+  background: rgba(0, 230, 118, 0.05);
+  border: 1px solid rgba(0, 230, 118, 0.4);
   border-radius: 6px;
   padding: 0.75rem 1rem;
+  box-shadow: 0 0 12px rgba(0, 230, 118, 0.1);
 }
 
 .cardRow {
@@ -165,4 +166,19 @@
 
 .emptyState {
   padding: 2.5rem 0;
+}
+
+// Neon cyan primary action button
+.primaryBtn {
+  background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+  border: 1px solid #00f2fe !important;
+  color: #000000 !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+
+  &:hover {
+    background: linear-gradient(135deg, #00d2ff, #00b8d9) !important;
+    color: #000000 !important;
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.55);
+  }
 }

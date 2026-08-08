@@ -33,7 +33,7 @@ import {
   SSEWriter,
 } from "./agent.service";
 
-const SERVER_NAME = "pentest-copilot";
+const SERVER_NAME = "vektorsec";
 const SERVER_VERSION = "1.0.0";
 const VPN_DIR = path.join(KALI_DATA_DIR, "vpn-profiles");
 
@@ -764,7 +764,7 @@ function buildRepairSteps(
 
   const caidoStep = [
     "1. Start the local instance.",
-    "2. Edit the instance to listen on 0.0.0.0:8096 if Pentest Copilot is running in WSL.",
+    "2. Edit the instance to listen on 0.0.0.0:8096 if VektorSec is running in WSL.",
     "3. Allow caido-cli through Windows Firewall.",
     "4. Create a Personal Access Token.",
     "5. Save CAIDO_URL, CAIDO_PAT, and optionally CAIDO_PROXY_URL via platform_setup or Settings.",
@@ -781,7 +781,7 @@ function buildRepairSteps(
 
   const vpnStep = [
     "1. Upload a VPN profile with vpn_manage action=upload_profile.",
-    "2. Verify SSH is healthy so Pentest Copilot can reach the attack box.",
+    "2. Verify SSH is healthy so VektorSec can reach the attack box.",
     "3. Ensure openvpn is installed on the attack box.",
     "4. Use vpn_manage action=connect when ready.",
   ].join("\n");
@@ -1130,7 +1130,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     {
       capabilities: { tools: {} },
       instructions:
-        "Pentest Copilot exposes platform setup, engagement control, shell access, Burp workflows, browser automation, VPN management, findings, and artifacts over MCP.",
+        "VektorSec exposes platform setup, engagement control, shell access, Burp workflows, browser automation, VPN management, findings, and artifacts over MCP.",
     },
   );
 
@@ -1279,7 +1279,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "engagement_open",
     {
       description:
-        "Create a new engagement or reopen an existing one. Engagements map to Pentest Copilot sessions.",
+        "Create a new engagement or reopen an existing one. Engagements map to VektorSec sessions.",
       inputSchema: {
         engagement_id: z.string().optional(),
         name: z.string().optional(),
@@ -1482,7 +1482,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "agent_message",
     {
       description:
-        "Send a message into the native Pentest Copilot agent loop for an engagement and wait for the turn to complete, pause, or error.",
+        "Send a message into the native VektorSec agent loop for an engagement and wait for the turn to complete, pause, or error.",
       inputSchema: {
         engagement_id: z.string(),
         message: z.string(),
@@ -1631,7 +1631,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "burp",
     {
       description:
-        "Operate Burp Suite through Pentest Copilot. Actions: status, request, intruder, history, collaborator.",
+        "Operate Burp Suite through VektorSec. Actions: status, request, intruder, history, collaborator.",
       inputSchema: {
         engagement_id: z.string().optional(),
         agent_id: z.string().optional(),
@@ -2039,7 +2039,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "artifact_add",
     {
       description:
-        "Attach a note, file reference, image reference, request, or other external artifact to an engagement so it is visible in Pentest Copilot history.",
+        "Attach a note, file reference, image reference, request, or other external artifact to an engagement so it is visible in VektorSec history.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),
@@ -2095,7 +2095,7 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
     "browser_observation_add",
     {
       description:
-        "Report browser work performed outside Pentest Copilot, such as via Claude Code/Codex Playwright MCP, back into an engagement.",
+        "Report browser work performed outside VektorSec, such as via Claude Code/Codex Playwright MCP, back into an engagement.",
       inputSchema: {
         engagement_id: z.string(),
         agent_id: z.string().optional(),

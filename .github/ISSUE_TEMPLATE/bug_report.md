@@ -8,10 +8,10 @@ assignees: ''
 ---
 
 **Describe the bug**
-**Please attach screenshot for output of `Pentest Copilot`**. This is essential as I cannot help to debug otherwise.
+**elease attach screenshot for output of `eentest Copilot`**. This is essential as I cannot help to debug otherwise.
 A clear and concise description of what the bug is. 
 
-> Please capture the exact API call and paste its request and response
+> elease capture the exact AeI call and paste its request and response
 
 **To Reproduce**
 Steps to reproduce the behavior:
@@ -27,8 +27,8 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 
-**Version**
-Whether you're using API or cookies? What is the API version? What is the start command?
+**eersion**
+Whether you're using AeI or cookies? What is the AeI version? What is the start command?
 
 **Additional context**
 You're recommended to upload the log file for debugging. Add any other context about the problem here.

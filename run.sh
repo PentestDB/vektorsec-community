@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  Pentest Copilot — All-in-one launcher
+#  VektorSec — All-in-one launcher
 #  Configures, builds, and runs the entire stack.
 #
 #  Commands: start | config | dev | stop | logs | status | help
@@ -72,7 +72,7 @@ load_run_state() {
 print_banner() {
     echo
     echo -e "${BLUE}${BOLD}╔══════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}${BOLD}║        Pentest Copilot  ·  Launcher      ║${NC}"
+    echo -e "${BLUE}${BOLD}║        VektorSec  ·  Launcher            ║${NC}"
     echo -e "${BLUE}${BOLD}╚══════════════════════════════════════════╝${NC}"
     echo
 }
@@ -246,7 +246,7 @@ ensure_config_defaults() {
     if [[ "${DEV_MODE:-false}" == true ]]; then
         # Dev mode: backend runs on host, uses localhost to reach containerized mongo/redis
         if [[ "$cur_mongo" == *"mongodb:"* && "$cur_mongo" != *"localhost"* ]]; then
-            set_toml_var "$CONFIG_TOML" "mongo_uri" "mongodb://localhost:27017/pentestcopilot"
+            set_toml_var "$CONFIG_TOML" "mongo_uri" "mongodb://localhost:27017/vektorsec"
         fi
         if [[ "$cur_redis" == *"redis:"* && "$cur_redis" != *"localhost"* ]]; then
             set_toml_var "$CONFIG_TOML" "redis_url" "redis://localhost:6379"
@@ -254,7 +254,7 @@ ensure_config_defaults() {
     else
         # Normal mode: backend runs in container, uses Docker service names
         if [[ "$cur_mongo" == *"localhost"* ]]; then
-            set_toml_var "$CONFIG_TOML" "mongo_uri" "mongodb://mongodb:27017/pentestcopilot"
+            set_toml_var "$CONFIG_TOML" "mongo_uri" "mongodb://mongodb:27017/vektorsec"
         fi
         if [[ "$cur_redis" == *"localhost"* ]]; then
             set_toml_var "$CONFIG_TOML" "redis_url" "redis://redis:6379"
@@ -351,7 +351,7 @@ select_mode_for_configuration() {
     section "Choose Configuration Target"
     echo
     echo -e "   ${BOLD}1)${NC} ${GREEN}Core Docker settings${NC}"
-    echo -e "      ${DIM}Use this if Pentest Copilot runs through Docker without provisioning Kali.${NC}"
+    echo -e "      ${DIM}Use this if VektorSec runs through Docker without provisioning Kali.${NC}"
     echo
     echo -e "   ${BOLD}2)${NC} ${GREEN}Full Docker + Kali settings${NC}"
     echo -e "      ${DIM}Use this if you provision the built-in Kali container in Docker.${NC}"
@@ -372,7 +372,7 @@ select_mode_for_configuration() {
 detect_running_mode() {
     local has_kali has_backend
     has_kali=$(docker ps --filter "name=kali" --format '{{.Names}}' 2>/dev/null | head -1)
-    has_backend=$(docker ps --filter "name=pentest-copilot-backend" --format '{{.Names}}' 2>/dev/null | head -1)
+    has_backend=$(docker ps --filter "name=vektorsec-backend" --format '{{.Names}}' 2>/dev/null | head -1)
 
     if [[ -n "$has_kali" && -n "$has_backend" ]]; then
         set_normal_kali_mode
@@ -388,7 +388,7 @@ detect_running_mode() {
     else
         # Nothing running — check for dev-mode infra (mongodb/redis only)
         local has_mongo
-        has_mongo=$(docker ps --filter "name=pentest-copilot-mongodb" --format '{{.Names}}' 2>/dev/null | head -1)
+        has_mongo=$(docker ps --filter "name=vektorsec-mongodb" --format '{{.Names}}' 2>/dev/null | head -1)
         if [[ -n "$has_mongo" ]]; then
             DEV_MODE=true
             COMPOSE_FILE="docker-compose.dev.yml"
@@ -436,7 +436,7 @@ select_launch_mode() {
     section "Choose How To Run"
     echo
     echo -e "   ${BOLD}1)${NC} ${GREEN}Normal mode${NC}"
-    echo -e "      ${DIM}Best for most people. Pentest Copilot starts the application for you${NC}"
+    echo -e "      ${DIM}Best for most people. VektorSec starts the application for you${NC}"
     echo -e "      ${DIM}using Docker with guided questions for the required setup.${NC}"
     echo
     echo -e "   ${BOLD}2)${NC} ${YELLOW}Developer mode${NC}"
@@ -550,7 +550,7 @@ configure_required_startup_smart() {
 
     if ! is_model_configured; then
         warn "No model is configured yet."
-        hint "Start Pentest Copilot, then open Settings -> Models to add a model preset and assign the orchestrator."
+        hint "Start VektorSec, then open Settings -> Models to add a model preset and assign the orchestrator."
     fi
 
     if ! is_google_configured; then
@@ -647,7 +647,7 @@ configure_static_full() {
 
     section "Database"
     hint "One-time setup. Change only if using external MongoDB/Redis."
-    default_mongo="mongodb://localhost:27017/pentestcopilot"
+    default_mongo="mongodb://localhost:27017/vektorsec"
     default_redis="redis://localhost:6379"
 
     cur=$(get_toml_var "$CONFIG_TOML" "mongo_uri")
@@ -660,7 +660,7 @@ configure_static_full() {
     fi
 
     cur=$(get_toml_var "$CONFIG_TOML" "mongo_database")
-    prompt_input "MongoDB database [${cur:-pentestcopilot}]:"
+    prompt_input "MongoDB database [${cur:-vektorsec}]:"
     read -r val
     [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "mongo_database" "$val"
 
@@ -799,7 +799,7 @@ configure_exploit_box() {
     echo
     echo -e "   ${BOLD}1)${NC} Kali VM exploit box spin up  ${DIM}(first build can take 15-30+ min)${NC}"
     echo -e "   ${BOLD}2)${NC} Connect to external exploit box (any VM via SSH, including your local computer)"
-    echo -e "   ${BOLD}3)${NC} ${RED}No exploit box${NC}  ${RED}(reduces Pentest Copilot functionality significantly)${NC}"
+    echo -e "   ${BOLD}3)${NC} ${RED}No exploit box${NC}  ${RED}(reduces VektorSec functionality significantly)${NC}"
     prompt_input "Choose [1/2/3]:"
     read -r ssh_choice
 
@@ -812,7 +812,7 @@ configure_exploit_box() {
             ;;
         3)
             echo
-            warn "No exploit box selected — Pentest Copilot will have reduced functionality (no terminal, shells, or command execution on a target)."
+            warn "No exploit box selected — VektorSec will have reduced functionality (no terminal, shells, or command execution on a target)."
             clear_exploit_box_config
             ;;
         *)
@@ -1046,7 +1046,7 @@ launch() {
         return
     fi
 
-    section "Launching Pentest Copilot"
+    section "Launching VektorSec"
 
     ensure_compose_override
     save_run_state
@@ -1070,7 +1070,7 @@ launch() {
     fi
     echo
 
-    section "Pentest Copilot is Running"
+    section "VektorSec is Running"
     echo
     local frontend_url backend_url
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
@@ -1169,7 +1169,7 @@ cmd_start() {
             info "Quick start — using existing configuration"
         else
             warn "No model is configured yet."
-            hint "Start Pentest Copilot, then open Settings -> Models to add a model preset and assign the orchestrator."
+            hint "Start VektorSec, then open Settings -> Models to add a model preset and assign the orchestrator."
         fi
     elif [[ "${DEV_MODE:-false}" == true ]]; then
         configure_static_full
@@ -1268,7 +1268,7 @@ cmd_dev() {
             info "Quick start — using existing configuration"
         else
             warn "No model is configured yet."
-            hint "Start Pentest Copilot, then open Settings -> Models to add a model preset and assign the orchestrator."
+            hint "Start VektorSec, then open Settings -> Models to add a model preset and assign the orchestrator."
         fi
     else
         configure_static_full
@@ -1285,7 +1285,7 @@ cmd_dev() {
 cmd_stop() {
     check_prerequisites
     select_mode_for_operations
-    section "Stopping Pentest Copilot"
+    section "Stopping VektorSec"
     compose down
     info "All containers stopped"
 }

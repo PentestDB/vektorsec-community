@@ -24,6 +24,8 @@ export const MODEL_ALIASES: Record<string, string> = {
   "claude-opus-4.5": "claude-opus-4-5",
   "claude-opus-4.1": "claude-opus-4-1",
   "kimi-k3-latest": "kimi-k3",
+  "deepseek-chat-latest": "deepseek-chat",
+  "deepseek-reasoner-latest": "deepseek-reasoner",
 };
 
 export function normalizeModelId(model: string): string {
@@ -75,6 +77,10 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   "kimi-k2.7-code": 256_000,
   "kimi-k2.6": 256_000,
   "MiniMax-M2": 204_800,
+  "deepseek-chat": 128_000,
+  "deepseek-reasoner": 128_000,
+  "deepseek-v3": 128_000,
+  "deepseek-r1": 128_000,
 };
 
 export const DEFAULT_CONTEXT_LIMIT = 128_000;

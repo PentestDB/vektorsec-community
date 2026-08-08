@@ -431,7 +431,7 @@
   font-weight: 700;
   font-family: "JetBrains Mono", monospace;
   color: var(--bugbase-green);
-  background: rgba(16, 202, 0, 0.08);
+  background: rgba(0, 230, 118, 0.1);
   padding: 0.04rem 0.2rem;
   border-radius: 2px;
   letter-spacing: 0.04em;
@@ -444,7 +444,7 @@
   font-size: 0.68rem;
 
   &.status2xx { color: var(--bugbase-green); }
-  &.status3xx { color: #79c0ff; }
+  &.status3xx { color: #00f2fe; }
   &.status4xx { color: var(--orange); }
   &.status5xx { color: #ff7b72; }
 }
@@ -535,9 +535,9 @@
   font-size: 0.6rem !important;
   height: 1.35rem !important;
   padding: 0 0.45rem !important;
-  color: var(--lime-green-700) !important;
-  border: 1px solid rgba(159, 239, 0, 0.15) !important;
-  background: rgba(159, 239, 0, 0.04) !important;
+  color: #00e676 !important;
+  border: 1px solid rgba(0, 230, 118, 0.3) !important;
+  background: rgba(0, 230, 118, 0.06) !important;
   border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
@@ -545,9 +545,10 @@
   font-weight: 600 !important;
 
   &:hover {
-    color: var(--lime-green) !important;
-    border-color: rgba(159, 239, 0, 0.35) !important;
-    background: rgba(159, 239, 0, 0.08) !important;
+    color: #00e676 !important;
+    border-color: rgba(0, 230, 118, 0.5) !important;
+    background: rgba(0, 230, 118, 0.12) !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.2);
   }
 }
 
@@ -601,13 +602,13 @@
 }
 
 // Syntax highlighting
-.httpMethod { color: var(--filled-purple); font-weight: 700; }
+.httpMethod { color: #00f2fe; font-weight: 700; }
 .httpUrl { color: var(--primary-text); }
 .httpVersion { color: var(--secondary-text); }
-.httpHeaderName { color: #79c0ff; }
+.httpHeaderName { color: #00f2fe; }
 .httpHeaderValue { color: var(--primary-text-100); }
 .httpStatusOk { color: var(--bugbase-green); font-weight: 700; }
-.httpStatusRedirect { color: #79c0ff; font-weight: 700; }
+.httpStatusRedirect { color: #00f2fe; font-weight: 700; }
 .httpStatusClientErr { color: var(--orange); font-weight: 700; }
 .httpStatusServerErr { color: #ff7b72; font-weight: 700; }
 .httpBody { color: var(--secondary-text); }
@@ -792,9 +793,9 @@
   font-size: 0.6rem !important;
   height: 1.35rem !important;
   padding: 0 0.5rem !important;
-  color: var(--lime-green-700) !important;
-  border: 1px solid rgba(159, 239, 0, 0.15) !important;
-  background: rgba(159, 239, 0, 0.04) !important;
+  color: #00e676 !important;
+  border: 1px solid rgba(0, 230, 118, 0.3) !important;
+  background: rgba(0, 230, 118, 0.06) !important;
   border-radius: 4px !important;
   display: flex !important;
   align-items: center !important;
@@ -802,9 +803,10 @@
   font-weight: 600 !important;
 
   &:hover {
-    color: var(--lime-green) !important;
-    border-color: rgba(159, 239, 0, 0.35) !important;
-    background: rgba(159, 239, 0, 0.08) !important;
+    color: #00e676 !important;
+    border-color: rgba(0, 230, 118, 0.5) !important;
+    background: rgba(0, 230, 118, 0.12) !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.2);
   }
 }
 

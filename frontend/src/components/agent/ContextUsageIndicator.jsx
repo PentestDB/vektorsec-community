@@ -56,7 +56,7 @@ export default function ContextUsageIndicator({ tokenUsage }) {
   const dashOffset = circumference - (ringFillPct / 100) * circumference;
 
   const ringColor =
-    usagePct >= 100 ? "#ff4d4f" : usagePct >= 85 ? "#ff7875" : usagePct >= 60 ? "#faad14" : "#4a9eff";
+    usagePct >= 100 ? "#ff4d4f" : usagePct >= 85 ? "#00e676" : "#00f2fe";
 
   return (
     <div className={styles.contextPanel}>
@@ -117,7 +117,7 @@ export default function ContextUsageIndicator({ tokenUsage }) {
             <HelpTip
               text={
                 remainingRaw >= 0
-                  ? "When the context limit is approached, Copilot will automatically summarize the conversation to free up space. Your session will continue uninterrupted."
+                  ? "When the context limit is approached, VektorSec will automatically summarize the conversation to free up space. Your session will continue uninterrupted."
                   : "Total tokens exceed the model context window until summarization runs. The percentage above reflects actual usage (can go above 100%)."
               }
             />

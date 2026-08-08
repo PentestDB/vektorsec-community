@@ -137,7 +137,7 @@ export async function loginWithCredentials(
   const loginPageRes = await axios.get(`${baseURL}/login`, {
     maxRedirects: 5,
     timeout: 15_000,
-    headers: { "User-Agent": "PentestCopilot/1.0" },
+    headers: { "User-Agent": "VektorSec/1.0" },
   });
 
   const $ = cheerio.load(loginPageRes.data);
@@ -155,7 +155,7 @@ export async function loginWithCredentials(
   const loginRes = await axios.post(`${baseURL}/login`, params.toString(), {
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "PentestCopilot/1.0",
+      "User-Agent": "VektorSec/1.0",
       Cookie: extractSetCookies(loginPageRes.headers["set-cookie"]),
     },
     maxRedirects: 0,
@@ -182,7 +182,7 @@ export async function verifyToken(url: string, token: string): Promise<string> {
   const res = await client.get("/api/v1/challenges", { params: { limit: 1 } });
   if (!res.data?.success) throw new Error("API token verification failed");
 
-  const pageRes = await axios.get(baseURL, { timeout: 10_000, headers: { "User-Agent": "PentestCopilot/1.0" } });
+  const pageRes = await axios.get(baseURL, { timeout: 10_000, headers: { "User-Agent": "VektorSec/1.0" } });
   const $ = cheerio.load(pageRes.data);
   return $("title").text().trim().replace(/\s*\|.*$/, "") || "CTF";
 }
@@ -674,7 +674,7 @@ async function fetchCsrfNonce(baseURL: string, cookie: string, bustCache = false
   try {
     const cacheBuster = bustCache ? `?_=${Date.now()}` : "";
     const res = await axios.get(`${baseURL}/challenges${cacheBuster}`, {
-      headers: { Cookie: cookie, "User-Agent": "PentestCopilot/1.0" },
+      headers: { Cookie: cookie, "User-Agent": "VektorSec/1.0" },
       timeout: 10_000,
       maxRedirects: 5,
     });

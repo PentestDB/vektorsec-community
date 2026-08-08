@@ -191,11 +191,18 @@ export function messagesToOpenAI(
       } = {
         role: "assistant" as const,
         content: m.content,
-        tool_calls: validToolCalls.map((tc) => ({
-          id: tc.id,
-          type: "function" as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
+        tool_calls: validToolCalls.map((tc) => {
+          const call: Record<string, unknown> = {
+            id: tc.id,
+            type: "function" as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          };
+          // Echo provider passthrough (Gemini's extra_content.google
+          // thought_signature) verbatim; omitting it 400s multi-turn tools.
+          const extra = (tc as { extraContent?: unknown }).extraContent;
+          if (extra != null) call.extra_content = extra;
+          return call;
+        }) as unknown as OpenAI.Chat.ChatCompletionMessageToolCall[],
       };
       if (includeReasoningContent && m.reasoning) {
         assistantMessage.reasoning_content = m.reasoning;

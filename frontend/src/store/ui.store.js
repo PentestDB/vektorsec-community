@@ -11,7 +11,7 @@ export const useUIStore = create(
       setActiveShellId: (id) => set({ activeShellId: id }),
     }),
     {
-      name: "pentest-copilot-ui",
+      name: "vektorsec-ui",
     },
   ),
 );

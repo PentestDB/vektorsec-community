@@ -303,7 +303,7 @@ export default function ChatView({ sessionId }) {
               height={80}
               className={styles.emptyStateLogo}
             />
-            <h2>Pentest Copilot</h2>
+            <h2>VektorSec</h2>
             <p>
               Describe your target and goals below. The agent will autonomously
               perform reconnaissance, enumerate services, identify
@@ -322,7 +322,15 @@ export default function ChatView({ sessionId }) {
           if (msg.role === "slash_command_result") {
             return <SlashCommandResult key={msg.id} message={msg} />;
           }
-          return <ChatMessage key={msg.id} message={msg} allMessages={messages} />;
+          return (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              allMessages={messages}
+              onSendAction={handleSend}
+              agentState={agentState}
+            />
+          );
         })}
 
         {pendingConsent && agentState === "waiting_consent" && (

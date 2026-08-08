@@ -20,8 +20,8 @@ const IntercommMessenger = () => {
       <>
         {
           !loginRoutes.includes(pathname) && (
-            <a href="mailto:queries@bugbase.ai">
-              <Tooltip title="For any queries, reach out to us at queries@bugbase.ai">
+            <a href="mailto:hello@vektorsec.ai">
+              <Tooltip title="For any queries, reach out to us at hello@vektorsec.ai">
                 <div className={styles.helperEmailContainer}>
                   <MailOutlined className={styles.mailIcon} />
                 </div>

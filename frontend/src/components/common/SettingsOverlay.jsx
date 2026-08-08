@@ -10,6 +10,7 @@ import {
   TbRadar,
   TbWorldWww,
   TbAdjustmentsHorizontal,
+  TbCreditCard,
 } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
@@ -22,6 +23,7 @@ import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
+import BillingPage from "@/components/pages/BillingPage";
 
 const TABS = [
   {
@@ -29,6 +31,13 @@ const TABS = [
     label: "My Account",
     icon: RiAccountCircleLine,
     component: MyAccount,
+  },
+  {
+    key: "billing",
+    label: "Billing",
+    description: "Manage your plan, subscription, and usage.",
+    icon: TbCreditCard,
+    component: BillingPage,
   },
   {
     key: "capabilities",

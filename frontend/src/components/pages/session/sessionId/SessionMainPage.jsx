@@ -104,7 +104,7 @@ const SessionMainPage = ({ session_id }) => {
           style={{
             width: 4,
             cursor: "col-resize",
-            backgroundColor: isDragging ? "#8e35ff" : "rgba(255, 255, 255, 0.06)",
+            backgroundColor: isDragging ? "#00f2fe" : "rgba(255, 255, 255, 0.06)",
             transition: isDragging ? "none" : "background-color 0.15s ease",
             flexShrink: 0,
             zIndex: 10,

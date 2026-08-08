@@ -31,16 +31,15 @@ export interface BlogDoc extends mongoose.Document {
 const BlogSchema = new Schema({
   author: {
     type: String,
-    default: "BugBase",
+    default: "VektorSec",
   },
   authorProfileImage: {
     type: String,
-    default:
-      "https://bugbasev1.blob.core.windows.net/public/v1/bugbase/bugbase-black-round.png",
+    default: "",
   },
   authorLink: {
     type: String,
-    default: "https://bugbase.ai",
+    default: "https://github.com/PentestDB",
   },
   createdAt: {
     type: Date,

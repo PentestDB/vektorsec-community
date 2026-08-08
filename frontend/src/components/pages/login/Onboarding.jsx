@@ -172,10 +172,10 @@ const OnboardingPage = () => {
           </div>
         ) : (
           <div className={styles.onboardSuccess}>
-            <h1>Welcome Aboard! 🚀</h1>
+            <h1>Welcome Aboard!</h1>
             <p>
               You&apos;re all set and ready to roll. Dive into the world of
-              pentesting with your very first Pentest Copilot workspace.
+              pentesting with your very first VektorSec workspace.
             </p>
             <PrimaryButton
               purpleFilled
@@ -189,7 +189,7 @@ const OnboardingPage = () => {
       <Col xl={8} lg={8} md={8} xs={0} className={styles.rightContainer}>
         <CopilotLogo plain />
         <p className={styles.onboardingText}>
-          Pentest Copilot harnesses the power of AI and Kali Linux to deliver
+          VektorSec harnesses the power of AI and Kali Linux to deliver
           the <span>ultimate futuristic hacking experience.</span>
         </p>
         <div className={styles.cardOverlay}>

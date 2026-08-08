@@ -174,11 +174,11 @@
   align-items: center;
   cursor: pointer;
   transition: all var(--transition-fast);
-  box-shadow: 0 2px 8px rgba(#8e35ff, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 242, 254, 0.3);
 
   &:hover {
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(#8e35ff, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 242, 254, 0.45);
   }
 
   .mailIcon {

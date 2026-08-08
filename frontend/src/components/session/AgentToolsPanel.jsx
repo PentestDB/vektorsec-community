@@ -32,6 +32,11 @@ const TOOL_GROUPS = [
     description: "Magnitude automation",
     tools: ["browser_action"],
   },
+  {
+    label: "Out-of-Band",
+    description: "Blind vulnerability detection",
+    tools: ["oob_listener"],
+  },
 ];
 
 const TOOL_LABELS = {
@@ -52,6 +57,7 @@ const TOOL_LABELS = {
   send_to_burp_intruder: "Burp Intruder",
   burp_collaborator: "Burp Collaborator",
   browser_action: "Browser Action",
+  oob_listener: "OOB Listener",
 };
 
 const AgentToolsPanel = ({ sessionId }) => {

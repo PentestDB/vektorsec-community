@@ -58,6 +58,7 @@ const PROVIDER_OPTIONS = [
   { value: "ollama", label: "Ollama (Local)" },
   { value: "openai-compatible", label: "OpenAI-Compatible" },
   { value: "kimi", label: "Kimi (Moonshot AI)" },
+  { value: "deepseek", label: "DeepSeek" },
   { value: "codex-subscription", label: "Codex Subscription (Local CLI)" },
   { value: "claude-subscription", label: "Claude Subscription (Local CLI)" },
 ];
@@ -100,6 +101,10 @@ const PROVIDER_META = {
     keyURL: "https://platform.kimi.ai/",
     keyLabel: "Get Kimi API Key",
   },
+  deepseek: {
+    keyURL: "https://platform.deepseek.com/api_keys",
+    keyLabel: "Get DeepSeek API Key",
+  },
 };
 
 const FALLBACK_MODELS = {
@@ -136,10 +141,22 @@ const FALLBACK_MODELS = {
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
   ],
-  google: ["gemini-2.0-flash", "gemini-2.0-pro"],
+  google: [
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+  ],
   mistralai: ["mistral-large-latest", "mistral-medium-latest"],
   ollama: ["llama3.3", "llama3.2", "qwen2.5-coder", "mistral"],
   kimi: ["kimi-k3", "kimi-k2.7-code-highspeed", "kimi-k2.7-code", "kimi-k2.6"],
+  deepseek: [
+    "deepseek-chat",
+    "deepseek-reasoner",
+    "deepseek-v3",
+    "deepseek-r1",
+  ],
   "codex-subscription": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
   "claude-subscription": ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
 };
@@ -567,12 +584,12 @@ const ModelsPage = () => {
                   <Tag color={provider.authenticated ? "green" : "warning"}>
                     {provider.authenticated ? "SIGNED IN" : "SIGN-IN NEEDED"}
                   </Tag>
-                  {connected && <Tag color="purple">CONFIGURED</Tag>}
+                  {connected && <Tag color="#00f2fe">CONFIGURED</Tag>}
                 </div>
               </div>
               <div className={styles.mcpTokenMeta}>
                 {provider.authenticated
-                  ? `Uses the existing ${displayName} login for normal Pentest Copilot inference. Default: ${provider.defaultModel}.`
+                  ? `Uses the existing ${displayName} login for normal VektorSec inference. Default: ${provider.defaultModel}.`
                   : provider.detail || `Run ${provider.loginCommand} on the backend host.`}
               </div>
               {provider.provider === "claude-subscription" && (
@@ -739,7 +756,7 @@ const ModelsPage = () => {
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {assignments.orchestratorModelId === model.id && (
-                      <Tag color="purple">
+                      <Tag color="#00f2fe">
                         <CrownFilled /> Orchestrator
                       </Tag>
                     )}

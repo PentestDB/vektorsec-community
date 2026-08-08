@@ -65,7 +65,7 @@ export default function AgentBehaviorPage() {
           <div>
             <div className={styles.mcpPanelTitle}>Agentic turn limit</div>
             <div className={styles.mcpPanelDescription}>
-              Maximum model/tool cycles before Pentest Copilot asks whether to
+              Maximum model/tool cycles before VektorSec asks whether to
               continue. Higher values can consume more subscription usage.
             </div>
           </div>

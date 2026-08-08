@@ -13,6 +13,16 @@ frontend/.env
 docker-compose.override.yml
 ssh-keys/
 
+# ── Build / tool artifacts (never commit) ──
+.next/
+*.log
+*.zip
+tsc-check*.txt
+tsc-out.txt
+build-out.txt
+build-check*.txt
+.clineignore
+
 # ── Runtime data ──
 /kali-data/
 /kali_data/

@@ -1,10 +1,9 @@
-import Image from "next/image";
-// import copilotLogo from "/copilotlogo.svg";
 import { MdOutlineMail } from "react-icons/md";
 import styles from "@/styles/components/Footer.module.scss";
 import { FaInstagram, FaLinkedin, FaYoutube } from "react-icons/fa";
 import { Col, Form, Row } from "antd";
 import {  MailFilled } from "@ant-design/icons";
+import CopilotLogo from "./CopilotLogo";
 
 const Footer = () => {
   const [form] = Form.useForm();
@@ -13,27 +12,27 @@ const Footer = () => {
   const socialLinks = [
     {
       icon: <FaInstagram />,
-      link: "https://www.instagram.com/bugbase.ai/",
+      link: "https://www.instagram.com/vektorsec.ai/",
       label: "Instagram",
     },
     {
-      icon: "𝕏",
-      link: "https://twitter.com/BugBase",
+      icon: "X",
+      link: "https://twitter.com/VektorSec_ai",
       label: "Twitter",
     },
     {
       icon: <FaLinkedin />,
-      link: "https://www.linkedin.com/company/bugbase/",
+      link: "https://www.linkedin.com/company/vektorsec/",
       label: "LinkedIn",
     },
     {
       icon: <FaYoutube />,
-      link: "https://www.youtube.com/channel/UCn7PV48or37LZhYIaAdQUGw",
+      link: "https://www.youtube.com/@VektorSec",
       label: "Youtube",
     },
     {
       icon: <MdOutlineMail />,
-      link: "mailto:queries@bugbase.ai",
+      link: "mailto:hello@vektorsec.ai",
       label: "Email",
     },
   ];
@@ -47,9 +46,9 @@ const Footer = () => {
       <div className={styles.footerContent}>
         <Row gutter={[48, 24]} justify="space-between">
           <Col lg={8} md={12} sm={24} xs={24}>
-            <Image src={"/copilotlogo.svg"} alt="" height={50} width={120} />
+            <CopilotLogo />
             <p className={styles.footerText}>
-              Pentest Copilot takes you through each step of the journey, making
+              VektorSec takes you through each step of the journey, making
               your life easier.
             </p>
             <p className={`${styles.footerText} ${styles.footerMailLink}`} style={{
@@ -58,8 +57,8 @@ const Footer = () => {
               gap: "10px",
             }}>
               <MailFilled />
-              <a href="mailto:queries@bugbase.ai">
-                queries@bugbase.ai
+              <a href="mailto:hello@vektorsec.ai">
+                hello@vektorsec.ai
               </a>
             </p>
 
@@ -81,18 +80,11 @@ const Footer = () => {
                     Terms & Conditions
                   </a>
 
-                  <a
-                    className={styles.footerLink}
-                    href="https://github.com/bugbasesecurity/pentest-copilot/wiki"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Documentation
-                  </a>
+                  <span className={styles.footerLink}>Documentation</span>
 
                   <a
                     className={styles.footerLink}
-                    href="https://discord.gg/bugbase"
+                    href="https://discord.gg/vektorsec"
                   >
                     Community
                   </a>
@@ -121,7 +113,7 @@ const Footer = () => {
       </div>
 
       <div className={styles.footerBottom}>
-        <p>BugBase Pte Ltd © 2025</p>
+        <p>VektorSec Pte Ltd © 2025</p>
         <div className={styles.socialIcons}>
           <span
             style={{
@@ -136,7 +128,7 @@ const Footer = () => {
             >
               ❤
             </span>{" "}
-            by Team BugBase
+            by Team VektorSec
           </span>
           <span
             style={{

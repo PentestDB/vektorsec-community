@@ -22,6 +22,29 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  // VektorSec Neon Cyan theme for all inner session views.
+  --primary-purple: #00f2fe;
+  --purple-background: rgba(0, 242, 254, 0.08);
+  --purple-bg: rgba(0, 242, 254, 0.25);
+  --filled-purple: #00f2fe;
+  --filled-purple-100: rgba(0, 242, 254, 0.47);
+  --filled-purple-50: rgba(0, 242, 254, 0.3);
+  --purple-bg-100: rgba(0, 242, 254, 0.1);
+  --primary-purple-100: rgba(0, 242, 254, 0.1);
+  --bugbase-green: #00e676;
+  --lime-green: #00e676;
+  --lime-green-700: rgba(0, 230, 118, 0.7);
+  --primary-bg: #0d1117;
+  --secondary-bg: #161b22;
+  --input-bg: rgba(0, 242, 254, 0.04);
+  --border-color: rgba(0, 242, 254, 0.2);
+  --border-color-100: rgba(0, 242, 254, 0.18);
+  --border-subtle: rgba(0, 242, 254, 0.12);
+  --border-default: rgba(0, 242, 254, 0.22);
+  --surface-hover: rgba(0, 242, 254, 0.05);
+  --surface-active: rgba(0, 242, 254, 0.09);
+  --primary-text: #e6edf3;
+  --secondary-text: #8b9bb0;
 }
 
 .exploitBoxAlert {
@@ -384,8 +407,11 @@
 
     .activeTab {
       @extend .tab;
-      background-color: var(--surface-active);
-      color: var(--primary-text);
+      background-color: rgba(0, 242, 254, 0.08);
+      color: #00f2fe;
+      border-left: 2px solid #00f2fe;
+      box-shadow: inset 0 0 12px rgba(0, 242, 254, 0.08),
+        0 0 12px rgba(0, 242, 254, 0.15);
     }
 
     .racerSection {
@@ -431,9 +457,11 @@
   .contextPanel {
     padding: 0.6rem 0.75rem;
     margin-bottom: 0.5rem;
-    background: var(--secondary-bg, rgba(255, 255, 255, 0.03));
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+    background: rgba(22, 27, 34, 0.8);
+    border: 1px solid rgba(0, 242, 254, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25),
+      inset 0 0 20px rgba(0, 242, 254, 0.04);
   }
 
   .contextHeader {
@@ -455,15 +483,16 @@
 
   .contextPct {
     font-family: "JetBrains Mono", monospace;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--primary-text, #e0e0e0);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #00f2fe;
     letter-spacing: -0.02em;
+    text-shadow: 0 0 8px rgba(0, 242, 254, 0.5);
   }
 
   .contextSubtitle {
     font-size: 0.55rem;
-    color: var(--secondary-text, #666);
+    color: #8b9bb0;
     margin-top: 0.05rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -471,10 +500,10 @@
   }
 
   .contextBar {
-    height: 2px;
+    height: 3px;
     width: 100%;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 2px;
+    background: rgba(0, 242, 254, 0.12);
+    border-radius: 3px;
     margin: 0.5rem 0;
     overflow: hidden;
   }
@@ -504,14 +533,14 @@
 
     span:last-child {
       font-family: "JetBrains Mono", monospace;
-      color: var(--primary-text, #ccc);
-      font-weight: 500;
+      color: #e6edf3;
+      font-weight: 600;
     }
   }
 
   .contextDivider {
     height: 1px;
-    background: var(--border-subtle, rgba(255, 255, 255, 0.06));
+    background: rgba(0, 242, 254, 0.1);
     margin: 0.25rem 0;
   }
 
@@ -767,4 +796,14 @@
       background: var(--surface-hover);
     }
   }
+}
+
+// Locked feature icon in sidebar
+.lockIcon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: #00f2fe;
+  font-size: 0.72rem;
+  filter: drop-shadow(0 0 4px rgba(0, 242, 254, 0.6));
 }

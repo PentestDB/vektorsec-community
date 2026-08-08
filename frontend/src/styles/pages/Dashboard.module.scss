@@ -1,7 +1,7 @@
 @import "../_variables";
 
 .dashboardContainer {
-  background: var(--secondary-bg);
+  background: #0d1117;
   min-height: calc(100vh - 4rem);
 
   .dashboardHeader {
@@ -62,7 +62,7 @@
 
   .workspaceGrid {
     padding: 1.25rem 1.5rem 1.5rem;
-    background: var(--secondary-bg);
+    background: #0d1117;
     border-top: 1px solid var(--border-subtle);
   }
 }
@@ -74,24 +74,77 @@
 }
 
 .workspaceCard {
-  background: var(--primary-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  background: #161b22;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 12px;
   padding: 1rem 1.15rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
 
   &:hover {
-    border-color: var(--border-default);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
+    border-color: rgba(0, 242, 254, 0.55);
+    box-shadow: 0 8px 28px rgba(0, 242, 254, 0.12),
+      0 4px 18px rgba(0, 0, 0, 0.3);
+    transform: translateY(-3px);
   }
 
   &.activeCard {
-    border-color: rgba(16, 202, 0, 0.3);
+    border-color: rgba(0, 230, 118, 0.4);
+  }
+}
+
+.cardStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  padding: 0.14rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusDotActive {
+  background: #00e676;
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.7);
+  animation: statusPulse 1.6s ease-in-out infinite;
+}
+
+.statusDotIdle {
+  background: #00f2fe;
+  box-shadow: 0 0 6px rgba(0, 242, 254, 0.5);
+}
+
+.statusDotEmpty {
+  background: #4b5563;
+}
+
+.statusLabel {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c9d6e6;
+}
+
+@keyframes statusPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
   }
 }
 
@@ -226,7 +279,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #10ca00;
+  background: #00e676;
   animation: pulse 2s infinite;
 }
 
@@ -234,7 +287,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #d29922;
+  background: #00f2fe;
 }
 
 @keyframes pulse {
@@ -992,5 +1045,120 @@
     border: 1px solid var(--border-subtle);
     font-size: 0.8rem;
     color: var(--secondary-text);
+  }
+}
+
+// ─── Card details rows ───────────────────────────────────────────────
+.cardDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(0, 242, 254, 0.03);
+  border: 1px solid rgba(0, 242, 254, 0.08);
+}
+
+.detailRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.detailKey {
+  font-size: 0.7rem;
+  color: #7d8ca3;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detailValue {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #c9d6e6;
+  font-family: "JetBrains Mono", monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
+// ─── Quick stats bar ─────────────────────────────────────────────────
+.statsBar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem 0;
+  background: #0d1117;
+}
+
+.statCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  background: rgba(22, 27, 34, 0.8);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px rgba(0, 242, 254, 0.03);
+}
+
+.statCardLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b9bb0;
+}
+
+.statCardValue {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #e6edf3;
+  font-variant-numeric: tabular-nums;
+}
+
+.statCardSub {
+  font-size: 0.72rem;
+  color: #6b7a90;
+}
+
+.statBadge {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.statBadgeGood {
+  color: #00e676;
+  background: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.35);
+}
+
+// ─── New Workspace button (neon cyan) ────────────────────────────────
+.newWorkspaceBtn {
+  height: 2.4rem !important;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, #00f2fe, #00d2ff) !important;
+  border: 1px solid #00f2fe !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 14px rgba(0, 242, 254, 0.3);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: linear-gradient(135deg, #00d2ff, #00b8d9) !important;
+    border-color: #00f2fe !important;
+    color: #000000 !important;
+    box-shadow: 0 0 22px rgba(0, 242, 254, 0.55);
+    transform: translateY(-1px);
   }
 }

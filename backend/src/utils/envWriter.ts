@@ -1,60 +1,107 @@
 import fs from "fs";
-import dotenv from "dotenv";
-import { getEnvFilePath, reloadEnv } from "./loadConfig";
+import { getEnvFilePath } from "./loadConfig";
 
 /**
- * Escape a value for safe .env writing. Wraps in double quotes and escapes
- * backslashes, double quotes, and newlines so values with special chars
- * (e.g. [ ] # $ in passwords) are preserved correctly.
+ * Resolve the canonical .env path — the same file that loadConfig / reloadEnv
+ * read from (in Docker this is /srv/data/.env; in dev it is backend/.env).
+ * Using process.cwd()/.env here breaks admin UI saves inside the container.
  */
-function escapeEnvValue(value: string): string {
-  if (value === undefined || value === null) return '""';
-  const s = String(value);
-  const escaped = s
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r");
-  return `"${escaped}"`;
+function resolveEnvPath(): string {
+  return getEnvFilePath();
 }
 
+/**
+ * Read the .env file and return its contents as an object.
+ */
 export function readEnvFile(): Record<string, string> {
-  const envPath = getEnvFilePath();
-  if (!fs.existsSync(envPath)) return {};
-
-  const content = fs.readFileSync(envPath, "utf-8");
-  const parsed = dotenv.parse(content);
-  return parsed;
-}
-
-export function writeEnvFile(vars: Record<string, string>): void {
-  const envPath = getEnvFilePath();
-
-  const lines: string[] = [
-    "# ─── Dynamic Configuration (managed by backend API) ──────────────────",
-    "",
-  ];
-
-  for (const [key, value] of Object.entries(vars)) {
-    lines.push(`${key}=${escapeEnvValue(value)}`);
+  try {
+    const envPath = resolveEnvPath();
+    if (!fs.existsSync(envPath)) {
+      return {};
+    }
+    const content = fs.readFileSync(envPath, "utf-8");
+    const result: Record<string, string> = {};
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) continue;
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+      // Strip surrounding quotes
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      result[key] = value;
+    }
+    return result;
+  } catch (error) {
+    console.error("[envWriter] Failed to read .env:", error);
+    return {};
   }
-
-  lines.push("");
-  fs.writeFileSync(envPath, lines.join("\n"), "utf-8");
-
-  reloadEnv();
 }
 
+/**
+ * Update specific variables in the .env file.
+ * Preserves existing content and comments.
+ */
 export function updateEnvVars(updates: Record<string, string>): void {
-  const current = readEnvFile();
-  const merged = { ...current, ...updates };
-  writeEnvFile(merged);
+  try {
+    const envPath = resolveEnvPath();
+    let content = "";
+    if (fs.existsSync(envPath)) {
+      content = fs.readFileSync(envPath, "utf-8");
+    }
+
+    const lines = content.split("\n");
+    const keys = Object.keys(updates);
+
+    for (const key of keys) {
+      const value = updates[key];
+      const lineIndex = lines.findIndex((l) => {
+        const trimmed = l.trim();
+        return !trimmed.startsWith("#") && trimmed.startsWith(`${key}=`);
+      });
+
+      if (lineIndex !== -1) {
+        lines[lineIndex] = `${key}=${value}`;
+      } else {
+        lines.push(`${key}=${value}`);
+      }
+    }
+
+    fs.writeFileSync(envPath, lines.join("\n"), "utf-8");
+  } catch (error) {
+    console.error("[envWriter] Failed to update .env:", error);
+  }
 }
 
+/**
+ * Delete specific variables from the .env file.
+ * Preserves existing content and comments.
+ */
 export function deleteEnvVars(keys: string[]): void {
-  const current = readEnvFile();
-  for (const key of keys) {
-    delete current[key];
+  try {
+    const envPath = resolveEnvPath();
+    if (!fs.existsSync(envPath)) return;
+
+    const lines = fs.readFileSync(envPath, "utf-8").split("\n");
+    const removeSet = new Set(keys);
+
+    const remaining = lines.filter((l) => {
+      const trimmed = l.trim();
+      if (!trimmed || trimmed.startsWith("#")) return true;
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) return true;
+      const key = trimmed.slice(0, eqIndex).trim();
+      return !removeSet.has(key);
+    });
+
+    fs.writeFileSync(envPath, remaining.join("\n"), "utf-8");
+  } catch (error) {
+    console.error("[envWriter] Failed to delete .env vars:", error);
   }
-  writeEnvFile(current);
 }

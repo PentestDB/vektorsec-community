@@ -591,6 +591,7 @@ export const updateModelConfig = async (req: Request, res: Response) => {
       "ollama",
       "openai-compatible",
       "kimi",
+      "deepseek",
       "codex-subscription",
       "claude-subscription",
     ];

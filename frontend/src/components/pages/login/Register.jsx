@@ -1,18 +1,22 @@
-import { App, Button, Checkbox, Col, Form, Input, Row } from "antd";
+"use client";
 
+import { App, Button, Form, Input } from "antd";
 import styles from "@/styles/pages/Login.module.scss";
-import { useRouter } from "next/navigation";
-import session from "@/assets/onboarding/session-placeholder.svg";
-import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "react-query";
 import { register } from "@/services/auth.service";
 import CopilotLogo from "@/components/common/CopilotLogo";
-
 import Link from "next/link";
+import { FaGithub, FaGoogle } from "react-icons/fa";
+import AuthShowcase from "./AuthShowcase";
+import { useEffect, useState } from "react";
+import RecaptchaField from "@/components/common/RecaptchaField";
 
 const RegisterPage = () => {
   const router = useRouter();
   const { message } = App.useApp();
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [recaptchaResetKey, setRecaptchaResetKey] = useState(0);
 
   const registerMutation = useMutation(register, {
     onError: (error) => {
@@ -20,6 +24,8 @@ const RegisterPage = () => {
         error?.response?.data?.message ??
           "Failed to register. Please try again later."
       );
+      // reCAPTCHA tokens are single-use — force a fresh solve on the next attempt.
+      setRecaptchaResetKey((k) => k + 1);
     },
     onSuccess: (data) => {
       message.success("Registration successful. Please login to continue.");
@@ -32,131 +38,150 @@ const RegisterPage = () => {
       name: values.name,
       email: values.email,
       password: values.password,
+      recaptchaToken,
     });
   };
 
+  const handleSocial = (provider) => {
+    const backend = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
+    const target =
+      provider === "Google"
+        ? `${backend}/api/auth/google`
+        : `${backend}/api/auth/github`;
+    window.location.href = target;
+  };
 
+  // Show a message when the OAuth flow bounces back with an error.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const social = searchParams.get("social");
+    const error = searchParams.get("error");
+    if (social && error) {
+      message.error(decodeURIComponent(error));
+      router.replace("/register", { scroll: false });
+    }
+  }, [searchParams, router, message]);
 
   return (
-    <Row className={styles.loginContainer}>
-      <Col xl={16} lg={12} md={12} xs={0} className={styles.leftContainer}>
-        <div className={styles.loginBannerContainer}>
-          <div className={styles.loginBannerText}>
-            <h1>
-              Unleash the Power of Pentesting with an{" "}
-              <span>AI-Powered Copilot</span>
-            </h1>
+    <div className={styles.authPage}>
+      <section className={styles.formPane}>
+        <div className={styles.formPaneInner}>
+          <div className={styles.brandRow}>
+            <Link href="/">
+              <CopilotLogo />
+            </Link>
+          </div>
 
-            <p>
-              Simply provide an IP address, and watch Pentest Copilot transform
-              into your sister pentester, utilising context throughout the
-              engagement to give you directed results.
+          <div className={styles.formHeader}>
+            <h1 className={styles.formTitle}>Create your account</h1>
+            <p className={styles.formSubtitle}>
+              Start your autonomous pentesting journey with VektorSec and claim
+              your one-time welcome tokens.
             </p>
           </div>
 
-          <div className={styles.loginBanner}>
-            <Image src={session} alt="session" />
+          <Form
+            className={styles.minimalForm}
+            onFinish={handleRegister}
+            layout="vertical"
+            requiredMark={false}
+          >
+            <Form.Item
+              name="name"
+              label="Full name"
+              rules={[
+                {
+                  required: true,
+                  message: "Please enter your name",
+                },
+              ]}
+            >
+              <Input placeholder="Jane Doe" bordered={false} />
+            </Form.Item>
+
+            <Form.Item
+              name="email"
+              label="Email address"
+              rules={[
+                {
+                  required: true,
+                  message: "Please enter your email",
+                },
+                {
+                  type: "email",
+                  message: "Invalid email",
+                },
+              ]}
+            >
+              <Input placeholder="you@company.com" bordered={false} />
+            </Form.Item>
+
+            <Form.Item
+              name="password"
+              label="Password"
+              rules={[
+                {
+                  required: true,
+                  message: "Please enter your password",
+                },
+                {
+                  min: 8,
+                  message: "Password must be at least 8 characters",
+                },
+              ]}
+            >
+              <Input.Password placeholder="Create a strong password" bordered={false} />
+            </Form.Item>
+
+            <RecaptchaField
+              onChange={setRecaptchaToken}
+              resetSignal={recaptchaResetKey}
+            />
+
+            <Form.Item className={styles.submitItem}>
+              <Button
+                className={styles.loginSubmit}
+                htmlType="submit"
+                loading={registerMutation.isLoading}
+              >
+                Create Account
+              </Button>
+            </Form.Item>
+          </Form>
+
+          <div className={styles.dividerRow}>
+            <span>or continue with</span>
+          </div>
+
+          <div className={styles.socialRow}>
+            <button
+              type="button"
+              className={styles.socialBtn}
+              onClick={() => handleSocial("GitHub")}
+            >
+              <FaGithub size={18} />
+              Continue with GitHub
+            </button>
+            <button
+              type="button"
+              className={styles.socialBtn}
+              onClick={() => handleSocial("Google")}
+            >
+              <FaGoogle size={18} />
+              Continue with Google
+            </button>
+          </div>
+
+          <div className={styles.authSwitch}>
+            Already have an account? <Link href="/login">Sign in</Link>
           </div>
         </div>
-      </Col>
-      <Col xl={8} lg={12} md={12} xs={24} className={styles.rightContainer}>
-        <div
-          className={styles.navbar}
-          style={{
-            display: "flex",
-          }}
-        >
-          <CopilotLogo plain />
-        </div>
-        <div className={styles.loginForm}>
-          <h1>
-            Sign up to <span>Pentest Copilot</span>
-          </h1>
-          <p>Elevate your ethical hacking experience with AI</p>
+      </section>
 
-
-          <Row style={{ flexDirection: "column" }}>
-            <Form className={styles.formContent} onFinish={handleRegister}>
-              <Form.Item
-                name="name"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter your name",
-                  },
-                ]}
-              >
-                <Input placeholder="Enter your name" />
-              </Form.Item>
-              <Form.Item
-                name="email"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter your email",
-                  },
-                  {
-                    type: "email",
-                    message: "Invalid email",
-                  },
-                ]}
-              >
-                <Input placeholder="Enter your email" />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please enter your password",
-                  },
-
-                ]}
-              >
-                <Input.Password placeholder="Enter your password" />
-              </Form.Item>
-              {/* <Form.Item
-                name="terms"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please accept the terms and conditions",
-                  },
-                ]}
-              >
-                <Checkbox value={true}>
-                  <div className={styles.terms}>
-                    I accept all the{" "}
-                    <a target="_blank" href="/terms">
-                      Terms & Conditions
-                    </a>
-                    .
-                  </div>
-                </Checkbox>
-              </Form.Item> */}
-              <Form.Item>
-                <Button
-                  className={styles.loginButtonBugbase}
-                  htmlType="submit"
-                  loading={registerMutation.isLoading}
-                >
-                  Register
-                </Button>
-              </Form.Item>
-            </Form>
-
-
-            <Link
-              className={styles.docLink}
-              href="/login"
-            >
-              <div className={styles.linkText}>Already a User? Login</div>
-            </Link>
-          </Row>
-        </div>
-      </Col>
-    </Row>
+      <AuthShowcase />
+    </div>
   );
 };
 
 export default RegisterPage;
+

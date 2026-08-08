@@ -1,0 +1,326 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+  min-height: 100vh;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  color: #94a3b8;
+  margin-bottom: 2rem;
+}
+
+.billingToggle {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0.25rem;
+  gap: 0.25rem;
+}
+
+.toggleBtn {
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggleBtn.active {
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  color: #fff;
+}
+
+.saveBadge {
+  font-size: 0.75rem;
+  background: rgba(0, 212, 255, 0.2);
+  color: #00d4ff;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  margin-left: 0.25rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.card.popular {
+  border: 1px solid rgba(123, 47, 247, 0.7);
+  border-radius: 1.1rem;
+  background: linear-gradient(
+    165deg,
+    rgba(123, 47, 247, 0.18),
+    rgba(0, 212, 255, 0.08) 55%,
+    rgba(255, 255, 255, 0.03)
+  );
+  box-shadow:
+    0 0 0 1px rgba(0, 212, 255, 0.3),
+    0 0 20px rgba(123, 47, 247, 0.45),
+    0 0 48px rgba(0, 212, 255, 0.2),
+    inset 0 1px 0 rgba(0, 212, 255, 0.3);
+  transform: scale(1.02);
+}
+
+.card.popular:hover {
+  transform: scale(1.02) translateY(-4px);
+  border-color: rgba(0, 212, 255, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(0, 212, 255, 0.45),
+    0 0 28px rgba(123, 47, 247, 0.55),
+    0 0 60px rgba(0, 212, 255, 0.28),
+    inset 0 1px 0 rgba(0, 212, 255, 0.35);
+}
+
+.popularBadge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 0 14px rgba(123, 47, 247, 0.6), 0 0 24px rgba(0, 212, 255, 0.35);
+}
+
+.planName {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.planDesc {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin-bottom: 1.5rem;
+  min-height: 2.5rem;
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 0.25rem;
+}
+
+.price {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.perMonth {
+  font-size: 1rem;
+  color: #94a3b8;
+  margin-left: 0.25rem;
+}
+
+.annualNote {
+  font-size: 0.8rem;
+  color: #00d4ff;
+  margin-bottom: 1rem;
+}
+
+.selectBtn {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #00d4ff, #7b2ff7);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  transition: opacity 0.2s;
+}
+
+.selectBtn:hover {
+  opacity: 0.9;
+}
+
+.freeBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.check {
+  flex-shrink: 0;
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid rgba(0, 212, 255, 0.45);
+  border-radius: 50%;
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.check::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 3px;
+  width: 4px;
+  height: 8px;
+  border: solid #00d4ff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.tokenLimits {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tokenLimitsTitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fbbf24;
+  margin-bottom: 0.25rem;
+}
+
+.tokenLimitItem {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.freeBadge {
+  align-self: flex-start;
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(0, 212, 255, 0.12);
+  color: #67e8f9;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.featureHighlight {
+  font-weight: 600;
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  margin: -0.4rem -0.6rem;
+  border: 1px solid rgba(168, 85, 247, 0.55);
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, rgba(123, 47, 247, 0.3), rgba(0, 212, 255, 0.18));
+}
+
+.featureHighlight .check {
+  border-color: rgba(168, 85, 247, 0.7);
+  background: rgba(123, 47, 247, 0.25);
+}
+
+.featureHighlight .check::before {
+  border-color: #d8b4fe;
+}
+
+.featureNegative {
+  color: #94a3b8;
+}
+
+.featureNegative .check {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.featureNegative .check::before {
+  border: 0;
+  left: 4px;
+  top: 7px;
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: #94a3b8;
+}
+
+.footer {
+  text-align: center;
+  color: #94a3b8;
+}
+
+.link {
+  color: #00d4ff;
+  text-decoration: underline;
+}
+
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-size: 1.2rem;
+  color: #94a3b8;
+}
+
+.error {
+  color: #f87171;
+}

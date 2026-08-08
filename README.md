@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="./assets/banner.png" alt="Pentest Copilot Banner" />
+  <img src="./assets/banner.png" alt="VektorSec Banner" />
 </p>
 
-# Pentest Copilot
+# VektorSec
 
-![GitHub License](https://img.shields.io/github/license/bugbasesecurity/pentest-copilot)
-![GitHub Repo stars](https://img.shields.io/github/stars/bugbasesecurity/pentest-copilot)
-![GitHub forks](https://img.shields.io/github/forks/bugbasesecurity/pentest-copilot)
+![GitHub License](https://img.shields.io/github/license/PentestDB/vektorsec-community)
+![GitHub Repo stars](https://img.shields.io/github/stars/PentestDB/vektorsec-community)
+![GitHub forks](https://img.shields.io/github/forks/PentestDB/vektorsec-community)
 
 An open-source, AI-driven penetration testing agent. Connects to a Kali attack box, runs tools autonomously, analyzes results, and iterates. You describe the target. It does the rest.
 
@@ -22,7 +22,7 @@ Built for real-world engagements, boot2root boxes, and CTFs.
 
 ## In Action
 
-Pentest Copilot performing an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/):
+VektorSec performing an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/):
 
 <video src="https://github.com/user-attachments/assets/bbb2cab2-6db7-4578-a3b7-f45a1619a987" poster="./assets/video-thumbnail.jpg" controls></video>
 
@@ -30,11 +30,11 @@ Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=bugbasesecurity%2Fpentest-copilot&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=PentestDB%2Fvektorsec-community&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&theme=dark&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bugbasesecurity/pentest-copilot&type=date&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=PentestDB/vektorsec-community&type=date&theme=dark&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=PentestDB/vektorsec-community&type=date&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=PentestDB/vektorsec-community&type=date&legend=top-left&sealed_token=VYz_mLFzoEYhswAZ0fcw1Y5b4-xwEgiA1-_LLkQulXwvkoEjkkNH-2VMCPTqxhTaVx_bGgAXaukN1XsHmsdq3Ve_fEWnM9_E08ZBHEKTkCiTkovjRa6uTVMBMHtNI1iIFQefuI6GU-sWbWlE9zIMttPUOrv4keBXyWsu_7IuojnGdiDF6sW90fIThJNG" />
  </picture>
 </a>
 
@@ -49,13 +49,13 @@ Watch it on [YouTube](https://www.youtube.com/watch?v=L0bjYzuICWo)
 - **Subagent parallelism** - spawn background agents to run tasks concurrently (e.g. directory brute-force + subdomain enum at the same time).
 - **Safety checks** - dangerous commands (recursive deletes, device writes, fork bombs) require explicit approval, even in auto-run mode.
 - **Bring your own model** - OpenAI, Anthropic (API key or OAuth), Google, Mistral, or any OpenAI-compatible endpoint.
-- **Use existing local subscriptions** - Pentest Copilot can use an authenticated Codex CLI in Docker or host mode, and Claude Code in host/developer mode, as normal inference providers while retaining its own tool and consent loop.
+- **Use existing local subscriptions** - VektorSec can use an authenticated Codex CLI in Docker or host mode, and Claude Code in host/developer mode, as normal inference providers while retaining its own tool and consent loop.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/bugbasesecurity/pentest-copilot.git
-cd pentest-copilot
+git clone https://github.com/PentestDB/vektorsec-community.git
+cd vektorsec-community
 ./run.sh start
 ```
 
@@ -72,10 +72,10 @@ claude auth login
 ```
 
 Then select **Use Codex** or **Use Claude Code**. The official CLI owns login,
-refresh, and subscription entitlement handling; Pentest Copilot does not copy
+refresh, and subscription entitlement handling; VektorSec does not copy
 or replay OAuth tokens. Subscription transports receive the same conversation
 history and function schemas as API providers and return the same assistant/tool
-call contract, so Pentest Copilot continues to execute tools and consent checks.
+call contract, so VektorSec continues to execute tools and consent checks.
 
 The Docker backend includes the Linux Codex CLI and mounts only the host's
 file-based `~/.codex/auth.json`, following Codex's documented headless/Docker
@@ -102,9 +102,9 @@ Fable/Opus/Sonnet 5, and Kimi K3 (direct Moonshot API or OpenRouter).
 
 ### MCP Access
 
-Pentest Copilot can expose its local control plane over MCP for clients such as Claude Code or Codex. Open Settings -> MCP Access to copy the local MCP endpoint and bearer token.
+VektorSec can expose its local control plane over MCP for clients such as Claude Code or Codex. Open Settings -> MCP Access to copy the local MCP endpoint and bearer token.
 
-Treat the token as local admin access: it can run commands on the configured exploit box, operate Burp, browser automation, and VPN flows, read artifacts, write findings, and update local Pentest Copilot configuration. MCP actions tied to an engagement are recorded in that session so they remain visible in the Pentest Copilot UI.
+Treat the token as local admin access: it can run commands on the configured exploit box, operate Burp, browser automation, and VPN flows, read artifacts, write findings, and update local VektorSec configuration. MCP actions tied to an engagement are recorded in that session so they remain visible in the VektorSec UI.
 
 After copying the endpoint and token, you can smoke test the MCP connection:
 
@@ -127,20 +127,20 @@ corepack pnpm run mcp:smoke
 
 ## Documentation
 
-Full documentation lives in the **[Wiki](https://github.com/bugbasesecurity/pentest-copilot/wiki)**:
+Full documentation lives in the **[Wiki](https://github.com/PentestDB/vektorsec-community/wiki)**:
 
-- [Getting Started](https://github.com/bugbasesecurity/pentest-copilot/wiki/Home) - setup, configuration, environment variables
-- [Architecture](https://github.com/bugbasesecurity/pentest-copilot/wiki/Architecture) - system design, agent loop, subagents
-- [Usage](https://github.com/bugbasesecurity/pentest-copilot/wiki/Usage) - workflow, consent model, chat interface
-- [Features](https://github.com/bugbasesecurity/pentest-copilot/wiki/Features) - full feature overview
-- [Settings](https://github.com/bugbasesecurity/pentest-copilot/wiki/Settings) - models, SSH, VNC, Burp, Magnitude
-- [Capabilities](https://github.com/bugbasesecurity/pentest-copilot/wiki/Capabilities) - tool registry and buckets
-- [Agent Tools](https://github.com/bugbasesecurity/pentest-copilot/wiki/Agent-Tools) - all 16 tools and consent behavior
-- [Burp Suite Integration](https://github.com/bugbasesecurity/pentest-copilot/wiki/Burp-Suite-Integration) - setup and usage
-- [Browser Agent](https://github.com/bugbasesecurity/pentest-copilot/wiki/Browser-Agent) - Magnitude configuration
-- [VPN Management](https://github.com/bugbasesecurity/pentest-copilot/wiki/VPN-Management) - profile management
-- [Slash Commands](https://github.com/bugbasesecurity/pentest-copilot/wiki/Slash-Commands) - session utilities
-- [Changelog](https://github.com/bugbasesecurity/pentest-copilot/wiki/Changelog) - what's new
+- [Getting Started](https://github.com/PentestDB/vektorsec-community/wiki/Home) - setup, configuration, environment variables
+- [Architecture](https://github.com/PentestDB/vektorsec-community/wiki/Architecture) - system design, agent loop, subagents
+- [Usage](https://github.com/PentestDB/vektorsec-community/wiki/Usage) - workflow, consent model, chat interface
+- [Features](https://github.com/PentestDB/vektorsec-community/wiki/Features) - full feature overview
+- [Settings](https://github.com/PentestDB/vektorsec-community/wiki/Settings) - models, SSH, VNC, Burp, Magnitude
+- [Capabilities](https://github.com/PentestDB/vektorsec-community/wiki/Capabilities) - tool registry and buckets
+- [Agent Tools](https://github.com/PentestDB/vektorsec-community/wiki/Agent-Tools) - all 16 tools and consent behavior
+- [Burp Suite Integration](https://github.com/PentestDB/vektorsec-community/wiki/Burp-Suite-Integration) - setup and usage
+- [Browser Agent](https://github.com/PentestDB/vektorsec-community/wiki/Browser-Agent) - Magnitude configuration
+- [VPN Management](https://github.com/PentestDB/vektorsec-community/wiki/VPN-Management) - profile management
+- [Slash Commands](https://github.com/PentestDB/vektorsec-community/wiki/Slash-Commands) - session utilities
+- [Changelog](https://github.com/PentestDB/vektorsec-community/wiki/Changelog) - what's new
 
 ## Local Development
 
@@ -156,13 +156,13 @@ cd backend && pnpm run dev                     # Backend server (port 8080)
 cd frontend && pnpm install && pnpm run dev    # Frontend (port 3000)
 ```
 
-See the [Wiki](https://github.com/bugbasesecurity/pentest-copilot/wiki/Home) for detailed setup instructions.
+See the [Wiki](https://github.com/PentestDB/vektorsec-community/wiki/Home) for detailed setup instructions.
 
 ## Authors
 
-- Dhruva Goyal - [dhruva@bugbase.ai](mailto:dhruva@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/dhruva-goyal/) | [GitHub](https://github.com/shero4) | [X](https://x.com/dhruvagoyal)
-- Aditya Peela - [aditya@bugbase.ai](mailto:aditya@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/aditya-peela/) | [GitHub](https://github.com/adityamhn) | [X](https://x.com/adityapeela)
-- Sitaraman Subramanian - [sitaraman@bugbase.ai](mailto:sitaraman@bugbase.ai) | [LinkedIn](https://www.linkedin.com/in/sitaraman-s/) | [GitHub](https://github.com/hackerbone) | [X](https://x.com/situuu_ig)
+- Dhruva Goyal - [dhruva@vektorsec.ai](mailto:dhruva@vektorsec.ai) | [LinkedIn](https://www.linkedin.com/in/dhruva-goyal/) | [GitHub](https://github.com/shero4) | [X](https://x.com/dhruvagoyal)
+- Aditya Peela - [aditya@vektorsec.ai](mailto:aditya@vektorsec.ai) | [LinkedIn](https://www.linkedin.com/in/aditya-peela/) | [GitHub](https://github.com/adityamhn) | [X](https://x.com/adityapeela)
+- Sitaraman Subramanian - [sitaraman@vektorsec.ai](mailto:sitaraman@vektorsec.ai) | [LinkedIn](https://www.linkedin.com/in/sitaraman-s/) | [GitHub](https://github.com/hackerbone) | [X](https://x.com/situuu_ig)
 
 ## Citations
 
@@ -185,4 +185,4 @@ Contributions welcome. See the [Contributing Guide](./CONTRIBUTING.md) and [Code
 
 ## Disclaimer
 
-Pentest Copilot is intended for authorized security testing only. Always have explicit permission before testing any system.
+VektorSec is intended for authorized security testing only. Always have explicit permission before testing any system.

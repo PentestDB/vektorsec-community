@@ -1,0 +1,268 @@
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.errorBanner {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.planCard {
+  background: #161b22;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px rgba(0, 242, 254, 0.03);
+}
+
+.planName {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.planPrice {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #00f2fe;
+}
+
+.perMonth {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.cancelNotice {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #fbbf24;
+}
+
+.expiry {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.planActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.upgradeBtn,
+.resumeBtn {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid #00f2fe;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #00f2fe, #00d2ff);
+  color: #000;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+}
+
+.upgradeBtn:hover,
+.resumeBtn:hover {
+  opacity: 0.92;
+  box-shadow: 0 0 18px rgba(0, 242, 254, 0.55);
+}
+
+.cancelBtn {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #f87171;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cancelBtn:hover {
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.featuresCard,
+.usageCard,
+.couponCard {
+  background: #161b22;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+.feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.check {
+  color: #00f2fe;
+  flex-shrink: 0;
+}
+
+.usageGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.usageItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.usageLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.usageValue {
+  color: #94a3b8;
+}
+
+.progressTrack {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(135deg, #00f2fe, #00d2ff);
+  border-radius: 999px;
+  transition: width 0.3s;
+  box-shadow: 0 0 8px rgba(0, 242, 254, 0.4);
+}
+
+.progressFill.danger {
+  background: #f87171;
+}
+
+.credits {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.couponRow {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.couponInput {
+  flex: 1;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 0.5rem;
+  background: #161b22;
+  color: #fff;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    border-color: #00f2fe;
+    box-shadow: 0 0 0 1px #00f2fe, 0 0 14px rgba(0, 242, 254, 0.2);
+  }
+}
+
+.couponInput::placeholder {
+  color: #64748b;
+}
+
+.redeemBtn {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid #00f2fe;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #00f2fe, #00d2ff);
+  color: #000;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+}
+
+.redeemBtn:hover {
+  opacity: 0.92;
+  box-shadow: 0 0 18px rgba(0, 242, 254, 0.55);
+}
+
+.couponSuccess {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #34d399;
+}
+
+.couponError {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #f87171;
+}
+
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-size: 1.2rem;
+  color: #94a3b8;
+}
+
+.error {
+  color: #f87171;
+}

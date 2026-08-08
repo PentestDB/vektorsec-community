@@ -22,10 +22,40 @@ import { ctfRoutes } from "./routes/ctf.routes";
 import { workspaceRoutes } from "./routes/workspace.routes";
 import { mcpRoutes } from "./routes/mcp.routes";
 import { mcpHttpRoutes } from "./routes/mcp-http.routes";
+import { billingRoutes } from "./routes/billing.routes";
+import { paymentRoutes } from "./routes/payment.routes";
+import { planRoutes } from "./routes/plan.routes";
+import { subscriptionRoutes } from "./routes/subscription.routes";
+import { telegramBotRoutes } from "./routes/telegramBot.routes";
+import adminRoutes from "./routes/admin.routes";
+import { announcementRoutes } from "./routes/announcement.routes";
+import { blogRoutes } from "./routes/blog.routes";
+import { menuRoutes } from "./routes/menu.routes";
+import { oobRoutes } from "./routes/oob.routes";
+
+
+
+
+import { ensureDefaultGateways } from "./services/payment.service";
+import { ensureDefaultPlans } from "./services/plan.service";
 import getSecrets from "./utils/getSecrets";
+import { setBotToken, startTelegramBot } from "./services/telegramBot.service";
+import bcrypt from "bcrypt";
+import UserModel from "./models/User/User.model";
+
+
+
+
 import { initTracing } from "./utils/tracing";
 import { setupShellWebSocket } from "./services/shell.socket";
 import { sessionLifecycle } from "./services/session.lifecycle";
+import { apiRateLimiter } from "./middlewares/RateLimit.middleware";
+import crypto from "crypto";
+
+// Fail fast on DB operations instead of buffering queries for 10s then timing out.
+// This makes connection failures surface immediately rather than as confusing
+// "buffering timed out after 10000ms" errors on every request.
+mongoose.set("bufferCommands", false);
 
 declare module "express-session" {
   export interface SessionData {
@@ -45,18 +75,39 @@ const initializeApp = async () => {
     const REDIS_URL = await getSecrets("REDIS_URL");
     redisClient = createClient({ url: REDIS_URL });
 
-    const SESS_SECRET = await getSecrets("SESS_SECRET");
+    // Enforce a strong session secret. If none is configured, generate a
+    // random one at startup (sessions will be invalidated on restart, which
+    // is safer than using a weak/default secret in production).
+    let SESS_SECRET = await getSecrets("SESS_SECRET");
+    if (!SESS_SECRET || SESS_SECRET.length < 32) {
+      const generated = crypto.randomBytes(48).toString("hex");
+      if (DEPLOYMENT === "LOCAL") {
+        console.warn(
+          "[security] SESS_SECRET is missing or too short. Generated a random secret for this session. " +
+            "Set a strong SESS_SECRET (>= 32 chars) in config.toml or .env for persistent sessions.",
+        );
+        SESS_SECRET = generated;
+      } else {
+        // In production, refuse to start with a weak secret.
+        throw new Error(
+          "SESS_SECRET must be set to a strong value (>= 32 characters) in production.",
+        );
+      }
+    }
+
 
     const connectToDB = async () => {
-      try {
-        if (!MONGO_URI) {
-          console.log("URI not provided!");
-          return;
-        }
-        await mongoose.connect(MONGO_URI);
-      } catch (err) {
-        console.log(err);
+      if (!MONGO_URI) {
+        throw new Error(
+          "MONGO_URI not configured. Set mongo_uri in config.toml or MONGO_URI in the environment.",
+        );
       }
+      await mongoose.connect(MONGO_URI, {
+        serverSelectionTimeoutMS: 15000,
+      });
+      console.log(
+        `MongoDB connected: ${MONGO_URI.replace(/\/\/[^@]*@/, "//***@")}`,
+      );
     };
 
     const app = express();
@@ -126,6 +177,10 @@ const initializeApp = async () => {
     app.use(cookieParser());
     app.use(mongoSanitize());
 
+    // Global API rate limiting (applies to all /api routes)
+    app.use("/api", apiRateLimiter);
+
+
     // @ts-ignore
     let redisStore = new RedisStore({ client: redisClient });
 
@@ -147,6 +202,13 @@ const initializeApp = async () => {
     app.use(sessionMiddleware);
 
     const httpServer = createServer(app);
+
+    // Connect to MongoDB and Redis BEFORE accepting any requests so that
+    // Mongoose operations never buffer for 10s then time out. If these
+    // connections fail, startup throws and initializeApp() retries in 5s.
+    await connectToDB();
+    await redisClient.connect();
+    console.log(`Redis connected`);
 
     // WebSocket for shell streaming (replaces Socket.IO terminal handling)
     setupShellWebSocket(httpServer, sessionMiddleware);
@@ -204,8 +266,22 @@ const initializeApp = async () => {
     app.use("/api/workspace", workspaceRoutes);
     app.use("/api/mcp", mcpRoutes);
     app.use("/mcp", mcpHttpRoutes);
+    app.use("/api/billing", billingRoutes);
+    app.use("/api/payment", paymentRoutes);
+    app.use("/api/plans", planRoutes);
+    app.use("/api/subscriptions", subscriptionRoutes);
+    app.use("/api/telegram", telegramBotRoutes);
+    app.use("/api/admin", adminRoutes);
+    app.use("/api/announcements", announcementRoutes);
+    app.use("/api/blog", blogRoutes);
+    app.use("/api/menus", menuRoutes);
+app.use("/api/oob", oobRoutes);
+
+
+
 
     app.use(function (err: any, req: any, res: any, next: any) {
+
       console.log("Error occurred but handled - ", err);
 
       if (err instanceof multer.MulterError) {
@@ -223,18 +299,47 @@ const initializeApp = async () => {
     });
 
     httpServer.listen(port, async () => {
+      // Seed default payment gateway rows so the admin can configure them.
       try {
-        await connectToDB();
-        console.log(`MongoDB connected`);
+        await ensureDefaultGateways();
+        console.log(`[payment] Default payment gateways ensured`);
       } catch (err) {
-        console.log(err);
+        console.warn("[payment] Failed to seed default gateways:", err);
       }
 
+      // Seed default plans so the system works out of the box.
       try {
-        await redisClient.connect();
-        console.log(`Redis connected`);
+        await ensureDefaultPlans();
+        console.log(`[plans] Default plans ensured`);
       } catch (err) {
-        console.log(err);
+        console.warn("[plans] Failed to seed default plans:", err);
+      }
+
+      // Ensure there is always at least one admin account so the admin panel
+      // can be accessed. Credentials can be overridden via ADMIN_EMAIL /
+      // ADMIN_PASSWORD env vars (defaults shown below). If the admin already
+      // exists, its password is left untouched.
+      try {
+        const adminEmail = (await getSecrets("ADMIN_EMAIL")) || "admin@vektorsec.com";
+        const adminPassword = (await getSecrets("ADMIN_PASSWORD")) || "admin1234";
+
+        const existingAdmin = await UserModel.findOne({ role: "admin" });
+        if (!existingAdmin) {
+          const hashedPassword = await bcrypt.hash(adminPassword, 10);
+          await UserModel.create({
+            name: "Administrator",
+            email: adminEmail,
+            password: hashedPassword,
+            role: "admin",
+            plan: "enterprise",
+            firstLogin: false,
+          });
+          console.log(`[auth] Default admin account ensured (${adminEmail})`);
+        } else {
+          console.log(`[auth] Admin account already exists (${existingAdmin.email})`);
+        }
+      } catch (err) {
+        console.warn("[auth] Failed to seed admin account:", err);
       }
 
       // Reset any sessions stuck in "running" state from a previous crash/restart
@@ -251,7 +356,22 @@ const initializeApp = async () => {
         console.warn("[startup] Failed to reset stale agent sessions:", err);
       }
 
+      // Start the Telegram bot if a token is configured.
+      try {
+        const telegramToken = await getSecrets("TELEGRAM_BOT_TOKEN");
+        if (telegramToken) {
+          setBotToken(telegramToken);
+          startTelegramBot();
+          console.log("[telegram] Telegram bot token configured, starting bot...");
+        } else {
+          console.log("[telegram] TELEGRAM_BOT_TOKEN not set. Telegram bot disabled. Configure via /api/telegram/configure.");
+        }
+      } catch (err) {
+        console.warn("[telegram] Failed to start Telegram bot:", err);
+      }
+
       console.log(`Express is listening at http://localhost:${port}`);
+
     });
 
     process.on("SIGTERM", async () => {

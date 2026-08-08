@@ -157,6 +157,21 @@ export const CURATED_PROVIDERS: CatalogProvider[] = [
     ],
   },
   {
+    id: "deepseek",
+    name: "DeepSeek",
+    models: [
+      model("deepseek/deepseek-chat", "deepseek-chat", "DeepSeek Chat", 128_000),
+      model(
+        "deepseek/deepseek-reasoner",
+        "deepseek-reasoner",
+        "DeepSeek Reasoner",
+        128_000,
+      ),
+      model("deepseek/deepseek-v3", "deepseek-v3", "DeepSeek V3", 128_000),
+      model("deepseek/deepseek-r1", "deepseek-r1", "DeepSeek R1", 128_000),
+    ],
+  },
+  {
     id: "codex-subscription",
     name: "Codex Subscription (local CLI)",
     models: [

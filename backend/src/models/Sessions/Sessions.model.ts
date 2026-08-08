@@ -7,6 +7,9 @@ export interface AgentToolCallData {
   id: string;
   name: string;
   arguments: string;
+  // Provider passthrough echoed back verbatim next turn (e.g. Gemini's
+  // extra_content.google.thought_signature). Required for multi-turn tools.
+  extraContent?: unknown;
 }
 
 export interface AgentMessageDoc {
@@ -235,8 +238,40 @@ export interface SessionVulnerabilityDoc {
   status: "open" | "confirmed" | "remediated" | "accepted";
   source: string;
   chatMessages: VulnerabilityChatMessageDoc[];
+  /** Related vulnerabilityIds this finding is chained with (vulnerability chaining). */
+  links?: string[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AttackChainStepDoc {
+  stepId: string;
+  phase: string;
+  action: string;
+  target?: string;
+  tool?: string;
+  result?: string;
+  status: "pending" | "running" | "success" | "failed" | "skipped";
+  timestamp: Date;
+  evidence?: string[];
+}
+
+export interface AttackChainStateDoc {
+  currentPhase: string;
+  completedPhases: string[];
+  steps: AttackChainStepDoc[];
+  phaseMemory: Record<string, string[]>;
+  updatedAt: Date;
+}
+
+export interface TargetMemoryEntryDoc {
+  id: string;
+  target: string;
+  source: string;
+  dataType: string;
+  content: string;
+  metadata?: Record<string, any>;
+  timestamp: Date;
 }
 
 export interface SessionDoc extends mongoose.Document {
@@ -271,6 +306,10 @@ export interface SessionDoc extends mongoose.Document {
   mcpArtifacts?: SessionArtifactDoc[];
   vulnerabilities?: SessionVulnerabilityDoc[];
   vulnerabilityBackfillVersion?: number;
+  /** Persisted attack-chain state (survives restarts and is injected into the system prompt). */
+  attackChain?: AttackChainStateDoc;
+  /** Persisted target-memory entries (scan findings keyed by target). */
+  targetMemory?: TargetMemoryEntryDoc[];
 }
 
 const ToolCallSchema = new Schema(
@@ -278,6 +317,7 @@ const ToolCallSchema = new Schema(
     id: { type: String, required: true },
     name: { type: String, required: true },
     arguments: { type: String, required: true },
+    extraContent: { type: Schema.Types.Mixed },
   },
   { _id: false },
 );
@@ -525,6 +565,7 @@ const SessionVulnerabilitySchema = new Schema(
     },
     source: { type: String, default: "agent" },
     chatMessages: { type: [VulnerabilityChatMessageSchema], default: [] },
+    links: { type: [String], default: [] },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
   },
@@ -682,6 +723,49 @@ const SessionSchema = new Schema({
     default: [],
   },
   vulnerabilityBackfillVersion: { type: Number, default: 0 },
+  attackChain: {
+    type: {
+      currentPhase: { type: String, default: "recon" },
+      completedPhases: { type: [String], default: [] },
+      steps: {
+        type: [
+          {
+            stepId: { type: String, required: true },
+            phase: { type: String, default: "recon" },
+            action: { type: String, required: true },
+            target: { type: String },
+            tool: { type: String },
+            result: { type: String },
+            status: {
+              type: String,
+              enum: ["pending", "running", "success", "failed", "skipped"],
+              default: "pending",
+            },
+            timestamp: { type: Date, default: Date.now },
+            evidence: { type: [String], default: [] },
+          },
+        ],
+        default: [],
+      },
+      phaseMemory: { type: Object, default: {} },
+      updatedAt: { type: Date, default: Date.now },
+    },
+    default: undefined,
+  },
+  targetMemory: {
+    type: [
+      {
+        id: { type: String, required: true },
+        target: { type: String, required: true },
+        source: { type: String, default: "manual" },
+        dataType: { type: String, default: "note" },
+        content: { type: String, required: true },
+        metadata: { type: Object, default: undefined },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
+    default: undefined,
+  },
 });
 
 SessionSchema.index({ workspaceId: 1, status: 1 });

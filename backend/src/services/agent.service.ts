@@ -30,12 +30,39 @@ import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
 import { SwarmManager, CtfSwarmContext, SwarmResult } from "./swarm.manager";
 import { EngagementState } from "./engagement-state";
+import {
+  formatAttackChainState,
+  formatTargetMemoryEntries,
+} from "./attackChain";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
-import { normalizeMaxAgentIterations } from "../utils/agentConfig";
+import {
+  normalizeMaxAgentIterations,
+  normalizeMaxSubagentIterations,
+  normalizeMaxSwarmIterations,
+} from "../utils/agentConfig";
+import { recordUsage } from "./usageTracker.service";
+
 
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
 const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
+
+// ─── Short-lived user cache ─────────────────────────────────────────
+// `UserModel.findById` is called several times per agent turn (prompt config,
+// consent flags, model config). A short TTL avoids redundant DB round-trips
+// within a single turn while still picking up config changes quickly.
+const USER_CACHE_TTL_MS = 5_000;
+const userCache = new Map<string, { value: any; expiresAt: number }>();
+
+async function cachedUser(userId: string): Promise<any> {
+  const now = Date.now();
+  const hit = userCache.get(userId);
+  if (hit && hit.expiresAt > now) return hit.value;
+  const user = await UserModel.findById(userId).lean();
+  userCache.set(userId, { value: user, expiresAt: now + USER_CACHE_TTL_MS });
+  return user;
+}
+
 
 // ─── Abort controller registry (for immediate pause) ───────────────────
 
@@ -63,6 +90,22 @@ export function hasActiveController(sessionId: string): boolean {
   const ctrl = abortControllers.get(sessionId);
   return !!ctrl && !ctrl.signal.aborted;
 }
+
+/**
+ * List currently active agent sessions (sessions with a registered, non-aborted
+ * abort controller). Used by the admin "Pentest Tasks" monitor.
+ */
+export function listActiveAgentSessions(): { sessionId: string; activeSince: number }[] {
+  const now = Date.now();
+  const out: { sessionId: string; activeSince: number }[] = [];
+  abortControllers.forEach((ctrl, sessionId) => {
+    if (!ctrl.signal.aborted) {
+      out.push({ sessionId, activeSince: now });
+    }
+  });
+  return out;
+}
+
 
 // ─── SSE helpers ─────────────────────────────────────────────────────
 
@@ -135,12 +178,29 @@ async function replaceMessages(sessionId: string, messages: AgentMessageDoc[]): 
   );
 }
 
-async function trackTokens(
+export async function trackTokens(
   sessionId: string,
   promptTokens: number,
   completionTokens: number,
   totalTokens: number,
+  channel: "telegram" | "online" | "platform" = "platform",
 ): Promise<void> {
+
+  // Record usage into the UsageRecord collection so plan-based daily/trial
+  // token limits can be enforced (admin-configurable).
+  try {
+    const session = await SessionsModel.findOne({ sessionId }).select("uid");
+    if (session?.uid) {
+      await recordUsage(session.uid.toString(), channel, {
+        tokensIn: promptTokens,
+        tokensOut: completionTokens,
+        requests: 1,
+      });
+    }
+  } catch (err) {
+    console.warn("[usage] trackTokens recordUsage error:", err);
+  }
+
   await SessionsModel.updateOne(
     { sessionId },
     {
@@ -190,8 +250,9 @@ async function buildAgentPromptConfig(
   userId: string,
   envInfo?: BoxEnvInfo,
 ): Promise<AgentPromptConfig> {
-  const user = await UserModel.findById(userId);
+  const user = await cachedUser(userId);
   const session = await SessionsModel.findOne({ sessionId }).select("ctfConfig workspaceId").lean();
+
   const now = new Date();
   const promptConfig: AgentPromptConfig = {
     sessionId,
@@ -258,10 +319,30 @@ async function buildSystemMessage(
   envInfo?: BoxEnvInfo,
 ): Promise<AgentMessageDoc> {
   const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
+  let systemContent = buildSystemPrompt(promptConfig);
+
+  // Inject the persisted attack chain + target memory so the agent keeps
+  // multi-step context across turns and summarizations.
+  try {
+    const session = await SessionsModel.findOne({ sessionId })
+      .select("attackChain targetMemory")
+      .lean();
+    if (session) {
+      const blocks: string[] = [];
+      const chainBlock = formatAttackChainState(session.attackChain as any);
+      if (chainBlock) blocks.push(chainBlock);
+      const memoryBlock = formatTargetMemoryEntries(session.targetMemory as any);
+      if (memoryBlock) blocks.push(memoryBlock);
+      if (blocks.length) systemContent += "\n\n" + blocks.join("\n\n");
+    }
+  } catch (err) {
+    console.error("[agent] failed to inject attack chain into system prompt:", err);
+  }
+
   return {
     id: `sys_${sessionId}`,
     role: "system",
-    content: buildSystemPrompt(promptConfig),
+    content: systemContent,
     timestamp: new Date(),
     turnIndex: 0,
   };
@@ -315,7 +396,7 @@ function buildRacerOrchestratorMessage(
     id: RACER_ORCHESTRATOR_PROMPT_ID,
     role: "system",
     content: `<role>
-You are the Pentest Copilot orchestrator. You coordinate racer agents — you do NOT solve tasks yourself.
+You are the VektorSec orchestrator. You coordinate racer agents — you do NOT solve tasks yourself.
 </role>
 ${ctfLine ? `\n<context>${ctfLine}\nSession: ${sessionContext?.sessionId ?? "unknown"}\n</context>\n` : ""}
 <roster>
@@ -436,8 +517,9 @@ export async function runAgentLoop(params: {
   userId: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
+  channel?: "telegram" | "online" | "platform";
 }): Promise<void> {
-  const { sessionId, userId, sse } = params;
+  const { sessionId, userId, sse, channel = "platform" } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -446,13 +528,21 @@ export async function runAgentLoop(params: {
     return;
   }
 
-  const user = await UserModel.findById(session.uid).lean();
+  const user = await cachedUser(session.uid.toString());
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
+
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
   const maxAgentIterations = normalizeMaxAgentIterations(
     user?.configs?.maxAgentIterations,
   );
+  const maxSubagentIterations = normalizeMaxSubagentIterations(
+    user?.configs?.maxSubagentIterations,
+  );
+  const maxSwarmIterations = normalizeMaxSwarmIterations(
+    user?.configs?.maxSwarmIterations,
+  );
   const disabledAgentTools: string[] = session.disabledAgentTools ?? [];
+
 
   await setAgentState(sessionId, "running");
   await setPaused(sessionId, false);
@@ -582,6 +672,7 @@ export async function runAgentLoop(params: {
     cve: vulnerability.cve,
     status: vulnerability.status,
     source: vulnerability.source,
+    links: vulnerability.links,
     createdAt: vulnerability.createdAt,
     updatedAt: vulnerability.updatedAt,
   }));
@@ -616,7 +707,10 @@ export async function runAgentLoop(params: {
       ctfContext: ctfSwarmContext,
       agentPromptConfig: racerPromptConfig,
     },
+    maxSubagentIterations,
+    maxSwarmIterations,
   });
+
 
   try {
     while (iteration < maxAgentIterations) {
@@ -803,6 +897,7 @@ export async function runAgentLoop(params: {
           lastPromptTokens,
           result.usage.completion_tokens ?? 0,
           result.usage.total_tokens ?? 0,
+          channel,
         );
 
         const contextLimit = getModelContextLimit(orchestratorConfig.model);
@@ -1106,8 +1201,9 @@ export async function initAndRun(params: {
   userMessage: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
+  channel?: "telegram" | "online" | "platform";
 }): Promise<void> {
-  const { sessionId, userId, userMessage, sse, abortSignal } = params;
+  const { sessionId, userId, userMessage, sse, abortSignal, channel = "platform" } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session) {
@@ -1134,7 +1230,7 @@ export async function initAndRun(params: {
 
   sse.write("user_message_ack", { id: userMsg.id });
 
-  await runAgentLoop({ sessionId, userId, sse, abortSignal });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel });
 }
 
 // ─── Handle consent response and resume ──────────────────────────────
@@ -1145,8 +1241,9 @@ export async function handleConsent(params: {
   approved: boolean;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
+  channel?: "telegram" | "online" | "platform";
 }): Promise<void> {
-  const { sessionId, userId, approved, sse, abortSignal } = params;
+  const { sessionId, userId, approved, sse, abortSignal, channel = "platform" } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
   if (!session || !session.pendingConsent) {
@@ -1176,7 +1273,7 @@ export async function handleConsent(params: {
     }));
     await appendMessages(sessionId, denialMessages);
     await setAgentState(sessionId, "idle");
-    await runAgentLoop({ sessionId, userId, sse, abortSignal });
+    await runAgentLoop({ sessionId, userId, sse, abortSignal, channel });
     return;
   }
 
@@ -1222,7 +1319,7 @@ export async function handleConsent(params: {
   }
 
   await appendMessages(sessionId, toolMessages);
-  await runAgentLoop({ sessionId, userId, sse, abortSignal });
+  await runAgentLoop({ sessionId, userId, sse, abortSignal, channel });
 }
 
 // ─── Handle manual execution output submission ───────────────────────

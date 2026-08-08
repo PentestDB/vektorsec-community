@@ -45,6 +45,7 @@ const updateEngagementState: ToolDefinition = {
           "add_file",
           "log_approach",
           "set_next_steps",
+          "link_vulnerabilities",
         ],
         description: "The type of state update to make.",
       },
@@ -512,6 +513,101 @@ const updateEngagementState: ToolDefinition = {
         state.nextSteps = Array.isArray(steps) ? steps : [steps];
         return {
           output: `Next steps updated (${state.nextSteps.length} items).`,
+          exitCode: 0,
+        };
+      }
+
+      // ─── Vulnerability chaining ────────────────────────────────
+      // Connect findings that build on one another (e.g. LFI → SSRF → RCE)
+      // so the chain of exploitation is visible to the model and the user.
+      case "link_vulnerabilities": {
+        if (!ctx.sessionId) {
+          return {
+            output: "link_vulnerabilities requires an active session",
+            exitCode: 1,
+          };
+        }
+        const fromRef =
+          str(data.vulnerabilityId) || str(data.from) || str(data.title);
+        const toRefs: string[] = Array.isArray(data.links)
+          ? data.links
+              .map((l: any) => str(l?.vulnerabilityId) || str(l?.title) || str(l))
+              .filter(Boolean)
+          : [];
+        if (!fromRef || toRefs.length === 0) {
+          return {
+            output:
+              "link_vulnerabilities requires data.vulnerabilityId (or title) and data.links[] of vulnerabilityIds/titles.",
+            exitCode: 1,
+          };
+        }
+
+        const session = await SessionsModel.findOne({ sessionId: ctx.sessionId })
+          .select("vulnerabilities")
+          .lean();
+        const vulns = session?.vulnerabilities ?? [];
+        const resolveRef = (ref: string): string | null => {
+          const clean = ref.trim().toLowerCase();
+          const found = vulns.find(
+            (v) =>
+              v.vulnerabilityId.toLowerCase() === clean ||
+              v.title.trim().toLowerCase() === clean ||
+              (v.endpoint && v.endpoint.toLowerCase() === clean),
+          );
+          return found?.vulnerabilityId ?? null;
+        };
+
+        const fromId = resolveRef(fromRef);
+        if (!fromId) {
+          return {
+            output: `No vulnerability found for reference: ${fromRef}`,
+            exitCode: 1,
+          };
+        }
+        const linked: string[] = [];
+        for (const ref of toRefs) {
+          const toId = resolveRef(ref);
+          if (toId && toId !== fromId && !linked.includes(toId)) {
+            linked.push(toId);
+          }
+        }
+        if (linked.length === 0) {
+          return {
+            output: "No matching linked vulnerabilities resolved.",
+            exitCode: 1,
+          };
+        }
+
+        // Bidirectional links in the DB.
+        await SessionsModel.updateOne(
+          { sessionId: ctx.sessionId, "vulnerabilities.vulnerabilityId": fromId },
+          { $addToSet: { "vulnerabilities.$.links": { $each: linked } } },
+        );
+        for (const toId of linked) {
+          await SessionsModel.updateOne(
+            { sessionId: ctx.sessionId, "vulnerabilities.vulnerabilityId": toId },
+            { $addToSet: { "vulnerabilities.$.links": fromId } },
+          );
+        }
+
+        // Keep the in-memory state in sync.
+        const fromVuln = state.vulnerabilities.find(
+          (v) => v.vulnerabilityId === fromId,
+        );
+        if (fromVuln) {
+          fromVuln.links = Array.from(new Set([...(fromVuln.links ?? []), ...linked]));
+        }
+        for (const toId of linked) {
+          const toVuln = state.vulnerabilities.find(
+            (v) => v.vulnerabilityId === toId,
+          );
+          if (toVuln) {
+            toVuln.links = Array.from(new Set([...(toVuln.links ?? []), fromId]));
+          }
+        }
+
+        return {
+          output: `Linked vulnerability ${fromId} ↔ ${linked.join(", ")}`,
           exitCode: 0,
         };
       }
