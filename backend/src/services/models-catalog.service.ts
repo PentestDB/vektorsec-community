@@ -172,6 +172,71 @@ export const CURATED_PROVIDERS: CatalogProvider[] = [
     ],
   },
   {
+    // AWS Bedrock via its OpenAI-compatible endpoint. Only the models Bedrock
+    // exposes on that endpoint are listed — each entry below was verified to
+    // return a completion. Anthropic and Amazon Nova models are Converse-only
+    // and therefore not reachable through this provider.
+    //
+    // Bedrock does not report context windows, so these are conservative
+    // published values: under-declaring only forgoes headroom, whereas
+    // over-declaring makes requests fail outright.
+    id: "bedrock",
+    name: "AWS Bedrock",
+    models: [
+      model(
+        "bedrock/openai.gpt-oss-120b-1:0",
+        "openai.gpt-oss-120b-1:0",
+        "GPT-OSS 120B",
+        128_000,
+      ),
+      model(
+        "bedrock/openai.gpt-oss-20b-1:0",
+        "openai.gpt-oss-20b-1:0",
+        "GPT-OSS 20B",
+        128_000,
+      ),
+      model(
+        "bedrock/qwen.qwen3-coder-next",
+        "qwen.qwen3-coder-next",
+        "Qwen3 Coder Next",
+        128_000,
+      ),
+      model(
+        "bedrock/qwen.qwen3-next-80b-a3b",
+        "qwen.qwen3-next-80b-a3b",
+        "Qwen3 Next 80B",
+        128_000,
+      ),
+      model(
+        "bedrock/moonshotai.kimi-k2.5",
+        "moonshotai.kimi-k2.5",
+        "Kimi K2.5",
+        128_000,
+      ),
+      model("bedrock/deepseek.v3.2", "deepseek.v3.2", "DeepSeek V3.2", 128_000),
+      model(
+        "bedrock/mistral.mistral-large-3-675b-instruct",
+        "mistral.mistral-large-3-675b-instruct",
+        "Mistral Large 3",
+        128_000,
+      ),
+      model(
+        "bedrock/mistral.devstral-2-123b",
+        "mistral.devstral-2-123b",
+        "Devstral 2 123B",
+        128_000,
+      ),
+      model(
+        "bedrock/minimax.minimax-m2.5",
+        "minimax.minimax-m2.5",
+        "MiniMax M2.5",
+        128_000,
+      ),
+      model("bedrock/zai.glm-5", "zai.glm-5", "GLM-5", 128_000),
+      model("bedrock/zai.glm-4.7", "zai.glm-4.7", "GLM-4.7", 128_000),
+    ],
+  },
+  {
     id: "codex-subscription",
     name: "Codex Subscription (local CLI)",
     models: [
@@ -217,6 +282,38 @@ export const CURATED_PROVIDERS: CatalogProvider[] = [
         "Claude Sonnet 5 via Claude Code",
         1_000_000,
       ),
+    ],
+  },
+  {
+    // MiniMax speaks the Anthropic Messages API, so these route through the
+    // Anthropic client path with the MiniMax base URL applied automatically.
+    // The same models remain listed under "Anthropic-Compatible" for anyone
+    // pointing at a self-hosted or proxied endpoint.
+    id: "minimax",
+    name: "MiniMax",
+    models: [
+      model("minimax/MiniMax-M2.7", "MiniMax-M2.7", "MiniMax M2.7", 204_800),
+      model(
+        "minimax/MiniMax-M2.7-highspeed",
+        "MiniMax-M2.7-highspeed",
+        "MiniMax M2.7 highspeed",
+        204_800,
+      ),
+      model("minimax/MiniMax-M2.5", "MiniMax-M2.5", "MiniMax M2.5", 204_800),
+      model(
+        "minimax/MiniMax-M2.5-highspeed",
+        "MiniMax-M2.5-highspeed",
+        "MiniMax M2.5 highspeed",
+        204_800,
+      ),
+      model("minimax/MiniMax-M2.1", "MiniMax-M2.1", "MiniMax M2.1", 204_800),
+      model(
+        "minimax/MiniMax-M2.1-highspeed",
+        "MiniMax-M2.1-highspeed",
+        "MiniMax M2.1 highspeed",
+        204_800,
+      ),
+      model("minimax/MiniMax-M2", "MiniMax-M2", "MiniMax M2", 204_800),
     ],
   },
   {

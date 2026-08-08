@@ -112,7 +112,7 @@ export const getConnectionStatus = async (sessionId) => {
   return res.data;
 };
 
-export const reconnectSSH = async (sessionId) => {
+export const reconnectWorkHost = async (sessionId) => {
   const res = await apiClient.post(`/shell/${sessionId}/reconnect`);
   return res.data;
 };

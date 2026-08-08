@@ -17,7 +17,7 @@ import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { getWorkspaceDetail, createSessionInWorkspace } from "@/services/workspace.service";
-import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd } from "@/services/ctf.service";
+import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd, startSolvingAll } from "@/services/ctf.service";
 import { deleteSession } from "@/services/agent.service";
 import { formatDurationSec } from "@/utils/formatDuration";
 import moment from "moment";
@@ -116,7 +116,27 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           ? { url: values.ctfUrl, apiToken: values.apiToken }
           : { url: values.ctfUrl, username: values.username, password: values.password };
 
-      await connectCtf(workspaceId, body);
+      const connectResult = await connectCtf(workspaceId, body);
+
+      const refresh = () => {
+        queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+        queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
+        setShowCtfConnect(false);
+        setSyncStatus("");
+      };
+
+      // Connected, but CTFd is withholding challenges (not started / no team).
+      // Keep the connection and let the user sync when the event opens.
+      if (connectResult?.challengesAvailable === false) {
+        refresh();
+        message.info(
+          connectResult.unavailableReason ||
+            "Connected, but challenges aren't available yet. Use Sync Challenges once the CTF starts.",
+          8,
+        );
+        return;
+      }
+
       setSyncStatus("Connected! Syncing challenges...");
 
       await new Promise((resolve, reject) => {
@@ -142,7 +162,10 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
       setShowCtfConnect(false);
       setSyncStatus("");
     } catch (err) {
-      message.error(err?.message || "Failed to connect CTF");
+      message.error(
+        err?.response?.data?.message || err?.message || "Failed to connect CTF",
+        8,
+      );
       setSyncStatus("");
     } finally {
       setSyncing(false);
@@ -187,6 +210,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   }, [workspaceId, queryClient]);
 
   const [submittingFlag, setSubmittingFlag] = useState(null);
+  const [solvingAll, setSolvingAll] = useState(false);
 
   const challenges = challengesData?.challenges || [];
   const activeSolve = challengesData?.activeSolve ?? null;
@@ -226,6 +250,42 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     sessions.forEach((s) => { map[s.name] = s; });
     return map;
   }, [sessions]);
+
+  // Challenges that "Solve All" would actually start: not yet solved, and
+  // backed by a session (sessions are matched to challenges by name).
+  const solvableChallenges = useMemo(
+    () =>
+      challenges.filter(
+        (c) => c.status !== "solved" && c.status !== "submitted" && sessionsByName[c.name],
+      ),
+    [challenges, sessionsByName],
+  );
+
+  const handleSolveAll = useCallback(() => {
+    const count = solvableChallenges.length;
+    confirmPopUp({
+      title: `Start solving ${count} challenge${count === 1 ? "" : "s"}?`,
+      content:
+        `Each unsolved challenge with a session will start its own agent, all at once. ` +
+        `Challenges already solved or currently running are skipped.`,
+      okText: "Start All",
+      cancelText: "Cancel",
+      okButtonBg: "#7c3aed",
+      onOk: async () => {
+        setSolvingAll(true);
+        try {
+          const res = await startSolvingAll(workspaceId);
+          message.success(res?.message || `Started ${res?.started ?? 0} sessions`);
+          queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+          queryClient.invalidateQueries(["ctf-challenges", workspaceId]);
+        } catch (err) {
+          message.error(err?.response?.data?.message || "Failed to start solving");
+        } finally {
+          setSolvingAll(false);
+        }
+      },
+    });
+  }, [solvableChallenges.length, confirmPopUp, workspaceId, queryClient]);
 
   const handleDisconnect = async () => {
     try {
@@ -346,6 +406,23 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         <div className={styles.headerRight}>
           {isCTF && ctfConnected && (
             <>
+              <Tooltip
+                title={
+                  solvableChallenges.length === 0
+                    ? "Nothing to solve — every challenge is solved or has no session yet"
+                    : null
+                }
+              >
+                <Button
+                  icon={solvingAll ? <LoadingOutlined /> : <PlayCircleOutlined />}
+                  onClick={handleSolveAll}
+                  disabled={solvingAll || solvableChallenges.length === 0}
+                  size="small"
+                  className={styles.solveAllBtn}
+                >
+                  {solvingAll ? "Starting..." : `Start Solving All (${solvableChallenges.length})`}
+                </Button>
+              </Tooltip>
               <Button
                 icon={<SyncOutlined spin={syncing} />}
                 onClick={handleSync}

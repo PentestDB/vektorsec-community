@@ -14,6 +14,7 @@ import {
   Tooltip,
   Button,
   Switch,
+  Alert,
 } from "antd";
 import {
   CheckCircleFilled,
@@ -99,6 +100,13 @@ const SSHPage = () => {
 
   return (
     <div className={styles.settingsContainer}>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="Legacy fallback only"
+        description="For parallel work, open Connection inside each session and choose a mounted ~/.ssh/config alias. This form remains available for older environment-based setups."
+      />
       <div className={styles.statusRow}>
         {configured ? (
           <Tag icon={<CheckCircleFilled />} color="success">Configured</Tag>

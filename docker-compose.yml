@@ -34,9 +34,17 @@ services:
       MONGO_URI: mongodb://mongodb:27017/vektorsec
       REDIS_URL: redis://redis:6379
       CODEX_HOME: /root/.codex
+      SSH_CONFIG_FILE: /root/.ssh/config
+      # "Local" work hosts execute in the backend runtime. Keep their folders
+      # on the persistent backend-data volume across rebuilds/restarts.
+      WORKSPACE_DIR: /srv/data/workspaces
+    cap_add:
+      # Required only when a workspace selects Local and starts OpenVPN there.
+      - NET_ADMIN
     ports:
       - "8080:8080"
       - "6080:6080"
+      - "9020:9020"
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -44,6 +52,8 @@ services:
       - ./backend/.env:/srv/data/.env
       - ./config.toml:/srv/data/config.toml:ro
       - ${CODEX_AUTH_FILE:-${HOME}/.codex/auth.json}:/root/.codex/auth.json
+      - ${HOST_SSH_DIR:-${HOME}/.ssh}:/root/.ssh:ro
+      - ${HOST_SSH_KEYS_DIR:-${HOME}/keys}:/root/keys:ro
     depends_on:
       redis:
         condition: service_healthy

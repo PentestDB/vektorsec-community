@@ -9,13 +9,20 @@ import {
   fetchChallenges,
   syncToWorkspace,
   sanitizeDirName,
+  normalizeCtfdUrl,
   SyncProgressEvent,
   submitFlagToCtfd,
   fetchSolvedChallengeNames,
   detectFlagFormat,
+  focusSessionOnChallenge,
 } from "../services/ctf.service";
-import { execSSHCommand } from "../services/ssh.service";
-import { WORKSPACE_DIR } from "../utils/commandSafety";
+import { execOnWorkspaceHost } from "../services/work-host.service";
+import {
+  initAndRun,
+  createDetachedSSEWriter,
+  registerAbortController,
+  hasActiveController,
+} from "../services/agent.service";
 
 function computeTimeToSolveSec(startedAt: unknown, solvedAt: unknown): number | null {
   if (!startedAt || !solvedAt) return null;
@@ -36,14 +43,19 @@ export const connectCtf = async (req: Request, res: Response) => {
     const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId, status: "active" });
     if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
-    const cleanUrl = url.replace(/\/+$/, "");
+    const cleanUrl = normalizeCtfdUrl(url);
     let ctfName: string;
     let authMethod: "token" | "credentials";
     let sessionCookie: string | undefined;
     let storedToken: string | undefined;
+    // Set when the credentials are good but CTFd will not serve challenges yet
+    // (event not started, or team mode with no team). Not a connection failure.
+    let unavailableReason: string | undefined;
 
     if (apiToken) {
-      ctfName = await verifyToken(cleanUrl, apiToken);
+      const verified = await verifyToken(cleanUrl, apiToken);
+      ctfName = verified.ctfName;
+      unavailableReason = verified.unavailableReason;
       authMethod = "token";
       storedToken = apiToken;
     } else if (username && password) {
@@ -73,13 +85,19 @@ export const connectCtf = async (req: Request, res: Response) => {
     );
 
     return res.status(200).json({
-      message: "Connected to CTF",
+      message: unavailableReason ? "Connected to CTF — challenges not available yet" : "Connected to CTF",
       ctfName,
       url: cleanUrl,
+      challengesAvailable: !unavailableReason,
+      unavailableReason,
     });
   } catch (err: any) {
-    console.error("[CTF] connect error:", err.message);
-    return res.status(400).json({ message: err.message || "Failed to connect to CTF" });
+    const status = err?.status ?? err?.response?.status;
+    console.error(`[CTF] connect error${status ? ` (${status})` : ""}:`, err.message);
+    return res.status(400).json({
+      message: err.message || "Failed to connect to CTF",
+      code: err?.code,
+    });
   }
 };
 
@@ -140,6 +158,7 @@ export const syncCtf = async (req: Request, res: Response) => {
     const challenges = await fetchChallenges(url, sessionCookie, apiToken, onProgress);
 
     const result = await syncToWorkspace(
+      workspaceId,
       ctfName,
       challenges,
       url,
@@ -354,10 +373,9 @@ export const getCtfChallenges = async (req: Request, res: Response) => {
     }> = [];
 
     try {
-      const home = (await execSSHCommand("echo $HOME")).trim();
-      const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
-      const indexPath = `${resolvedWs}/${safeCTFName}/challenges.json`;
-      const raw = await execSSHCommand(`cat "${indexPath}" 2>/dev/null || echo "[]"`);
+      const indexPath = `${safeCTFName}/challenges.json`;
+      const result = await execOnWorkspaceHost(workspaceId, `cat "${indexPath}" 2>/dev/null || echo "[]"`);
+      const raw = `${result.stdout}${result.stderr}`;
       challenges = JSON.parse(raw.trim());
     } catch (err: any) {
       console.warn("[CTF] Failed to read challenges.json from attack box:", err.message);
@@ -502,10 +520,9 @@ export const submitFlag = async (req: Request, res: Response) => {
     if (!resolvedId) {
       const safeCTFName = sanitizeDirName(workspace.ctfConfig.ctfName);
       try {
-        const home = (await execSSHCommand("echo $HOME")).trim();
-        const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
-        const indexPath = `${resolvedWs}/${safeCTFName}/challenges.json`;
-        const raw = await execSSHCommand(`cat "${indexPath}" 2>/dev/null || echo "[]"`);
+        const indexPath = `${safeCTFName}/challenges.json`;
+        const result = await execOnWorkspaceHost(workspaceId, `cat "${indexPath}" 2>/dev/null || echo "[]"`);
+        const raw = `${result.stdout}${result.stderr}`;
         const challs = JSON.parse(raw.trim());
         const match = challs.find((c: any) => c.name === challengeName);
         if (match?.id) resolvedId = match.id;
@@ -626,3 +643,183 @@ export const submitFlag = async (req: Request, res: Response) => {
     return res.status(400).json({ message: err.message || "Failed to submit flag" });
   }
 };
+
+/**
+ * Starts the agent on every session in a CTF workspace whose challenge is not
+ * already solved, focusing each session on its own challenge first.
+ *
+ * Sessions are matched to challenges by name (the same convention the workspace
+ * UI uses). Runs are detached — the agent loop persists to the session document,
+ * so the UI picks each one up from session history rather than a stream.
+ *
+ * Responds as soon as the runs are dispatched; it does not wait for solves.
+ */
+export const startSolvingAll = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId })
+      .select("type ctfConfig")
+      .lean();
+
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+    if (workspace.type !== "ctf") {
+      return res.status(400).json({ message: "Solve all is only available for CTF workspaces." });
+    }
+    if (!workspace.ctfConfig?.ctfName) {
+      return res.status(400).json({ message: "No CTF connected. Connect to a CTFd instance first." });
+    }
+
+    const safeCTFName = sanitizeDirName(workspace.ctfConfig.ctfName);
+    let challenges: Array<{ name: string; category: string; value: number; safeDir: string }> = [];
+    try {
+      const result = await execOnWorkspaceHost(
+        workspaceId,
+        `cat "${safeCTFName}/challenges.json" 2>/dev/null || echo "[]"`,
+      );
+      challenges = JSON.parse(`${result.stdout}${result.stderr}`.trim());
+    } catch (err: any) {
+      return res.status(400).json({
+        message: "Could not read synced challenges from the work host. Run a CTF sync first.",
+      });
+    }
+
+    if (challenges.length === 0) {
+      return res.status(400).json({ message: "No challenges synced yet. Run a CTF sync first." });
+    }
+
+    let ctfdSolved: Set<string> = new Set();
+    try {
+      const { url, sessionCookie, apiToken } = workspace.ctfConfig;
+      ctfdSolved = await fetchSolvedChallengeNames(url, sessionCookie, apiToken);
+    } catch {
+      // Non-critical: fall back to locally tracked solve state.
+    }
+
+    const sessions = await SessionsModel.find({
+      workspaceId,
+      status: { $ne: "archived" },
+    })
+      .select("sessionId name agentState ctfConfig.solveHistory")
+      .lean();
+    const sessionByName = new Map(sessions.map((s) => [s.name, s]));
+
+    const solvedLocally = new Set<string>();
+    for (const s of sessions) {
+      for (const r of (s as any).ctfConfig?.solveHistory ?? []) {
+        if (r.status === "solved" || r.status === "submitted") solvedLocally.add(r.challengeName);
+      }
+    }
+
+    const started: Array<{ sessionId: string; name: string }> = [];
+    const skipped: Array<{ name: string; reason: string }> = [];
+
+    for (const ch of challenges) {
+      if (ctfdSolved.has(ch.name) || solvedLocally.has(ch.name)) {
+        skipped.push({ name: ch.name, reason: "already solved" });
+        continue;
+      }
+      const session = sessionByName.get(ch.name);
+      if (!session) {
+        skipped.push({ name: ch.name, reason: "no session" });
+        continue;
+      }
+      // Only a live in-process controller means genuinely running. A DB state of
+      // "running" with no controller is stale (the process died, or the server
+      // restarted) and must be restartable rather than skipped forever.
+      if (hasActiveController(session.sessionId)) {
+        skipped.push({ name: ch.name, reason: "already running" });
+        continue;
+      }
+      started.push({ sessionId: session.sessionId, name: ch.name });
+    }
+
+    // Stale "running" state blocks the UI and hides the fact that nothing is
+    // actually executing. Any session we are about to start has no live
+    // controller (checked above), so clear it before dispatching.
+    if (started.length > 0) {
+      await SessionsModel.updateMany(
+        { sessionId: { $in: started.map((t) => t.sessionId) }, agentState: "running" },
+        { $set: { agentState: "idle" } },
+      );
+    }
+
+    // Dispatch in a bounded pool rather than all at once. Each agent opens SSH
+    // shells on the workspace host, and sshd's defaults (MaxStartups 10:30:100,
+    // MaxSessions 10) start dropping connections past ten concurrent — which
+    // strands agents with no shell and no output. Override with
+    // CTF_SOLVE_ALL_CONCURRENCY=0 for unlimited.
+    const configured = parseInt(process.env.CTF_SOLVE_ALL_CONCURRENCY ?? "6", 10);
+    const limit = Number.isFinite(configured) && configured > 0 ? configured : started.length;
+
+    void (async () => {
+      const queue = [...started];
+      const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+        for (let next = queue.shift(); next; next = queue.shift()) {
+          await runSolveDetached(next.sessionId, next.name, userId);
+        }
+      });
+      await Promise.allSettled(workers);
+    })();
+
+    return res.status(200).json({
+      started: started.length,
+      skipped: skipped.length,
+      startedSessions: started,
+      skippedChallenges: skipped,
+      message:
+        started.length > 0
+          ? `Started solving ${started.length} challenge${started.length === 1 ? "" : "s"}.`
+          : "Nothing to start — every challenge is solved, already running, or has no session.",
+    });
+  } catch (err: any) {
+    console.error("[CTF] startSolvingAll error:", err);
+    return res.status(500).json({ message: err.message ?? "Failed to start solving" });
+  }
+};
+
+/**
+ * Focuses one session on its challenge and runs the agent, detached.
+ * Never throws — a single failed session must not affect the others.
+ */
+async function runSolveDetached(sessionId: string, challengeName: string, userId: string): Promise<void> {
+  try {
+    const focus = await focusSessionOnChallenge({
+      sessionId,
+      query: challengeName,
+      // Every session targets a different challenge here, so mirroring onto the
+      // workspace's single activeSolve would just be last-write-wins noise.
+      syncWorkspaceActiveSolve: false,
+    });
+
+    if (!focus.ok) {
+      console.error(`[CTF] solve-all: could not focus ${sessionId} on "${challengeName}": ${focus.message}`);
+      return;
+    }
+
+    const ch = focus.challenge;
+    const prompt = [
+      `Start solving the CTF challenge "${ch.name}".`,
+      ``,
+      `Category: ${ch.category} | Points: ${ch.points}`,
+      `Working directory: ${ch.challengeDir}`,
+      ch.files.length > 0 ? `Files: ${ch.files.join(", ")}` : `No attached files.`,
+      ``,
+      `Work autonomously until you recover the flag. When you find it, record it as the confirmed flag.`,
+    ].join("\n");
+
+    const abortCtrl = registerAbortController(sessionId);
+    await initAndRun({
+      sessionId,
+      userId,
+      userMessage: prompt,
+      sse: createDetachedSSEWriter(sessionId),
+      abortSignal: abortCtrl.signal,
+    });
+  } catch (err: any) {
+    console.error(`[CTF] solve-all: run failed for ${sessionId} (${challengeName}):`, err?.message ?? err);
+  }
+}

@@ -388,6 +388,8 @@ export default function useAgentStream({
             toolName: data.name,
             args: data.args,
             safetyBlock: data.safetyBlock ?? false,
+            approvalReason: data.approvalReason,
+            batch: data.batch,
           });
           setAgentState("waiting_consent");
         })

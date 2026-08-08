@@ -8,6 +8,9 @@ export interface SSHConfig {
   privateKey?: string | Buffer;
   passphrase?: string;
   tryKeyboard?: boolean;
+  agent?: string;
+  keepaliveInterval?: number;
+  keepaliveCountMax?: number;
 }
 
 let _sshConfigWarned = false;

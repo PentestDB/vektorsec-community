@@ -30,12 +30,16 @@ export interface PendingConsentToolCall {
   toolCallId: string;
   toolName: string;
   arguments: Record<string, any>;
+  safetyBlock?: boolean;
+  approvalReason?: string;
 }
 
 export interface PendingConsentDoc {
   toolCallId: string;
   toolName: string;
   arguments: Record<string, any>;
+  safetyBlock?: boolean;
+  approvalReason?: string;
   batch?: PendingConsentToolCall[];
 }
 
@@ -133,6 +137,8 @@ export interface SwarmDoc {
 
 export interface ConnectionStateDoc {
   sshConnected: boolean;
+  hostConnected?: boolean;
+  hostKind?: "local" | "ssh";
   lastConnectedAt?: Date;
   lastError?: string;
 }
@@ -598,12 +604,16 @@ const SessionSchema = new Schema({
       toolCallId: { type: String, required: true },
       toolName: { type: String, required: true },
       arguments: { type: Schema.Types.Mixed, required: true },
+      safetyBlock: { type: Boolean, default: false },
+      approvalReason: { type: String },
       batch: {
         type: [
           {
             toolCallId: { type: String, required: true },
             toolName: { type: String, required: true },
             arguments: { type: Schema.Types.Mixed, required: true },
+            safetyBlock: { type: Boolean, default: false },
+            approvalReason: { type: String },
           },
         ],
         default: undefined,
@@ -638,10 +648,12 @@ const SessionSchema = new Schema({
   connectionState: {
     type: {
       sshConnected: { type: Boolean, default: false },
+      hostConnected: { type: Boolean, default: false },
+      hostKind: { type: String, enum: ["local", "ssh"] },
       lastConnectedAt: { type: Date },
       lastError: { type: String },
     },
-    default: { sshConnected: false },
+    default: { sshConnected: false, hostConnected: false },
   },
   disabledAgentTools: {
     type: [{ type: String }],

@@ -7,7 +7,7 @@ const RECONNECT_MAX_ATTEMPTS = 10;
 
 export default function useShellSocket({ sessionId, onError }) {
   const [shells, setShells] = useState([]);
-  const [connectionStatus, setConnectionStatus] = useState({ sshConnected: false });
+  const [connectionStatus, setConnectionStatus] = useState({ hostConnected: false });
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);

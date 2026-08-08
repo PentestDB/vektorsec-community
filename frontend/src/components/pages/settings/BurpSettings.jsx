@@ -16,13 +16,18 @@ import {
   WarningOutlined,
   ApiOutlined,
   DownloadOutlined,
+  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getBurpConfig, updateBurpConfig } from "@/services/user.service";
-import { getBurpConnectionStatus } from "@/services/burp.service";
+import {
+  configureBurpCa,
+  getBurpCaStatus,
+  getBurpConnectionStatus,
+} from "@/services/burp.service";
 
 const BurpSettingsPage = () => {
   const { message } = App.useApp();
@@ -33,6 +38,44 @@ const BurpSettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+
+  const {
+    data: connectionStatus,
+    refetch: refetchConnectionStatus,
+  } = useQuery("burp-settings-connection-status", getBurpConnectionStatus, {
+    enabled: !!data?.configured,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const burpConnected = connectionStatus?.connected === true;
+
+  const {
+    data: caStatus,
+    isLoading: caStatusLoading,
+    refetch: refetchCaStatus,
+  } = useQuery("burp-settings-ca-status", getBurpCaStatus, {
+    enabled: burpConnected,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const configureCaMutation = useMutation(configureBurpCa, {
+    onSuccess: (status) => {
+      refetchCaStatus();
+      queryClient.invalidateQueries("burp-ca-status");
+      if (status?.trusted) {
+        message.success("Burp CA trusted by the Browser Agent");
+      } else {
+        message.warning(status?.message || "Burp CA setup needs attention");
+      }
+    },
+    onError: (err) => {
+      message.error(err?.response?.data?.message || "Failed to configure Burp CA trust");
+    },
+  });
 
   useEffect(() => {
     if (data) {
@@ -48,6 +91,7 @@ const BurpSettingsPage = () => {
       message.success("Burp configuration saved");
       queryClient.invalidateQueries("burp-config");
       queryClient.invalidateQueries("burp-connection-status");
+      queryClient.invalidateQueries("burp-settings-connection-status");
       setSaving(false);
     },
     onError: (err) => {
@@ -69,6 +113,7 @@ const BurpSettingsPage = () => {
     setTestResult(null);
     try {
       const result = await getBurpConnectionStatus();
+      refetchConnectionStatus();
       setTestResult({
         success: result.connected,
         message: result.connected
@@ -125,6 +170,42 @@ const BurpSettingsPage = () => {
           }}
         >
           {testResult.message}
+        </div>
+      )}
+
+      {burpConnected && (
+        <div className={styles.burpHttpsCard}>
+          <div className={styles.burpHttpsIcon} data-ready={caStatus?.trusted || undefined}>
+            {caStatus?.trusted ? <CheckCircleFilled /> : <SafetyCertificateOutlined />}
+          </div>
+          <div className={styles.burpHttpsContent}>
+            <div className={styles.burpHttpsTitle}>
+              {caStatus?.trusted ? "HTTPS interception ready" : "Enable HTTPS interception"}
+            </div>
+            <div className={styles.burpHttpsDescription}>
+              {caStatus?.message || "Checking whether Chromium trusts Burp's CA…"}
+            </div>
+            {caStatus?.fingerprint && (
+              <code className={styles.burpHttpsFingerprint} title={caStatus.fingerprint}>
+                SHA-256 {caStatus.fingerprint}
+              </code>
+            )}
+          </div>
+          <Button
+            type={caStatus?.trusted ? "default" : "primary"}
+            size="small"
+            icon={<SafetyCertificateOutlined />}
+            loading={caStatusLoading || configureCaMutation.isLoading}
+            disabled={!caStatusLoading && !caStatus?.certificateAvailable}
+            onClick={() => configureCaMutation.mutate()}
+            className={styles.burpHttpsButton}
+          >
+            {caStatus?.trusted
+              ? "Refresh CA trust"
+              : caStatus?.needsRefresh
+                ? "Refresh CA trust"
+                : "Configure in one click"}
+          </Button>
         </div>
       )}
 

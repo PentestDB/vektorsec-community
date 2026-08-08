@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { readEnvFile } from "../utils/envWriter";
+import { configureBurpCaTrust, getBurpCaStatus } from "../services/burp-ca.service";
 
 const BURP_DISCONNECTED_MSG =
   "Burp Suite appears to be disconnected. " +
@@ -104,6 +105,39 @@ export const getBurpConnectionStatus = async (_req: Request, res: Response) => {
       connected: false,
       message: BURP_DISCONNECTED_MSG,
     });
+  }
+};
+
+export const getBurpCertificateStatus = async (_req: Request, res: Response) => {
+  try {
+    return res.status(200).json(await getBurpCaStatus());
+  } catch (error: any) {
+    console.error("[burp] CA status error:", error?.message || error);
+    return res.status(500).json({ message: "Failed to inspect Burp CA trust." });
+  }
+};
+
+export const configureBurpCertificate = async (_req: Request, res: Response) => {
+  try {
+    const { host, port } = getBurpConnection();
+    if (!host || !String(host).trim()) {
+      return res.status(400).json({ message: "Connect Burp RPC before configuring HTTPS interception." });
+    }
+
+    const burp = await createBurpClient(host, port);
+    try {
+      await burp.ping();
+    } finally {
+      burp.close();
+    }
+
+    return res.status(200).json(await configureBurpCaTrust());
+  } catch (error: any) {
+    console.error("[burp] CA configuration error:", error?.message || error);
+    if (isBurpUnreachable(error)) {
+      return res.status(502).json({ message: BURP_DISCONNECTED_MSG });
+    }
+    return res.status(400).json({ message: error?.message || "Failed to trust the Burp CA." });
   }
 };
 

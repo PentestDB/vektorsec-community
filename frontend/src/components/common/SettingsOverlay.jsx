@@ -5,9 +5,8 @@ import { RiAccountCircleLine, RiCloseLine } from "react-icons/ri";
 import {
   TbTools,
   TbBrain,
-  TbTerminal2,
-  TbDeviceDesktop,
   TbRadar,
+  TbTopologyStar3,
   TbWorldWww,
   TbAdjustmentsHorizontal,
   TbCreditCard,
@@ -16,10 +15,9 @@ import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
 import CapabilitiesPage from "@/components/pages/settings/Capabilities";
 import ModelsPage from "@/components/pages/settings/Models";
-import SSHPage from "@/components/pages/settings/SSH";
-import GUISettingsPage from "@/components/pages/settings/GUISettings";
 import BurpSettingsPage from "@/components/pages/settings/BurpSettings";
 import CaidoSettingsPage from "@/components/pages/settings/CaidoSettings";
+import MythicSettingsPage from "@/components/pages/settings/MythicSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
@@ -64,20 +62,6 @@ const TABS = [
     component: AgentBehaviorPage,
   },
   {
-    key: "ssh",
-    label: "SSH / Exploit Box",
-    icon: TbTerminal2,
-    component: SSHPage,
-  },
-  {
-    key: "gui",
-    label: "GUI / VNC",
-    description:
-      "Set up a remote desktop on your exploit box for graphical tools.",
-    icon: TbDeviceDesktop,
-    component: GUISettingsPage,
-  },
-  {
     key: "burp",
     label: "Burp Suite",
     description: "Connect to a Burp Suite instance via the Burp RPC extension.",
@@ -90,6 +74,14 @@ const TABS = [
     description: "Configure URL, token, and proxy settings.",
     icon: TbRadar,
     component: CaidoSettingsPage,
+  },
+  {
+    key: "mythic",
+    label: "Mythic C2",
+    description:
+      "Connect a Mythic command-and-control server for post-exploitation and pivoting.",
+    icon: TbTopologyStar3,
+    component: MythicSettingsPage,
   },
   {
     key: "magnitude",

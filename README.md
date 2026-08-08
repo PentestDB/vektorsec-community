@@ -89,6 +89,24 @@ Anthropic's current third-party product and subscription terms.
 Current first-class model families include GPT-5.6 Sol/Terra/Luna, Claude
 Fable/Opus/Sonnet 5, and Kimi K3 (direct Moonshot API or OpenRouter).
 
+### Session-scoped SSH profiles
+
+In Docker mode, Pentest Copilot mounts the host's `~/.ssh` and `~/keys`
+directories read-only. Each session can select a different concrete `Host`
+alias from `~/.ssh/config` under **Connection**, so parallel sessions use
+independent SSH connections and remote workspaces without copying private keys
+into MongoDB. Set `HOST_SSH_DIR` or `HOST_SSH_KEYS_DIR` before starting Docker
+when those directories live elsewhere.
+
+Use named aliases rather than wildcard-only entries:
+
+```ssh-config
+Host lab-box
+  HostName 10.10.10.10
+  User root
+  IdentityFile ~/.ssh/lab-box.pem
+```
+
 `run.sh` handles config file generation, Docker builds, and container orchestration. On first run it prompts for your model provider and API key. Use `./run.sh start -q` to skip prompts on subsequent runs.
 
 ```bash

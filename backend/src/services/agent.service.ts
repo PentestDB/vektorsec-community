@@ -20,11 +20,11 @@ import {
   executeToolCalls,
   executeConsentedTool,
   buildExecutionContext,
+  buildPendingConsentBatch,
   ToolExecutionCallbacks,
 } from "./agent.tools";
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { buildSystemPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/copilot/prompts";
-import { WORKSPACE_DIR } from "../utils/commandSafety";
 import UserModel from "../models/User/User.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
@@ -42,7 +42,7 @@ import {
   normalizeMaxSwarmIterations,
 } from "../utils/agentConfig";
 import { recordUsage } from "./usageTracker.service";
-
+import { createAiToolSafetyEvaluator } from "./tool-approval.service";
 
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
 const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
@@ -137,6 +137,26 @@ export function createSSEWriter(res: Response): SSEWriter {
         // already ended
       }
     },
+  };
+}
+
+/**
+ * An SSEWriter with no client attached, for agent runs started by the server
+ * rather than by a streaming request (e.g. CTF "solve all"). The agent loop
+ * already persists messages and state to the session document, so the UI picks
+ * the run up from session history — these events simply have nowhere to go.
+ *
+ * `error` events are logged, since with no client there is otherwise no trace
+ * of why a detached run died.
+ */
+export function createDetachedSSEWriter(label: string): SSEWriter {
+  return {
+    write(event: string, data: any) {
+      if (event === "error") {
+        console.error(`[agent:detached:${label}] ${data?.message ?? JSON.stringify(data)}`);
+      }
+    },
+    end() {},
   };
 }
 
@@ -531,6 +551,8 @@ export async function runAgentLoop(params: {
   const user = await cachedUser(session.uid.toString());
   const requireConsentForAllTools = user?.configs?.requireConsentForAllTools ?? false;
 
+  const toolExecutionMode = user?.configs?.toolExecutionMode ??
+    (requireConsentForAllTools ? "requires_consent" : "auto");
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
   const maxAgentIterations = normalizeMaxAgentIterations(
     user?.configs?.maxAgentIterations,
@@ -567,7 +589,7 @@ export async function runAgentLoop(params: {
       const parts = envOut.trim().split("|||");
       if (parts.length >= 4) {
         const home = parts[1];
-        const resolvedWs = WORKSPACE_DIR.replace(/^~/, home);
+        const resolvedWs = shellManager.remoteWorkspaceDir.replace(/^~/, home);
         envInfo = {
           user: parts[0],
           home,
@@ -618,6 +640,13 @@ export async function runAgentLoop(params: {
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
   const orchestratorReasoningMode: ReasoningMode =
     (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
+  const toolSafetyEvaluator = toolExecutionMode === "auto_approve"
+    ? createAiToolSafetyEvaluator({
+        provider: orchestratorConfig,
+        userId: session.uid.toString(),
+        abortSignal: params.abortSignal,
+      })
+    : undefined;
 
   let ctfSwarmContext: CtfSwarmContext | undefined;
   const sessionCtf = session.ctfConfig;
@@ -715,6 +744,18 @@ export async function runAgentLoop(params: {
   try {
     while (iteration < maxAgentIterations) {
       iteration++;
+
+      // Flush whatever the previous iteration produced. Without this, messages
+      // only reach the database when the run ends, so the UI shows an empty
+      // chat for the whole run (server-started runs have no SSE stream either),
+      // and a crash or restart discards every message since turn one.
+      //
+      // Sits at the top of the loop so it also covers iterations that ended via
+      // `continue`; the final iteration is still flushed by the exit paths.
+      if (newMessages.length > 0) {
+        await appendMessages(sessionId, newMessages);
+        newMessages.length = 0;
+      }
 
       if (await isPaused(sessionId)) {
         await appendMessages(sessionId, newMessages);
@@ -988,8 +1029,9 @@ export async function runAgentLoop(params: {
         onToolError(id, error) {
           sse.write("tool_error", { id, error });
         },
-        onConsentRequired(id, name, args, safetyBlock) {
-          sse.write("consent_required", { id, name, args, safetyBlock: safetyBlock ?? false });
+        onConsentRequired(id, name, args, safetyBlock, approvalReason) {
+          // Emitted once as a complete batch below. Streaming individual
+          // requests here could briefly hide siblings behind one approval.
         },
         onInstallSuggestion(suggestion) {
           sse.write("install_suggestion", suggestion);
@@ -1003,6 +1045,8 @@ export async function runAgentLoop(params: {
         executionCtx,
         requireConsentForAllTools,
         disableSafetyProtections,
+        toolExecutionMode,
+        toolSafetyEvaluator,
       );
 
       // Track spawned subagents and swarms
@@ -1039,13 +1083,17 @@ export async function runAgentLoop(params: {
         }
 
         const firstConsent = consentResults[0];
-        const batch = consentResults.map((cr) => ({
-          toolCallId: cr.toolCallId,
-          toolName: cr.toolName,
-          arguments: parseToolArguments(
-            assistantToolCalls.find((tc) => tc.id === cr.toolCallId)?.arguments ?? "{}",
-          ).args,
-        }));
+        const batch = buildPendingConsentBatch(consentResults, assistantToolCalls);
+        const firstBatchItem = batch[0];
+
+        sse.write("consent_required", {
+          id: firstBatchItem.toolCallId,
+          name: firstBatchItem.toolName,
+          args: firstBatchItem.arguments,
+          safetyBlock: firstBatchItem.safetyBlock,
+          approvalReason: firstBatchItem.approvalReason,
+          batch: batch.length > 1 ? batch : undefined,
+        });
 
         await appendMessages(sessionId, newMessages);
         await SessionsModel.updateOne(
@@ -1059,6 +1107,8 @@ export async function runAgentLoop(params: {
                 arguments: parseToolArguments(
                   assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
                 ).args,
+                safetyBlock: firstBatchItem.safetyBlock,
+                approvalReason: firstBatchItem.approvalReason,
                 batch: batch.length > 1 ? batch : undefined,
               },
             },

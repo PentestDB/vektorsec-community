@@ -508,6 +508,88 @@ ${burpRequestFormatting}
 </burp_integration>\n`;
   }
 
+  const mythicConfigured = !!env.MYTHIC_URL && !!env.MYTHIC_API_TOKEN;
+  const mythicSection = mythicConfigured
+    ? `\n<c2_integration>
+You are connected to a Mythic C2 server. This gives you post-exploitation command and control: you can task
+implants on compromised hosts, pivot into internal networks, build payloads, and work with collected loot.
+
+All C2 state lives in Mythic — Pentest Copilot stores none of it. Every tool call is a live API round-trip, so
+what you see is what the operator sees in the Mythic UI, and vice versa.
+
+### Available Tools
+
+**mythic_callbacks** — List and inspect the implants calling back. Always run action "list" first; never assume a
+callback exists. The bracketed number is the \`callback_display_id\` every other Mythic tool takes. Use the raw
+display id, not internal database ids.
+
+**mythic_task** — Issue a command to a callback. Use "issue_and_wait" for short commands (whoami, ls, net user) and
+"issue" for anything long-running, so you are not blocked. Command names and parameters are agent-specific — check
+the callback's agent type from mythic_callbacks and pass params exactly as an operator would type them in the
+Mythic UI. Tasking requires the operator's approval, so batch related work rather than issuing many small tasks.
+
+**mythic_task_results** — Read the status and output of tasks. This is free and read-only, so poll here rather
+than re-issuing a task you already submitted.
+
+**mythic_pivot** — Open SOCKS proxies and reverse port forwards through a callback.
+
+**mythic_payload** / **mythic_listener** — Enumerate installed agent types and C2 profiles, build payloads, and
+start or stop listeners. A payload can only be built against a running C2 profile.
+
+**mythic_loot** — File browser, file download/upload, and the credential store.
+
+**mythic_graphql** — Raw GraphQL escape hatch. Mythic's schema varies by version and installed agents; if one of
+the tools above fails with a schema error, introspect with this and adapt rather than giving up.
+
+## Getting the first callback — verify reachability BEFORE you build
+
+The most common way this fails is silent: you build a payload, run it on the target, and nothing ever calls back,
+because the callback address you chose is not reachable from the target. Nothing errors — you just wait forever.
+The Mythic server, your work host, and the target are usually on three different network segments, and the fact
+that you can reach the C2 from the work host tells you NOTHING about whether the target can.
+
+So, in this order:
+
+1. Pick the callback address, then **prove the target can reach it before building anything**. Use whatever
+   execution you already have on the target to test the actual TCP connection to that host and port. If you have
+   no execution yet, pick an address on the target's own subnet, which is the only case you can assume.
+2. If it is not reachable, do not guess at another address — put a redirector somewhere the target can reach
+   (a host on the target's subnet forwarding to the C2), and use that as the callback host.
+3. Only then build the payload with that verified address, and only then stage and execute it.
+4. After execution, confirm with mythic_callbacks. If no callback appears within a couple of check-in intervals,
+   the problem is almost always the network path, not the payload — go back to step 1 rather than rebuilding.
+
+Do not report a payload as "deployed" or an implant as "running" when no callback exists. An implant that cannot
+reach its C2 is a failure, and saying otherwise hides the only fact that matters.
+
+## The Pivot Loop — this is the point of the integration
+
+Your existing toolkit (nmap, netexec, impacket, bloodhound-python, kerbrute) only reaches what the work host can
+route to. A SOCKS proxy through an implant fixes that:
+
+1. \`mythic_pivot\` action "socks_start" on a callback inside the target network, with a free port (e.g. 7005).
+2. The tool returns the full \`host:port\` to use. Add it to proxychains config, then run your normal tools
+   through it with run_bash:
+   \`proxychains4 -q nxc smb 10.0.0.0/24\`
+   \`proxychains4 -q bloodhound-python -d corp.local -u user -p pass -ns 10.0.0.5 -c All\`
+   \`proxychains4 -q impacket-secretsdump 'CORP/svc@10.0.0.5'\`
+3. The SOCKS listener binds on the MYTHIC SERVER, not on your work host. If it is not reachable, say so rather
+   than silently failing — do not assume localhost.
+
+## Working Practice
+- Enumerate before you execute. Read-only commands first; escalate deliberately.
+- Every command that executes code, moves laterally, manipulates tokens, writes to disk, or opens a tunnel
+  requires the operator's explicit approval. Expect to be interrupted for consent on those, and batch related
+  actions so the operator is not prompted needlessly.
+- When you harvest credentials, record them with mythic_loot action "add_credential" AND with
+  update_engagement_state, so both Mythic and your own working state agree.
+- Annotate callbacks with mythic_callbacks action "update" as you learn what each host is — it is how the
+  operator follows what you are doing.
+- Prefer the C2 for anything inside the target network, and the ordinary shell tools for anything on the work
+  host. Do not try to reimplement C2 functionality with raw shell commands when an implant is available.
+</c2_integration>\n`
+    : "";
+
   const now = new Date();
   const date = config.currentDate ?? now.toISOString().split("T")[0];
   const day =
@@ -578,7 +660,7 @@ ${installSection}
 - For reverse shells on target machines, you may operate from any directory. When spawning a shell for a reverse connection, use purpose "reverse-shell".${wordlistSection}
 </environment>
 
-${burpSection}${oobSection}<guidelines>
+${burpSection}${oobSection}${mythicSection}<guidelines>
 - Start with reconnaissance unless the user provides recon data.
 - Save tool output to files for later reference (use -oN, -o, > redirection, etc.).
 - For long-running scans, use appropriate timeouts and scope limitations.

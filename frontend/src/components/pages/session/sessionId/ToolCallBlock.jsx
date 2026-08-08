@@ -34,6 +34,14 @@ const TOOL_LABELS = {
   send_to_caido_automate: "Caido Automate",
   caido_intercept_control: "Caido Intercept",
   caido_oast: "Caido OAST",
+  mythic_callbacks: "Mythic Callbacks",
+  mythic_task: "Mythic Task",
+  mythic_task_results: "Mythic Task Output",
+  mythic_pivot: "Mythic Pivot",
+  mythic_payload: "Mythic Payload",
+  mythic_listener: "Mythic Listener",
+  mythic_loot: "Mythic Loot",
+  mythic_graphql: "Mythic GraphQL",
   platform_health: "MCP Platform Health",
   platform_setup: "MCP Platform Setup",
   platform_repair: "MCP Platform Repair",
@@ -88,6 +96,26 @@ function formatArgsPreview(toolName, parsed) {
     const path = firstLine.split(" ")[1] || "";
     return `${method} ${parsed.host ?? ""}${path ? `:${parsed.port ?? 443}${path}` : ""}`;
   }
+  if (toolName === "mythic_task_results") {
+    return `${parsed.action ?? ""} ${parsed.task_display_id != null ? `task ${parsed.task_display_id}` : ""}`.trim();
+  }
+  if (toolName === "mythic_task") {
+    const target = parsed.callback_display_id != null ? `callback ${parsed.callback_display_id}` : "";
+    return `${target}: ${parsed.command ?? ""} ${parsed.params ?? ""}`.trim();
+  }
+  if (toolName === "mythic_pivot") {
+    return `${parsed.action ?? ""} ${parsed.callback_display_id != null ? `callback ${parsed.callback_display_id}` : ""}${parsed.port ? ` :${parsed.port}` : ""}`.trim();
+  }
+  if (toolName === "mythic_callbacks") {
+    return `${parsed.action ?? ""} ${parsed.callback_display_id != null ? `callback ${parsed.callback_display_id}` : ""}`.trim();
+  }
+  if (toolName === "mythic_payload" || toolName === "mythic_listener") {
+    return `${parsed.action ?? ""} ${parsed.profile_name ?? parsed.save_path ?? ""}`.trim();
+  }
+  if (toolName === "mythic_loot") {
+    return `${parsed.action ?? ""} ${parsed.remote_path ?? parsed.local_path ?? parsed.save_path ?? parsed.account ?? parsed.host ?? ""}`.trim();
+  }
+  if (toolName === "mythic_graphql") return (parsed.query ?? "").slice(0, 80);
   if (toolName === "agent_message") return (parsed.message ?? "").slice(0, 80);
   if (toolName === "shell_exec") return parsed.command ?? "";
   if (toolName === "shell_session")
@@ -125,6 +153,18 @@ function getCodePreview(toolName, parsed) {
   }
   if (toolName === "shell_exec") {
     return { code: parsed.command ?? "", language: "bash" };
+  }
+  if (toolName === "mythic_task" && parsed.command) {
+    return {
+      code: `${parsed.command} ${parsed.params ?? ""}`.trim(),
+      language: "bash",
+    };
+  }
+  if (toolName === "mythic_graphql") {
+    return { code: parsed.query ?? "", language: "graphql" };
+  }
+  if (toolName === "mythic_payload" && parsed.definition) {
+    return { code: parsed.definition, language: "json" };
   }
   return null;
 }

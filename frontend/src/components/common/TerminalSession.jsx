@@ -250,7 +250,7 @@ const TerminalSession = ({
       {sshError && (
         <div className={styles.sshErrorContainer}>
           <div className={styles.sshErrorMessage}>
-            SSH Connection Error: {sshError}
+            Workspace connection error: {sshError}
           </div>
           <button className={styles.sshReconnectBtn} onClick={handleReconnect}>
             Reconnect
@@ -265,7 +265,7 @@ const TerminalSession = ({
           className={styles.loadBox}
         >
           <Spin indicator={<LoadingOutlined className={styles.loadIcon} />} />{" "}
-          Establishing secure connection with your exploit box...
+          Opening a shell in your workspace folder...
         </Row>
       )}
       {!sshError &&

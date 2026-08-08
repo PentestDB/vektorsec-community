@@ -7,7 +7,11 @@ import {
   getVncDisplay,
   getVncRfbPort,
   getWebsockifyPort,
+  getBrowserAgentDisplay,
+  getBrowserAgentRfbPort,
+  getBrowserAgentNovncPort,
 } from "../config/constants";
+import { isPortListening } from "../utils/tcpProbe";
 import { getAvailableModels as fetchModelsCatalog } from "../services/models-catalog.service";
 import {
   clearProviderCache,
@@ -19,6 +23,9 @@ import {
   isSubscriptionProvider,
 } from "../services/subscription-inference.service";
 import { resolveMagnitudeLlmConfig } from "../utils/magnitudeLlm";
+import { getBurpBrowserHome } from "../services/burp-ca.service";
+import { normalizeMythicUrl } from "../services/mythic.client";
+import { requireActiveSession } from "../services/session.helpers";
 import {
   getAssignedModels,
   normalizeModelRegistryInput,
@@ -440,6 +447,8 @@ export const getCapabilities = async (req: Request, res: Response) => {
       installedCapabilities: user.configs.installedCapabilities ?? [],
       requireConsentForAllTools:
         user.configs.requireConsentForAllTools ?? false,
+      toolExecutionMode: user.configs.toolExecutionMode ??
+        (user.configs.requireConsentForAllTools ? "requires_consent" : "auto"),
     });
   } catch (error) {
     console.log(error);
@@ -450,7 +459,7 @@ export const getCapabilities = async (req: Request, res: Response) => {
 export const updateCapabilities = async (req: Request, res: Response) => {
   try {
     const user = res.locals.user;
-    const { capabilities, requireConsentForAllTools } = req.body;
+    const { capabilities, requireConsentForAllTools, toolExecutionMode } = req.body;
 
     if (capabilities !== undefined) {
       if (!Array.isArray(capabilities)) {
@@ -467,6 +476,18 @@ export const updateCapabilities = async (req: Request, res: Response) => {
 
     if (typeof requireConsentForAllTools === "boolean") {
       user.configs.requireConsentForAllTools = requireConsentForAllTools;
+      // Keep legacy API clients working while moving new clients to the mode.
+      if (toolExecutionMode === undefined) {
+        user.configs.toolExecutionMode = requireConsentForAllTools ? "requires_consent" : "auto";
+      }
+    }
+
+    if (toolExecutionMode !== undefined) {
+      if (!["auto", "auto_approve", "requires_consent"].includes(toolExecutionMode)) {
+        return res.status(400).json({ message: "Invalid tool execution mode" });
+      }
+      user.configs.toolExecutionMode = toolExecutionMode;
+      user.configs.requireConsentForAllTools = toolExecutionMode === "requires_consent";
     }
 
     await user.save();
@@ -904,17 +925,20 @@ export const resetVNCConfig = async (_req: Request, res: Response) => {
   }
 };
 
-export const autoSetupVNC = async (_req: Request, res: Response) => {
+export const autoSetupVNC = async (req: Request, res: Response) => {
   const VNC_DISPLAY = getVncDisplay();
   const VNC_RFBPORT = getVncRfbPort();
   const WEBSOCKIFY_PORT = getWebsockifyPort();
-  const { buildSSHConfig } = await import("../utils/sshConfig");
-  const ssh2 = await import("ssh2");
   const { generateRandomPassword } = await import("../utils/fileUtils");
 
   try {
-    const sshConfig = buildSSHConfig();
-    const sshClient = new ssh2.Client();
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || "").trim();
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+    const session = await requireActiveSession(res.locals.userId, sessionId, res);
+    if (!session) return;
+    const { WorkHostCommandClient, resolveSessionWorkHost } = await import("../services/work-host.service");
+    const target = await resolveSessionWorkHost(sessionId);
+    const sshClient = new WorkHostCommandClient(sessionId);
 
     sshClient
       .on("ready", async () => {
@@ -1033,10 +1057,10 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           );
           // Kill all existing VNC/Xvfb processes for a clean start
           await execCmd(
-            "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
-              "pkill -f x11vnc 2>/dev/null || true; " +
-              "pkill -f 'Xvfb' 2>/dev/null || true; " +
-              `for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done`,
+            `vncserver -kill "${VNC_DISPLAY}" 2>/dev/null || true; ` +
+              `pkill -f '[x]11vnc.*-display ${VNC_DISPLAY}.*-rfbport ${VNC_RFBPORT}' 2>/dev/null || true; ` +
+              `pkill -f '[X]vfb ${VNC_DISPLAY}' 2>/dev/null || true; ` +
+              `pkill -f '[X](vnc|tigervnc).*${VNC_DISPLAY}.*rfbport ${VNC_RFBPORT}' 2>/dev/null || true`,
           );
           const escapedPw = randomPassword.replace(/'/g, "'\\''");
           // Write a VNC passwd file (vncpasswd / tigervncpasswd / x11vnc
@@ -1105,7 +1129,7 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
           await new Promise((resolve) => setTimeout(resolve, 1000));
           steps[4].done = true;
 
-          const vncHost = sshConfig.host || "localhost";
+          const vncHost = target.kind === "ssh" ? target.sshProfile?.host || "localhost" : "localhost";
           const vncPort = "9020";
 
           const isDockerInternal =
@@ -1157,7 +1181,7 @@ export const autoSetupVNC = async (_req: Request, res: Response) => {
         });
       });
 
-    sshClient.connect(sshConfig);
+    sshClient.connect();
   } catch (error) {
     console.log(error);
     return res.status(400).json({
@@ -1198,11 +1222,15 @@ function parseVncPath(raw: string): string {
   return "";
 }
 
-async function runDiagnostics(): Promise<DiagCheck[]> {
+async function runDiagnostics(sessionId: string): Promise<DiagCheck[]> {
   const VNC_DISPLAY = getVncDisplay();
   const VNC_RFBPORT = getVncRfbPort();
   const WEBSOCKIFY_PORT = getWebsockifyPort();
-  const { execSSHCommand } = await import("../services/ssh.service");
+  const { execOnWorkHost } = await import("../services/work-host.service");
+  const execSSHCommand = async (command: string, timeoutMs = 30_000) => {
+    const result = await execOnWorkHost(sessionId, command, timeoutMs);
+    return `${result.stdout}${result.stderr}`;
+  };
 
   const checks: DiagCheck[] = [];
   console.log("[VNC Diagnose] Starting diagnostics...");
@@ -1446,10 +1474,14 @@ async function runDiagnostics(): Promise<DiagCheck[]> {
   return checks;
 }
 
-export const diagnoseVNC = async (_req: Request, res: Response) => {
+export const diagnoseVNC = async (req: Request, res: Response) => {
   try {
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || "").trim();
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+    const session = await requireActiveSession(res.locals.userId, sessionId, res);
+    if (!session) return;
     console.log("[VNC Diagnose] Diagnose endpoint called");
-    const checks = await runDiagnostics();
+    const checks = await runDiagnostics(sessionId);
     const allPassed = checks.every((c) => c.status === "pass");
     console.log(`[VNC Diagnose] All passed: ${allPassed}`);
     return res.status(200).json({ checks, allPassed });
@@ -1467,7 +1499,15 @@ export const repairVNC = async (req: Request, res: Response) => {
     const VNC_DISPLAY = getVncDisplay();
     const VNC_RFBPORT = getVncRfbPort();
     const WEBSOCKIFY_PORT = getWebsockifyPort();
-    const { execSSHCommand } = await import("../services/ssh.service");
+    const sessionId = String(req.body?.sessionId || req.body?.session_id || "").trim();
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required" });
+    const session = await requireActiveSession(res.locals.userId, sessionId, res);
+    if (!session) return;
+    const { execOnWorkHost } = await import("../services/work-host.service");
+    const execSSHCommand = async (command: string, timeoutMs = 120_000) => {
+      const result = await execOnWorkHost(sessionId, command, timeoutMs);
+      return `${result.stdout}${result.stderr}`;
+    };
     const env = readEnvFile();
     const savedPassword = env[VNC_ENV_KEYS.password] || "";
     const fix = req.body?.fix || "all";
@@ -1591,10 +1631,10 @@ export const repairVNC = async (req: Request, res: Response) => {
 
       try {
         await execSSHCommand(
-          "pkill -f '[X](vnc|tigervnc)' 2>/dev/null || true; " +
-            "pkill -f x11vnc 2>/dev/null || true; " +
-            "pkill -f 'Xvfb' 2>/dev/null || true; " +
-            'for display in {1..99}; do vncserver -kill ":$display" 2>/dev/null || true; done',
+          `vncserver -kill "${VNC_DISPLAY}" 2>/dev/null || true; ` +
+            `pkill -f '[x]11vnc.*-display ${VNC_DISPLAY}.*-rfbport ${VNC_RFBPORT}' 2>/dev/null || true; ` +
+            `pkill -f '[X]vfb ${VNC_DISPLAY}' 2>/dev/null || true; ` +
+            `pkill -f '[X](vnc|tigervnc).*${VNC_DISPLAY}.*rfbport ${VNC_RFBPORT}' 2>/dev/null || true`,
         );
         log.push("Killed all existing VNC/Xvfb processes");
         console.log("[VNC Repair] Killed all existing VNC/Xvfb processes");
@@ -1741,7 +1781,7 @@ export const repairVNC = async (req: Request, res: Response) => {
     console.log(
       "[VNC Repair] Repair steps done. Running post-repair diagnostics...",
     );
-    const checks = await runDiagnostics();
+    const checks = await runDiagnostics(sessionId);
     const allPassed = checks.every((c) => c.status === "pass");
     console.log(`[VNC Repair] Post-repair all passed: ${allPassed}. Log:`, log);
 
@@ -1983,6 +2023,51 @@ export const updateCaidoConfig = async (req: Request, res: Response) => {
   }
 };
 
+// ─── Mythic C2 Configuration ─────────────────────────────────────────
+
+export const getMythicConfig = async (_req: Request, res: Response) => {
+  try {
+    const env = readEnvFile();
+    return res.status(200).json({
+      url: env.MYTHIC_URL || "",
+      tokenConfigured: !!env.MYTHIC_API_TOKEN,
+      insecureTls: String(env.MYTHIC_INSECURE_TLS || "").toLowerCase() === "true",
+      configured: !!env.MYTHIC_URL && !!env.MYTHIC_API_TOKEN,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to get Mythic config" });
+  }
+};
+
+export const updateMythicConfig = async (req: Request, res: Response) => {
+  try {
+    const { url, token, insecureTls } = req.body;
+
+    if (!url) {
+      return res.status(400).json({ message: "URL is required" });
+    }
+
+    const updates: Record<string, string> = {
+      MYTHIC_URL: normalizeMythicUrl(String(url)),
+      MYTHIC_INSECURE_TLS: insecureTls === true || insecureTls === "true" ? "true" : "false",
+    };
+
+    // Only overwrite the token when one was actually submitted, so the settings
+    // form can round-trip without the client ever seeing the stored value.
+    if (token !== undefined) {
+      updates.MYTHIC_API_TOKEN = String(token || "");
+    }
+
+    updateEnvVars(updates);
+
+    return res.status(200).json({ message: "Mythic configuration updated" });
+  } catch (error) {
+    console.log(error);
+    return res.status(400).json({ message: "Failed to update Mythic config" });
+  }
+};
+
 // ─── Magnitude Browser Agent Configuration ───────────────────────────
 
 export const getMagnitudeConfig = async (_req: Request, res: Response) => {
@@ -2098,12 +2183,13 @@ export const startMagnitudeAgent = async (req: Request, res: Response) => {
     const { startBrowserAgent } = await import("magnitude-core");
     const llm = resolveMagnitudeLlmConfig(providerConfig);
 
-    const launchOptions: any = { headless };
+    const browserEnv = { ...process.env, HOME: getBurpBrowserHome() };
+    const launchOptions: any = { headless, env: browserEnv };
     if (proxyUrl) {
       launchOptions.proxy = { server: proxyUrl };
     }
     if (!headless) {
-      launchOptions.env = { ...process.env, DISPLAY: normalizedDisplay };
+      launchOptions.env = { ...browserEnv, DISPLAY: normalizedDisplay };
     }
 
     const agentConfig: any = {
@@ -2152,19 +2238,36 @@ export const getBrowserAgentVNC = async (_req: Request, res: Response) => {
     const env = readEnvFile();
     const magnitudeEnabled = env.MAGNITUDE_ENABLED === "true";
     const headless = env.MAGNITUDE_HEADLESS !== "false";
-    const display = env.MAGNITUDE_DISPLAY || process.env.DISPLAY || ":99";
-    const novncPort = process.env.BROWSER_AGENT_NOVNC_PORT || "6080";
+    const display = env.MAGNITUDE_DISPLAY || getBrowserAgentDisplay();
+    const novncPort = String(getBrowserAgentNovncPort());
 
     const fs = await import("fs");
     const inDocker = fs.existsSync("/.dockerenv");
 
+    // Probe the stack instead of assuming it is up because we are in Docker.
+    // x11vnc dies whenever Xvfb fails, which leaves websockify happily serving
+    // the noVNC page with nothing behind it — the client then renders a bare
+    // "Failed to connect to server" with no explanation.
+    const [rfbUp, novncUp] = inDocker
+      ? await Promise.all([
+          isPortListening(getBrowserAgentRfbPort()),
+          isPortListening(getBrowserAgentNovncPort()),
+        ])
+      : [false, false];
+
+    const vncRunning = inDocker && rfbUp && novncUp;
+
     return res.status(200).json({
+      // `available` stays config-intent (headed mode requested); `vncRunning`
+      // reports whether the stream is actually serviceable right now.
       available: magnitudeEnabled && !headless,
       enabled: magnitudeEnabled,
       headless,
       display,
       novncPort,
-      vncRunning: inDocker,
+      vncRunning,
+      rfbUp,
+      novncUp,
       mode: inDocker ? "docker" : "dev",
     });
   } catch (error) {

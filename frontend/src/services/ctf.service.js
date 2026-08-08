@@ -89,3 +89,8 @@ export const disconnectCtf = async (workspaceId) => {
   const res = await apiClient.post(`/ctf/${workspaceId}/disconnect`);
   return res.data;
 };
+
+export const startSolvingAll = async (workspaceId) => {
+  const res = await apiClient.post(`/ctf/${workspaceId}/solve-all`);
+  return res.data;
+};

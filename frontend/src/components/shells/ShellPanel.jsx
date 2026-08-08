@@ -17,12 +17,12 @@ export default function ShellPanel({
   resizeShell,
   connectionStatus,
   wsConnected,
-  onReconnectSSH,
+  onReconnectHost,
 }) {
   const [activeShellId, setActiveShellId] = useState(null);
   const [reconnecting, setReconnecting] = useState(false);
   const activeShells = shells.filter((s) => s.status === "active");
-  const sshOk = connectionStatus?.sshConnected;
+  const hostOk = connectionStatus?.hostConnected ?? connectionStatus?.sshConnected ?? false;
 
   const currentShellId = activeShellId && activeShells.find((s) => s.shellId === activeShellId)
     ? activeShellId
@@ -42,10 +42,10 @@ export default function ShellPanel({
   }, [activeShellId, activeShells, closeShell]);
 
   const handleReconnect = async () => {
-    if (reconnecting || !onReconnectSSH) return;
+    if (reconnecting || !onReconnectHost) return;
     setReconnecting(true);
     try {
-      await onReconnectSSH();
+      await onReconnectHost();
     } finally {
       setTimeout(() => setReconnecting(false), 2000);
     }
@@ -71,15 +71,15 @@ export default function ShellPanel({
         color: "#a1a1a1",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          {sshOk ? (
-            <ApiOutlined style={{ color: "#00e676", fontSize: 12 }} />
+          {hostOk ? (
+            <ApiOutlined style={{ color: "#10ca00", fontSize: 12 }} />
           ) : (
             <DisconnectOutlined style={{ color: "#ff3e3e", fontSize: 12 }} />
           )}
-          <span style={{ color: sshOk ? "#00e676" : "#ff3e3e" }}>
-            SSH {sshOk ? "Connected" : "Disconnected"}
+          <span style={{ color: hostOk ? "#10ca00" : "#ff3e3e" }}>
+            Host {hostOk ? "Connected" : "Disconnected"}
           </span>
-          {!sshOk && onReconnectSSH && (
+          {!hostOk && onReconnectHost && (
             <button
               onClick={handleReconnect}
               disabled={reconnecting}
@@ -119,7 +119,7 @@ export default function ShellPanel({
           <span>WS {wsConnected ? "Connected" : "Disconnected"}</span>
         </div>
 
-        {connectionStatus?.lastError && !sshOk && (
+        {connectionStatus?.lastError && !hostOk && (
           <>
             <div style={{
               width: 1,

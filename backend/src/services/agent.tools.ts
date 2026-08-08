@@ -10,6 +10,8 @@ import { SwarmWinCondition } from "../models/Sessions/Sessions.model";
 import { AgentPromptConfig } from "../utils/copilot/prompts";
 import { parseToolArguments } from "../utils/toolArguments";
 import { executeWithTimeout } from "../utils/executeWithTimeout";
+import type { ToolExecutionMode } from "../models/User/User.model";
+import { decideToolConsent, ToolSafetyEvaluator } from "./tool-approval.service";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -20,7 +22,13 @@ export interface ToolExecutionCallbacks {
   onToolOutput: (toolCallId: string, chunk: string) => void;
   onToolDone: (toolCallId: string, result: ToolResult) => void;
   onToolError: (toolCallId: string, error: string) => void;
-  onConsentRequired: (toolCallId: string, toolName: string, args: Record<string, any>, safetyBlock?: boolean) => void;
+  onConsentRequired: (
+    toolCallId: string,
+    toolName: string,
+    args: Record<string, any>,
+    safetyBlock?: boolean,
+    approvalReason?: string,
+  ) => void;
   onInstallSuggestion?: (suggestion: { name: string; label: string; installCommand: string; size: string }) => void;
 }
 
@@ -29,6 +37,33 @@ export interface ToolExecutionResult {
   toolName: string;
   result: ToolResult;
   needsConsent: boolean;
+  approvalReason?: string;
+  safetyBlock?: boolean;
+}
+
+export interface PendingConsentBatchItem {
+  toolCallId: string;
+  toolName: string;
+  arguments: Record<string, any>;
+  safetyBlock: boolean;
+  approvalReason?: string;
+}
+
+/** Build the exact set presented to the user and later executed on approval. */
+export function buildPendingConsentBatch(
+  results: ToolExecutionResult[],
+  toolCalls: ToolCallData[],
+): PendingConsentBatchItem[] {
+  const callsById = new Map(toolCalls.map((call) => [call.id, call]));
+  return results
+    .filter((result) => result.needsConsent)
+    .map((result) => ({
+      toolCallId: result.toolCallId,
+      toolName: result.toolName,
+      arguments: parseToolArguments(callsById.get(result.toolCallId)?.arguments ?? "{}").args,
+      safetyBlock: result.safetyBlock ?? false,
+      approvalReason: result.approvalReason,
+    }));
 }
 
 function truncateOutput(output: string): string {
@@ -169,6 +204,8 @@ export async function executeToolCall(
   ctx: ExecutionContext,
   requireConsentForAllTools?: boolean,
   disableSafetyProtections?: boolean,
+  toolExecutionMode?: ToolExecutionMode,
+  toolSafetyEvaluator?: ToolSafetyEvaluator,
 ): Promise<ToolExecutionResult> {
   const toolDef = toolRegistry.get(toolCall.name);
 
@@ -203,17 +240,30 @@ export async function executeToolCall(
   }
 
   const safetyTriggered = !disableSafetyProtections && (toolDef.shouldRequireConsent?.(args, ctx) ?? false);
-  const needsConsent =
-    requireConsentForAllTools ||
-    (requireConsentForAllTools !== false && (toolDef.requiresConsent ?? false)) ||
-    safetyTriggered;
+  const mode: ToolExecutionMode = toolExecutionMode ??
+    (requireConsentForAllTools === true
+      ? "requires_consent"
+      : requireConsentForAllTools === false
+        ? "auto"
+        : (toolDef.requiresConsent ? "requires_consent" : "auto"));
+  const approval = await decideToolConsent({
+    mode,
+    tool: toolDef,
+    args,
+    context: ctx,
+    safetyTriggered,
+    evaluator: toolSafetyEvaluator,
+  });
+  const needsConsent = approval.requireConsent;
   if (needsConsent) {
-    callbacks.onConsentRequired(toolCall.id, toolCall.name, args, safetyTriggered);
+    callbacks.onConsentRequired(toolCall.id, toolCall.name, args, safetyTriggered, approval.reason);
     return {
       toolCallId: toolCall.id,
       toolName: toolCall.name,
       result: { output: "", exitCode: 0 },
       needsConsent: true,
+      approvalReason: approval.reason,
+      safetyBlock: safetyTriggered,
     };
   }
 
@@ -258,10 +308,21 @@ export async function executeToolCalls(
   ctx: ExecutionContext,
   requireConsentForAllTools?: boolean,
   disableSafetyProtections?: boolean,
+  toolExecutionMode?: ToolExecutionMode,
+  toolSafetyEvaluator?: ToolSafetyEvaluator,
 ): Promise<ToolExecutionResult[]> {
   const results = await Promise.all(
     toolCalls.map((tc) =>
-      executeToolCall(sessionId, tc, callbacks, ctx, requireConsentForAllTools, disableSafetyProtections),
+      executeToolCall(
+        sessionId,
+        tc,
+        callbacks,
+        ctx,
+        requireConsentForAllTools,
+        disableSafetyProtections,
+        toolExecutionMode,
+        toolSafetyEvaluator,
+      ),
     ),
   );
   return results;

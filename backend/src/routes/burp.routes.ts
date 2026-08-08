@@ -3,6 +3,8 @@ import { verifySess } from "../middlewares/VerifySession.middleware";
 import {
   getBurpHealth,
   getBurpConnectionStatus,
+  getBurpCertificateStatus,
+  configureBurpCertificate,
   getBurpProxyHistory,
   getBurpProxyEntry,
   sendBurpRequest,
@@ -19,6 +21,8 @@ const router = express.Router();
 
 router.get("/health", getBurpHealth);
 router.get("/connection-status", [verifySess], getBurpConnectionStatus);
+router.get("/ca/status", [verifySess], getBurpCertificateStatus);
+router.post("/ca/configure", [verifySess], configureBurpCertificate);
 router.get("/proxy-history", [verifySess], getBurpProxyHistory);
 router.get("/proxy-entry/:id", [verifySess], getBurpProxyEntry);
 router.post("/send-request", [verifySess], sendBurpRequest);

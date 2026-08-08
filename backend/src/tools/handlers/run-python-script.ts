@@ -1,5 +1,4 @@
 import { ToolDefinition } from "../types";
-import { WORKSPACE_DIR } from "../../utils/commandSafety";
 import { findCapabilityForCommand } from "../../capabilities/registry";
 
 const MODULE_NOT_FOUND_PATTERNS = [
@@ -56,7 +55,7 @@ const runPythonScript: ToolDefinition = {
       const safeName = file_name.replace(/^.*[\\/]/, "");
       if (safeName) {
         ctx.runCommand(
-          `cat > ${WORKSPACE_DIR}/${safeName} << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
+          `cat > './${safeName.replace(/'/g, "'\\''")}' << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
           10_000,
         ).catch(() => {});
         files.push(safeName);
@@ -65,7 +64,7 @@ const runPythonScript: ToolDefinition = {
 
     // Always run in-memory via stdin — faster and avoids path issues
     const { output, exitCode } = await ctx.runCommand(
-      `cd ${WORKSPACE_DIR} && python3 << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
+      `python3 << 'PYTHON_SCRIPT_EOF'\n${script}\nPYTHON_SCRIPT_EOF`,
       this.timeoutMs,
     );
     const suggestion = exitCode !== 0 ? detectMissingModule(output) : null;

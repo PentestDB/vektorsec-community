@@ -363,6 +363,38 @@ button {
   }
 }
 
+// antd is running on its default (light) theme tokens, so a disabled button
+// falls back to near-black text on a near-transparent black fill — invisible
+// against this UI. Primary buttons show it worst: a disabled "Save" renders as
+// an empty black box. Give both variants an explicit dark-theme disabled state.
+.ant-btn-primary {
+  &:disabled,
+  &.ant-btn-disabled {
+    color: rgba(255, 255, 255, 0.4);
+    background: rgba(142, 53, 255, 0.3);
+    border-color: rgba(142, 53, 255, 0.38);
+    box-shadow: none;
+
+    .anticon {
+      color: rgba(255, 255, 255, 0.4);
+    }
+  }
+}
+
+.ant-btn-default {
+  &:disabled,
+  &.ant-btn-disabled {
+    color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+
+    .anticon {
+      color: rgba(255, 255, 255, 0.3);
+    }
+  }
+}
+
 .ant-tag {
   border-radius: 999px;
   font-weight: 600;

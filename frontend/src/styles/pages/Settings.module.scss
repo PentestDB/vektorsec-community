@@ -410,6 +410,73 @@
     }
   }
 }
+.burpHttpsCard {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(127, 86, 217, 0.28);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(127, 86, 217, 0.11), rgba(127, 86, 217, 0.035));
+}
+
+.burpHttpsIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: #b884ff;
+  background: rgba(127, 86, 217, 0.16);
+  font-size: 1.05rem;
+
+  &[data-ready="true"] {
+    color: #7ee787;
+    background: rgba(126, 231, 135, 0.1);
+  }
+}
+
+.burpHttpsContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.burpHttpsTitle {
+  color: var(--primary-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.burpHttpsDescription {
+  color: var(--secondary-text);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.burpHttpsFingerprint {
+  max-width: 42rem;
+  overflow: hidden;
+  color: var(--secondary-text-500);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.58rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.burpHttpsButton {
+  flex-shrink: 0;
+  height: 1.8rem !important;
+  padding: 0 0.75rem !important;
+  border-radius: 5px !important;
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+}
 
 .fieldGroup {
   margin-bottom: 1.25rem;

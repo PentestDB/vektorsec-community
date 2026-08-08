@@ -18,6 +18,7 @@ import { vpnRoutes } from "./routes/vpn.routes";
 import { vncRoutes } from "./routes/vnc.routes";
 import { burpRoutes } from "./routes/burp.routes";
 import { caidoRoutes } from "./routes/caido.routes";
+import { mythicRoutes } from "./routes/mythic.routes";
 import { ctfRoutes } from "./routes/ctf.routes";
 import { workspaceRoutes } from "./routes/workspace.routes";
 import { mcpRoutes } from "./routes/mcp.routes";
@@ -262,6 +263,7 @@ const initializeApp = async () => {
     app.use("/api/copilot", vncRoutes);
     app.use("/api/burp", burpRoutes);
     app.use("/api/caido", caidoRoutes);
+    app.use("/api/mythic", mythicRoutes);
     app.use("/api/ctf", ctfRoutes);
     app.use("/api/workspace", workspaceRoutes);
     app.use("/api/mcp", mcpRoutes);

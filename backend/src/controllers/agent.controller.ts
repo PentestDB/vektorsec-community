@@ -316,7 +316,7 @@ export const getHistory = async (req: Request, res: Response) => {
           completedAt: a.completedAt,
         })),
       })),
-      connectionState: session.connectionState ?? { sshConnected: false },
+      connectionState: session.connectionState ?? { sshConnected: false, hostConnected: false },
     });
   } catch (err: any) {
     console.error("[agent] getHistory error:", err);
@@ -367,6 +367,7 @@ export const getSessionInfo = async (req: Request, res: Response) => {
       createdAt: session.createdAt,
       totalTokens: session.totalTokens,
       messageCount: session.messages.length,
+      connectionState: session.connectionState ?? { sshConnected: false },
       isCTF,
       ...(ctf ? { ctf } : {}),
     });
@@ -539,7 +540,7 @@ export const getUserSessions = async (req: Request, res: Response) => {
       uid: user._id,
       status: { $ne: "archived" },
     })
-      .select("sessionId workspaceId name description createdAt agentState totalTokens")
+      .select("sessionId workspaceId name description createdAt agentState totalTokens connectionState")
       .sort({ createdAt: -1 });
 
     return res.status(200).json(sessions);

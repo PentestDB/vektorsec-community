@@ -59,6 +59,7 @@ const PROVIDER_OPTIONS = [
   { value: "openai-compatible", label: "OpenAI-Compatible" },
   { value: "kimi", label: "Kimi (Moonshot AI)" },
   { value: "deepseek", label: "DeepSeek" },
+  { value: "bedrock", label: "AWS Bedrock" },
   { value: "codex-subscription", label: "Codex Subscription (Local CLI)" },
   { value: "claude-subscription", label: "Claude Subscription (Local CLI)" },
 ];
@@ -104,6 +105,11 @@ const PROVIDER_META = {
   deepseek: {
     keyURL: "https://platform.deepseek.com/api_keys",
     keyLabel: "Get DeepSeek API Key",
+  },
+  bedrock: {
+    keyURL:
+      "https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html",
+    keyLabel: "Get Bedrock API Key",
   },
 };
 
@@ -157,6 +163,12 @@ const FALLBACK_MODELS = {
     "deepseek-v3",
     "deepseek-r1",
   ],
+  bedrock: [
+    "openai.gpt-oss-120b-1:0",
+    "qwen.qwen3-coder-next",
+    "moonshotai.kimi-k2.5",
+    "mistral.mistral-large-3-675b-instruct",
+  ],
   "codex-subscription": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
   "claude-subscription": ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
 };
@@ -187,9 +199,14 @@ function createModelId(label) {
 }
 
 function needsBaseURL(provider) {
-  return ["anthropic-compatible", "openai-compatible", "ollama"].includes(
-    provider,
-  );
+  // Bedrock's endpoint is region-specific, so allow overriding the default
+  // us-east-1 host. Optional — blank falls back to the configured region.
+  return [
+    "anthropic-compatible",
+    "openai-compatible",
+    "ollama",
+    "bedrock",
+  ].includes(provider);
 }
 
 function isSubscriptionProvider(provider) {
@@ -200,6 +217,9 @@ function baseURLPlaceholder(provider) {
   if (provider === "ollama") return "http://localhost:11434/v1";
   if (provider === "anthropic-compatible") {
     return "https://api.minimax.io/anthropic";
+  }
+  if (provider === "bedrock") {
+    return "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1";
   }
   return "https://api.groq.com/openai/v1";
 }
@@ -346,7 +366,9 @@ const ModelModal = ({
                 name="baseURL"
                 rules={[
                   {
-                    required: provider !== "ollama",
+                    // Optional for Ollama (local default) and Bedrock (falls
+                    // back to the configured AWS region's endpoint).
+                    required: !["ollama", "bedrock"].includes(provider),
                     message: "Base URL is required",
                   },
                 ]}

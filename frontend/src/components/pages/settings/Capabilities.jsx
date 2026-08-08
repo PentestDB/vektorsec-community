@@ -31,6 +31,7 @@ import {
   HiOutlinePhoto,
   HiOutlineCube,
   HiOutlineCodeBracket,
+  HiOutlineCloud,
 } from "react-icons/hi2";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useState, useMemo, useCallback } from "react";
@@ -44,6 +45,7 @@ const BUCKET_ICONS = {
   forensics: HiOutlineBeaker,
   stego: HiOutlinePhoto,
   web: HiOutlineCodeBracket,
+  cloud: HiOutlineCloud,
 };
 const BUCKET_ICON_FALLBACK = HiOutlineCube;
 

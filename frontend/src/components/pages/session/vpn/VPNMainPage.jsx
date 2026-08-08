@@ -10,7 +10,6 @@ import {
   disconnectAllVPNConnections,
   getVPNStatus,
 } from "@/services/copilot.service";
-import { getSSHConfig } from "@/services/user.service";
 import { FiUpload, FiTrash2, FiWifi, FiWifiOff } from "react-icons/fi";
 import { MdOutlineVpnLock } from "react-icons/md";
 import { useState } from "react";
@@ -19,9 +18,6 @@ import styles from "@/styles/components/VPN.module.scss";
 const VPNMainPage = ({ sessionId }) => {
   const queryClient = useQueryClient();
 
-  const { data: sshConfigData } = useQuery("ssh-config", getSSHConfig, {
-    refetchInterval: 30000,
-  });
   const [uploading, setUploading] = useState(false);
   const [activeConnectProfile, setActiveConnectProfile] = useState(null);
 
@@ -116,8 +112,6 @@ const VPNMainPage = ({ sessionId }) => {
     },
   };
 
-  const boxRunning = !!(sshConfigData?.configured);
-
   return (
     <div className={styles.vpnContainer}>
       <div className={styles.header}>
@@ -127,7 +121,7 @@ const VPNMainPage = ({ sessionId }) => {
             VPN Connections
           </h2>
           <p className={styles.headerSubtitle}>
-            Manage OpenVPN profiles and active connections on your exploit box
+            Manage OpenVPN profiles and active connections on this workspace host
           </p>
         </div>
         <div className={styles.headerRight}>
@@ -280,7 +274,6 @@ const VPNMainPage = ({ sessionId }) => {
                                 connectMutation.isLoading &&
                                 activeConnectProfile === profile.name
                               }
-                              disabled={!boxRunning}
                               onClick={() => {
                                 setActiveConnectProfile(profile.name);
                                 connectMutation.mutate({
@@ -317,11 +310,6 @@ const VPNMainPage = ({ sessionId }) => {
           )}
         </div>
 
-        {!boxRunning && (
-          <div className={styles.warningBanner}>
-            No exploit box configured. Set up SSH in Settings to connect or disconnect VPN profiles.
-          </div>
-        )}
       </div>
     </div>
   );

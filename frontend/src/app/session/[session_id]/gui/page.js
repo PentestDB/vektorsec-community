@@ -8,9 +8,11 @@ import { DesktopOutlined, SettingOutlined } from "@ant-design/icons";
 import { use, useState } from "react";
 import { useQuery } from "react-query";
 import { useDispatch, useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
 
 const GUIpage = ({ params }) => {
   const { session_id: sessionId } = use(params);
+  const router = useRouter();
   const dispatch = useDispatch();
   const { sessions } = useSelector((state) => state.user);
   const [settingsHint, setSettingsHint] = useState(false);
@@ -81,21 +83,20 @@ const GUIpage = ({ params }) => {
         <Result
           icon={<DesktopOutlined style={{ color: "var(--primary-purple, #7c3aed)" }} />}
           title="GUI Desktop Not Configured"
-          subTitle="Set up VNC from the settings to use a graphical desktop on your exploit box. You can auto-install with one click or connect to an existing VNC server."
+          subTitle="Set up a graphical desktop on this workspace host. You can install it with one click or connect to an existing VNC server."
           extra={
             <Button
               type="primary"
               icon={<SettingOutlined />}
               onClick={() => {
-                const event = new CustomEvent("open-settings", { detail: { tab: "gui" } });
-                window.dispatchEvent(event);
+                router.push(`/session/${sessionId}/connection`);
               }}
               style={{
                 background: "var(--primary-purple, #7c3aed)",
                 borderColor: "var(--primary-purple, #7c3aed)",
               }}
             >
-              Open GUI Settings
+              Open Connection
             </Button>
           }
         />
@@ -133,27 +134,26 @@ const GUIpage = ({ params }) => {
           subTitle={
             <span>
               {errMsg}
-              {!isApiError && " Check your SSH and VNC settings."}
+              {!isApiError && " Check the workspace connection and desktop setup."}
             </span>
           }
           extra={
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", maxWidth: 440 }}>
               <div style={{ fontSize: "0.78rem", color: "var(--secondary-text)", textAlign: "center", lineHeight: 1.5 }}>
-                If the API succeeded but the iframe fails, ensure the Base URL in Settings &gt; GUI is reachable from your browser (e.g. localhost or your VPN hostname).
+                If the API succeeded but the iframe fails, ensure the desktop Base URL is reachable from your browser (for example, localhost or your VPN hostname).
               </div>
               <Button
                 type="primary"
                 icon={<SettingOutlined />}
                 onClick={() => {
-                  const event = new CustomEvent("open-settings", { detail: { tab: "gui" } });
-                  window.dispatchEvent(event);
+                  router.push(`/session/${sessionId}/connection`);
                 }}
                 style={{
                   background: "var(--primary-purple, #7c3aed)",
                   borderColor: "var(--primary-purple, #7c3aed)",
                 }}
               >
-                Check GUI Settings
+                Check Connection
               </Button>
             </div>
           }

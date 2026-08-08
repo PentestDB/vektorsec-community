@@ -4,6 +4,14 @@ import { CtfConfigDoc } from "../Sessions/Sessions.model";
 const Schema = mongoose.Schema;
 
 export type WorkspaceType = "ctf" | "pentest" | "general";
+export type WorkHostKind = "local" | "ssh";
+
+export interface WorkHostDoc {
+  kind: WorkHostKind;
+  workFolder: string;
+  sshProfileAlias?: string;
+  configuredAt: Date;
+}
 
 export interface WorkspaceDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
@@ -13,6 +21,7 @@ export interface WorkspaceDoc extends mongoose.Document {
   type: WorkspaceType;
   createdAt: Date;
   status: "active" | "archived";
+  workHost?: WorkHostDoc;
   ctfConfig?: CtfConfigDoc;
 }
 
@@ -24,6 +33,17 @@ const WorkspaceSchema = new Schema({
   type: { type: String, default: "general", enum: ["ctf", "pentest", "general"] },
   createdAt: { type: Date, default: Date.now },
   status: { type: String, default: "active", enum: ["active", "archived"] },
+  workHost: {
+    type: {
+      kind: { type: String, required: true, enum: ["local", "ssh"] },
+      workFolder: { type: String, required: true },
+      // Only the public ~/.ssh/config alias is persisted. Credentials remain in
+      // the SSH agent/config/key mounts owned by the runtime.
+      sshProfileAlias: { type: String },
+      configuredAt: { type: Date, default: Date.now },
+    },
+    default: undefined,
+  },
   ctfConfig: {
     type: {
       url: { type: String, required: true },

@@ -3,6 +3,15 @@ import { v4 as uuidv4 } from "uuid";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
+import { listSSHProfiles } from "../services/ssh-profile.service";
+import { sessionLifecycle } from "../services/session.lifecycle";
+import {
+  defaultWorkFolder,
+  listResolvedWorkHostDirectories,
+  normalizeWorkHost,
+  resolveWorkspaceWorkHost,
+  testWorkHost,
+} from "../services/work-host.service";
 
 export const createWorkspace = async (req: Request, res: Response) => {
   try {
@@ -40,7 +49,7 @@ export const getUserWorkspaces = async (req: Request, res: Response) => {
       uid: user._id,
       status: { $ne: "archived" },
     })
-      .select("workspaceId name description type createdAt")
+      .select("workspaceId name description type createdAt workHost")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -145,11 +154,133 @@ export const getWorkspaceDetail = async (req: Request, res: Response) => {
       type: workspace.type,
       createdAt: workspace.createdAt,
       ctf: ctfInfo,
+      workHost: workspace.workHost || {
+        kind: "local",
+        workFolder: defaultWorkFolder(workspace.workspaceId),
+      },
       sessions,
     });
   } catch (err: any) {
     console.error("[workspace] getWorkspaceDetail error:", err);
     return res.status(400).json({ message: "Failed to get workspace details" });
+  }
+};
+
+export const getWorkspaceWorkHost = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId, status: "active" })
+      .select("workspaceId workHost")
+      .lean();
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+    const workHost = workspace.workHost || {
+      kind: "local",
+      workFolder: defaultWorkFolder(workspaceId),
+    };
+    return res.status(200).json({
+      workHost,
+      profiles: await listSSHProfiles(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message || "Failed to load work host" });
+  }
+};
+
+export const updateWorkspaceWorkHost = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId, status: "active" });
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+    const normalized = await normalizeWorkHost(workspaceId, req.body || {});
+    workspace.workHost = { ...normalized, configuredAt: new Date() };
+    await workspace.save();
+
+    // Existing sessions inherit workspace configuration. Drop their transports
+    // so the next operation reconnects on the newly selected host/folder.
+    const sessions = await SessionsModel.find({ workspaceId, status: "active" })
+      .select("sessionId")
+      .lean();
+    await Promise.all(sessions.map((session) => sessionLifecycle.destroy(session.sessionId)));
+
+    return res.status(200).json({ message: "Work host saved", workHost: workspace.workHost });
+  } catch (err: any) {
+    return res.status(400).json({ message: err.message || "Failed to save work host" });
+  }
+};
+
+export const testWorkspaceWorkHost = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId, status: "active" })
+      .select("workspaceId")
+      .lean();
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+    const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = req.body?.kind
+      ? await (async () => {
+          const input = await normalizeWorkHost(workspaceId, req.body);
+          if (input.kind === "local") return { workspaceId, ...input };
+          const { resolveSSHProfile } = await import("../services/ssh-profile.service");
+          const profile = await resolveSSHProfile(input.sshProfileAlias!);
+          return {
+            workspaceId,
+            ...input,
+            sshConfig: profile.config,
+            sshProfile: profile.summary,
+          };
+        })()
+      : await resolveWorkspaceWorkHost(workspaceId);
+    const result = await testWorkHost(target);
+    if (result.code !== 0) {
+      return res.status(200).json({ success: false, message: result.stderr || "Host test failed" });
+    }
+    return res.status(200).json({
+      success: true,
+      kind: target.kind,
+      workFolder: result.stdout.trim() || target.workFolder,
+      profile: target.sshProfile,
+    });
+  } catch (err: any) {
+    return res.status(200).json({ success: false, message: err.message || "Host test failed" });
+  }
+};
+
+export const listWorkspaceWorkHostDirectories = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+    const workspace = await WorkspaceModel.findOne({ workspaceId, uid: userId, status: "active" })
+      .select("workspaceId")
+      .lean();
+    if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+    const input = await normalizeWorkHost(workspaceId, {
+      ...(req.body?.workHost || {}),
+      workFolder: req.body?.path || req.body?.workHost?.workFolder || "~",
+    });
+    const target: Awaited<ReturnType<typeof resolveWorkspaceWorkHost>> = input.kind === "local"
+      ? { workspaceId, ...input }
+      : await (async () => {
+          const { resolveSSHProfile } = await import("../services/ssh-profile.service");
+          const profile = await resolveSSHProfile(input.sshProfileAlias!);
+          return {
+            workspaceId,
+            ...input,
+            sshConfig: profile.config,
+            sshProfile: profile.summary,
+          };
+        })();
+
+    return res.status(200).json(
+      await listResolvedWorkHostDirectories(target, req.body?.path || "~"),
+    );
+  } catch (err: any) {
+    return res.status(400).json({ message: err.message || "Failed to list directories" });
   }
 };
 

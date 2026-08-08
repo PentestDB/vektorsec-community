@@ -192,6 +192,29 @@
   gap: 0.25rem !important;
 }
 
+.solveAllBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem !important;
+  height: 1.6rem !important;
+  border-radius: 5px !important;
+  padding: 0 0.6rem !important;
+  color: #c4a5ff !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
+  background: rgba(124, 58, 237, 0.12) !important;
+
+  &:hover:not(:disabled) {
+    color: #ddc9ff !important;
+    border-color: rgba(124, 58, 237, 0.85) !important;
+    background: rgba(124, 58, 237, 0.2) !important;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+  }
+}
+
 .syncBtn {
   font-size: 0.72rem !important;
   height: 1.6rem !important;

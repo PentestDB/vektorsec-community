@@ -4,13 +4,13 @@ import UserModel from "../models/User/User.model";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import getSecrets from "../utils/getSecrets";
 import { requireActiveSession } from "../services/session.helpers";
+import { resolveSessionWorkHost, testWorkHost } from "../services/work-host.service";
 import Docker from "dockerode";
 
 const docker = new Docker(); // Uses default socket (/var/run/docker.sock)
 
 export const startupNewTask = async (req: Request, res: Response) => {
   try {
-    const user = res.locals.user;
     const userId = res.locals.userId;
     const { sessionId } = req.body;
 
@@ -23,27 +23,62 @@ export const startupNewTask = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
-    const previousServiceTask = await ServiceTaskModel.find({
-      uid: userId,
-      status: { $ne: "stopped" },
-    });
-
-    if (previousServiceTask.length > 0) {
-      return res.status(400).json({
-        message: "Exploit Box with another session is already running",
-        description:
-          "Please stop the previous exploit box before starting a new one",
-      });
+    // New workspaces use their selected local/SSH work host as the exploit
+    // environment. Keep the legacy Docker lookup below only for older records
+    // that do not yet belong to a workspace.
+    if (session.workspaceId) {
+      try {
+        const target = await resolveSessionWorkHost(sessionId);
+        const probe = await testWorkHost(target);
+        const connected = probe.code === 0;
+        return res.status(200).json({
+          success: connected,
+          message: connected
+            ? `${target.kind === "ssh" ? "SSH" : "Local"} work host is connected`
+            : probe.stderr || "Work host is not connected",
+          status: connected ? "running" : "disconnected",
+          readyToConnect: connected,
+          containerIP: target.kind === "ssh"
+            ? target.sshProfile?.host || target.sshProfileAlias
+            : "localhost",
+          type: target.kind,
+          workFolder: probe.stdout.trim() || target.workFolder,
+        });
+      } catch (error: any) {
+        return res.status(200).json({
+          success: false,
+          message: error?.message || "Work host is not connected",
+          status: "disconnected",
+          readyToConnect: false,
+        });
+      }
     }
 
-    const sameBoxTask = previousServiceTask.find(
-      (task) => task._id === session.boxId
-    );
+    const sameBoxTask = await ServiceTaskModel.findOne({
+      uid: userId,
+      sessionId: session._id,
+      status: { $ne: "stopped" },
+    });
 
     if (sameBoxTask) {
       return res.status(200).json({
         message: "You already have a running container",
         serviceId: sameBoxTask.serviceId,
+      });
+    }
+
+    const runningForUser = await ServiceTaskModel.countDocuments({
+      uid: userId,
+      status: { $ne: "stopped" },
+    });
+    const perUserLimit = Number.parseInt(
+      process.env.MAX_PARALLEL_EXPLOIT_BOXES_PER_USER || "3",
+      10,
+    );
+    if (runningForUser >= perUserLimit) {
+      return res.status(400).json({
+        message: `You can run up to ${perUserLimit} exploit boxes in parallel`,
+        description: "Stop an existing session's exploit box before starting another.",
       });
     }
 
@@ -115,17 +150,6 @@ export const exploitBoxStatus = async (req: Request, res: Response) => {
     );
     
     if (!kaliContainer) {
-      const sshHost = (process.env.SSH_HOST || "").trim();
-      if (sshHost) {
-        return res.status(200).json({
-          success: true,
-          message: "Exploit Box is running (local SSH)",
-          status: "running",
-          readyToConnect: true,
-          containerIP: sshHost,
-          type: "local",
-        });
-      }
       return res.status(200).json({
         message: "Exploit Box is not running",
         success: false,
