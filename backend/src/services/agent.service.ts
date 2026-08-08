@@ -652,6 +652,18 @@ export async function runAgentLoop(params: {
     while (iteration < maxAgentIterations) {
       iteration++;
 
+      // Flush whatever the previous iteration produced. Without this, messages
+      // only reach the database when the run ends, so the UI shows an empty
+      // chat for the whole run (server-started runs have no SSE stream either),
+      // and a crash or restart discards every message since turn one.
+      //
+      // Sits at the top of the loop so it also covers iterations that ended via
+      // `continue`; the final iteration is still flushed by the exit paths.
+      if (newMessages.length > 0) {
+        await appendMessages(sessionId, newMessages);
+        newMessages.length = 0;
+      }
+
       if (await isPaused(sessionId)) {
         await appendMessages(sessionId, newMessages);
         await setAgentState(sessionId, "paused");
