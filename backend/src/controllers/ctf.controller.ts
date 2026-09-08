@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
 import HistoryArchiveModel from "../models/HistoryArchive/HistoryArchive.model";
+import { assertTargetIsExternal } from "../utils/ssrfGuard";
 import {
   loginWithCredentials,
   verifyToken,
@@ -503,6 +504,13 @@ export const submitFlag = async (req: Request, res: Response) => {
     }
 
     const { url, sessionCookie, apiToken } = workspace.ctfConfig;
+
+    // SSRF guard: stored CTFd URL must still resolve to a public address.
+    try {
+      await assertTargetIsExternal(url);
+    } catch {
+      return res.status(403).json({ message: "Target IP/Domain is restricted for security reasons.", code: "SSRF_BLOCKED" });
+    }
 
     logSubmitFlag("workspace.ctfConfig", {
       ctfdUrl: url,

@@ -1,0 +1,23 @@
+# Caddy reverse proxy → automatic HTTPS (Let's Encrypt).
+#
+# Replace vektor.example.com with your domain. Point the DNS A record at your
+# VPS and make sure TCP 80 + 443 are open in the firewall.
+#
+# Quick start (native binary on the VPS):
+#   1) Put this file at /etc/caddy/Caddyfile
+#   2) sudo systemctl enable --now caddy
+#
+# Or with Docker:
+#   docker run -d --name caddy --restart unless-stopped \
+#     -p 80:80 -p 443:443 \
+#     -v ./Caddyfile:/etc/caddy/Caddyfile \
+#     -v caddy_data:/data -v caddy_config:/config \
+#     caddy:latest
+
+vektor.example.com {
+    reverse_proxy localhost:3001
+}
+
+# ── Security ──────────────────────────────────────────────────────────────
+# Never publish the backend (8081), MongoDB (27017) or Redis (6379).
+# If you use the built-in Kali box, also keep 4242/4200/5901/9020 internal.

@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { isDangerousShellInput } from "../../utils/commandSafety";
+import { assertCommandTargetsAreExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 
 const writeToShell: ToolDefinition = {
   name: "write_to_shell",
@@ -33,6 +34,14 @@ const writeToShell: ToolDefinition = {
     const { shell_id, input } = args;
     if (!shell_id) return { output: "Error: shell_id is required", exitCode: 1 };
     if (input === undefined) return { output: "Error: input is required", exitCode: 1 };
+
+    // SSRF guard: input may be (or include) a scan/request command, so any
+    // target it references must resolve to a public address only.
+    try {
+      await assertCommandTargetsAreExternal(String(input));
+    } catch {
+      return blockedTargetResult();
+    }
 
     try {
       await ctx.writeToShell(shell_id, input);

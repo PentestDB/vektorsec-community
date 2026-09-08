@@ -44,6 +44,11 @@ import {
   getSubscriptionProviders,
   connectSubscriptionProvider,
   testSubscriptionProvider,
+  listManagedSSHProfiles,
+  addManagedSSHProfile,
+  deleteManagedSSHProfile,
+  testManagedSSHProfile,
+  testSavedSSHProfile,
 } from "../controllers/user.controller";
 import { uploadImageMiddleware } from "../middlewares/MulterMiddleware";
 
@@ -79,6 +84,15 @@ router.post("/detect-capabilities", [verifySess], detectCapabilities);
 router.get("/get-ssh-config", [verifySess], getSSHConfig);
 router.post("/update-ssh-config", [verifySess], updateSSHConfig);
 router.post("/update-safety-protections", [verifySess], updateSafetyProtections);
+
+// Managed SSH profiles — multiple SSH servers managed from the UI.
+router.get("/ssh-profiles", [verifySess], listManagedSSHProfiles);
+router.post("/ssh-profiles", [verifySess], addManagedSSHProfile);
+// NOTE: the literal /ssh-profiles/test route MUST be registered before the
+// parameterized /:alias/test route, otherwise "test" is captured as an alias.
+router.post("/ssh-profiles/test", [verifySess], testManagedSSHProfile);
+router.post("/ssh-profiles/:alias/test", [verifySess], testSavedSSHProfile);
+router.delete("/ssh-profiles/:alias", [verifySess], deleteManagedSSHProfile);
 
 router.get("/get-vnc-config", [verifySess], getVNCConfig);
 router.post("/update-vnc-config", [verifySess], updateVNCConfig);

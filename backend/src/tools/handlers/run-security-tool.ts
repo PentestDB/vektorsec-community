@@ -9,6 +9,7 @@ import {
   isToolAvailable,
 } from "../../services/toolWrappers";
 import { validateCommandScope, createDefaultScopeConfig } from "../../utils/scopeValidator";
+import { assertTargetIsExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 import { getHITLManager } from "../../services/hitlPolicy";
 import {
   runSelfCorrection,
@@ -53,6 +54,14 @@ const runSecurityTool: ToolDefinition = {
 
     if (!tool || !target) {
       return { output: "Error: tool and target are required", exitCode: 1 };
+    }
+
+    // SSRF guard: resolve the target's latest DNS records and reject any
+    // internal/private address (loopback, RFC1918, cloud metadata, …).
+    try {
+      await assertTargetIsExternal(target);
+    } catch {
+      return blockedTargetResult();
     }
 
     // Check tool availability

@@ -1,4 +1,14 @@
 import styles from "@/styles/pages/Terms.module.scss";
+import { pageMetadata } from "@/lib/seo";
+
+export const metadata = pageMetadata({
+  title: "Terms and Conditions",
+  description:
+    "VektorSec Terms and Conditions — the legal terms for using the autonomous AI penetration testing and security operations platform.",
+  path: "/terms",
+});
+
+export const revalidate = 300;
 
 const TermsPage = () => {
   return (

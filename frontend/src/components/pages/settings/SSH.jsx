@@ -20,13 +20,15 @@ import {
   CheckCircleFilled,
   InfoCircleOutlined,
   WarningOutlined,
+  PlusOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { TbTerminal2 } from "react-icons/tb";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { getSSHConfig, updateSSHConfig, updateSafetyProtections } from "@/services/user.service";
+import { getSSHConfig, updateSSHConfig, updateSafetyProtections, getSSHProfiles, addSSHProfile, deleteSSHProfile, testSSHProfile, testSavedSSHProfile } from "@/services/user.service";
 import { apiClient } from "@/utils/axios.config";
 
 const SSHPage = () => {
@@ -80,6 +82,74 @@ const SSHPage = () => {
       setSaving(false);
     },
   });
+
+  // Managed SSH servers (multiple profiles).
+  const { data: managedProfiles, isLoading: profilesLoading } = useQuery(
+    "managed-ssh-profiles",
+    getSSHProfiles,
+  );
+  const [profileForm] = Form.useForm();
+
+  const addProfileMutation = useMutation(addSSHProfile, {
+    onSuccess: () => {
+      message.success("SSH server added");
+      profileForm.resetFields();
+      queryClient.invalidateQueries("managed-ssh-profiles");
+    },
+    onError: (err) =>
+      message.error(err?.response?.data?.message || "Failed to add SSH server"),
+  });
+
+  const deleteProfileMutation = useMutation(deleteSSHProfile, {
+    onSuccess: () => {
+      message.success("SSH server removed");
+      queryClient.invalidateQueries("managed-ssh-profiles");
+    },
+    onError: (err) =>
+      message.error(err?.response?.data?.message || "Failed to remove SSH server"),
+  });
+
+  // Test connection for the in-progress form (BEFORE saving).
+  const [testingProfile, setTestingProfile] = useState(false);
+  const testProfileMutation = useMutation(testSSHProfile, {
+    onMutate: () => setTestingProfile(true),
+    onSuccess: (res) => {
+      if (res?.success) {
+        message.success(res.message || "SSH connection successful");
+      } else {
+        message.error(res?.message || "SSH connection failed");
+      }
+    },
+    onError: (err) =>
+      message.error(err?.response?.data?.message || "SSH connection failed"),
+    onSettled: () => setTestingProfile(false),
+  });
+
+  // Test an already-saved managed profile (per-row button).
+  const [testingAlias, setTestingAlias] = useState(null);
+  const testSavedMutation = useMutation(testSavedSSHProfile, {
+    onMutate: (alias) => setTestingAlias(alias),
+    onSuccess: (res) => {
+      if (res?.success) {
+        message.success(res.message || "SSH connection successful");
+      } else {
+        message.error(res?.message || "SSH connection failed");
+      }
+    },
+    onError: (err) =>
+      message.error(err?.response?.data?.message || "SSH connection failed"),
+    onSettled: () => setTestingAlias(null),
+  });
+
+  const handleTestProfile = async () => {
+    try {
+      // Runs the same required-field rules as "Add Server".
+      const values = await profileForm.validateFields();
+      testProfileMutation.mutate(values);
+    } catch {
+      // antd renders the inline validation errors already.
+    }
+  };
 
   const onFinish = (values) => {
     setSaving(true);
@@ -306,6 +376,148 @@ const SSHPage = () => {
           </li>
           <li>Private key authentication is recommended for production.</li>
         </ul>
+      </div>
+
+      <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
+
+      <div className={styles.safetySection}>
+        <div className={styles.safetySectionHeader}>
+          <div>
+            <div className={styles.safetySectionTitle}>
+              <TbTerminal2 style={{ marginRight: 6 }} /> SSH Servers
+            </div>
+            <div className={styles.safetySectionDesc}>
+              Manage multiple SSH servers (any host). Each server appears in the
+              workspace Connection page — pick which host a session connects to.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          {(managedProfiles?.profiles ?? []).map((profile) => (
+            <div
+              key={profile.alias}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 10px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: 6,
+                background: "rgba(255, 255, 255, 0.02)",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "#e6edf3" }}>
+                  {profile.label || profile.alias}
+                  {profile.available ? (
+                    <CheckCircleFilled style={{ color: "#10ca00", marginLeft: 8, fontSize: 11 }} />
+                  ) : (
+                    <WarningOutlined style={{ color: "#ff3e3e", marginLeft: 8, fontSize: 11 }} />
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: "#a1a1a1" }}>
+                  {profile.username}@{profile.host}:{profile.port}
+                  {!profile.available && profile.error ? ` — ${profile.error}` : ""}
+                </div>
+              </div>
+              <Button
+                size="small"
+                icon={<TbTerminal2 />}
+                loading={testingAlias === profile.alias}
+                onClick={() => testSavedMutation.mutate(profile.alias)}
+              >
+                Test
+              </Button>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                loading={
+                  deleteProfileMutation.isLoading &&
+                  deleteProfileMutation.variables === profile.alias
+                }
+                onClick={() => deleteProfileMutation.mutate(profile.alias)}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          {(managedProfiles?.profiles ?? []).length === 0 && !profilesLoading && (
+            <div style={{ fontSize: 12, color: "#6d6d6d" }}>
+              No SSH servers configured yet. Add one below.
+            </div>
+          )}
+        </div>
+
+        <Form
+          form={profileForm}
+          layout="vertical"
+          onFinish={(values) => addProfileMutation.mutate(values)}
+          style={{ marginTop: 12 }}
+        >
+          <Row gutter={8}>
+            <Col span={8}>
+              <Form.Item name="alias" label="Name" rules={[{ required: true, message: "Required" }]}>
+                <Input placeholder="kali-box" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="label" label="Label">
+                <Input placeholder="My Kali" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="username" label="Username" rules={[{ required: true, message: "Required" }]}>
+                <Input placeholder="root" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={8}>
+            <Col span={8}>
+              <Form.Item name="host" label="Host" rules={[{ required: true, message: "Required" }]}>
+                <Input placeholder="<YOUR_VPS_IP> or example.com" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="port" label="Port" initialValue={22}>
+                <InputNumber min={1} max={65535} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="password" label="Password">
+                <Input.Password placeholder="SSH password" autoComplete="new-password" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={8} align="middle">
+            <Col span={16}>
+              <Form.Item name="privateKeyPath" label="Private key path (optional)">
+                <Input placeholder="/root/.ssh/id_rsa" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <div style={{ display: "flex", alignItems: "flex-end", height: "100%", paddingBottom: 24, gap: 8 }}>
+                <Button
+                  onClick={handleTestProfile}
+                  loading={testingProfile}
+                  style={{ height: "2rem", fontSize: "0.75rem" }}
+                >
+                  Test
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  icon={<PlusOutlined />}
+                  loading={addProfileMutation.isLoading}
+                  style={{ height: "2rem", fontSize: "0.75rem" }}
+                >
+                  Add Server
+                </Button>
+              </div>
+            </Col>
+          </Row>
+        </Form>
       </div>
 
     </div>

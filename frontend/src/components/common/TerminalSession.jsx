@@ -10,8 +10,6 @@ import { useSocketContext } from "@/context/SocketContext";
 import { closeSession } from "@/store/user.slice";
 import { updateActiveTerminal } from "@/store/socket.slice";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI;
-
 const TerminalSession = ({
   session,
   show,
@@ -50,8 +48,8 @@ const TerminalSession = ({
         setCurrentSocket(null);
       }
 
-      // Initialize new socket and terminal
-      const newSocket = io(BACKEND_URL, {
+      // Initialize new socket and terminal (same-origin gateway).
+      const newSocket = io({
         transports: ["polling", "websocket"],
         withCredentials: true,
         query: {

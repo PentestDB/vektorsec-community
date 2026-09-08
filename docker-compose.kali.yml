@@ -17,15 +17,30 @@ services:
 
   backend:
     build: ./backend
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/vektorsec
+      REDIS_URL: redis://redis:6379
+      CODEX_HOME: /root/.codex
+      SSH_CONFIG_FILE: /root/.ssh/config
+      # "Local" work hosts execute in the backend runtime. Keep their folders
+      # on the persistent backend-data volume across rebuilds/restarts.
+      WORKSPACE_DIR: /srv/data/workspaces
+    cap_add:
+      # Required only when a workspace selects Local and starts OpenVPN there.
+      - NET_ADMIN
     ports:
-      - "8080:8080"
+      - "8081:8081"
       - "6080:6080"
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
+      - backend-data:/srv/data
       - ./backend/.env:/srv/data/.env
       - ./backend/model-registry.json:/srv/data/model-registry.json
       - ./config.toml:/srv/data/config.toml:ro
+      - ${CODEX_AUTH_FILE:-${HOME}/.codex/auth.json}:/root/.codex/auth.json
+      - ${HOST_SSH_DIR:-${HOME}/.ssh}:/root/.ssh:ro
+      - ${HOST_SSH_KEYS_DIR:-${HOME}/keys}:/root/keys:ro
     depends_on:
       redis:
         condition: service_started
@@ -38,11 +53,13 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        NEXT_PUBLIC_BACKEND_URI: ${NEXT_PUBLIC_BACKEND_URI:-http://localhost:8080}
-        NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-LOCAL}
+    environment:
+      PORT: 3001
+      # Black-box gateway targets (server-side only — never reach the browser)
+      BACKEND_URI: http://backend:8081
+      VNC_ORIGIN_URI: http://backend:6080
     ports:
-      - "3000:3000"
+      - "3001:3001"
     env_file:
       - ./frontend/.env
     depends_on:
@@ -75,4 +92,6 @@ volumes:
   redis-data:
     driver: local
   kali-data:
+    driver: local
+  backend-data:
     driver: local

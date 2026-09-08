@@ -6,6 +6,7 @@ package-lock.json
 # Secrets
 .env
 .env.*
+!.env.example
 !.env.template
 *.pem
 

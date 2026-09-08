@@ -110,13 +110,13 @@ pnpm dev
 
 ### ตั้งค่า Model (จำเป็น)
 
-หลังรันเสร็จ เปิดเว็บ `http://localhost:3000` แล้วไปที่:
+หลังรันเสร็จ เปิดเว็บ `http://localhost:3001` แล้วไปที่:
 **Settings → Models** → เพิ่ม Model Preset (เช่น Anthropic Claude, OpenAI GPT)
 → กำหนดให้เป็น Orchestrator
 
 ### ตั้งค่า Payment Gateway (สำหรับระบบใหม่)
 
-1. เปิด `http://localhost:3000/admin/payment`
+1. เปิด `http://localhost:3001/admin/payment`
 2. เลือกช่องทางชำระเงิน (Google Pay, Alipay, LINE Pay, Crypto)
 3. กด **Enable** และกรอกข้อมูล merchant / wallet address
 4. บันทึก
@@ -129,7 +129,7 @@ pnpm dev
 ระบบจะ seed แผนเริ่มต้น (Free/Pro/Team/Enterprise) อัตโนมัติเมื่อรันครั้งแรก
 Admin สามารถปรับราคาและฟีเจอร์ได้ที่ `/admin/payment` → ส่วน **Plans**:
 
-1. เปิด `http://localhost:3000/admin/payment`
+1. เปิด `http://localhost:3001/admin/payment`
 2. ไปที่ส่วน **Plans**
 3. แก้ไขราคา/เดือน, ราคา/ปี, หรือตั้ง **Channel Pricing** แยกตามช่องทาง
 4. ตั้งค่า **Limits** (sessions, iterations, workspaces, MCP tokens)
@@ -208,7 +208,7 @@ pnpm test
 
 ### 3. ทดสอบระบบ Payment
 
-1. เปิด `http://localhost:3000/pricing`
+1. เปิด `http://localhost:3001/pricing`
 2. เลือกแผน (เช่น Pro) → กด **Upgrade**
 3. เลือกช่องทางชำระเงิน → กด **Checkout**
 4. ระบบจะสร้าง Order ID (เช่น `ORD-XXXX-XXXX`)
@@ -217,7 +217,7 @@ pnpm test
 
 ### 4. ทดสอบ Subscription
 
-1. เปิด `http://localhost:3000/pricing`
+1. เปิด `http://localhost:3001/pricing`
 2. เลือกแผน (เช่น Pro) → กด **Upgrade**
 3. ชำระเงินผ่านช่องทางที่เปิดไว้ → ระบบจะเปิดใช้งาน subscription ให้อัตโนมัติ
 4. เปิดหน้า **Billing** (`/billing`) เพื่อตรวจสอบสถานะ subscription
@@ -284,7 +284,7 @@ corepack prepare pnpm@latest --activate
 ### Q: บริการ (เช่น redis) ไม่ start หรือ exit ทันที (พอร์ตชนกัน)
 
 การรันสอง stack พร้อมกัน (`vektorsec` และ `vektorsec-community`) ใช้พอร์ตเดียวกัน
-(3000, 8080, 27017, 6379) หลัง Docker Desktop รีสตาร์ท container ที่ตั้งค่า
+(3001, 8081, 27017, 6379) หลัง Docker Desktop รีสตาร์ท container ที่ตั้งค่า
 `restart: always` จะกลับมาขึ้นเองและแย่งพอร์ตของอีก stack ได้ ทำให้บริการตัวใดตัวหนึ่ง
 start ไม่ขึ้นหรือถูก terminate ทันที
 

@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
+import { assertTargetIsExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 import { formatMagnitudeError } from "../../utils/magnitudeError";
 import { presetToProviderConfig } from "../../utils/llm/providers";
 import { getAssignedModels } from "../../utils/modelRegistryStore";
@@ -48,6 +49,14 @@ const magnitudeBrowser: ToolDefinition = {
         output: "Error: both 'url' and 'goal' are required",
         exitCode: 1,
       };
+    }
+
+    // SSRF guard: the browser agent will navigate to this URL, so it must
+    // resolve to a public address only.
+    try {
+      await assertTargetIsExternal(url);
+    } catch {
+      return blockedTargetResult();
     }
 
     const env = readEnvFile();

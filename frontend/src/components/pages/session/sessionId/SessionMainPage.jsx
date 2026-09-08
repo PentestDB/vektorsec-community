@@ -29,6 +29,7 @@ const SessionMainPage = ({ session_id }) => {
         duration: 3,
         placement: "bottomRight",
       });
+      return true;
     } catch (err) {
       notification.error({
         message: "Workspace reconnect failed",
@@ -36,6 +37,7 @@ const SessionMainPage = ({ session_id }) => {
         duration: 5,
         placement: "bottomRight",
       });
+      return false;
     }
   }, [session_id]);
 

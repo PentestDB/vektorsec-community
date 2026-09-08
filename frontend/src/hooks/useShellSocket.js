@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const WS_BASE = process.env.NEXT_PUBLIC_BACKEND_URI?.replace(/^http/, "ws") ?? "ws://localhost:8080";
+// Same-origin WebSocket through the black-box gateway (server.js proxies
+// /ws/* to the backend). The backend host is never known to the browser.
+const WS_BASE =
+  typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
+    : "ws://localhost:3001";
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 const RECONNECT_MAX_ATTEMPTS = 10;
@@ -22,7 +27,9 @@ export default function useShellSocket({ sessionId, onError }) {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ event, data }));
+      return true;
     }
+    return false;
   }, []);
 
   const connect = useCallback(() => {
@@ -57,18 +64,28 @@ export default function useShellSocket({ sessionId, onError }) {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      const code = event?.code;
+      const reason = event?.reason || "";
+      console.info(`[ShellSocket] WS closed: code=${code} reason="${reason}"`);
       const wasConnected = wsRef.current !== null;
       setWsConnected(false);
       wsRef.current = null;
       if (wasConnected && reconnectAttempt.current === 0) {
-        onErrorRef.current?.("Shell connection lost. Reconnecting...", "warning");
+        const detail =
+          code === 1006
+            ? " (abnormal closure — gateway or backend restarted)"
+            : reason
+              ? ` (${reason})`
+              : "";
+        onErrorRef.current?.(`Shell connection lost${detail}. Reconnecting...`, "warning");
       }
       scheduleReconnect();
     };
 
-    ws.onerror = () => {
-      // onclose will fire after this
+    ws.onerror = (event) => {
+      // onclose will fire right after this; keep a breadcrumb for debugging.
+      console.warn("[ShellSocket] WS error:", event?.message || event?.type || "unknown");
     };
   }, [sessionId]);
 
@@ -156,7 +173,7 @@ export default function useShellSocket({ sessionId, onError }) {
   }, [send]);
 
   const spawnShell = useCallback((label) => {
-    send("spawn_shell", { label });
+    return send("spawn_shell", { label });
   }, [send]);
 
   const closeShell = useCallback((shellId) => {

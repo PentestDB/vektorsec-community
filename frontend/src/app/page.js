@@ -1,17 +1,12 @@
-"use client";
-
 import LandingPage from "@/components/pages/Landing";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+
+// Revalidate periodically so live SEO metadata (Admin > SEO) and content
+// propagate without a full redeploy.
+export const revalidate = 300;
 
 const Home = () => {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    const url = pathname + searchParams.toString();
-  }, [pathname, searchParams]);
-
   return <LandingPage />;
 };
 
 export default Home;
+

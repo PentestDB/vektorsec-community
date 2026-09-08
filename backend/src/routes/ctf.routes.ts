@@ -1,5 +1,6 @@
 import express from "express";
 import { verifySess } from "../middlewares/VerifySession.middleware";
+import { ssrfValidateBody } from "../utils/ssrfGuard";
 import {
   connectCtf,
   getCtfConfig,
@@ -14,7 +15,9 @@ import {
 
 const router = express.Router();
 
-router.post("/:workspaceId/connect", [verifySess], connectCtf);
+// The CTFd URL is user-supplied and the backend fires requests at it, so it is
+// SSRF-checked (DNS-resolved → internal/private ranges rejected) up front.
+router.post("/:workspaceId/connect", [verifySess, ssrfValidateBody("url")], connectCtf);
 router.patch("/:workspaceId/reauth", [verifySess], reauthCtf);
 router.get("/:workspaceId/config", [verifySess], getCtfConfig);
 router.get("/:workspaceId/challenges", [verifySess], getCtfChallenges);

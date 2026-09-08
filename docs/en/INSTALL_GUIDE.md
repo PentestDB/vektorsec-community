@@ -110,13 +110,13 @@ pnpm dev
 
 ### Configure Models (required)
 
-After startup, open `http://localhost:3000` and go to:
+After startup, open `http://localhost:3001` and go to:
 **Settings → Models** → add a Model Preset (e.g., Anthropic Claude, OpenAI GPT)
 → set it as Orchestrator
 
 ### Configure Payment Gateways
 
-1. Open `http://localhost:3000/admin/payment`
+1. Open `http://localhost:3001/admin/payment`
 2. Select a payment channel (Google Pay, Alipay, LINE Pay, Crypto)
 3. Click **Enable** and fill in the merchant / wallet address details
 4. Save
@@ -129,7 +129,7 @@ After startup, open `http://localhost:3000` and go to:
 The system seeds default plans (Free/Pro/Team/Enterprise) automatically on first run.
 Admins can adjust prices and features at `/admin/payment` → **Plans** section:
 
-1. Open `http://localhost:3000/admin/payment`
+1. Open `http://localhost:3001/admin/payment`
 2. Go to the **Plans** section
 3. Edit monthly/annual prices, or set **Channel Pricing** per channel
 4. Configure **Limits** (sessions, iterations, workspaces, MCP tokens)
@@ -207,7 +207,7 @@ pnpm test
 
 ### 3. Test the Payment system
 
-1. Open `http://localhost:3000/pricing`
+1. Open `http://localhost:3001/pricing`
 2. Choose a plan (e.g., Pro) → click **Upgrade**
 3. Choose a payment channel → click **Checkout**
 4. The system creates an Order ID (e.g., `ORD-XXXX-XXXX`)
@@ -216,7 +216,7 @@ pnpm test
 
 ### 4. Test Subscription
 
-1. Open `http://localhost:3000/pricing`
+1. Open `http://localhost:3001/pricing`
 2. Choose a plan (e.g., Pro) → click **Upgrade**
 3. Pay through an enabled channel → the system activates the subscription automatically
 4. Open the **Billing** page (`/billing`) to check the subscription status
@@ -282,7 +282,7 @@ corepack prepare pnpm@latest --activate
 ### Q: A service (e.g. redis) does not start or exits immediately (port conflict)
 
 Running two VektorSec stacks at the same time (`vektorsec` and `vektorsec-community`)
-uses the same host ports (3000, 8080, 27017, 6379). After a Docker Desktop restart,
+uses the same host ports (3001, 8081, 27017, 6379). After a Docker Desktop restart,
 containers configured with `restart: always` come back on their own and can steal a
 port from the other stack, so a service may fail to start or get terminated instantly.
 

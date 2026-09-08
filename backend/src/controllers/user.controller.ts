@@ -531,6 +531,14 @@ export const detectCapabilities = async (req: Request, res: Response) => {
 // ─── Server-level Model Configuration (reads/writes .env) ────────────
 
 import { readEnvFile, updateEnvVars } from "../utils/envWriter";
+import { reloadEnv } from "../utils/loadConfig";
+import {
+  addManagedProfile,
+  listManagedProfiles,
+  removeManagedProfile,
+  testManagedSSHProfileInput,
+  testSSHProfile,
+} from "../services/ssh-profile.service";
 import {
   writeVncPasswordCmd,
   hasVncPassword,
@@ -1856,6 +1864,9 @@ export const updateSSHConfig = async (req: Request, res: Response) => {
     }
 
     updateEnvVars(updates);
+    // Reload process.env so the new SSH credentials apply to connections
+    // immediately — without a backend restart.
+    reloadEnv();
 
     if (typeof disableSafetyProtections === "boolean") {
       const user = res.locals.user;
@@ -1893,6 +1904,75 @@ export const updateSafetyProtections = async (req: Request, res: Response) => {
     return res
       .status(400)
       .json({ message: "Failed to update safety protections" });
+  }
+};
+
+// ─── Managed SSH profiles (multiple SSH servers) ──────────────────────
+
+export const listManagedSSHProfiles = async (_req: Request, res: Response) => {
+  try {
+    return res.status(200).json({ profiles: listManagedProfiles() });
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message || "Failed to list SSH profiles" });
+  }
+};
+
+export const addManagedSSHProfile = async (req: Request, res: Response) => {
+  try {
+    const profile = addManagedProfile(req.body ?? {});
+    return res.status(200).json({ profile, message: "SSH server added" });
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message || "Failed to add SSH profile" });
+  }
+};
+
+export const deleteManagedSSHProfile = async (req: Request, res: Response) => {
+  try {
+    const alias = String(req.params?.alias ?? "");
+    if (!alias) return res.status(400).json({ message: "alias is required" });
+    const removed = removeManagedProfile(alias);
+    if (!removed) return res.status(404).json({ message: "SSH profile not found" });
+    return res.status(200).json({ message: "SSH server removed" });
+  } catch (error: any) {
+    return res.status(400).json({ message: error.message || "Failed to remove SSH profile" });
+  }
+};
+
+// Tests credentials entered in the UI form BEFORE the profile is saved.
+// Returns 200 with success:false on failure so the frontend can show the
+// specific reason without treating it as an HTTP error.
+export const testManagedSSHProfile = async (req: Request, res: Response) => {
+  try {
+    const profile = await testManagedSSHProfileInput(req.body ?? {});
+    return res.status(200).json({
+      success: true,
+      profile,
+      message: `SSH connection successful (${profile.username}@${profile.host}:${profile.port})`,
+    });
+  } catch (error: any) {
+    return res.status(200).json({
+      success: false,
+      message: error.message || "SSH connection failed",
+    });
+  }
+};
+
+// Re-tests an already-saved managed profile (per-row Test button).
+export const testSavedSSHProfile = async (req: Request, res: Response) => {
+  try {
+    const alias = String(req.params?.alias ?? "").trim();
+    if (!alias) return res.status(400).json({ success: false, message: "alias is required" });
+    const profile = await testSSHProfile(alias);
+    return res.status(200).json({
+      success: true,
+      profile,
+      message: `SSH connection successful (${profile.username}@${profile.host}:${profile.port})`,
+    });
+  } catch (error: any) {
+    return res.status(200).json({
+      success: false,
+      message: error.message || "SSH connection failed",
+    });
   }
 };
 

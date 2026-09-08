@@ -6,6 +6,13 @@ const Schema = mongoose.Schema;
  *  - googlepay : Google Pay (merchant id / gateway config)
  *  - alipay    : Alipay (merchant id / app id)
  *  - linepay   : LINE Pay (channel id / secret)
+ *  - paypal    : PayPal (client id / secret)
+ *  - opn       : Opn Payments (public key / secret key)
+ *  - stripe    : Stripe (publishable key / secret key)
+ *  - 2c2p      : 2C2P / PGS (merchant id / secret key)
+ *  - gb_prime_pay : GB Prime Pay
+ *  - gb_pay    : GB Pay
+ *  - k_payment : K-Payment Gateway
  *  - crypto    : Crypto wallets (ETH / BTC / BNB addresses)
  */
 export type PaymentChannel =
@@ -13,6 +20,12 @@ export type PaymentChannel =
   | "alipay"
   | "linepay"
   | "paypal"
+  | "opn"
+  | "stripe"
+  | "2c2p"
+  | "gb_prime_pay"
+  | "gb_pay"
+  | "k_payment"
   | "crypto_eth"
   | "crypto_btc"
   | "crypto_bnb";
@@ -53,8 +66,21 @@ const PaymentGatewaySchema = new Schema(
   {
     channel: {
       type: String,
-      enum: ["googlepay", "alipay", "linepay", "paypal", "crypto_eth", "crypto_btc", "crypto_bnb"],
-
+      enum: [
+        "googlepay",
+        "alipay",
+        "linepay",
+        "paypal",
+        "opn",
+        "stripe",
+        "2c2p",
+        "gb_prime_pay",
+        "gb_pay",
+        "k_payment",
+        "crypto_eth",
+        "crypto_btc",
+        "crypto_bnb",
+      ],
       required: true,
       unique: true,
     },

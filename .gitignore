@@ -1,43 +1,67 @@
-# ── Secrets & generated config (NEVER commit these) ──
-config.toml
-backend/.env
-backend/model-registry.json
-frontend/.env
-.env
-*.env.local
-*.env.production
+# ============================================================================
+#  VektorSec — .gitignore (public repository)
+#  ค่าลับ/ไฟล์ runtime ถูก ignore ทั้งหมด — ผู้ใช้ copy ไฟล์ *.example ไปเป็น
+#  ชื่อจริง (config.toml, .env ฯลฯ) แล้วกรอกค่าของตัวเอง ห้าม commit ไฟล์จริง
+# ============================================================================
 
-# ── Run script generated files ──
+# ── Secrets & runtime config (NEVER commit) ────────────────────────────────
+config.toml
+*.env
+*.env.*
+!.env.example
+!.env.template
+!deploy/secrets.env.example
+backend/model-registry.json
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# ── Launcher / run.sh generated state ──────────────────────────────────────
 .run.conf
 .run-state
 docker-compose.override.yml
 ssh-keys/
+backend/mptest.js
 
-# ── Build / tool artifacts (never commit) ──
-.next/
-*.log
-*.zip
-tsc-check*.txt
-tsc-out.txt
-build-out.txt
-build-check*.txt
-.clineignore
-
-# ── Runtime data ──
-/kali-data/
-/kali_data/
-
-# ── Dependencies ──
+# ── Dependencies ───────────────────────────────────────────────────────────
 **/node_modules/
 .pnpm-store/
 
-# ── Editor / OS ──
-**/.DS_Store
-**/.vscode
+# ── Build artifacts ────────────────────────────────────────────────────────
+**/.next/
+**/dist/
+/out/
+*.tsbuildinfo
 
-# ── Local agent/tooling state ──
+# ── Logs, archives & local build output ────────────────────────────────────
+*.log
+*.zip
+*.tar.gz
+*.tgz
+tsc-*.txt
+build-*.txt
+run-out.txt
+.clineignore
+
+# ── Runtime / user data (Docker bind mounts — never versioned) ─────────────
+/kali-data/
+/kali_data/
+**/kali-data/
+**/kali_data/
+
+# ── Local screenshots / 2FA QR codes at repo root ──────────────────────────
+/admin-login.png
+/qr-*.png
+
+# ── Editor / OS ────────────────────────────────────────────────────────────
+**/.DS_Store
+**/.vscode/
+**/.idea/
+**/*.swp
+
+# ── Local agent / tooling state ────────────────────────────────────────────
+/.cursor/
 /.claude/
 /.codex-tmp/
-
-# ── Generated deliverables (decks, reports) ──
 /output/

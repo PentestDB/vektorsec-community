@@ -1,5 +1,6 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import { assertTargetIsExternal } from "../utils/ssrfGuard";
 
 const execAsync = promisify(exec);
 
@@ -78,6 +79,7 @@ export async function runNmap(
   options: NmapOptions,
   config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
 ): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.target);
   const flags: string[] = ["nmap"];
 
   switch (options.scanType) {
@@ -113,6 +115,7 @@ export async function runNuclei(
   options: NucleiOptions,
   config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
 ): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.target);
   const flags: string[] = ["nuclei"];
 
   if (options.templates) flags.push(`-t ${options.templates}`);
@@ -142,6 +145,7 @@ export async function runSqlmap(
   options: SqlmapOptions,
   config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
 ): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.url);
   const flags: string[] = ["sqlmap"];
 
   flags.push("-u", options.url);
@@ -172,6 +176,7 @@ export async function runFfuf(
   options: FfufOptions,
   config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
 ): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.url);
   const flags: string[] = ["ffuf"];
 
   flags.push("-u", options.url);
@@ -200,6 +205,7 @@ export async function runGobuster(
   options: GobusterOptions,
   config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
 ): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.target);
   const flags: string[] = ["gobuster"];
 
   switch (options.mode) {
@@ -236,6 +242,7 @@ export async function runHydra(
   options: HydraOptions,
   config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
 ): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.target);
   const flags: string[] = ["hydra"];
 
   if (options.username) flags.push(`-l ${options.username}`);
@@ -279,6 +286,7 @@ export async function zapStartScan(
   target: string,
   config: ZapApiConfig,
 ): Promise<string> {
+  await assertTargetIsExternal(target);
   const result = await zapApiRequest("/JSON/ascan/action/scan/", { url: target }, config);
   return result.scan;
 }

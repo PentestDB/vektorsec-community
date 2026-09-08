@@ -1,0 +1,37 @@
+# ============================================================================
+#  VektorSec — Static Configuration template (config.example.toml)
+# ----------------------------------------------------------------------------
+#  1) Copy to config.toml   ->   cp config.example.toml config.toml
+#  2) Fill in YOUR values below (do not commit config.toml).
+#  3) This file is read once at backend startup (mapped to env vars in
+#     backend/src/utils/loadConfig.ts). Changes require a container restart.
+#
+#  ไม่ต้องก๊อปเองก็ได้: ใช้  ./run.sh  หรือ  deploy/vps-setup.sh  ซึ่งจะสร้าง
+#  config.toml จาก template นี้ให้อัตโนมัติ + สุ่ม session secret ให้
+# ============================================================================
+
+[server]
+port = 8081
+deployment = "LOCAL"                 # "LOCAL" หรือ "PROD" (PROD บังคับ secret เข้ม)
+# กรณี deploy บน VPS/โดเมนจริง ให้เปลี่ยนเป็น https://<YOUR_DOMAIN>
+base_url_frontend = "http://localhost:3001"
+cors_origins = "http://localhost:3001"
+
+[database]
+# ใน Docker compose backend วิ่งใน container → ใช้ service name (mongodb / redis)
+# ถ้า deploy ด้วย MONGO_URI/REDIS_URL ใน environment ค่า env จะมีชัยเหนือไฟล์นี้
+mongo_uri = "mongodb://mongodb:27017/vektorsec"
+mongo_database = "vektorsec"
+redis_url = "redis://redis:6379"
+
+[session]
+# ⚠️ ห้ามใช้ค่านี้ใน production — สุ่มค่าใหม่ด้วย:  openssl rand -hex 32
+# run.sh / deploy/vps-setup.sh จะสุ่มให้อัตโนมัติถ้ายังเป็น placeholder
+secret = "CHANGE_ME_with_openssl_rand_hex_32"
+lifetime = 1000
+
+[tracing]
+enabled = false
+public_key = ""
+secret_key = ""
+base_url = "https://cloud.langfuse.com"

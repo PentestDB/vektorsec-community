@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   parseSSHConfigAliases,
   parseSSHGOutput,
+  normalizeManagedInput,
+  managedProfileToConfig,
 } from "../src/services/ssh-profile.service";
 import { ShellManager } from "../src/services/shell.manager";
 import {
@@ -41,6 +43,62 @@ identityfile ~/.ssh/id_rsa
   assert.equal(parsed.hostname[0], "10.0.0.1");
   assert.equal(parsed.user[0], "admin");
   assert.deepEqual(parsed.identityfile, ["~/.ssh/id_ed25519", "~/.ssh/id_rsa"]);
+});
+
+test("normalizeManagedInput parses form values and requires an auth method", () => {
+  const profile = normalizeManagedInput({
+    alias: "kali-wsl",
+    label: "WSL Kali",
+    host: "10.0.0.1",
+    port: "2222",
+    username: "root",
+    password: "secret",
+  });
+  assert.equal(profile.alias, "kali-wsl");
+  assert.equal(profile.label, "WSL Kali");
+  assert.equal(profile.port, 2222);
+  assert.equal(profile.password, "secret");
+  assert.equal(profile.privateKeyPath, undefined);
+
+  // No auth method → the test would have nothing to authenticate with.
+  assert.throws(
+    () => normalizeManagedInput({ alias: "kali-wsl", host: "10.0.0.1", username: "root" }),
+    /auth method/,
+  );
+  // Invalid alias.
+  assert.throws(
+    () => normalizeManagedInput({ alias: "bad alias", host: "10.0.0.1", username: "root", password: "x" }),
+    /Profile name/,
+  );
+  // Missing host/username.
+  assert.throws(
+    () => normalizeManagedInput({ alias: "kali-wsl", username: "root", password: "x" }),
+    /Host and username/,
+  );
+});
+
+test("managedProfileToConfig resolves an existing key file", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pc-ssh-key-"));
+  const keyPath = path.join(dir, "id_test");
+  fs.writeFileSync(keyPath, "FAKE-KEY");
+  try {
+    const config = managedProfileToConfig({
+      alias: "key-box",
+      label: "Key Box",
+      host: "10.0.0.9",
+      port: 22,
+      username: "tester",
+      privateKeyPath: keyPath,
+    });
+    assert.equal(config.host, "10.0.0.9");
+    assert.equal(config.port, 22);
+    assert.equal(config.username, "tester");
+    assert.equal(config.privateKey, "FAKE-KEY");
+    assert.equal(config.password, undefined);
+    assert.equal(config.tryKeyboard, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("sessions in one workspace resolve the same local host and folder", async () => {

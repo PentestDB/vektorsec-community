@@ -65,8 +65,8 @@ const AdminTelegram = () => {
     try {
       const data = await testTelegramConnection(testToken.trim() || undefined);
       setTestResult(data);
-      if (data.success) setSuccess(data.message);
-      else setError(data.message);
+      if (data?.success) setSuccess(data?.message || "Connection OK");
+      else setError(data?.message || "Connection failed");
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to test connection");
     } finally {
@@ -80,7 +80,7 @@ const AdminTelegram = () => {
     setSavingWebhook(true);
     try {
       const data = await setTelegramWebhook(webhookUrl.trim());
-      setSuccess(data.message);
+      setSuccess(data?.message || "Webhook saved");
       await load();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to set webhook");
@@ -100,7 +100,7 @@ const AdminTelegram = () => {
     setBroadcasting(true);
     try {
       const data = await broadcastTelegramMessage(broadcastMsg.trim());
-      setSuccess(data.message);
+      setSuccess(data?.message || "Broadcast sent");
       setBroadcastMsg("");
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to broadcast");

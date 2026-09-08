@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { escapeForLoginShell } from "../src/services/shell.manager";
+import { buildPersistentShellCommand, escapeForLoginShell } from "../src/services/shell.manager";
 
 test("never emits a bare $SHELL that can collapse to a dangling -l", () => {
   const wrapped = escapeForLoginShell("echo hi");
@@ -26,4 +26,23 @@ test("single quotes in the command are escaped safely", () => {
   const singles = (wrapped.match(/'/g) || []).length;
   assert.equal(singles % 2, 0, `unbalanced quoting: ${wrapped}`);
   assert.ok(wrapped.includes("'\\''"));
+});
+
+test("persistent shell command never emits a bare $SHELL", () => {
+  const cmd = buildPersistentShellCommand("'folder'");
+  // Same regression as the one-shot wrapper: `exec $SHELL -l` with $SHELL
+  // unset collapses to `exec -l` and the terminal appears blank.
+  assert.ok(
+    !/(^|[^:{])\$SHELL\s+-l/.test(cmd),
+    `persistent command uses bare $SHELL: ${cmd}`,
+  );
+  assert.match(cmd, /\$\{SHELL:-/, "must provide a fallback for unset SHELL");
+  assert.match(cmd, /command -v bash/, "should prefer bash when SHELL is unset");
+});
+
+test("persistent shell command roots the login shell in the work folder", () => {
+  const cmd = buildPersistentShellCommand("\"$HOME\"/'pentest'");
+  assert.ok(cmd.includes("mkdir -p --"), "should create the work folder first");
+  assert.ok(cmd.includes("cd --"), "should cd into the work folder");
+  assert.ok(cmd.includes("-l"), "should run a login shell");
 });

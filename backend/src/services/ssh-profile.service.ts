@@ -17,7 +17,7 @@ export interface SSHProfileSummary {
   port: number;
   username: string;
   identityFile?: string;
-  source: "ssh_config" | "legacy_env";
+  source: "ssh_config" | "legacy_env" | "managed";
   available: boolean;
   error?: string;
 }
@@ -193,20 +193,181 @@ function resolveLegacyProfile(): ResolvedSSHProfile {
   };
 }
 
+// ─── Managed SSH profiles (persisted in /srv/data/ssh-profiles.json) ──
+// Lets a user define multiple SSH servers (any host/port/user/auth) from the
+// UI. They are merged into listSSHProfiles() so every workspace can target any
+// of them from the Connection page — no ~/.ssh/config edit required.
+
+export interface ManagedSSHProfile {
+  alias: string;
+  label: string;
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKeyPath?: string;
+}
+
+/** Raw input accepted from the UI form for a managed SSH profile. */
+export interface ManagedSSHProfileInput {
+  alias?: unknown;
+  label?: unknown;
+  host?: unknown;
+  port?: unknown;
+  username?: unknown;
+  password?: unknown;
+  privateKeyPath?: unknown;
+}
+
+function managedProfilesPath(): string {
+  const dataDir =
+    process.env.DATA_DIR?.trim() ||
+    (fs.existsSync("/srv/data") ? "/srv/data" : path.resolve(__dirname, "../.."));
+  return path.join(dataDir, "ssh-profiles.json");
+}
+
+function readManagedProfiles(): ManagedSSHProfile[] {
+  try {
+    const file = managedProfilesPath();
+    if (!fs.existsSync(file)) return [];
+    const parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
+    return Array.isArray(parsed) ? (parsed as ManagedSSHProfile[]) : [];
+  } catch (error) {
+    console.warn("[ssh-profiles] Failed to read managed profiles:", error);
+    return [];
+  }
+}
+
+function writeManagedProfiles(profiles: ManagedSSHProfile[]): void {
+  fs.writeFileSync(managedProfilesPath(), JSON.stringify(profiles, null, 2), "utf-8");
+}
+
+function managedProfileToSummary(profile: ManagedSSHProfile): SSHProfileSummary {
+  const hasAuth = Boolean(profile.password || profile.privateKeyPath);
+  const available = Boolean(profile.host && profile.username && hasAuth);
+  return {
+    alias: profile.alias,
+    label: profile.label || profile.alias,
+    host: profile.host,
+    port: profile.port,
+    username: profile.username,
+    source: "managed",
+    available,
+    ...(!available
+      ? { error: "Provide a host, username and an auth method (password or key)" }
+      : {}),
+  };
+}
+
+export function listManagedProfiles(): SSHProfileSummary[] {
+  return readManagedProfiles().map(managedProfileToSummary);
+}
+
+export function getManagedProfile(alias: string): ManagedSSHProfile | undefined {
+  return readManagedProfiles().find((profile) => profile.alias === alias);
+}
+
+function parseManagedFields(input: Record<string, unknown>): ManagedSSHProfile {
+  const alias = String(input.alias ?? "").trim();
+  if (!PROFILE_ALIAS_PATTERN.test(alias)) {
+    throw new Error("Profile name may only contain letters, numbers and _ . @ : + -");
+  }
+  const host = String(input.host ?? "").trim();
+  const username = String(input.username ?? "").trim();
+  if (!host || !username) throw new Error("Host and username are required");
+
+  return {
+    alias,
+    label: String(input.label || alias).trim() || alias,
+    host,
+    port: Number.parseInt(String(input.port ?? "22"), 10) || 22,
+    username,
+    password: input.password ? String(input.password) : undefined,
+    privateKeyPath: input.privateKeyPath ? String(input.privateKeyPath).trim() : undefined,
+  };
+}
+
+/**
+ * Parse and validate a managed-profile form payload. Unlike addManagedProfile,
+ * this REQUIRES an auth method (password or key path) so a connection test
+ * always has something to authenticate with — used by the Test button.
+ */
+export function normalizeManagedInput(input: Record<string, unknown>): ManagedSSHProfile {
+  const profile = parseManagedFields(input);
+  if (!profile.password && !profile.privateKeyPath) {
+    throw new Error("Provide an auth method (password or private key path)");
+  }
+  return profile;
+}
+
+/** Build an ssh2 config for a managed profile, resolving the key file if present. */
+export function managedProfileToConfig(profile: ManagedSSHProfile): SSHConfig {
+  const config: SSHConfig = {
+    host: profile.host,
+    port: profile.port,
+    username: profile.username,
+    tryKeyboard: true,
+  };
+  if (profile.password) config.password = profile.password;
+  if (profile.privateKeyPath) {
+    const candidates = [
+      expandSSHPath(profile.privateKeyPath),
+      profile.privateKeyPath,
+      path.join(os.homedir(), ".ssh", path.basename(profile.privateKeyPath)),
+    ];
+    for (const candidate of candidates) {
+      try {
+        if (fs.statSync(candidate).isFile()) {
+          config.privateKey = fs.readFileSync(candidate, "utf-8");
+          break;
+        }
+      } catch {
+        // try the next candidate
+      }
+    }
+  }
+  return config;
+}
+
+export function addManagedProfile(input: Record<string, unknown>): ManagedSSHProfile {
+  const profile = parseManagedFields(input);
+
+  const profiles = readManagedProfiles();
+  const index = profiles.findIndex((p) => p.alias === profile.alias);
+  if (index !== -1) profiles[index] = profile;
+  else profiles.push(profile);
+  writeManagedProfiles(profiles);
+  return profile;
+}
+
+export function removeManagedProfile(alias: string): boolean {
+  const profiles = readManagedProfiles();
+  const remaining = profiles.filter((p) => p.alias !== alias);
+  if (remaining.length === profiles.length) return false;
+  writeManagedProfiles(remaining);
+  return true;
+}
+
 export async function resolveSSHProfile(alias: string): Promise<ResolvedSSHProfile> {
   if (alias === LEGACY_PROFILE_ALIAS) {
     if (!hasLegacyConfig()) throw new Error("Legacy SSH environment configuration is unavailable");
     return resolveLegacyProfile();
   }
+  const managed = getManagedProfile(alias);
+  if (managed) {
+    return { summary: managedProfileToSummary(managed), config: managedProfileToConfig(managed) };
+  }
   return resolveFromSSHConfig(alias);
 }
 
 export async function listSSHProfiles(): Promise<SSHProfileSummary[]> {
-  const summaries: SSHProfileSummary[] = [];
+  const summaries: SSHProfileSummary[] = listManagedProfiles();
+  const managedAliases = new Set<string>(readManagedProfiles().map((p) => p.alias));
   const configFile = getSSHConfigFile();
   if (fs.existsSync(configFile)) {
     const aliases = parseSSHConfigAliases(await fs.promises.readFile(configFile, "utf8"));
     for (const alias of aliases) {
+      if (managedAliases.has(alias)) continue;
       try {
         summaries.push((await resolveFromSSHConfig(alias)).summary);
       } catch (error: any) {
@@ -227,8 +388,12 @@ export async function listSSHProfiles(): Promise<SSHProfileSummary[]> {
   return summaries;
 }
 
-export async function testSSHProfile(alias: string, timeoutMs = 8_000): Promise<SSHProfileSummary> {
-  const resolved = await resolveSSHProfile(alias);
+/**
+ * Open (and immediately close) an SSH session against a raw config so callers
+ * can verify credentials without keeping a connection around. Resolves when the
+ * handshake succeeds, rejects with a friendly error otherwise.
+ */
+export async function testSSHConfig(config: SSHConfig, timeoutMs = 8_000): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const ssh = new SSHClient();
     let settled = false;
@@ -248,11 +413,30 @@ export async function testSSHProfile(alias: string, timeoutMs = 8_000): Promise<
     ssh.on("ready", () => finish());
     ssh.on("error", (error) => finish(error));
     ssh.on("keyboard-interactive", (_name, _instructions, _language, prompts, callback) => {
-      callback(prompts.map(() => resolved.config.password || ""));
+      callback(prompts.map(() => config.password || ""));
     });
-    ssh.connect({ ...resolved.config, readyTimeout: timeoutMs });
+    ssh.connect({ ...config, readyTimeout: timeoutMs });
   });
+}
+
+export async function testSSHProfile(alias: string, timeoutMs = 8_000): Promise<SSHProfileSummary> {
+  const resolved = await resolveSSHProfile(alias);
+  await testSSHConfig(resolved.config, timeoutMs);
   return resolved.summary;
+}
+
+/**
+ * Test a managed-profile form payload BEFORE it is saved — validates the fields
+ * the same way addManagedProfile does, but requires an auth method so the probe
+ * can actually authenticate.
+ */
+export async function testManagedSSHProfileInput(
+  input: Record<string, unknown>,
+  timeoutMs = 8_000,
+): Promise<SSHProfileSummary> {
+  const profile = normalizeManagedInput(input);
+  await testSSHConfig(managedProfileToConfig(profile), timeoutMs);
+  return managedProfileToSummary(profile);
 }
 
 export { LEGACY_PROFILE_ALIAS };

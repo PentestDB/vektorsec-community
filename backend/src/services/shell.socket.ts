@@ -159,16 +159,19 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
         const msg = JSON.parse(raw.toString());
         await handleMessage(client, shellManager, msg);
       } catch (err: any) {
+        console.warn(`[ShellSocket] Invalid message from client=${clientKey(ws)}:`, err?.message ?? err);
         send(ws, "error", { message: `Invalid message: ${err.message}` });
       }
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code?: number, reason?: string) => {
+      console.info(`[ShellSocket] ws closed (client=${clientKey(ws)}, code=${code ?? "n/a"}, reason=${reason || ""})`);
       unsubscribeFromShellEvents(client, shellManager);
       clients.delete(ws);
     });
 
-    ws.on("error", () => {
+    ws.on("error", (error?: Error) => {
+      console.warn(`[ShellSocket] ws error (client=${clientKey(ws)}):`, error?.message ?? error);
       unsubscribeFromShellEvents(client, shellManager);
       clients.delete(ws);
     });
@@ -265,6 +268,7 @@ async function handleMessage(
         });
         send(client.ws, "shell_spawned", { shellId, label });
       } catch (err: any) {
+        console.error(`[ShellSocket] spawn_shell failed for session ${client.sessionId}:`, err?.message ?? err);
         send(client.ws, "error", { message: `Failed to spawn shell: ${err.message}` });
       }
       break;
@@ -295,6 +299,7 @@ async function handleMessage(
     }
 
     default:
+      console.warn(`[ShellSocket] Unknown event "${event}" from client=${clientKey(client.ws)}`);
       send(client.ws, "error", { message: `Unknown event: ${event}` });
   }
 }

@@ -21,6 +21,12 @@ export const DEFAULT_CHANNELS: PaymentChannel[] = [
   "alipay",
   "linepay",
   "paypal",
+  "opn",
+  "stripe",
+  "2c2p",
+  "gb_prime_pay",
+  "gb_pay",
+  "k_payment",
   "crypto_eth",
   "crypto_btc",
   "crypto_bnb",
@@ -31,6 +37,12 @@ export const CHANNEL_LABELS: Record<PaymentChannel, string> = {
   alipay: "Alipay",
   linepay: "LINE Pay",
   paypal: "PayPal",
+  opn: "Opn Payments",
+  stripe: "Stripe",
+  "2c2p": "2C2P",
+  gb_prime_pay: "GB Prime Pay",
+  gb_pay: "GB Pay",
+  k_payment: "K-Payment Gateway",
   crypto_eth: "Crypto (ETH)",
   crypto_btc: "Crypto (BTC)",
   crypto_bnb: "Crypto (BNB)",
@@ -79,9 +91,19 @@ export async function listEnabledGateways(): Promise<Partial<PaymentGatewayDoc>[
 
 /**
  * List all gateways (admin only).
+ *
+ * Secrets are NEVER sent to the browser — the actual `secret` value is
+ * replaced with an empty string and `hasSecret` indicates whether one is
+ * configured (so the admin UI can show a masked placeholder).
  */
-export async function listAllGateways(): Promise<PaymentGatewayDoc[]> {
-  return PaymentGateway.find().sort({ sortOrder: 1 });
+export async function listAllGateways(): Promise<Array<PaymentGatewayDoc & { hasSecret: boolean }>> {
+  const gateways = await PaymentGateway.find().sort({ sortOrder: 1 });
+  return gateways.map((g) => {
+    const obj = g.toObject() as PaymentGatewayDoc & { hasSecret: boolean };
+    obj.hasSecret = Boolean((g as any).secret);
+    (obj as any).secret = "";
+    return obj;
+  });
 }
 
 /**

@@ -137,8 +137,8 @@ const LandingPage = () => {
 
             <div className={styles.copilotFeatureInit} id="hacker-love">
               <div className={styles.titleSection}>
-                <h1>Everything Hackers</h1>
-                <h1>Love</h1>
+                <h2>Everything Hackers</h2>
+                <h2>Love</h2>
                 <p>
                   VektorSec takes you through each step of the journey,
                   making your life easier.
@@ -149,6 +149,7 @@ const LandingPage = () => {
             <div className={styles.mainContainer}>
               <div className={styles.wrapper}>
                 <p className={styles.tagline}>NEXT-GEN AI PENTEST PLATFORM</p>
+                {/* Single H1 per page — the main hero heading */}
                 <h1>VektorSec</h1>
                 <p>
                   Autonomous AI Security Operations &amp; Penetration Testing
@@ -265,10 +266,10 @@ const LandingPage = () => {
               {copilotProcess.map((item, index) => (
                 <Col md={12} className={styles.featureBox} key={index}>
                   <div className={styles.featureIcon}>
-                    <Image src={item.icon} alt="" width={40} height={40} />
+                    <Image src={item.icon} alt={item.title} width={40} height={40} />
                   </div>
                   <div className={styles.featureContent}>
-                    <h1>{item.title}</h1>
+                    <h3>{item.title}</h3>
                     <p>{item.description}</p>
                   </div>
                 </Col>
@@ -288,7 +289,7 @@ const LandingPage = () => {
 
           <div className={styles.copilotSteps}>
             <div className={styles.titleSection}>
-              <h1>Future of Ethical Hacking</h1>
+              <h2>Future of Ethical Hacking</h2>
             </div>
 
             <div className={styles.copilotFeatureSlider}>
@@ -299,11 +300,11 @@ const LandingPage = () => {
                 slides={futureItems.map((item, index) => (
                   <div className={styles.featureSlide} key={index}>
                     <div className={styles.slideImage}>
-                      <Image src={item.image} alt="" />
+                      <Image src={item.image} alt={item.title} />
                     </div>
                     <div className={styles.slideContent}>
                       <span className={styles.slideNum}>0{index + 1}</span>
-                      <h1>{item.title}</h1>
+                      <h3>{item.title}</h3>
                       <p>{item.description}</p>
                     </div>
                   </div>
@@ -399,7 +400,7 @@ const LandingPage = () => {
 
           <div className={styles.copilotFeatures}>
             <div className={styles.titleSection}>
-              <h1>Ultimate Hacker Experience</h1>
+              <h2>Ultimate Hacker Experience</h2>
               <p>
                 These are features that make VektorSec more accessible to
                 people, ease of use, better experience etc.

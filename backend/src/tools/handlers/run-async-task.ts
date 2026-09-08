@@ -2,6 +2,11 @@ import { ToolDefinition } from "../types";
 import { getTaskQueue } from "../../services/taskQueue";
 import { getSandboxManager } from "../../services/sandbox";
 import { getAuditTrail } from "../../services/auditTrail";
+import {
+  assertCommandTargetsAreExternal,
+  assertTargetIsExternal,
+  blockedTargetResult,
+} from "../../utils/ssrfGuard";
 
 // ─── Async Task Execution Tool ──────────────────────────────────────
 // รันงาน Pentest ที่ใช้เวลานาน (Nmap scan, FFUF brute force, SQLmap dump)
@@ -49,6 +54,17 @@ const runAsyncTask: ToolDefinition = {
 
     if (!command) {
       return { output: "Error: command is required", exitCode: 1 };
+    }
+
+    // SSRF guard: reject async scan tasks whose command references any
+    // internal/private target, and validate the explicit target when given.
+    try {
+      await assertCommandTargetsAreExternal(command);
+      if (target && typeof target === "string") {
+        await assertTargetIsExternal(target);
+      }
+    } catch {
+      return blockedTargetResult();
     }
 
     const taskQueue = getTaskQueue();

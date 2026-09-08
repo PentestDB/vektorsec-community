@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { isDangerousCommand } from "../../utils/commandSafety";
+import { assertCommandTargetsAreExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 import { findCapabilityForCommand } from "../../capabilities/registry";
 
 const runBash: ToolDefinition = {
@@ -31,6 +32,15 @@ const runBash: ToolDefinition = {
   async execute(args, ctx) {
     const command = args.command;
     if (!command) return { output: "Error: no command provided", exitCode: 1 };
+
+    // SSRF guard: any IP/domain/URL referenced by the command must resolve to
+    // a public address only. Internal targets (loopback, RFC1918, cloud
+    // metadata, …) are rejected before the command is executed.
+    try {
+      await assertCommandTargetsAreExternal(command);
+    } catch {
+      return blockedTargetResult();
+    }
 
     const timeoutMs = args.timeout_seconds ? args.timeout_seconds * 1000 : this.timeoutMs;
     const { output, exitCode } = await ctx.runCommand(command, timeoutMs);

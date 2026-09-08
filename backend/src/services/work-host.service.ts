@@ -1,4 +1,4 @@
-import { exec, spawn } from "child_process";
+import { exec, spawn, spawnSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -365,11 +365,44 @@ export async function execOnResolvedWorkHost(
   }
 }
 
+let scriptHelperAvailable: boolean | null = null;
+
+/**
+ * `script` (util-linux) is used to give interactive local shells a real PTY.
+ * Detect it once at startup so a container without util-linux can fall back
+ * to the old pipe-stdio behaviour instead of failing to spawn.
+ */
+function hasScriptHelper(): boolean {
+  if (scriptHelperAvailable !== null) return scriptHelperAvailable;
+  try {
+    const probe = spawnSync("script", ["--version"], { stdio: "ignore", timeout: 2_000 });
+    scriptHelperAvailable = probe.error === undefined && probe.status === 0;
+  } catch {
+    scriptHelperAvailable = false;
+  }
+  return scriptHelperAvailable;
+}
+
 export function spawnLocalShell(workFolder: string, interactive: boolean) {
   const folder = expandLocalFolder(workFolder);
   fs.mkdirSync(folder, { recursive: true });
   const shell = process.env.SHELL || "/bin/sh";
-  return spawn(shell, interactive ? ["-l"] : [], {
+
+  if (!interactive || !hasScriptHelper()) {
+    // Non-interactive (or no PTY helper available): plain pipe stdio is fine.
+    return spawn(shell, interactive ? ["-l"] : [], {
+      cwd: folder,
+      env: { ...process.env, PWD: folder },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  }
+
+  // Interactive shells MUST have a real TTY on stdin. With pipe stdio the
+  // login shell detects "stdin is not a terminal", runs non-interactively and
+  // never prints a prompt — the xterm stays black even though the shell is
+  // alive and consuming input. `script -qefc` (util-linux) allocates a PTY and
+  // proxies stdio without a native addon like node-pty.
+  return spawn("script", ["-q", "-e", "-f", "-c", `exec "${shell}" -l`, "/dev/null"], {
     cwd: folder,
     env: { ...process.env, PWD: folder },
     stdio: ["pipe", "pipe", "pipe"],

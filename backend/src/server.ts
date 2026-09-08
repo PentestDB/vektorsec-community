@@ -33,6 +33,7 @@ import { announcementRoutes } from "./routes/announcement.routes";
 import { blogRoutes } from "./routes/blog.routes";
 import { menuRoutes } from "./routes/menu.routes";
 import { oobRoutes } from "./routes/oob.routes";
+import { publicRoutes } from "./routes/public.routes";
 
 
 
@@ -112,17 +113,17 @@ const initializeApp = async () => {
     };
 
     const app = express();
-    const port = parseInt(process.env.PORT || "8080", 10);
+    const port = parseInt(process.env.PORT || "8081", 10);
 
     const defaultWhitelist = [
-      "http://127.0.0.1:8080",
-      "http://127.0.0.1:3000",
+      "http://127.0.0.1:8081",
       "http://127.0.0.1:3001",
+      "http://127.0.0.1:3003",
       "http://127.0.0.1:5000",
-      "http://localhost:8080",
+      "http://localhost:8081",
       "http://localhost:5000",
+      "http://localhost:3003",
       "http://localhost:3001",
-      "http://localhost:3000",
     ];
 
     const corsOriginsEnv = process.env.CORS_ORIGINS;
@@ -278,6 +279,7 @@ const initializeApp = async () => {
     app.use("/api/blog", blogRoutes);
     app.use("/api/menus", menuRoutes);
 app.use("/api/oob", oobRoutes);
+app.use("/api/public", publicRoutes);
 
 
 
@@ -318,15 +320,25 @@ app.use("/api/oob", oobRoutes);
       }
 
       // Ensure there is always at least one admin account so the admin panel
-      // can be accessed. Credentials can be overridden via ADMIN_EMAIL /
-      // ADMIN_PASSWORD env vars (defaults shown below). If the admin already
-      // exists, its password is left untouched.
+      // can be accessed. Credentials are taken from ADMIN_EMAIL /
+      // ADMIN_PASSWORD in backend/.env. If ADMIN_PASSWORD is left empty, a
+      // random temporary password is generated on first boot and printed in
+      // the backend logs — never ship/commit a default password. If the admin
+      // already exists, its password is left untouched.
       try {
-        const adminEmail = (await getSecrets("ADMIN_EMAIL")) || "admin@vektorsec.com";
-        const adminPassword = (await getSecrets("ADMIN_PASSWORD")) || "admin1234";
+        const adminEmail = (await getSecrets("ADMIN_EMAIL")) || "admin@vektorsec.local";
 
         const existingAdmin = await UserModel.findOne({ role: "admin" });
         if (!existingAdmin) {
+          let adminPassword = await getSecrets("ADMIN_PASSWORD");
+          if (!adminPassword) {
+            adminPassword = crypto.randomBytes(16).toString("hex");
+            console.log(
+              `[auth] No ADMIN_PASSWORD was set. Created admin "${adminEmail}" with a ` +
+                `random temporary password. Grab it from this log, log in once and change it ` +
+                `immediately (never use a hardcoded default). Temporary password: ${adminPassword}`,
+            );
+          }
           const hashedPassword = await bcrypt.hash(adminPassword, 10);
           await UserModel.create({
             name: "Administrator",

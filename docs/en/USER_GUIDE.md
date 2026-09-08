@@ -27,7 +27,7 @@ Audit Trail, Vault, and more.
 ## 🚀 Getting Started
 
 1. Follow the [Installation Guide](./INSTALL_GUIDE.md)
-2. Open `http://localhost:3000`
+2. Open `http://localhost:3001`
 3. Sign up / Log in
 4. Go to **Settings → Models** to configure a Model (required)
 5. Start chatting with the Agent to run pentests

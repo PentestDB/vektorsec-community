@@ -67,8 +67,7 @@ export default function RecaptchaField({
   useEffect(() => {
     if (siteKey) return;
     let cancelled = false;
-    const backend = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
-    fetch(`${backend}/api/auth/recaptcha-site-key`)
+    fetch("/api/auth/recaptcha-site-key")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad status"))))
       .then((data) => {
         if (!cancelled && data?.siteKey) setSiteKey(data.siteKey);

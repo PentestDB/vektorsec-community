@@ -350,24 +350,58 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // If 2FA is enabled, require the TOTP code
+    // Two-Factor Authentication (TOTP)
+    // - Existing users with 2FA enabled must supply their current code.
+    // - New users without a secret are forced through 2FA enrollment on first
+    //   login: a secret + otpauth URI is returned (not yet activated), and the
+    //   login only completes once they verify a code from their authenticator.
     const twoFactorEnabled = (user as any).twoFactorEnabled || false;
-    const twoFactorSecret = (user as any).twoFactorSecret;
-    if (twoFactorEnabled && twoFactorSecret) {
-      if (!twoFactorCode) {
+    let twoFactorSecret = (user as any).twoFactorSecret;
+
+    if (!twoFactorSecret) {
+      twoFactorSecret = generateSecret();
+      (user as any).twoFactorSecret = twoFactorSecret;
+      await user.save();
+    }
+
+    if (!twoFactorCode) {
+      if (!twoFactorEnabled) {
+        // First login without 2FA → show QR setup step (do not log in yet).
         return res.status(400).json({
-          message: "Two-factor authentication code required",
-          twoFactorRequired: true,
+          message: "Two-factor authentication setup required",
+          twoFactorSetupRequired: true,
+          otpauthUri: buildOtpAuthUri(twoFactorSecret, user.email),
+          secret: twoFactorSecret,
         });
       }
-      if (!verifyTOTP(twoFactorSecret, twoFactorCode)) {
-        await logAuditFromRequest(req, res, "auth.login_failed", {
-          resourceType: "user",
-          resourceId: user._id.toString(),
-          details: { email, reason: "invalid_2fa_code" },
-        });
-        return res.status(401).json({ message: "Invalid two-factor code" });
-      }
+      return res.status(400).json({
+        message: "Two-factor authentication code required",
+        twoFactorRequired: true,
+        // Include the QR URI + raw secret so an account that already has 2FA
+        // enabled can re-scan / copy its key at any login (new device, recovery,
+        // backup). Only reachable after the email+password pair is verified.
+        otpauthUri: buildOtpAuthUri(twoFactorSecret, user.email),
+        secret: twoFactorSecret,
+      });
+    }
+
+    if (!verifyTOTP(twoFactorSecret, twoFactorCode)) {
+      await logAuditFromRequest(req, res, "auth.login_failed", {
+        resourceType: "user",
+        resourceId: user._id.toString(),
+        details: { email, reason: "invalid_2fa_code" },
+      });
+      return res.status(401).json({ message: "Invalid two-factor code" });
+    }
+
+    // Code verified — if this was the first-time enrollment, activate 2FA now.
+    if (!twoFactorEnabled) {
+      (user as any).twoFactorEnabled = true;
+      await user.save();
+      await logAuditFromRequest(req, res, "auth.two_factor_enabled", {
+        resourceType: "user",
+        resourceId: user._id.toString(),
+      });
     }
 
     const head = req.headers["x-forwarded-for"] as string;
@@ -433,7 +467,7 @@ export const loginUser = async (req: Request, res: Response) => {
 
 // ─── OAuth (Google / GitHub) sign-in ─────────────────────────────────
 
-const FRONTEND_URL = () => process.env.FRONTEND_URL || "http://localhost:3000";
+const FRONTEND_URL = () => process.env.FRONTEND_URL || "http://localhost:3001";
 
 /** In-memory OAuth state store (expires after 10 minutes). */
 const oauthStateStore = new Map<string, { provider: string; expiresAt: number }>();
@@ -518,7 +552,7 @@ export const googleOAuthStart = async (_req: Request, res: Response) => {
 
   const redirectUri =
     process.env.GOOGLE_OAUTH_REDIRECT_URI ||
-    `${process.env.BACKEND_URI || "http://localhost:8080"}/api/auth/google/callback`;
+    `${process.env.BACKEND_URI || "http://localhost:8081"}/api/auth/google/callback`;
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -552,7 +586,7 @@ export const googleOAuthCallback = async (req: Request, res: Response) => {
 
     const redirectUri =
       process.env.GOOGLE_OAUTH_REDIRECT_URI ||
-      `${process.env.BACKEND_URI || "http://localhost:8080"}/api/auth/google/callback`;
+      `${process.env.BACKEND_URI || "http://localhost:8081"}/api/auth/google/callback`;
 
     // Exchange the authorization code for tokens.
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -612,7 +646,7 @@ export const githubOAuthStart = async (_req: Request, res: Response) => {
 
   const redirectUri =
     process.env.GITHUB_OAUTH_REDIRECT_URI ||
-    `${process.env.BACKEND_URI || "http://localhost:8080"}/api/auth/github/callback`;
+    `${process.env.BACKEND_URI || "http://localhost:8081"}/api/auth/github/callback`;
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -642,7 +676,7 @@ export const githubOAuthCallback = async (req: Request, res: Response) => {
 
     const redirectUri =
       process.env.GITHUB_OAUTH_REDIRECT_URI ||
-      `${process.env.BACKEND_URI || "http://localhost:8080"}/api/auth/github/callback`;
+      `${process.env.BACKEND_URI || "http://localhost:8081"}/api/auth/github/callback`;
 
     // Exchange the authorization code for an access token.
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {

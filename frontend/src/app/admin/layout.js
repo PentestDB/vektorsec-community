@@ -6,6 +6,17 @@ import Link from "next/link";
 import { checkSession, logoutUser } from "@/services/auth.service";
 import styles from "./admin.module.scss";
 
+// Admin page styles are imported here (side-effect) so every admin sub-page
+// gets its theme from the same always-loaded CSS set as the admin shell.
+// This avoids the lazy "hydration link" (:HL) stylesheet path entirely: the
+// tabs / badges / buttons keep their dark cyberpunk theme even when a strict
+// browser or extension blocks client-injected <link> elements.
+import "@/components/pages/AdminPaymentPage.module.scss";
+import "@/components/pages/AdminSettingsPage.module.scss";
+import "@/components/pages/AdminTopUpPage.module.scss";
+import "@/components/pages/NotificationLogsPage.module.scss";
+import "@/components/pages/SystemHealthPage.module.scss";
+
 // NOTE: All sidebar icons are single UTF-16 code units (BMP range) on purpose.
 // Surrogate-pair emoji break when copied/pasted between editors, so we stick
 // to safe BMP symbols (U+00A4 ... U+271B).
@@ -35,6 +46,7 @@ const MENU_GROUPS = [
   {
     title: "Security & Compliance",
     items: [
+      { href: "/admin/security", label: "Security", icon: "\u25CB" },
       { href: "/admin/scope", label: "Scope / Whitelist", icon: "\u25C9" },
       { href: "/admin/quotas", label: "Quotas / Rate Limits", icon: "\u23F1" },
       { href: "/admin/api-keys", label: "API Keys / Providers", icon: "\u2301" },
@@ -45,6 +57,7 @@ const MENU_GROUPS = [
     items: [
       { href: "/admin/articles", label: "Articles", icon: "\u270E" },
       { href: "/admin/announcements", label: "Announcements", icon: "\u2756" },
+      { href: "/admin/seo", label: "SEO & Sitemap", icon: "\u2606" },
       { href: "/admin/menu-links", label: "Menu Links", icon: "\u2637" },
     ],
   },
@@ -75,7 +88,7 @@ export default function AdminLayout({ children }) {
     const verify = async () => {
       try {
         const data = await checkSession();
-        if (!data.success) {
+        if (!data?.success) {
           router.replace("/admin");
           return;
         }
@@ -83,7 +96,7 @@ export default function AdminLayout({ children }) {
           router.replace("/no-access");
           return;
         }
-        setUser(data.user);
+        setUser(data.user ?? null);
         setLoading(false);
       } catch (err) {
         router.replace("/admin");
@@ -101,69 +114,73 @@ export default function AdminLayout({ children }) {
     router.replace("/admin");
   };
 
-  // Login page is rendered without the admin shell.
-  if (isLoginPage) {
-    return children;
-  }
+  return renderShell();
 
-  if (loading) {
+  function renderShell() {
+    // Login page is rendered without the admin shell.
+    if (isLoginPage) {
+      return children;
+    }
+
+    if (loading) {
+      return (
+        <div className={styles.loadingScreen}>
+          <div className={styles.loadingSpinner} />
+          <p>Checking admin access...</p>
+        </div>
+      );
+    }
+
     return (
-      <div className={styles.loadingScreen}>
-        <div className={styles.loadingSpinner} />
-        <p>Checking admin access...</p>
+      <div className={styles.adminLayout}>
+        <aside className={styles.sidebar}>
+          <div className={styles.sidebarHeader}>
+            <h1 className={styles.logo}>VektorSec</h1>
+            <p className={styles.logoSub}>Autonomous Security Operations</p>
+          </div>
+
+          <nav className={styles.nav}>
+            {MENU_GROUPS.map((group) => (
+              <div key={group.title} className={styles.navGroup}>
+                <div className={styles.navGroupTitle}>{group.title}</div>
+                {group.items.map((item) => {
+                  const isActive =
+                    pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`${styles.navItem} ${
+                        isActive ? styles.navItemActive : ""
+                      }`}
+                    >
+                      <span className={styles.navIcon}>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          <div className={styles.sidebarFooter}>
+            <div className={styles.userInfo}>
+              <div className={styles.userAvatar}>
+                {user?.name?.charAt(0)?.toUpperCase() || "A"}
+              </div>
+              <div className={styles.userDetails}>
+                <span className={styles.userName}>{user?.name}</span>
+                <span className={styles.userRole}>Administrator</span>
+              </div>
+            </div>
+            <button className={styles.logoutBtn} onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </aside>
+
+        <main className={styles.mainContent}>{children}</main>
       </div>
     );
   }
-
-  return (
-    <div className={styles.adminLayout}>
-      <aside className={styles.sidebar}>
-        <div className={styles.sidebarHeader}>
-          <h1 className={styles.logo}>VektorSec</h1>
-          <p className={styles.logoSub}>Autonomous Security Operations</p>
-        </div>
-
-        <nav className={styles.nav}>
-          {MENU_GROUPS.map((group) => (
-            <div key={group.title} className={styles.navGroup}>
-              <div className={styles.navGroupTitle}>{group.title}</div>
-              {group.items.map((item) => {
-                const isActive =
-                  pathname === item.href || pathname.startsWith(item.href + "/");
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`${styles.navItem} ${
-                      isActive ? styles.navItemActive : ""
-                    }`}
-                  >
-                    <span className={styles.navIcon}>{item.icon}</span>
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-
-        <div className={styles.sidebarFooter}>
-          <div className={styles.userInfo}>
-            <div className={styles.userAvatar}>
-              {user?.name?.charAt(0)?.toUpperCase() || "A"}
-            </div>
-            <div className={styles.userDetails}>
-              <span className={styles.userName}>{user?.name}</span>
-              <span className={styles.userRole}>Administrator</span>
-            </div>
-          </div>
-          <button className={styles.logoutBtn} onClick={handleLogout}>
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      <main className={styles.mainContent}>{children}</main>
-    </div>
-  );
 }

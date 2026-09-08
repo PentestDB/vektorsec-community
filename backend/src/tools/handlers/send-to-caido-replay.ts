@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { getCaidoConnection, isCaidoConfigured, sendCaidoReplayRequest } from "../../services/caido.client";
+import { assertTargetIsExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 
 const MAX_RESPONSE_LENGTH = 8000;
 
@@ -34,6 +35,13 @@ const sendToCaidoReplay: ToolDefinition = {
 
     if (!args.host) return { output: "Error: host is required", exitCode: 1 };
     if (!args.raw_request) return { output: "Error: raw_request is required", exitCode: 1 };
+
+    // SSRF guard: Replay fires the request at this host on our behalf.
+    try {
+      await assertTargetIsExternal(args.host);
+    } catch {
+      return blockedTargetResult();
+    }
 
     try {
       const result = await sendCaidoReplayRequest({

@@ -1,0 +1,7 @@
+# ── Line endings ────────────────────────────────────────────────
+# Shell scripts run on Linux (VPS / Docker / WSL) and break on CRLF.
+# Keep them LF regardless of core.autocrlf on any machine.
+*.sh text eol=lf
+
+# This file itself must stay LF too.
+.gitattributes text eol=lf

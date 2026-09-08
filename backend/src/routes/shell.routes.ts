@@ -16,7 +16,11 @@ const router = Router();
 
 router.use(verifySess);
 
-const SSH_TEST_TIMEOUT_MS = 5000;
+// How long the legacy "Test connectivity" probe may take before failing.
+// Covers TCP connect + SSH handshake + auth + running `whoami` on the remote.
+// Tune with SSH_TEST_TIMEOUT_MS (ms) if your exploit box responds slowly.
+const SSH_TEST_TIMEOUT_MS =
+  Number.parseInt(process.env.SSH_TEST_TIMEOUT_MS || "10000", 10) || 10000;
 
 router.post("/test-ssh", async (_req: Request, res: Response) => {
   try {

@@ -94,6 +94,35 @@ export const updateSafetyProtections = async (body) => {
   return res.data;
 };
 
+// ─── Managed SSH profiles (multiple SSH servers) ─────────────────────
+
+export const getSSHProfiles = async () => {
+  const res = await apiClient.get("/user/ssh-profiles");
+  return res.data;
+};
+
+export const addSSHProfile = async (body) => {
+  const res = await apiClient.post("/user/ssh-profiles", body);
+  return res.data;
+};
+
+// Test credentials BEFORE they are saved (uses the current form values).
+export const testSSHProfile = async (body) => {
+  const res = await apiClient.post("/user/ssh-profiles/test", body);
+  return res.data;
+};
+
+// Re-test an already-saved managed profile.
+export const testSavedSSHProfile = async (alias) => {
+  const res = await apiClient.post(`/user/ssh-profiles/${encodeURIComponent(alias)}/test`);
+  return res.data;
+};
+
+export const deleteSSHProfile = async (alias) => {
+  const res = await apiClient.delete(`/user/ssh-profiles/${encodeURIComponent(alias)}`);
+  return res.data;
+};
+
 export const getVNCConfig = async (sessionId) => {
   const res = await apiClient.get("/user/get-vnc-config", {
     params: sessionId ? { sessionId } : undefined,

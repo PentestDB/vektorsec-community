@@ -43,11 +43,9 @@ const RegisterPage = () => {
   };
 
   const handleSocial = (provider) => {
-    const backend = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
-    const target =
-      provider === "Google"
-        ? `${backend}/api/auth/google`
-        : `${backend}/api/auth/github`;
+    // OAuth is initiated through the same-origin API gateway so the browser
+    // never talks to the backend host directly.
+    const target = provider === "Google" ? "/api/auth/google" : "/api/auth/github";
     window.location.href = target;
   };
 

@@ -22,12 +22,12 @@ NC='\033[0m'
 # ── Paths ─────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_TOML="$SCRIPT_DIR/config.toml"
-CONFIG_TOML_TMPL="$SCRIPT_DIR/config.toml.template"
+CONFIG_TOML_TMPL="$SCRIPT_DIR/config.example.toml"
 DYNAMIC_ENV=""  # set by resolve_env_path
-DYNAMIC_ENV_TMPL="$SCRIPT_DIR/backend/.env.template"
+DYNAMIC_ENV_TMPL="$SCRIPT_DIR/backend/.env.example"
 MODEL_REGISTRY_FILE="$SCRIPT_DIR/backend/model-registry.json"
 FRONTEND_ENV="$SCRIPT_DIR/frontend/.env"
-FRONTEND_TMPL="$SCRIPT_DIR/frontend/.env.template"
+FRONTEND_TMPL="$SCRIPT_DIR/frontend/.env.example"
 SSH_KEYS_DIR="$SCRIPT_DIR/ssh-keys"
 COMPOSE_OVERRIDE="$SCRIPT_DIR/docker-compose.override.yml"
 
@@ -264,7 +264,7 @@ ensure_config_defaults() {
     # Ensure CORS defaults to frontend URL
     local frontend_url cors_cur
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend")
-    frontend_url="${frontend_url:-http://localhost:3000}"
+    frontend_url="${frontend_url:-http://localhost:3001}"
     cors_cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
     if [[ -z "$cors_cur" ]]; then
         set_toml_var "$CONFIG_TOML" "cors_origins" "$frontend_url"
@@ -273,7 +273,7 @@ ensure_config_defaults() {
     # Ensure session secret
     local secret
     secret=$(get_toml_var "$CONFIG_TOML" "secret")
-    if [[ -z "$secret" || "$secret" == "thisismysessionsecret!123" ]]; then
+    if [[ -z "$secret" || "$secret" == "thisismysessionsecret!123" || "$secret" == *"CHANGE_ME"* ]]; then
         local generated
         generated=$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | base64 | tr -d '/+=' | head -c 64)
         set_toml_var "$CONFIG_TOML" "secret" "$generated"
@@ -599,17 +599,17 @@ configure_static_full() {
 
     section "Server Settings"
     cur=$(get_toml_var "$CONFIG_TOML" "base_url_frontend")
-    prompt_input "Frontend URL [${cur:-http://localhost:3000}]:"
+    prompt_input "Frontend URL [${cur:-http://localhost:3001}]:"
     read -r val
     if [[ -n "$val" ]]; then
         set_toml_var "$CONFIG_TOML" "base_url_frontend" "$val"
         frontend_url="$val"
     else
-        frontend_url="${cur:-http://localhost:3000}"
+        frontend_url="${cur:-http://localhost:3001}"
     fi
 
     cur=$(get_toml_var "$CONFIG_TOML" "port")
-    prompt_input "Backend port [${cur:-8080}]:"
+    prompt_input "Backend port [${cur:-8081}]:"
     read -r val
     [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "port" "$val"
 
@@ -618,13 +618,13 @@ configure_static_full() {
     read -r val
     [[ -n "$val" ]] && set_toml_var "$CONFIG_TOML" "deployment" "$val"
 
-    frontend_backend_uri=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
-    prompt_input "Backend URL for the frontend [${frontend_backend_uri:-http://localhost:8080}]:"
+    frontend_backend_uri=$(get_env "$FRONTEND_ENV" "BACKEND_URI")
+    prompt_input "Backend URL for the frontend gateway [${frontend_backend_uri:-http://localhost:8081}]:"
     read -r val
     if [[ -n "$val" ]]; then
-        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "$val"
+        set_env_var "$FRONTEND_ENV" "BACKEND_URI" "$val"
     elif [[ -z "$frontend_backend_uri" ]]; then
-        set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI" "http://localhost:8080"
+        set_env_var "$FRONTEND_ENV" "BACKEND_URI" "http://localhost:8081"
     fi
 
     frontend_deployment=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT")
@@ -632,8 +632,12 @@ configure_static_full() {
     read -r val
     if [[ -n "$val" ]]; then
         set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "$val"
+        set_env_var "$FRONTEND_ENV" "DEPLOYMENT" "$val"
     elif [[ -z "$frontend_deployment" ]]; then
         set_env_var "$FRONTEND_ENV" "NEXT_PUBLIC_DEPLOYMENT" "LOCAL"
+        set_env_var "$FRONTEND_ENV" "DEPLOYMENT" "LOCAL"
+    else
+        set_env_var "$FRONTEND_ENV" "DEPLOYMENT" "$frontend_deployment"
     fi
 
     cur=$(get_toml_var "$CONFIG_TOML" "cors_origins")
@@ -1074,11 +1078,11 @@ launch() {
     echo
     local frontend_url backend_url
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
-    backend_url=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
-    frontend_url="${frontend_url:-http://localhost:3000}"
-    backend_url="${backend_url:-http://localhost:8080}"
+    backend_url=$(get_env "$FRONTEND_ENV" "BACKEND_URI")
+    frontend_url="${frontend_url:-http://localhost:3001}"
+    backend_url="${backend_url:-http://localhost:8081}"
     echo -e "   ${GREEN}Frontend${NC}   ${frontend_url}"
-    echo -e "   ${GREEN}Backend${NC}    ${backend_url}"
+    echo -e "   ${GREEN}Backend${NC}    ${backend_url} (hidden behind the frontend gateway)"
     echo -e "   ${GREEN}MongoDB${NC}    localhost:27017"
     echo -e "   ${GREEN}Redis${NC}      localhost:6379"
 
@@ -1136,8 +1140,8 @@ launch_dev() {
     echo
     local frontend_url backend_url
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)
-    backend_url=$(get_env "$FRONTEND_ENV" "NEXT_PUBLIC_BACKEND_URI")
-    echo -e "   ${CYAN}Endpoints:${NC} Frontend ${frontend_url:-http://localhost:3000} | Backend ${backend_url:-http://localhost:8080}"
+    backend_url=$(get_env "$FRONTEND_ENV" "BACKEND_URI")
+    echo -e "   ${CYAN}Endpoints:${NC} Frontend ${frontend_url:-http://localhost:3001} | Backend ${backend_url:-http://localhost:8081} (via gateway)"
     echo
     hint "Config files: config.toml (restart-required) | backend/.env + backend/model-registry.json (Settings UI)"
     hint "Additional features (Burp, Browser Agent, VNC) can be configured in the Settings UI."
@@ -1351,16 +1355,16 @@ cmd_status() {
     if [[ "${DEPLOY_MODE:-}" == "kali" || "${DEPLOY_MODE:-}" == "dev-kali" ]]; then
         section "Quick Access"
         echo
-        echo -e "   ${GREEN}Frontend${NC}   http://localhost:3000"
-        echo -e "   ${GREEN}Backend${NC}    http://localhost:8080"
+        echo -e "   ${GREEN}Frontend${NC}   http://localhost:3001"
+        echo -e "   ${GREEN}Backend${NC}    http://localhost:8081"
         echo -e "   ${GREEN}Kali SSH${NC}   ssh root@localhost -p 4242"
         echo -e "   ${GREEN}Kali noVNC${NC} http://localhost:4200"
         echo
     else
         section "Quick Access"
         echo
-        echo -e "   ${GREEN}Frontend${NC}   http://localhost:3000"
-        echo -e "   ${GREEN}Backend${NC}    http://localhost:8080"
+        echo -e "   ${GREEN}Frontend${NC}   http://localhost:3001"
+        echo -e "   ${GREEN}Backend${NC}    http://localhost:8081"
         echo
     fi
 }

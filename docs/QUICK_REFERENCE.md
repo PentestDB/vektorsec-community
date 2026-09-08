@@ -34,9 +34,9 @@
 
 | ระบบ | URL (Local) | ใน Docker |
 |------|-------------|-----------|
-| **Frontend (Web App)** | `http://localhost:3000` | `http://localhost:3000` |
-| **Backend API** | `http://localhost:8080` | `http://localhost:8080` |
-| **Healthcheck** | `http://localhost:8080/api/healthcheck` | — |
+| **Frontend (Web App)** | `http://localhost:3001` | `http://localhost:3001` |
+| **Backend API** | `http://localhost:8081` | `http://localhost:8081` |
+| **Healthcheck** | `http://localhost:8081/api/healthcheck` | — |
 | **Kali Box (ถ้ามี)** | ผ่าน Agent ในหน้าเว็บ | — |
 
 ---
@@ -87,7 +87,7 @@
 
 ## 🛠️ API Endpoints ทั้งหมด
 
-> Base URL: `http://localhost:8080` (backend)
+> Base URL: `http://localhost:8081` (backend)
 
 ### 🔐 Authentication
 
@@ -161,12 +161,12 @@
 > **ตัวอย่าง:**
 > ```bash
 > # ตั้งค่า Bot
-> curl -X POST http://localhost:8080/api/telegram/configure \
+> curl -X POST http://localhost:8081/api/telegram/configure \
 >   -H "Content-Type: application/json" \
 >   -d '{"token": "123456789:ABCdef..."}'
 >
 > # Link ผู้ใช้
-> curl -X POST http://localhost:8080/api/telegram/users/987654321/link \
+> curl -X POST http://localhost:8081/api/telegram/users/987654321/link \
 >   -H "Content-Type: application/json" \
 >   -d '{"userId": "65f1a2b3c4d5e6f7a8b9c0d1"}'
 > ```
@@ -187,13 +187,13 @@
 
 | หน้า | URL | บทบาท |
 |------|-----|-------|
-| **หน้าแรก / Dashboard** | `http://localhost:3000` | ผู้ใช้ทั่วไป |
-| **Pricing** | `http://localhost:3000/pricing` | ผู้ใช้ทั่วไป |
-| **Checkout** | `http://localhost:3000/checkout` | ผู้ใช้ทั่วไป |
-| **Billing / Usage** | `http://localhost:3000/billing` | ผู้ใช้ทั่วไป |
-| **Settings (Models)** | `http://localhost:3000/settings` | ผู้ใช้ทั่วไป |
-| **Admin Payment** | `http://localhost:3000/admin/payment` | ✅ Admin เท่านั้น |
-| **Admin อื่นๆ** | `http://localhost:3000/admin/*` | ✅ Admin เท่านั้น |
+| **หน้าแรก / Dashboard** | `http://localhost:3001` | ผู้ใช้ทั่วไป |
+| **Pricing** | `http://localhost:3001/pricing` | ผู้ใช้ทั่วไป |
+| **Checkout** | `http://localhost:3001/checkout` | ผู้ใช้ทั่วไป |
+| **Billing / Usage** | `http://localhost:3001/billing` | ผู้ใช้ทั่วไป |
+| **Settings (Models)** | `http://localhost:3001/settings` | ผู้ใช้ทั่วไป |
+| **Admin Payment** | `http://localhost:3001/admin/payment` | ✅ Admin เท่านั้น |
+| **Admin อื่นๆ** | `http://localhost:3001/admin/*` | ✅ Admin เท่านั้น |
 
 ---
 
@@ -201,7 +201,7 @@
 
 ### 1. ตั้งค่า Model (จำเป็น)
 
-1. เปิด `http://localhost:3000` → เข้าสู่ระบบ
+1. เปิด `http://localhost:3001` → เข้าสู่ระบบ
 2. ไปที่ **Settings → Models**
 3. เพิ่ม Model Preset (Anthropic Claude / OpenAI GPT)
 4. กำหนดให้เป็น **Orchestrator**
@@ -211,7 +211,7 @@
 
 ### 2. จัดการ Plans & ราคา
 
-1. เปิด `http://localhost:3000/admin/payment` → ส่วน **Plans**
+1. เปิด `http://localhost:3001/admin/payment` → ส่วน **Plans**
 2. แก้ไข/สร้างแผน:
    - **priceMonthly** — ราคา/เดือน
    - **priceAnnual** — ราคา/ปี
@@ -245,7 +245,7 @@ Limits ทั้ง 2 ตัวทำงานอัตโนมัติเม�
 
 ### 3. ตั้งค่า Payment Gateway
 
-1. เปิด `http://localhost:3000/admin/payment` → ส่วน **Gateway**
+1. เปิด `http://localhost:3001/admin/payment` → ส่วน **Gateway**
 2. เลือกช่องทาง (Google Pay / Alipay / LINE Pay / Crypto)
 3. กด **Enable** → กรอก merchant ID / wallet address
 4. บันทึก
@@ -259,14 +259,14 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdef...
 
 **วิธีที่ 2: ผ่าน API (ไม่ต้อง restart)**
 ```bash
-curl -X POST http://localhost:8080/api/telegram/configure \
+curl -X POST http://localhost:8081/api/telegram/configure \
   -H "Content-Type: application/json" \
   -d '{"token": "123456789:ABCdef..."}'
 ```
 
 ตรวจสอบ:
 ```bash
-curl http://localhost:8080/api/telegram/status
+curl http://localhost:8081/api/telegram/status
 # → { "configured": true, "running": true }
 ```
 
@@ -276,11 +276,11 @@ curl http://localhost:8080/api/telegram/status
 1. ให้ผู้ใช้กด `/start` กับ Bot ก่อน (ระบบจะสร้าง TelegramUser record)
 2. Admin หา `telegramId`:
    ```bash
-   curl http://localhost:8080/api/telegram/users
+   curl http://localhost:8081/api/telegram/users
    ```
 3. Link กับ User ID:
    ```bash
-   curl -X POST http://localhost:8080/api/telegram/users/<telegramId>/link \
+   curl -X POST http://localhost:8081/api/telegram/users/<telegramId>/link \
      -H "Content-Type: application/json" \
      -d '{"userId": "<platform_user_mongodb_id>"}'
    ```
@@ -326,7 +326,7 @@ curl http://localhost:8080/api/telegram/status
 | ผู้ใช้ใช้ Agent ไม่ได้ | ยังไม่ได้ link → ทำตามขั้นตอนที่ 5 |
 | Subscription ไม่ active | ตรวจ `/api/subscriptions/me/:channel` หรือรอ expire |
 | Payment ไม่แสดง | ไป `/admin/payment` → Enable gateway |
-| หน้าเว็บไม่โหลด | ตรวจ backend `http://localhost:8080/api/healthcheck` |
+| หน้าเว็บไม่โหลด | ตรวจ backend `http://localhost:8081/api/healthcheck` |
 
 ---
 

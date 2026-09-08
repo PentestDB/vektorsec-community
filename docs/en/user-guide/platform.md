@@ -84,7 +84,7 @@ Follow the guided prompts:
 
 The Platform version uses a **one-time license**. After purchase:
 
-1. Open `http://localhost:3000`
+1. Open `http://localhost:3001`
 2. Sign up / log in
 3. Redeem your license (via the Billing page or a coupon code)
 4. Your plan is activated permanently
@@ -97,7 +97,7 @@ The Platform version uses a **one-time license**. After purchase:
 
 Since this is BYOK, you need to add your own AI model API key:
 
-1. Open `http://localhost:3000`
+1. Open `http://localhost:3001`
 2. Go to **Settings → Models**
 3. Add a Model Preset (e.g., Anthropic Claude, OpenAI GPT)
 4. Enter your API key

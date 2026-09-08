@@ -19,6 +19,7 @@ import {
   SiAlipay,
   SiLine,
   SiPaypal,
+  SiStripe,
   SiEthereum,
   SiBitcoin,
   SiBinance,
@@ -30,6 +31,12 @@ const CHANNEL_LABELS = {
   alipay: "Alipay",
   linepay: "LINE Pay",
   paypal: "PayPal",
+  opn: "Opn Payments",
+  stripe: "Stripe",
+  "2c2p": "2C2P",
+  gb_prime_pay: "GB Prime Pay",
+  gb_pay: "GB Pay",
+  k_payment: "K-Payment Gateway",
   crypto_eth: "Crypto (ETH)",
   crypto_btc: "Crypto (BTC)",
   crypto_bnb: "Crypto (BNB)",
@@ -41,6 +48,9 @@ const CHANNEL_BRAND_ICONS = {
   alipay: SiAlipay,
   linepay: SiLine,
   paypal: SiPaypal,
+  stripe: SiStripe,
+  // Opn Payments / 2C2P / GB Prime Pay / GB Pay / K-Payment have no brand
+  // icon in react-icons — they fall back to the first-letter avatar.
   crypto_eth: SiEthereum,
   crypto_btc: SiBitcoin,
   crypto_bnb: SiBinance,
@@ -119,7 +129,10 @@ const AdminPaymentPage = () => {
       enabled: gw.enabled,
       instructions: gw.instructions || "",
       merchantId: gw.merchantId || "",
-      secret: gw.secret || "",
+      // The backend never returns the real secret; hasSecret tells us a value
+      // is configured so the UI can show a masked placeholder instead.
+      secret: "",
+      secretConfigured: !!gw.hasSecret,
       logo: gw.logo || "",
       logoColor: gw.logoColor || "",
       cryptoWallet: {
@@ -1182,7 +1195,11 @@ const AdminPaymentPage = () => {
                     type="password"
                     value={form.secret || ""}
                     onChange={(e) => setForm({ ...form, secret: e.target.value })}
-                    placeholder="Leave blank to keep existing"
+                    placeholder={
+                      form.secretConfigured
+                        ? "•••••••• (configured — leave blank to keep)"
+                        : "Enter secret / API key"
+                    }
                   />
                 </label>
               </>

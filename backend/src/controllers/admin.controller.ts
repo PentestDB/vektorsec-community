@@ -147,7 +147,7 @@ export const listUsers = async (req: Request, res: Response) => {
         .sort({ createdAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
-        .select("name email role plan isBlocked blockedAt blockedReason firstLogin createdAt lastLoginAt credits creditsUsed"),
+        .select("name email role plan isBlocked blockedAt blockedReason firstLogin twoFactorEnabled createdAt lastLoginAt credits creditsUsed"),
       UserModel.countDocuments(filter),
     ]);
 
@@ -162,6 +162,7 @@ export const listUsers = async (req: Request, res: Response) => {
         blockedAt: u.blockedAt,
         blockedReason: u.blockedReason,
         firstLogin: u.firstLogin,
+        twoFactorEnabled: u.twoFactorEnabled,
         createdAt: (u as any).createdAt,
         credits: u.credits,
         creditsUsed: u.creditsUsed,
@@ -380,6 +381,99 @@ export const resetUserPassword = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("[admin] resetUserPassword error:", error);
     return res.status(500).json({ message: "Failed to reset user password" });
+  }
+};
+
+const VALID_USER_ROLES = ["admin", "pentester", "viewer"];
+const VALID_USER_PLANS = ["free", "pro", "team", "enterprise"];
+
+/**
+ * POST /admin/users
+ * Create a new user account directly from the admin panel (add user).
+ */
+export const createUser = async (req: Request, res: Response) => {
+  try {
+    const { name, email, password, role = "pentester", plan = "free" } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email and password are required" });
+    }
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ message: "Name is required" });
+    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    if (!/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,20})+$/.test(cleanEmail)) {
+      return res.status(400).json({ message: "Invalid email address" });
+    }
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters" });
+    }
+    if (!VALID_USER_ROLES.includes(role)) {
+      return res.status(400).json({ message: `Role must be one of: ${VALID_USER_ROLES.join(", ")}` });
+    }
+    if (!VALID_USER_PLANS.includes(plan)) {
+      return res.status(400).json({ message: `Plan must be one of: ${VALID_USER_PLANS.join(", ")}` });
+    }
+
+    const existing = await UserModel.findOne({ email: cleanEmail });
+    if (existing) {
+      return res.status(409).json({ message: "A user with this email already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new UserModel({
+      name: String(name).trim(),
+      email: cleanEmail,
+      password: hashedPassword,
+      role,
+      plan,
+      firstLogin: true,
+    });
+    await user.save();
+
+    await logAuditFromRequest(req, res, "user.created", {
+      resourceType: "user",
+      resourceId: user._id,
+      details: { email: user.email, role: user.role, plan: user.plan },
+    });
+
+    return res.status(201).json({ message: "User created successfully", uid: user._id });
+  } catch (error: any) {
+    console.error("[admin] createUser error:", error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "A user with this email already exists" });
+    }
+    return res.status(500).json({ message: "Failed to create user" });
+  }
+};
+
+/**
+ * POST /admin/users/:userId/reset-2fa
+ * Disable two-factor authentication for a user (e.g. lost authenticator).
+ */
+export const resetUserTwoFactor = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.twoFactorEnabled = false;
+    user.twoFactorSecret = undefined;
+    await user.save();
+
+    await logAuditFromRequest(req, res, "user.two_factor_reset", {
+      resourceType: "user",
+      resourceId: userId,
+      details: { email: user.email, by: res.locals.user?.email || res.locals.userId },
+    });
+
+    return res.status(200).json({ message: "Two-factor authentication reset for this user" });
+  } catch (error) {
+    console.error("[admin] resetUserTwoFactor error:", error);
+    return res.status(500).json({ message: "Failed to reset 2FA" });
   }
 };
 
@@ -710,6 +804,20 @@ export const getSystemSettings = async (_req: Request, res: Response) => {
         telegramAdminChatId: env.TELEGRAM_ADMIN_CHAT_ID || "",
         scanTimeoutMinutes: Number(env.SCAN_TIMEOUT_MINUTES || 30),
         scopeBlacklist: env.SCOPE_BLACKLIST_ENTRIES || "",
+        // ─── SEO / Sitemap (consumed by the frontend at runtime) ─────
+        seoTitle: env.SEO_TITLE || "",
+        seoDescription: env.SEO_DESCRIPTION || "",
+        seoKeywords: env.SEO_KEYWORDS || "",
+        seoSiteUrl: env.SEO_SITE_URL || "",
+        seoOgImage: env.SEO_OG_IMAGE || "",
+        seoTwitterHandle: env.SEO_TWITTER_HANDLE || "",
+        seoIndexing: env.SEO_INDEXING !== "0",
+        seoSitemapEnabled: env.SEO_SITEMAP_ENABLED !== "0",
+        seoRobotsExtraDisallow: env.SEO_ROBOTS_EXTRA_DISALLOW || "",
+        seoSitemapExtraRoutes: env.SEO_SITEMAP_EXTRA_ROUTES || "",
+        // ─── Security ────────────────────────────────────────────────
+        ssrfEnabled: env.SSRF_ENABLED !== "0",
+        securityHeadersEnabled: env.SECURITY_HEADERS_ENABLED !== "0",
       },
     });
   } catch (error) {
@@ -735,6 +843,20 @@ export const updateSystemSettings = async (req: Request, res: Response) => {
       telegramAdminChatId,
       scanTimeoutMinutes,
       scopeBlacklist,
+      // SEO / sitemap
+      seoTitle,
+      seoDescription,
+      seoKeywords,
+      seoSiteUrl,
+      seoOgImage,
+      seoTwitterHandle,
+      seoIndexing,
+      seoSitemapEnabled,
+      seoRobotsExtraDisallow,
+      seoSitemapExtraRoutes,
+      // Security
+      ssrfEnabled,
+      securityHeadersEnabled,
     } = req.body;
 
     const updates: Record<string, string> = {};
@@ -780,9 +902,26 @@ export const updateSystemSettings = async (req: Request, res: Response) => {
     if (scopeBlacklist !== undefined) {
       updates.SCOPE_BLACKLIST_ENTRIES = String(scopeBlacklist).trim();
     }
+    // ─── SEO / Sitemap ───────────────────────────────────────────────
+    if (seoTitle !== undefined) updates.SEO_TITLE = String(seoTitle).trim();
+    if (seoDescription !== undefined) updates.SEO_DESCRIPTION = String(seoDescription).trim();
+    if (seoKeywords !== undefined) updates.SEO_KEYWORDS = String(seoKeywords).trim();
+    if (seoSiteUrl !== undefined) updates.SEO_SITE_URL = String(seoSiteUrl).trim();
+    if (seoOgImage !== undefined) updates.SEO_OG_IMAGE = String(seoOgImage).trim();
+    if (seoTwitterHandle !== undefined) updates.SEO_TWITTER_HANDLE = String(seoTwitterHandle).trim();
+    if (typeof seoIndexing === "boolean") updates.SEO_INDEXING = seoIndexing ? "1" : "0";
+    if (typeof seoSitemapEnabled === "boolean") updates.SEO_SITEMAP_ENABLED = seoSitemapEnabled ? "1" : "0";
+    if (seoRobotsExtraDisallow !== undefined) updates.SEO_ROBOTS_EXTRA_DISALLOW = String(seoRobotsExtraDisallow).trim();
+    if (seoSitemapExtraRoutes !== undefined) updates.SEO_SITEMAP_EXTRA_ROUTES = String(seoSitemapExtraRoutes).trim();
+    // ─── Security ────────────────────────────────────────────────────
+    if (typeof ssrfEnabled === "boolean") updates.SSRF_ENABLED = ssrfEnabled ? "1" : "0";
+    if (typeof securityHeadersEnabled === "boolean") updates.SECURITY_HEADERS_ENABLED = securityHeadersEnabled ? "1" : "0";
 
     if (Object.keys(updates).length > 0) {
       updateEnvVars(updates);
+      // Reload process.env so backend security toggles (e.g. SSRF_ENABLED)
+      // take effect immediately without a restart.
+      reloadEnv();
     }
 
     await logAuditFromRequest(req, res, "admin.system_settings", {

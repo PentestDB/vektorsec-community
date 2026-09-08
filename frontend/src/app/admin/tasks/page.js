@@ -75,7 +75,7 @@ const AdminTasks = () => {
     setSuccess("");
     try {
       const data = await abortAgentSession(sessionId);
-      setSuccess(data.message);
+      setSuccess(data?.message || "Session aborted");
       await loadTasks();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to abort session");
@@ -88,7 +88,7 @@ const AdminTasks = () => {
     setSuccess("");
     try {
       const data = await cancelQueuedTask(taskId);
-      setSuccess(data.message);
+      setSuccess(data?.message || "Task cancelled");
       await loadTasks();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to cancel task");

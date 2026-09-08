@@ -33,15 +33,15 @@ test("extractOobTokenFromHost pulls the token from a subdomain host", () => {
     "3f9a7c21a0b1c2d3e4f5061728394a5b",
   );
   assert.equal(extractOobTokenFromHost("app.vektorsec.local"), null);
-  assert.equal(extractOobTokenFromHost("localhost:8080"), null);
+  assert.equal(extractOobTokenFromHost("localhost:8081"), null);
   assert.equal(extractOobTokenFromHost(undefined), null);
 });
 
 test("buildPayloadUrls produces path and host payloads", () => {
   const token = "3f9a7c21a0b1c2d3e4f5061728394a5b";
-  const urls = buildPayloadUrls("http://localhost:8080", token);
-  assert.equal(urls.pathUrl, `http://localhost:8080/api/oob/callback/${token}`);
-  assert.equal(urls.hostUrl, `${token}.oob.localhost:8080`);
+  const urls = buildPayloadUrls("http://localhost:8081", token);
+  assert.equal(urls.pathUrl, `http://localhost:8081/api/oob/callback/${token}`);
+  assert.equal(urls.hostUrl, `${token}.oob.localhost:8081`);
 });
 
 test("oob payload generation, interaction recording and polling (memory store)", async () => {
@@ -56,7 +56,7 @@ test("oob payload generation, interaction recording and polling (memory store)",
     method: "GET",
     path: "/api/oob/callback/" + payload.token,
     protocol: "http",
-    host: "localhost:8080",
+    host: "localhost:8081",
     remoteAddress: "10.0.0.5",
     headers: { "user-agent": "curl/8" },
   });

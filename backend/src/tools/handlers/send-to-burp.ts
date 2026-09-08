@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
+import { assertTargetIsExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 
 const MAX_RESPONSE_LENGTH = 8000;
 
@@ -66,6 +67,14 @@ const sendToBurp: ToolDefinition = {
 
     if (!host) return { output: "Error: host is required", exitCode: 1 };
     if (!raw_request) return { output: "Error: raw_request is required", exitCode: 1 };
+
+    // SSRF guard: Burp will forward the request on our behalf, so the host
+    // must resolve to a public address only.
+    try {
+      await assertTargetIsExternal(host);
+    } catch {
+      return blockedTargetResult();
+    }
 
     const env = readEnvFile();
     const connHost = env.BURP_RPC_HOST;

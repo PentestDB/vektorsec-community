@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import {
   getUsers,
+  createUser,
   blockUser,
   unblockUser,
   updateUserRole,
   updateUserPlan,
   resetUserPassword,
+  resetUserTwoFactor,
   deleteUser,
 } from "@/services/admin.service";
 import styles from "../admin.module.scss";
@@ -25,6 +27,12 @@ const AdminUsers = () => {
   const [resetTarget, setResetTarget] = useState(null);
   const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
   const [resetting, setResetting] = useState(false);
+
+  // Add-user modal
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", email: "", password: "", role: "pentester", plan: "free" });
+  const [adding, setAdding] = useState(false);
+  const [resetting2fa, setResetting2fa] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -125,6 +133,53 @@ const AdminUsers = () => {
     }
   };
 
+  const handleAddUser = async () => {
+    setError("");
+    setSuccess("");
+    if (!addForm.name.trim() || !addForm.email.trim() || !addForm.password) {
+      setError("Name, email and password are required.");
+      return;
+    }
+    if (addForm.password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    setAdding(true);
+    try {
+      await createUser({
+        name: addForm.name,
+        email: addForm.email,
+        password: addForm.password,
+        role: addForm.role,
+        plan: addForm.plan,
+      });
+      setSuccess("User created successfully");
+      setAddOpen(false);
+      setAddForm({ name: "", email: "", password: "", role: "pentester", plan: "free" });
+      await loadUsers();
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to create user");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleReset2fa = async (user) => {
+    if (!window.confirm(`Reset two-factor authentication for ${user.name || user.email}?`)) return;
+    setError("");
+    setSuccess("");
+    setResetting2fa(true);
+    try {
+      await resetUserTwoFactor(user.uid);
+      setSuccess(`Two-factor authentication reset for ${user.name || user.email}`);
+      await loadUsers();
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to reset 2FA");
+    } finally {
+      setResetting2fa(false);
+    }
+  };
+
   const openEdit = (user) => {
     setEditingUser(user.uid);
     setEditForm({
@@ -164,8 +219,23 @@ const AdminUsers = () => {
   return (
     <div>
       <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>Users</h1>
-        <p className={styles.pageSubtitle}>Manage user accounts, roles, and access.</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+          <div>
+            <h1 className={styles.pageTitle}>Users</h1>
+            <p className={styles.pageSubtitle}>Manage user accounts, roles, and access.</p>
+          </div>
+          <button
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={() => {
+              setError("");
+              setSuccess("");
+              setAddForm({ name: "", email: "", password: "", role: "pentester", plan: "free" });
+              setAddOpen(true);
+            }}
+          >
+            + Add User
+          </button>
+        </div>
       </div>
 
       {error && <div className={styles.error}>{error}</div>}
@@ -251,6 +321,14 @@ const AdminUsers = () => {
                         onClick={() => openResetPassword(u)}
                       >
                         Reset Password
+                      </button>
+                      <button
+                        className={`${styles.btn} ${styles.btnSecondary} ${styles.btnSmall}`}
+                        onClick={() => handleReset2fa(u)}
+                        disabled={resetting2fa}
+                        title={u.twoFactorEnabled ? "Disable 2FA for this user" : "2FA is already off"}
+                      >
+                        {u.twoFactorEnabled ? "Reset 2FA" : "2FA Off"}
                       </button>
                       {u.isBlocked ? (
                         <button
@@ -393,6 +471,95 @@ const AdminUsers = () => {
                 disabled={resetting}
               >
                 {resetting ? "Resetting..." : "Reset Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addOpen && (
+        <div className={styles.modalOverlay} onClick={() => setAddOpen(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>Add User</h2>
+            <p className={styles.pageSubtitle}>
+              Create a new user account. They will need to log in with the
+              password you set here.
+            </p>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>Name</label>
+              <input
+                className={styles.input}
+                type="text"
+                placeholder="Jane Doe"
+                value={addForm.name}
+                onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>Email</label>
+              <input
+                className={styles.input}
+                type="email"
+                placeholder="jane@example.com"
+                value={addForm.email}
+                onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>Password</label>
+              <input
+                className={styles.input}
+                type="password"
+                placeholder="At least 8 characters"
+                value={addForm.password}
+                onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>Role</label>
+              <select
+                className={styles.select}
+                value={addForm.role}
+                onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}
+              >
+                <option value="pentester">Pentester</option>
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>Plan</label>
+              <select
+                className={styles.select}
+                value={addForm.plan}
+                onChange={(e) => setAddForm({ ...addForm, plan: e.target.value })}
+              >
+                <option value="free">Free</option>
+                <option value="pro">Pro</option>
+                <option value="team">Team</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                className={`${styles.btn} ${styles.btnSecondary}`}
+                onClick={() => setAddOpen(false)}
+                disabled={adding}
+              >
+                Cancel
+              </button>
+              <button
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={handleAddUser}
+                disabled={adding}
+              >
+                {adding ? "Creating..." : "Create User"}
               </button>
             </div>
           </div>

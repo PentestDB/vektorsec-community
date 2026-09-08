@@ -21,9 +21,9 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 
 | System | URL (Local) | In Docker |
 |--------|-------------|-----------|
-| **Frontend (Web App)** | `http://localhost:3000` | `http://localhost:3000` |
-| **Backend API** | `http://localhost:8080` | `http://localhost:8080` |
-| **Healthcheck** | `http://localhost:8080/api/healthcheck` | — |
+| **Frontend (Web App)** | `http://localhost:3001` | `http://localhost:3001` |
+| **Backend API** | `http://localhost:8081` | `http://localhost:8081` |
+| **Healthcheck** | `http://localhost:8081/api/healthcheck` | — |
 | **Kali Box (if any)** | via Agent on the web page | — |
 
 ---
@@ -74,7 +74,7 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 
 ## 🛠️ All API Endpoints
 
-> Base URL: `http://localhost:8080` (backend)
+> Base URL: `http://localhost:8081` (backend)
 
 ### 🔐 Authentication
 
@@ -148,12 +148,12 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 > **Examples:**
 > ```bash
 > # Configure the bot
-> curl -X POST http://localhost:8080/api/telegram/configure \
+> curl -X POST http://localhost:8081/api/telegram/configure \
 >   -H "Content-Type: application/json" \
 >   -d '{"token": "123456789:ABCdef..."}'
 >
 > # Link a user
-> curl -X POST http://localhost:8080/api/telegram/users/987654321/link \
+> curl -X POST http://localhost:8081/api/telegram/users/987654321/link \
 >   -H "Content-Type: application/json" \
 >   -d '{"userId": "65f1a2b3c4d5e6f7a8b9c0d1"}'
 > ```
@@ -174,13 +174,13 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 
 | Page | URL | Role |
 |------|-----|------|
-| **Home / Dashboard** | `http://localhost:3000` | Regular user |
-| **Pricing** | `http://localhost:3000/pricing` | Regular user |
-| **Checkout** | `http://localhost:3000/checkout` | Regular user |
-| **Billing / Usage** | `http://localhost:3000/billing` | Regular user |
-| **Settings (Models)** | `http://localhost:3000/settings` | Regular user |
-| **Admin Payment** | `http://localhost:3000/admin/payment` | ✅ Admin only |
-| **Other Admin** | `http://localhost:3000/admin/*` | ✅ Admin only |
+| **Home / Dashboard** | `http://localhost:3001` | Regular user |
+| **Pricing** | `http://localhost:3001/pricing` | Regular user |
+| **Checkout** | `http://localhost:3001/checkout` | Regular user |
+| **Billing / Usage** | `http://localhost:3001/billing` | Regular user |
+| **Settings (Models)** | `http://localhost:3001/settings` | Regular user |
+| **Admin Payment** | `http://localhost:3001/admin/payment` | ✅ Admin only |
+| **Other Admin** | `http://localhost:3001/admin/*` | ✅ Admin only |
 
 ---
 
@@ -188,7 +188,7 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 
 ### 1. Configure Models (required)
 
-1. Open `http://localhost:3000` → log in
+1. Open `http://localhost:3001` → log in
 2. Go to **Settings → Models**
 3. Add a Model Preset (Anthropic Claude / OpenAI GPT)
 4. Set it as **Orchestrator**
@@ -198,7 +198,7 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 
 ### 2. Manage Plans & Pricing
 
-1. Open `http://localhost:3000/admin/payment` → **Plans** section
+1. Open `http://localhost:3001/admin/payment` → **Plans** section
 2. Edit/create a plan:
    - **priceMonthly** — monthly price
    - **priceAnnual** — annual price
@@ -232,7 +232,7 @@ When a limit is exceeded:
 
 ### 3. Configure Payment Gateways
 
-1. Open `http://localhost:3000/admin/payment` → **Gateway** section
+1. Open `http://localhost:3001/admin/payment` → **Gateway** section
 2. Select a channel (Google Pay / Alipay / LINE Pay / Crypto)
 3. Click **Enable** → fill in merchant ID / wallet address
 4. Save
@@ -246,14 +246,14 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdef...
 
 **Method 2: via API (no restart needed)**
 ```bash
-curl -X POST http://localhost:8080/api/telegram/configure \
+curl -X POST http://localhost:8081/api/telegram/configure \
   -H "Content-Type: application/json" \
   -d '{"token": "123456789:ABCdef..."}'
 ```
 
 Verify:
 ```bash
-curl http://localhost:8080/api/telegram/status
+curl http://localhost:8081/api/telegram/status
 # → { "configured": true, "running": true }
 ```
 
@@ -263,11 +263,11 @@ curl http://localhost:8080/api/telegram/status
 1. Have the user press `/start` with the bot first (creates a TelegramUser record)
 2. Find the `telegramId`:
    ```bash
-   curl http://localhost:8080/api/telegram/users
+   curl http://localhost:8081/api/telegram/users
    ```
 3. Link with the User ID:
    ```bash
-   curl -X POST http://localhost:8080/api/telegram/users/<telegramId>/link \
+   curl -X POST http://localhost:8081/api/telegram/users/<telegramId>/link \
      -H "Content-Type: application/json" \
      -d '{"userId": "<platform_user_mongodb_id>"}'
    ```

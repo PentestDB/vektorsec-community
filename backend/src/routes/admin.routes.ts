@@ -3,12 +3,14 @@ import { verifyAdmin } from "../middlewares/VerifyAdmin.middleware";
 import {
   getDashboardStats,
   listUsers,
+  createUser,
   blockUser,
   unblockUser,
   updateUserRole,
   updateUserPlan,
   deleteUser,
   resetUserPassword,
+  resetUserTwoFactor,
   getReports,
   listCoupons,
   createCoupon,
@@ -60,11 +62,13 @@ router.get("/dashboard", getDashboardStats);
 
 // User management
 router.get("/users", listUsers);
+router.post("/users", createUser);
 router.post("/users/:userId/block", blockUser);
 router.post("/users/:userId/unblock", unblockUser);
 router.put("/users/:userId/role", updateUserRole);
 router.put("/users/:userId/plan", updateUserPlan);
 router.post("/users/:userId/reset-password", resetUserPassword);
+router.post("/users/:userId/reset-2fa", resetUserTwoFactor);
 router.delete("/users/:userId", deleteUser);
 
 // Reports

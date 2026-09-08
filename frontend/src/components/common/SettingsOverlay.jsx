@@ -10,6 +10,7 @@ import {
   TbWorldWww,
   TbAdjustmentsHorizontal,
   TbCreditCard,
+  TbTerminal2,
 } from "react-icons/tb";
 import styles from "@/styles/components/SettingsOverlay.module.scss";
 import MyAccount from "@/components/pages/settings/MyAccount";
@@ -21,6 +22,7 @@ import MythicSettingsPage from "@/components/pages/settings/MythicSettings";
 import MagnitudeSettingsPage from "@/components/pages/settings/MagnitudeSettings";
 import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
+import SSHPage from "@/components/pages/settings/SSH";
 import BillingPage from "@/components/pages/BillingPage";
 
 const TABS = [
@@ -60,6 +62,14 @@ const TABS = [
       "Configure how long autonomous agent runs can continue before pausing.",
     icon: TbAdjustmentsHorizontal,
     component: AgentBehaviorPage,
+  },
+  {
+    key: "ssh",
+    label: "SSH / Exploit Box",
+    description:
+      "Configure the SSH connection to your exploit box (legacy fallback; prefer the per-session Connection tab).",
+    icon: TbTerminal2,
+    component: SSHPage,
   },
   {
     key: "burp",

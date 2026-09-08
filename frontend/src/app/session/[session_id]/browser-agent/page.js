@@ -8,8 +8,6 @@ import { use, useMemo } from "react";
 import { useQuery } from "react-query";
 import { useDispatch, useSelector } from "react-redux";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URI || "http://localhost:8080";
-
 const BrowserAgentPage = ({ params }) => {
   const { session_id: sessionId } = use(params);
   const dispatch = useDispatch();
@@ -58,13 +56,11 @@ const BrowserAgentPage = ({ params }) => {
   );
 
   const novncUrl = useMemo(() => {
+    // noVNC is served through the same-origin black-box gateway
+    // (server.js proxies /novnc/* and /websockify to the VNC origin), so the
+    // browser never connects to the backend/VNC host directly.
     if (!vncData?.novncPort) return null;
-    try {
-      const backendOrigin = new URL(BACKEND_URL);
-      return `${backendOrigin.protocol}//${backendOrigin.hostname}:${vncData.novncPort}`;
-    } catch {
-      return `http://localhost:${vncData.novncPort}`;
-    }
+    return "/novnc";
   }, [vncData]);
 
   if (configLoading || vncLoading) {

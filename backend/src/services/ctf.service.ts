@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import * as cheerio from "cheerio";
 import { execOnWorkspaceHost, resolveWorkspaceWorkHost } from "./work-host.service";
+import { assertTargetIsExternal } from "../utils/ssrfGuard";
 
 const CHALLENGE_DETAIL_CONCURRENCY = 8;
 const CHALLENGE_SYNC_CONCURRENCY = 4;
@@ -113,11 +114,20 @@ function buildClient(baseURL: string, cookie?: string, token?: string): AxiosIns
   return axios.create({ baseURL, headers, maxRedirects: 5, timeout: 30_000 });
 }
 
+/**
+ * SSRF guard: the CTFd URL is user-supplied and every request to it is fired
+ * from the backend, so the host must resolve to a public address only.
+ */
+async function assertSafeCtfUrl(url: string): Promise<void> {
+  await assertTargetIsExternal(url);
+}
+
 export async function loginWithCredentials(
   url: string,
   username: string,
   password: string,
 ): Promise<{ sessionCookie: string; ctfName: string }> {
+  await assertSafeCtfUrl(url);
   const baseURL = url.replace(/\/+$/, "");
 
   const loginPageRes = await axios.get(`${baseURL}/login`, {
@@ -175,6 +185,7 @@ export class CtfConnectError extends Error {
 }
 
 async function fetchCtfName(baseURL: string): Promise<string> {
+  await assertSafeCtfUrl(baseURL);
   try {
     const pageRes = await axios.get(baseURL, {
       timeout: 10_000,
@@ -200,6 +211,7 @@ export interface VerifyTokenResult {
 }
 
 export async function verifyToken(url: string, token: string): Promise<VerifyTokenResult> {
+  await assertSafeCtfUrl(url);
   const baseURL = url.replace(/\/+$/, "");
   const client = buildClient(baseURL, undefined, token);
 
@@ -292,6 +304,7 @@ export async function fetchChallenges(
   token?: string,
   onProgress?: ProgressCallback,
 ): Promise<CTFdChallenge[]> {
+  await assertSafeCtfUrl(url);
   const baseURL = url.replace(/\/+$/, "");
   const client = buildClient(baseURL, cookie, token);
 
@@ -624,6 +637,7 @@ async function postWithRetry(
   config: any,
   label: string,
 ): Promise<any> {
+  await assertSafeCtfUrl(url);
   const delays = [0, 1000, 2500];
   let lastRes: any = null;
 
@@ -650,6 +664,7 @@ export async function submitFlagToCtfd(
   cookie?: string,
   token?: string,
 ): Promise<CtfdSubmitResult> {
+  await assertSafeCtfUrl(url);
   const baseURL = url.replace(/\/+$/, "");
   const payload = { challenge_id: challengeId, submission: flag.trim() };
 
@@ -758,6 +773,7 @@ export async function submitFlagToCtfd(
 }
 
 async function fetchCsrfNonce(baseURL: string, cookie: string, bustCache = false): Promise<string | null> {
+  await assertSafeCtfUrl(baseURL);
   try {
     const cacheBuster = bustCache ? `?_=${Date.now()}` : "";
     const res = await axios.get(`${baseURL}/challenges${cacheBuster}`, {
@@ -779,6 +795,7 @@ export async function fetchSolvedChallengeNames(
   cookie?: string,
   token?: string,
 ): Promise<Set<string>> {
+  await assertSafeCtfUrl(url);
   const baseURL = url.replace(/\/+$/, "");
   const client = buildClient(baseURL, cookie, token);
   const delays = [0, 1000, 2500];

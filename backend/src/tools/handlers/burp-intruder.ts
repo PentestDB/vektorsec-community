@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../types";
 import { readEnvFile } from "../../utils/envWriter";
+import { assertTargetIsExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 
 const burpIntruder: ToolDefinition = {
   name: "send_to_burp_intruder",
@@ -61,6 +62,13 @@ const burpIntruder: ToolDefinition = {
 
     if (!host) return { output: "Error: host is required", exitCode: 1 };
     if (!raw_request) return { output: "Error: raw_request is required", exitCode: 1 };
+
+    // SSRF guard: Burp Intruder will fire requests at this host on our behalf.
+    try {
+      await assertTargetIsExternal(host);
+    } catch {
+      return blockedTargetResult();
+    }
 
     const env = readEnvFile();
     const connHost = env.BURP_RPC_HOST;

@@ -4,6 +4,7 @@ import {
   getCaidoConnection,
   isCaidoConfigured,
 } from "../../services/caido.client";
+import { assertTargetIsExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 
 const caidoAutomate: ToolDefinition = {
   name: "send_to_caido_automate",
@@ -60,6 +61,13 @@ const caidoAutomate: ToolDefinition = {
 
     if (!args.host) return { output: "Error: host is required", exitCode: 1 };
     if (!args.raw_request) return { output: "Error: raw_request is required", exitCode: 1 };
+
+    // SSRF guard: Automate will fire requests at this host on our behalf.
+    try {
+      await assertTargetIsExternal(String(args.host));
+    } catch {
+      return blockedTargetResult();
+    }
 
     try {
       const strategy = ["SEQUENTIAL", "ALL", "PARALLEL", "MATRIX"].includes(args.strategy)

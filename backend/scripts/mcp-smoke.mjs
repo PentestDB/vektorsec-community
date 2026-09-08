@@ -2,7 +2,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const url = process.env.PENTEST_COPILOT_MCP_URL || "http://localhost:8080/mcp";
+const url = process.env.PENTEST_COPILOT_MCP_URL || "http://localhost:8081/mcp";
 const token = process.env.PENTEST_COPILOT_MCP_TOKEN;
 
 if (!token) {

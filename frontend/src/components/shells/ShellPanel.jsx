@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import { App } from "antd";
 import { ApiOutlined, DisconnectOutlined, ReloadOutlined } from "@ant-design/icons";
 import { FiTerminal } from "react-icons/fi";
 import ShellTabBar from "./ShellTabBar";
@@ -19,8 +20,10 @@ export default function ShellPanel({
   wsConnected,
   onReconnectHost,
 }) {
+  const { message } = App.useApp();
   const [activeShellId, setActiveShellId] = useState(null);
   const [reconnecting, setReconnecting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const activeShells = shells.filter((s) => s.status === "active");
   const hostOk = connectionStatus?.hostConnected ?? connectionStatus?.sshConnected ?? false;
 
@@ -30,8 +33,11 @@ export default function ShellPanel({
 
   const handleSpawnShell = useCallback(() => {
     const label = `shell-${shells.length + 1}`;
-    spawnShell(label);
-  }, [shells.length, spawnShell]);
+    const sent = spawnShell(label);
+    if (!sent) {
+      message.error("Could not open a shell — the connection is offline. Try again in a moment.");
+    }
+  }, [shells.length, spawnShell, message]);
 
   const handleCloseShell = useCallback((shellId) => {
     closeShell(shellId);
@@ -50,6 +56,37 @@ export default function ShellPanel({
       setTimeout(() => setReconnecting(false), 2000);
     }
   };
+
+  // "SSH Connect" — establish the work-host connection (if not connected) and
+  // immediately open a fresh terminal on it. Spawning a shell over the WS
+  // auto-connects the host too, so this is safe even when hostOk is false.
+  const handleSshConnect = useCallback(async () => {
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      // If the shell WebSocket is down, spawnShell would silently drop the
+      // message — always surface that instead of doing nothing.
+      if (!wsConnected) {
+        message.error("Shell connection is offline — reconnecting. Try again in a moment.");
+        return;
+      }
+      if (!hostOk && onReconnectHost) {
+        const ok = await onReconnectHost();
+        if (ok === false) {
+          // The reconnect already surfaced its own error notification.
+          return;
+        }
+      }
+      const sent = spawnShell(`ssh-${shells.length + 1}`);
+      if (!sent) {
+        message.error("Could not open a shell — the connection was lost. Click Reconnect and try again.");
+      }
+    } catch (err) {
+      message.error(err?.message || "SSH Connect failed");
+    } finally {
+      setTimeout(() => setConnecting(false), 1200);
+    }
+  }, [connecting, hostOk, onReconnectHost, shells.length, spawnShell, wsConnected, message]);
 
   return (
     <div style={{
@@ -118,6 +155,51 @@ export default function ShellPanel({
           }} />
           <span>WS {wsConnected ? "Connected" : "Disconnected"}</span>
         </div>
+
+        <div style={{
+          width: 1,
+          height: 12,
+          backgroundColor: "rgba(0, 242, 254, 0.15)",
+        }} />
+
+        <button
+          onClick={handleSshConnect}
+          disabled={connecting}
+          title={hostOk ? "Open a new SSH terminal" : "Connect SSH and open a terminal"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            background: hostOk
+              ? "linear-gradient(135deg, #00f2fe, #00d2ff)"
+              : "rgba(0, 242, 254, 0.08)",
+            border: `1px solid ${hostOk ? "transparent" : "rgba(0, 242, 254, 0.45)"}`,
+            borderRadius: 4,
+            color: hostOk ? "#000000" : "#00f2fe",
+            cursor: connecting ? "not-allowed" : "pointer",
+            padding: "2px 8px",
+            fontSize: 10,
+            fontWeight: 600,
+            boxShadow: hostOk ? "0 0 10px rgba(0, 242, 254, 0.3)" : "none",
+            transition: "all 150ms ease",
+          }}
+          onMouseEnter={(e) => {
+            if (connecting) return;
+            e.currentTarget.style.background = hostOk
+              ? "linear-gradient(135deg, #00d2ff, #00b8d9)"
+              : "rgba(0, 242, 254, 0.2)";
+            e.currentTarget.style.boxShadow = "0 0 14px rgba(0, 242, 254, 0.45)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = hostOk
+              ? "linear-gradient(135deg, #00f2fe, #00d2ff)"
+              : "rgba(0, 242, 254, 0.08)";
+            e.currentTarget.style.boxShadow = hostOk ? "0 0 10px rgba(0, 242, 254, 0.3)" : "none";
+          }}
+        >
+          <FiTerminal style={{ fontSize: 11 }} />
+          {connecting ? "Connecting..." : "SSH Connect"}
+        </button>
 
         {connectionStatus?.lastError && !hostOk && (
           <>

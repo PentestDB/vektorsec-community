@@ -3,12 +3,19 @@ name: vektorsec
 services:
   mongodb:
     image: mongo:latest
+    # Production: MongoDB runs with --auth. Set MONGO_USER / MONGO_PASSWORD
+    # when deploying (see deploy/secrets.env). On a fresh volume the env vars
+    # create the root user; on an existing volume the user must exist already.
+    command: ["mongod", "--auth"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
       - mongodb-data:/data/db
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      test: ["CMD", "mongosh", "--quiet", "-u", "${MONGO_USER:-root}", "-p", "${MONGO_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -16,12 +23,14 @@ services:
 
   redis:
     image: redis:latest
+    # Production: Redis requires a password (REDIS_PASSWORD, see deploy/secrets.env).
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - redis-data:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -31,8 +40,8 @@ services:
     image: vektorsec-backend
     build: ./backend
     environment:
-      MONGO_URI: mongodb://mongodb:27017/vektorsec
-      REDIS_URL: redis://redis:6379
+      MONGO_URI: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD}@mongodb:27017/vektorsec?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CODEX_HOME: /root/.codex
       SSH_CONFIG_FILE: /root/.ssh/config
       # "Local" work hosts execute in the backend runtime. Keep their folders
@@ -42,9 +51,9 @@ services:
       # Required only when a workspace selects Local and starts OpenVPN there.
       - NET_ADMIN
     ports:
-      - "8080:8080"
-      - "6080:6080"
-      - "9020:9020"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:6080:6080"
+      - "127.0.0.1:9020:9020"
     volumes:
       - ./kali-data:/kali-data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -65,8 +74,13 @@ services:
     image: vektorsec-frontend
     build:
       context: ./frontend
+    environment:
+      PORT: 3001
+      # Black-box gateway targets (server-side only — never reach the browser)
+      BACKEND_URI: http://backend:8081
+      VNC_ORIGIN_URI: http://backend:6080
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3001:3001"
     env_file:
       - ./frontend/.env
     depends_on:

@@ -29,6 +29,21 @@ export function escapeForLoginShell(command: string): string {
   return `"\${SHELL:-$(command -v bash || command -v sh)}" -l -c '${escaped}'`;
 }
 
+/**
+ * Command that opens a persistent interactive login shell on a remote work
+ * host, rooted in the workspace folder.
+ *
+ * `$SHELL` must not be used bare here either: it is routinely unset over
+ * non-interactive SSH and in containers, and `exec $SHELL -l` would collapse
+ * to `exec -l` — the remote shell tries to run "-l" as a program, the channel
+ * closes instantly, and the terminal appears blank (no prompt, no error).
+ * Fall back to bash, then sh, when it is empty — same policy as
+ * escapeForLoginShell().
+ */
+export function buildPersistentShellCommand(folder: string): string {
+  return `mkdir -p -- ${folder} && cd -- ${folder} && exec "\${SHELL:-$(command -v bash || command -v sh)}" -l`;
+}
+
 export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
 
 export interface ShellInfo {
@@ -135,6 +150,8 @@ export class ShellManager extends EventEmitter {
   private destroyed: boolean = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempt: number = 0;
+  /** In-flight connect attempt shared by concurrent callers (spawn + HTTP reconnect). */
+  private connectPromise: Promise<void> | null = null;
 
   constructor(sessionId: string, loadTarget: () => Promise<ResolvedWorkHost>) {
     super();
@@ -155,12 +172,28 @@ export class ShellManager extends EventEmitter {
   }
 
   async connect(): Promise<void> {
-    if (this.connected || this.connecting || this.destroyed) return;
+    if (this.destroyed) throw new Error("Shell manager is destroyed");
+    if (this.connected) return;
+    // Concurrent callers (WS spawn_shell + HTTP reconnect) share the same
+    // in-flight attempt instead of racing. Without this, spawnShell could
+    // proceed while the SSH handshake is still running and fail spuriously
+    // with "SSH not connected" — a classic silent/no-feedback failure.
+    const inFlight = this.connectPromise;
+    if (inFlight) return inFlight;
+
     this.connecting = true;
+    const attempt = this.doConnect().finally(() => {
+      this.connecting = false;
+      this.connectPromise = null;
+    });
+    this.connectPromise = attempt;
+    return attempt;
+  }
+
+  private async doConnect(): Promise<void> {
     try {
       this.target = await this.loadTarget();
     } catch (error: any) {
-      this.connecting = false;
       this.emit("connection_status", {
         sshConnected: false,
         error: error?.message || "Could not resolve workspace work host",
@@ -171,39 +204,55 @@ export class ShellManager extends EventEmitter {
     if (this.target.kind === "local") {
       await import("fs").then(({ promises }) => promises.mkdir(expandLocalFolder(this.target!.workFolder), { recursive: true }));
       this.connected = true;
-      this.connecting = false;
       this.reconnectAttempt = 0;
+      console.log(`[ShellManager:${this.sessionId}] Local work host ready (folder=${this.target.workFolder})`);
       this.emit("connection_status", { sshConnected: false, hostConnected: true, kind: "local" });
       return;
     }
 
-    return new Promise<void>((resolve, reject) => {
-      const ssh = new SSHClient();
-      let settled = false;
+    const ssh = new SSHClient();
+    const timeoutMs = Number.parseInt(
+      process.env.SSH_CONNECT_TIMEOUT_MS || "15000",
+      10,
+    ) || 15_000;
 
-      ssh.on("ready", () => {
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let timer: NodeJS.Timeout | null = null;
+
+      const finish = (error?: Error) => {
         if (settled) return;
         settled = true;
+        if (timer) clearTimeout(timer);
+        error ? reject(error) : resolve();
+      };
+
+      // Hard bound on the handshake: ssh2's own readyTimeout covers the TCP +
+      // key-exchange phase, but a server that keeps demanding auth methods (or
+      // a blackholed network) could otherwise stall this forever. A bounded
+      // connect always settles, so callers always get feedback.
+      timer = setTimeout(() => {
+        if (settled) return;
+        try { ssh.end(); } catch { /* ignore */ }
+        finish(new Error(`SSH connection timed out after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+
+      ssh.on("ready", () => {
         this.sshConnection = ssh;
         this.connected = true;
-        this.connecting = false;
         this.reconnectAttempt = 0;
         console.log(`[ShellManager:${this.sessionId}] SSH connected`);
         ssh.exec(`mkdir -p -- ${shellFolderExpression(this.target!.workFolder)}`, (err) => {
           if (err) console.warn(`[ShellManager:${this.sessionId}] Failed to create workspace dir:`, err.message);
         });
         this.emit("connection_status", { sshConnected: true, hostConnected: true, kind: "ssh" });
-        resolve();
+        finish();
       });
 
       ssh.on("error", (err: Error) => {
         console.error(`[ShellManager:${this.sessionId}] SSH error:`, err.message);
         if (!settled) {
-          settled = true;
-          this.connecting = false;
-          try { ssh.end(); } catch { /* ignore */ }
-          this.emit("connection_status", { sshConnected: false, error: err.message });
-          reject(err);
+          finish(err);
         } else if (this.connected && this.sshConnection === ssh) {
           this.handleDisconnect();
         }
@@ -221,15 +270,27 @@ export class ShellManager extends EventEmitter {
         }
       });
 
-      ssh.on("keyboard-interactive", (_name: string, _instructions: string, _instructionsLang: string, prompts: any[], finish: (responses: string[]) => void) => {
-        finish(prompts.map(() => this.target?.sshConfig?.password || ""));
+      ssh.on("keyboard-interactive", (_name: string, _instructions: string, _instructionsLang: string, prompts: any[], respond: (responses: string[]) => void) => {
+        respond(prompts.map(() => this.target?.sshConfig?.password || ""));
       });
 
-      ssh.connect(this.target!.sshConfig!);
+      ssh.connect({ ...this.target!.sshConfig!, readyTimeout: timeoutMs });
+    }).catch((error: Error) => {
+      // Ensure a failed handshake is always surfaced through connection_status
+      // (the UI renders it next to the "SSH Connect" button) and never leaves a
+      // half-open client attached.
+      try { ssh.end(); } catch { /* ignore */ }
+      this.emit("connection_status", { sshConnected: false, error: error.message });
+      throw error;
     });
   }
 
   async reconnect(): Promise<void> {
+    // Let any in-flight attempt settle (it has a hard timeout) before tearing
+    // down, so two clients never race for the same connection state.
+    if (this.connectPromise) {
+      try { await this.connectPromise; } catch { /* failed attempt — retry fresh */ }
+    }
     if (this.sshConnection) {
       try { this.sshConnection.end(); } catch { /* ignore */ }
       this.sshConnection = null;
@@ -307,6 +368,7 @@ export class ShellManager extends EventEmitter {
       if (this.target?.kind === "local") {
         const child = spawnLocalShell(this.target.workFolder, shell.type === "pty");
         this.wireChannel(shell, localChannel(child));
+        console.log(`[ShellManager:${this.sessionId}] Spawned local shell ${shell.shellId} (label=${shell.label}, cwd=${expandLocalFolder(this.target.workFolder)})`);
         resolve();
         return;
       }
@@ -315,19 +377,41 @@ export class ShellManager extends EventEmitter {
       }
 
       const folder = shellFolderExpression(this.target!.workFolder);
-      const cmd = `mkdir -p -- ${folder} && cd -- ${folder} && exec $SHELL -l`;
+      const cmd = buildPersistentShellCommand(folder);
+      console.log(`[ShellManager:${this.sessionId}] Opening shell ${shell.shellId} (label=${shell.label}) over SSH — exec: ${cmd}`);
+
+      // If the remote command fails before a shell is up (e.g. the fallback
+      // shell was missing, mkdir failed, $SHELL unset), surface the real error
+      // into the terminal buffer instead of leaving a blank screen that looks
+      // like a hang.
+      const finish = (err: Error | undefined, channel: RuntimeChannel | null) => {
+        if (err) {
+          const msg = `\r\n[Failed to start shell: ${err.message}]\r\n`;
+          shell.outputBuffer.append(msg);
+          this.emit("shell_output", {
+            shellId: shell.shellId,
+            data: msg,
+            offset: shell.outputBuffer.currentOffset,
+          });
+          console.error(`[ShellManager:${this.sessionId}] Failed to start shell ${shell.shellId}:`, err.message);
+          return reject(err);
+        }
+        if (!channel) {
+          return reject(new Error("No channel returned by SSH server"));
+        }
+        this.wireChannel(shell, channel);
+        console.log(`[ShellManager:${this.sessionId}] Shell ${shell.shellId} channel opened`);
+        resolve();
+      };
+
       if (shell.type === "pty") {
-        this.sshConnection.exec(cmd, { pty: { term: "xterm-256color", cols: 200, rows: 50 } }, (err, channel) => {
-          if (err) return reject(err);
-          this.wireChannel(shell, channel);
-          resolve();
-        });
+        this.sshConnection.exec(
+          cmd,
+          { pty: { term: "xterm-256color", cols: 200, rows: 50 } },
+          (err, channel) => finish(err, channel),
+        );
       } else {
-        this.sshConnection.exec(cmd, (err, channel) => {
-          if (err) return reject(err);
-          this.wireChannel(shell, channel);
-          resolve();
-        });
+        this.sshConnection.exec(cmd, (err, channel) => finish(err, channel));
       }
     });
   }
@@ -355,7 +439,8 @@ export class ShellManager extends EventEmitter {
       });
     });
 
-    channel.on("close", () => {
+    channel.on("close", (code?: number | null) => {
+      console.log(`[ShellManager:${this.sessionId}] Shell ${shell.shellId} channel closed (code=${code ?? "n/a"})`);
       if (shell.status === "active" && !this.destroyed) {
         shell.channel = null;
         shell.outputBuffer.append("\r\n[Shell closed]\r\n");
@@ -387,7 +472,17 @@ export class ShellManager extends EventEmitter {
     };
 
     this.shells.set(shellId, shell);
-    await this.openChannel(shell);
+    try {
+      await this.openChannel(shell);
+    } catch (err: any) {
+      // Don't leave a stuck "active" tab behind when the channel failed to
+      // open — the socket error event already tells the user why.
+      console.error(`[ShellManager:${this.sessionId}] spawnShell failed (label=${shell.label}):`, err?.message ?? err);
+      shell.status = "closed";
+      this.shells.delete(shellId);
+      this.emit("shell_closed", { shellId });
+      throw err;
+    }
 
     this.emit("shell_created", {
       shellId,

@@ -84,14 +84,15 @@ Operations consume credits based on context depth and tool invocation:
     icon: FiCode,
     content: `## API Reference
 
-The backend exposes a REST API for programmatic integration:
+The platform exposes a REST API through the frontend gateway (the backend host is
+not exposed directly to clients):
 
 \`\`\`bash
 # Verify the current session
-curl -X POST http://localhost:8080/auth/status
+curl -X POST http://localhost:3001/api/auth/status
 
 # Create a new workspace
-curl -X POST http://localhost:8080/workspace/create
+curl -X POST http://localhost:3001/api/workspace/create
 \`\`\`
 
 Authentication is handled via session cookies. For machine-to-machine access, generate an **MCP token** from **Settings > MCP Access**.`,

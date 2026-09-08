@@ -202,7 +202,7 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
           }
           name="proxyUrl"
         >
-          <Input placeholder="e.g. http://127.0.0.1:8080" />
+          <Input placeholder="e.g. http://127.0.0.1:8081" />
         </Form.Item>
 
         <Form.Item

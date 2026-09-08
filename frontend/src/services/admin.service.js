@@ -42,6 +42,16 @@ export const deleteUser = async (userId) => {
   return response.data;
 };
 
+export const createUser = async ({ name, email, password, role, plan }) => {
+  const response = await apiClient.post("/admin/users", { name, email, password, role, plan });
+  return response.data;
+};
+
+export const resetUserTwoFactor = async (userId) => {
+  const response = await apiClient.post(`/admin/users/${userId}/reset-2fa`);
+  return response.data;
+};
+
 // Reports
 export const getReports = async (period = "30d") => {
   const response = await apiClient.get("/admin/reports", { params: { period } });
