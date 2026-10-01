@@ -150,6 +150,16 @@ function hasLegacyConfig(): boolean {
   return Boolean(process.env.SSH_HOST?.trim() && process.env.SSH_USERNAME?.trim());
 }
 
+/**
+ * True when the environment still carries the pre-workspace SSH credentials
+ * (Settings → SSH / `SSH_*` in `.env`). Used as the fallback work host for
+ * workspaces that never picked a host explicitly — otherwise those sessions
+ * silently ran every command inside the backend container.
+ */
+export function hasLegacySSHConfig(): boolean {
+  return hasLegacyConfig();
+}
+
 function loadLegacyKeyFromMountedPath(config: SSHConfig): SSHConfig {
   if (config.privateKey || config.password || config.agent) return config;
 

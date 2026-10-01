@@ -1,13 +1,21 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { App } from "antd";
-import { ApiOutlined, DisconnectOutlined, ReloadOutlined } from "@ant-design/icons";
+import { useRouter } from "next/navigation";
+import {
+  ApiOutlined,
+  CloudServerOutlined,
+  DisconnectOutlined,
+  LaptopOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import { FiTerminal } from "react-icons/fi";
 import ShellTabBar from "./ShellTabBar";
 import ShellTerminal from "./ShellTerminal";
 
 export default function ShellPanel({
+  sessionId,
   shells,
   subscribeShell,
   unsubscribeShell,
@@ -21,11 +29,24 @@ export default function ShellPanel({
   onReconnectHost,
 }) {
   const { message } = App.useApp();
+  const router = useRouter();
   const [activeShellId, setActiveShellId] = useState(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const warnedLocalHost = useRef(false);
   const activeShells = shells.filter((s) => s.status === "active");
   const hostOk = connectionStatus?.hostConnected ?? connectionStatus?.sshConnected ?? false;
+  // Which machine the terminals actually run on. `kind` arrives from the backend
+  // (session connection_state / WS connection_status); undefined means the work
+  // host has not been resolved yet (nothing has connected in this session).
+  const hostKind = connectionStatus?.kind ?? connectionStatus?.hostKind;
+  const isLocalHost = hostKind === "local";
+  const hostLabel = connectionStatus?.hostLabel || connectionStatus?.sshProfileAlias || "";
+  const connectionHref = sessionId ? `/session/${sessionId}/connection` : null;
+
+  const openConnectionSettings = useCallback(() => {
+    if (connectionHref) router.push(connectionHref);
+  }, [connectionHref, router]);
 
   const currentShellId = activeShellId && activeShells.find((s) => s.shellId === activeShellId)
     ? activeShellId
@@ -77,6 +98,15 @@ export default function ShellPanel({
           return;
         }
       }
+      if (isLocalHost && !warnedLocalHost.current) {
+        // Say it once per panel: this terminal is the Pentest Copilot container,
+        // not the exploit box the user configured under Settings → SSH.
+        warnedLocalHost.current = true;
+        message.warning(
+          "This session runs on the local host (the Pentest Copilot container). To work on your own box, pick an SSH host in the Connection tab.",
+          6,
+        );
+      }
       const sent = spawnShell(`ssh-${shells.length + 1}`);
       if (!sent) {
         message.error("Could not open a shell — the connection was lost. Click Reconnect and try again.");
@@ -86,7 +116,7 @@ export default function ShellPanel({
     } finally {
       setTimeout(() => setConnecting(false), 1200);
     }
-  }, [connecting, hostOk, onReconnectHost, shells.length, spawnShell, wsConnected, message]);
+  }, [connecting, hostOk, isLocalHost, onReconnectHost, shells.length, spawnShell, wsConnected, message]);
 
   return (
     <div style={{
@@ -162,10 +192,75 @@ export default function ShellPanel({
           backgroundColor: "rgba(0, 242, 254, 0.15)",
         }} />
 
+        {/* Where do the terminals actually run? SSH box vs the backend container. */}
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}
+          title={
+            hostKind === "ssh"
+              ? `Commands run on the SSH host${hostLabel ? ` "${hostLabel}"` : ""}`
+              : isLocalHost
+                ? "Commands run inside the Pentest Copilot container — not on your own box"
+                : "Work host not resolved yet — connect a shell to see where it runs"
+          }
+        >
+          {hostKind === "ssh" ? (
+            <CloudServerOutlined style={{ color: "#00f2fe", fontSize: 11 }} />
+          ) : (
+            <LaptopOutlined style={{ color: isLocalHost ? "#ffb300" : "#6d6d6d", fontSize: 11 }} />
+          )}
+          <span style={{
+            color: hostKind === "ssh" ? "#00f2fe" : isLocalHost ? "#ffb300" : "#6d6d6d",
+            maxWidth: 170,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {hostKind === "ssh"
+              ? `SSH · ${hostLabel || "remote host"}`
+              : isLocalHost
+                ? "Local · container"
+                : "Host · unknown"}
+          </span>
+          {isLocalHost && connectionHref && (
+            <button
+              onClick={openConnectionSettings}
+              title="Open the Connection tab and select an SSH host for this workspace"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                background: "none",
+                border: "1px solid rgba(255, 179, 0, 0.45)",
+                borderRadius: 4,
+                color: "#ffb300",
+                cursor: "pointer",
+                padding: "1px 6px",
+                fontSize: 10,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <CloudServerOutlined style={{ fontSize: 9 }} />
+              Use SSH host
+            </button>
+          )}
+        </div>
+
+        <div style={{
+          width: 1,
+          height: 12,
+          backgroundColor: "rgba(0, 242, 254, 0.15)",
+        }} />
+
         <button
           onClick={handleSshConnect}
           disabled={connecting}
-          title={hostOk ? "Open a new SSH terminal" : "Connect SSH and open a terminal"}
+          title={
+            isLocalHost
+              ? "Opens a terminal in the local Pentest Copilot container — pick an SSH host in the Connection tab to work on your own box"
+              : hostOk
+                ? "Open a new SSH terminal"
+                : "Connect SSH and open a terminal"
+          }
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -198,7 +293,7 @@ export default function ShellPanel({
           }}
         >
           <FiTerminal style={{ fontSize: 11 }} />
-          {connecting ? "Connecting..." : "SSH Connect"}
+          {connecting ? "Connecting..." : isLocalHost ? "Local Shell" : "SSH Connect"}
         </button>
 
         {connectionStatus?.lastError && !hostOk && (

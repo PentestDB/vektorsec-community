@@ -9,10 +9,22 @@ import { PassThrough } from "stream";
 import WorkspaceModel, { WorkHostKind } from "../models/Workspace/Workspace.model";
 import SessionsModel from "../models/Sessions/Sessions.model";
 import { SSHConfig } from "../utils/sshConfig";
-import { resolveSSHProfile, SSHProfileSummary } from "./ssh-profile.service";
+import {
+  hasLegacySSHConfig,
+  LEGACY_PROFILE_ALIAS,
+  resolveSSHProfile,
+  SSHProfileSummary,
+} from "./ssh-profile.service";
 
 const execAsync = promisify(exec);
 const DEFAULT_WORK_ROOT = process.env.WORKSPACE_DIR || "~/pentest-workspaces";
+/**
+ * Remote default. WORKSPACE_DIR points at a *container* path (/srv/data/...)
+ * in the dev stack, which is meaningless on an exploit box, so remote and local
+ * hosts get different roots: sessions on SSH hosts keep their files under
+ * `~/pentest-workspaces/<workspaceId>` in the remote user's home.
+ */
+const REMOTE_WORK_ROOT = "~/pentest-workspaces";
 
 export interface ResolvedWorkHost {
   workspaceId: string;
@@ -44,6 +56,11 @@ export interface DirectoryListing {
 
 export function defaultWorkFolder(workspaceId: string): string {
   return `${DEFAULT_WORK_ROOT.replace(/\/+$/, "")}/${workspaceId}`;
+}
+
+/** Default folder inside a remote (SSH) host's home directory. */
+export function defaultRemoteWorkFolder(workspaceId: string): string {
+  return `${REMOTE_WORK_ROOT}/${workspaceId}`;
 }
 
 export function validateWorkFolder(value: unknown): string {
@@ -119,11 +136,27 @@ export async function resolveWorkHostRecords(
   }
   const workspaceId = workspace.workspaceId;
   const stored = workspace.workHost;
-  const kind: WorkHostKind = stored?.kind || "local";
-  const workFolder = validateWorkFolder(stored?.workFolder || defaultWorkFolder(workspaceId));
+
+  // A workspace that never picked a host inherits the environment SSH box
+  // (Settings → SSH / `SSH_*`) when it is configured and usable. Without this,
+  // the default was `local` — i.e. every command, terminal and agent run landed
+  // inside the backend container even though "SSH Connect" was configured and
+  // reachable, which looked like SSH silently not connecting.
+  if (!stored) {
+    const inherited = await resolveInheritedLegacyHost(workspaceId, profileResolver);
+    if (inherited) return inherited;
+    return {
+      workspaceId,
+      kind: "local",
+      workFolder: validateWorkFolder(defaultWorkFolder(workspaceId)),
+    };
+  }
+
+  const kind: WorkHostKind = stored.kind || "local";
+  const workFolder = validateWorkFolder(stored.workFolder || defaultWorkFolder(workspaceId));
   if (kind === "local") return { workspaceId, kind, workFolder };
 
-  const sshProfileAlias = stored?.sshProfileAlias;
+  const sshProfileAlias = stored.sshProfileAlias;
   if (!sshProfileAlias) throw new Error("The workspace has no SSH profile selected");
   const resolved = await profileResolver(sshProfileAlias);
   return {
@@ -134,6 +167,33 @@ export async function resolveWorkHostRecords(
     sshConfig: resolved.config,
     sshProfile: resolved.summary,
   };
+}
+
+/**
+ * Fallback work host for a workspace that never selected one: the legacy
+ * environment SSH box, but only when it is actually usable. Any failure
+ * (no `SSH_*` configured, unreadable key, unreachable profile) keeps the local
+ * default instead of breaking every command in the workspace.
+ */
+async function resolveInheritedLegacyHost(
+  workspaceId: string,
+  profileResolver: typeof resolveSSHProfile,
+): Promise<ResolvedWorkHost | null> {
+  if (!hasLegacySSHConfig()) return null;
+  try {
+    const resolved = await profileResolver(LEGACY_PROFILE_ALIAS);
+    if (!resolved.summary.available) return null;
+    return {
+      workspaceId,
+      kind: "ssh",
+      workFolder: validateWorkFolder(defaultRemoteWorkFolder(workspaceId)),
+      sshProfileAlias: LEGACY_PROFILE_ALIAS,
+      sshConfig: resolved.config,
+      sshProfile: resolved.summary,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function resolveSessionWorkHost(sessionId: string): Promise<ResolvedWorkHost> {

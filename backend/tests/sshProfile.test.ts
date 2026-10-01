@@ -5,6 +5,7 @@ import {
   parseSSHGOutput,
   normalizeManagedInput,
   managedProfileToConfig,
+  LEGACY_PROFILE_ALIAS,
 } from "../src/services/ssh-profile.service";
 import { ShellManager } from "../src/services/shell.manager";
 import {
@@ -14,6 +15,8 @@ import {
   shellFolderExpression,
   testWorkHost,
   validateWorkFolder,
+  defaultWorkFolder,
+  defaultRemoteWorkFolder,
 } from "../src/services/work-host.service";
 import fs from "node:fs";
 import os from "node:os";
@@ -146,6 +149,131 @@ test("SSH work host stores an alias and resolves credentials outside Mongo", asy
   );
   assert.equal(target.sshProfileAlias, "kali-lab");
   assert.equal(target.sshConfig?.privateKey, "not-persisted");
+});
+
+/** Runs `run` with the legacy `SSH_*` environment overridden, then restores it. */
+async function withLegacySSHEnv<T>(
+  values: { SSH_HOST?: string; SSH_USERNAME?: string },
+  run: () => Promise<T>,
+): Promise<T> {
+  const keys = ["SSH_HOST", "SSH_USERNAME"] as const;
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]])) as Record<string, string | undefined>;
+  for (const key of keys) {
+    const value = values[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    return await run();
+  } finally {
+    for (const key of keys) {
+      const value = previous[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test("a workspace with no work host inherits the environment SSH box", async () => {
+  await withLegacySSHEnv({ SSH_HOST: "172.26.249.177", SSH_USERNAME: "root" }, async () => {
+    const requested: string[] = [];
+    const target = await resolveWorkHostRecords(
+      { workspaceId: "workspace-one" },
+      { workspaceId: "workspace-one" },
+      async (alias) => {
+        requested.push(alias);
+        return {
+          summary: {
+            alias,
+            label: "Legacy environment default",
+            host: "172.26.249.177",
+            port: 2222,
+            username: "root",
+            source: "legacy_env" as const,
+            available: true,
+          },
+          config: { host: "172.26.249.177", port: 2222, username: "root", password: "secret" },
+        };
+      },
+    );
+    // The legacy profile resolves the credentials — no alias is stored in Mongo.
+    assert.deepEqual(requested, [LEGACY_PROFILE_ALIAS]);
+    assert.equal(target.kind, "ssh");
+    assert.equal(target.sshProfileAlias, LEGACY_PROFILE_ALIAS);
+    assert.equal(target.sshConfig?.password, "secret");
+    assert.equal(target.workFolder, defaultRemoteWorkFolder("workspace-one"));
+    // Remote hosts keep their files in the remote home, not a container path.
+    assert.equal(target.workFolder, "~/pentest-workspaces/workspace-one");
+  });
+});
+
+test("a workspace with no work host stays local when no environment SSH box exists", async () => {
+  await withLegacySSHEnv({}, async () => {
+    let resolverCalled = false;
+    const target = await resolveWorkHostRecords(
+      { workspaceId: "workspace-two" },
+      { workspaceId: "workspace-two" },
+      async () => {
+        resolverCalled = true;
+        throw new Error("no legacy profile should be resolved without SSH_* config");
+      },
+    );
+    assert.equal(resolverCalled, false);
+    assert.equal(target.kind, "local");
+    assert.equal(target.workFolder, defaultWorkFolder("workspace-two"));
+  });
+});
+
+test("an unusable environment SSH box falls back to the local host", async () => {
+  await withLegacySSHEnv({ SSH_HOST: "172.26.249.177", SSH_USERNAME: "root" }, async () => {
+    // Profile exists but no credential could be loaded → unusable.
+    const unavailable = await resolveWorkHostRecords(
+      { workspaceId: "workspace-three" },
+      { workspaceId: "workspace-three" },
+      async (alias) => ({
+        summary: {
+          alias,
+          label: "Legacy environment default",
+          host: "172.26.249.177",
+          port: 22,
+          username: "root",
+          source: "legacy_env" as const,
+          available: false,
+          error: "The legacy credential could not be loaded",
+        },
+        config: { host: "172.26.249.177", port: 22, username: "root" },
+      }),
+    );
+    assert.equal(unavailable.kind, "local");
+
+    // A resolver failure must never break every command in the workspace.
+    const throwing = await resolveWorkHostRecords(
+      { workspaceId: "workspace-three" },
+      { workspaceId: "workspace-three" },
+      async () => {
+        throw new Error("Legacy SSH environment configuration is unavailable");
+      },
+    );
+    assert.equal(throwing.kind, "local");
+    assert.equal(throwing.workFolder, defaultWorkFolder("workspace-three"));
+  });
+});
+
+test("an explicit local work host wins over the environment SSH box", async () => {
+  await withLegacySSHEnv({ SSH_HOST: "172.26.249.177", SSH_USERNAME: "root" }, async () => {
+    const target = await resolveWorkHostRecords(
+      { workspaceId: "workspace-four" },
+      {
+        workspaceId: "workspace-four",
+        workHost: { kind: "local", workFolder: "/tmp/explicit local" },
+      },
+      async () => {
+        throw new Error("an explicit local choice must not resolve an SSH profile");
+      },
+    );
+    assert.equal(target.kind, "local");
+    assert.equal(target.workFolder, "/tmp/explicit local");
+  });
 });
 
 test("work folder validation and quoting preserve spaces and remote home expansion", () => {

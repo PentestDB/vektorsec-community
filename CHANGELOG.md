@@ -70,6 +70,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   translated "Session not available" screen with a link back to the workspaces
   (`frontend/src/app/session/[session_id]/layout.js`, `frontend/src/hooks/useShellSocket.js`).
 - Notification/cron-style log lines no longer print credentials (`[REDACTED]` plus structured fields).
+- **"SSH Connect" opened a shell inside the backend container**: a workspace that never picked a
+  work host defaulted to `local`, so terminals and agent commands ran in the Pentest Copilot
+  container even though Settings → SSH was configured and reachable — the Connection tab only
+  showed a host after the default was saved by hand. A workspace with no stored `workHost` now
+  inherits the legacy `SSH_*` box when it is configured and usable (files under
+  `~/pentest-workspaces/<workspaceId>` on the remote), the Connection tab reports that effective
+  host, and an unusable/unreadable SSH profile still degrades to the local host instead of
+  breaking every command in the workspace (`backend/src/services/work-host.service.ts`,
+  `backend/src/controllers/workspace.controller.ts`).
+- **The shell panel now says where a terminal actually runs**: it shows the resolved host
+  (`SSH · <profile>` vs `Local · container`), the button is labelled **Local Shell** and warns once
+  when the session is local, with a shortcut to the Connection tab to pick an SSH host
+  (`frontend/src/components/shells/ShellPanel.jsx`, `backend/src/services/shell.manager.ts`,
+  `backend/src/services/shell.socket.ts`).
 
 ### Security
 

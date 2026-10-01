@@ -126,6 +126,7 @@ const SessionMainPage = ({ session_id }) => {
           flexDirection: "column",
         }}>
           <ShellPanel
+            sessionId={session_id}
             shells={shells}
             subscribeShell={subscribeShell}
             unsubscribeShell={unsubscribeShell}

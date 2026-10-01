@@ -46,6 +46,12 @@ export function buildPersistentShellCommand(folder: string): string {
 
 export type ShellPurpose = "exploit-box" | "reverse-shell" | "listener";
 
+/**
+ * Label for the backend container itself. Shown in the shell panel so a local
+ * shell is never mistaken for the configured exploit box.
+ */
+export const LOCAL_HOST_LABEL = "Local (Pentest Copilot container)";
+
 export interface ShellInfo {
   shellId: string;
   label: string;
@@ -171,6 +177,22 @@ export class ShellManager extends EventEmitter {
     return this.target?.workFolder || "";
   }
 
+  /** Resolved work-host kind, undefined until the target has been loaded. */
+  get workHostKind(): "local" | "ssh" | undefined {
+    return this.target?.kind;
+  }
+
+  /** Human label for the resolved work host (used by the shell panel). */
+  get workHostLabel(): string | undefined {
+    if (!this.target) return undefined;
+    if (this.target.kind === "local") return LOCAL_HOST_LABEL;
+    return (
+      this.target.sshProfile?.label ||
+      this.target.sshProfileAlias ||
+      this.target.sshConfig?.host
+    );
+  }
+
   async connect(): Promise<void> {
     if (this.destroyed) throw new Error("Shell manager is destroyed");
     if (this.connected) return;
@@ -206,7 +228,12 @@ export class ShellManager extends EventEmitter {
       this.connected = true;
       this.reconnectAttempt = 0;
       console.log(`[ShellManager:${this.sessionId}] Local work host ready (folder=${this.target.workFolder})`);
-      this.emit("connection_status", { sshConnected: false, hostConnected: true, kind: "local" });
+      this.emit("connection_status", {
+        sshConnected: false,
+        hostConnected: true,
+        kind: "local",
+        hostLabel: LOCAL_HOST_LABEL,
+      });
       return;
     }
 
@@ -245,7 +272,12 @@ export class ShellManager extends EventEmitter {
         ssh.exec(`mkdir -p -- ${shellFolderExpression(this.target!.workFolder)}`, (err) => {
           if (err) console.warn(`[ShellManager:${this.sessionId}] Failed to create workspace dir:`, err.message);
         });
-        this.emit("connection_status", { sshConnected: true, hostConnected: true, kind: "ssh" });
+        this.emit("connection_status", {
+          sshConnected: true,
+          hostConnected: true,
+          kind: "ssh",
+          hostLabel: this.workHostLabel,
+        });
         finish();
       });
 
@@ -280,7 +312,11 @@ export class ShellManager extends EventEmitter {
       // (the UI renders it next to the "SSH Connect" button) and never leaves a
       // half-open client attached.
       try { ssh.end(); } catch { /* ignore */ }
-      this.emit("connection_status", { sshConnected: false, error: error.message });
+      this.emit("connection_status", {
+        sshConnected: false,
+        error: error.message,
+        ...(this.target?.kind ? { kind: this.target.kind, hostLabel: this.workHostLabel } : {}),
+      });
       throw error;
     });
   }

@@ -162,7 +162,17 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
     clientManagers.set(ws, shellManager);
     subscribeToShellEvents(client, shellManager);
 
-    send(ws, "connection_status", { sshConnected: shellManager.isConnected });
+    // Report the resolved work host up-front so the shell panel can label itself
+    // honestly — "SSH Connect" only when the session really runs on an SSH host,
+    // and a clear "Local (container)" hint otherwise.
+    const hostKind = shellManager.workHostKind;
+    const connected = shellManager.isConnected;
+    send(ws, "connection_status", {
+      sshConnected: hostKind === "ssh" ? connected : false,
+      hostConnected: connected,
+      ...(hostKind ? { kind: hostKind } : {}),
+      ...(shellManager.workHostLabel ? { hostLabel: shellManager.workHostLabel } : {}),
+    });
 
     ws.on("message", async (raw) => {
       try {

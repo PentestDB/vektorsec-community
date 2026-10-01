@@ -308,10 +308,26 @@ export const getWorkspaceWorkHost = async (req: Request, res: Response) => {
       .lean();
     if (!workspace) return res.status(404).json({ message: "Workspace not found" });
 
-    const workHost = workspace.workHost || {
-      kind: "local",
-      workFolder: defaultWorkFolder(workspaceId),
-    };
+    // Credential-free view of the host this workspace's commands actually run
+    // on: the saved choice when there is one, otherwise the resolved default
+    // (which inherits the environment SSH box once one is configured, so the
+    // Connection page reflects reality instead of always showing "Local").
+    let workHost = workspace.workHost;
+    if (!workHost) {
+      try {
+        const resolved = await resolveWorkspaceWorkHost(workspaceId);
+        workHost = {
+          kind: resolved.kind,
+          workFolder: resolved.workFolder,
+          ...(resolved.sshProfileAlias ? { sshProfileAlias: resolved.sshProfileAlias } : {}),
+        } as typeof workspace.workHost;
+      } catch {
+        workHost = {
+          kind: "local",
+          workFolder: defaultWorkFolder(workspaceId),
+        } as typeof workspace.workHost;
+      }
+    }
     return res.status(200).json({
       workHost,
       profiles: await listSSHProfiles(),
