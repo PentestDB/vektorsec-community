@@ -1,5 +1,7 @@
 # 🚀 VektorSec — คู่มือการติดตั้ง (Installation Guide)
 
+> 🇬🇧 **English**: [Installation Guide](./en/INSTALL_GUIDE.md)
+
 คู่มือนี้สำหรับการติดตั้งและรัน **VektorSec เวอร์ชันใหม่** ที่เพิ่มระบบ
 Payment & Plan Management, Agentic Tools, Sandbox Isolation, Knowledge Base,
 Audit Trail, Vault และอื่นๆ อีกมากมาย

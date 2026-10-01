@@ -1,5 +1,7 @@
 # 🏗️ VektorSec — แผนสถาปัตยกรรม 3 ช่องทาง (Architecture Plan)
 
+> 🇬🇧 **English**: [3-Channel Architecture Plan](./en/ARCHITECTURE_PLAN.md)
+
 เอกสารนี้วางแผนสถาปัตยกรรมสำหรับการให้บริการ **VektorSec** ผ่าน 3 ช่องทาง
 พร้อมระบบ Trial, ระบบคิดเงิน, และการป้องกัน Reverse Engineering
 
@@ -459,35 +461,37 @@ interface ChannelPricing {
 ## 🗺️ Roadmap การพัฒนา
 
 ### Phase 1: ระบบ Subscription & Trial (พื้นฐาน)
-- [ ] สร้าง `Subscription` model + service
-- [ ] สร้าง `UsageRecord` model + usage tracker
-- [ ] เพิ่ม trial flow ในระบบ payment ที่มีอยู่
-- [ ] เพิ่ม feature flags ตามแผน (จำกัดฟีเจอร์)
+- [x] สร้าง `Subscription` model + service → `models/Subscription/Subscription.model.ts`, `services/subscription.service.ts`
+- [x] สร้าง `UsageRecord` model + usage tracker → `models/UsageRecord/UsageRecord.model.ts`, `services/usageTracker.service.ts`
+- [x] เพิ่ม trial flow ในระบบ payment → `startTrial()` + endpoint `POST /api/subscriptions/me/:channel/trial` + ปุ่ม "Start Free Trial" ใน Pricing page + คำสั่ง `/trial` ใน Telegram
+- [x] เพิ่ม feature flags ตามแผน (จำกัดฟีเจอร์) → `Plan.features[]`, `Plan.limits`, `middlewares/UsageLimit.middleware.ts`
 
 ### Phase 2: Online Web (ปรับระบบที่มีอยู่)
-- [ ] เพิ่ม trial button ใน Pricing page
-- [ ] เพิ่ม Usage dashboard ใน Billing page
-- [ ] เชื่อมต่อ hosted API (เราเช่า) กับ backend
-- [ ] ตั้งค่า API key ของเราใน config
+- [x] เพิ่ม trial button ใน Pricing page → การ์ด "Welcome Trial" (plan `free`) ใน `frontend/src/components/pages/PricingPage.jsx`
+- [x] เพิ่ม Usage dashboard ใน Billing page → `BillingPage.jsx` เรียก `getUsage()` และแสดง usage bars
+- [x] เชื่อมต่อ hosted API (เราเช่า) กับ backend → ผ่าน model registry (Settings → Models) ที่เก็บ API key ของผู้ให้บริการ
+- [x] ตั้งค่า API key ของเราใน config → `backend/model-registry.json` (ไม่อยู่ใน git) + หน้า Settings → Models
 
 ### Phase 3: Telegram Bot
-- [ ] สร้าง `telegramBot.service.ts` (ใช้ `node-telegram-bot-api`)
-- [ ] สร้างคำสั่ง /start /subscribe /trial /status /usage
-- [ ] เชื่อมต่อกับ Agent Engine
-- [ ] ระบบ subscription ผ่าน Telegram
+- [x] สร้าง `telegramBot.service.ts` → ใช้ Telegram Bot API ผ่าน HTTP เอง (ไม่พึ่ง `node-telegram-bot-api`)
+- [x] สร้างคำสั่ง /start /subscribe /trial /status /usage → ครบแล้ว (`/trial` ใช้ `startTrial()` ตัวเดียวกับเว็บ)
+- [ ] เชื่อมต่อกับ Agent Engine → ยังไม่มีจุดที่ Telegram เรียก agent runtime
+- [ ] ระบบ subscription ผ่าน Telegram → มีการแสดงแผน/สถานะ แต่ยังไม่ครบ flow สมัคร + ชำระเงินในแชท
 
 ### Phase 4: Platform Download + License
-- [ ] สร้าง `license.service.ts` + License model
+- [ ] สร้าง `license.service.ts` + License model → **ยังไม่มี** (ทั้งโปรเจกต์ไม่มี License model)
 - [ ] สร้าง HW fingerprint + signed token
 - [ ] สร้าง CLI entry point (`vektorsec` command)
-- [ ] Obfuscate + compile to binary
-- [ ] ระบบ BYOK (ใส่ API เอง)
+- [ ] Obfuscate + compile to binary → หมายเหตุ: ตัด obfuscator ออกโดยเจตนาแล้ว (ดู `docs/BLACKBOX_ARCHITECTURE.md` หัวข้อ Build Pipeline)
+- [x] ระบบ BYOK (ใส่ API เอง) → ใช้งานได้จริงผ่าน model registry (Settings → Models)
 
 ### Phase 5: ป้องกัน Reverse Engineering
 - [ ] License key + HW binding
-- [ ] Code obfuscation
+- [ ] Code obfuscation → สำหรับ public repo ใช้แค่ minify + ปิด source maps (`next.config.js`)
 - [ ] Signed token + online check
 - [ ] (เพิ่มเติม) Compile to binary + native module
+
+> 📌 สถานะการทำจริงถูกตรวจจากโค้ดในเรพอัปเดตล่าสุด (กันยายน 2026) — งานที่ยังเหลือและลำดับความสำคัญดูที่ [ROADMAP_NEXT.md](./ROADMAP_NEXT.md)
 
 ---
 

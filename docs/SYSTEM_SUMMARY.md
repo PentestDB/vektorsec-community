@@ -1,5 +1,7 @@
 # 📘 VektorSec — สรุประบบทั้งหมด (System Summary)
 
+> 🇬🇧 **English**: [System Summary](./en/SYSTEM_SUMMARY.md)
+
 > สรุปภาพรวมสถาปัตยกรรม โมดูล และฟีเจอร์ของระบบ VektorSec
 > อัปเดตล่าสุด: สิงหาคม 2026
 

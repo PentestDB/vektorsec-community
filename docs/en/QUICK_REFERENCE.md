@@ -1,5 +1,7 @@
 # 📘 VektorSec — Quick Reference & Admin Manual
 
+> 🇹🇭 **ไทย**: [Quick Reference & Admin Manual](../QUICK_REFERENCE.md)
+
 A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Admin usage** for Admins/Developers.
 
 ---
@@ -24,6 +26,7 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 | **Frontend (Web App)** | `http://localhost:3001` | `http://localhost:3001` |
 | **Backend API** | `http://localhost:8081` | `http://localhost:8081` |
 | **Healthcheck** | `http://localhost:8081/api/healthcheck` | — |
+| **Readiness (Mongo + Redis)** | `http://localhost:8081/api/ready` → `{"status":"ready"}` (503 = not ready) | — |
 | **Kali Box (if any)** | via Agent on the web page | — |
 
 ---
@@ -52,6 +55,13 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 | `LANGFUSE_PUBLIC_KEY` | ⬜ Optional | Langfuse public key |
 | `LANGFUSE_SECRET_KEY` | ⬜ Optional | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | ⬜ Optional | Langfuse base URL |
+| `TOOLS_EXTENSIONS_DIR` | ⬜ Optional | Directory of tool plugins auto-loaded at startup (defaults to `backend/src/tools/extensions/`) |
+| `LOG_LEVEL` | ⬜ Optional | Log level: `debug`\|`info`\|`warn`\|`error` (default: debug in dev, info in production) |
+| `LOG_JSON` | ⬜ Optional | `1` = one JSON object per log line (default: on in production) |
+| `NOTIFY_WEBHOOK_URL` | ⬜ Optional | Notification target URL (Slack/Discord/LINE/webhook) — unset disables the feature |
+| `NOTIFY_WEBHOOK_KIND` | ⬜ Optional | `generic`\|`slack`\|`discord`\|`line` (default: generic) |
+| `NOTIFY_MIN_SEVERITY` | ⬜ Optional | Lowest severity forwarded: `info`\|`warning`\|`critical` |
+| `NOTIFY_TYPES` | ⬜ Optional | Comma-separated event allow-list (e.g. `payment_confirmed,agent_run_failed`) |
 
 > ⚠️ **Never commit the `.env` file to Git** — it is already in `.gitignore`.
 
@@ -128,6 +138,8 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 | GET | `/api/subscriptions/me/:channel` | Session | Subscription for a channel |
 | GET | `/api/subscriptions/me/:channel/access` | Session | Check access rights |
 | GET | `/api/subscriptions/me/:channel/usage` | Session | Channel usage |
+| GET | `/api/subscriptions/me/:channel/usage/export?days=30` | Session | Download the usage history as CSV |
+| POST | `/api/subscriptions/me/:channel/trial` | Session | Start the free trial (one-off → 409 once used) |
 | POST | `/api/subscriptions/me/:channel/cancel` | Session | Cancel channel subscription |
 | GET | `/api/subscriptions/admin` | Admin | All subscriptions |
 | POST | `/api/subscriptions/admin/expire-due` | Admin | Expire due subscriptions |
@@ -163,6 +175,7 @@ A single reference covering **Token/Secrets, API Endpoints, Panel Links, and Adm
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/api/agent/session/:id/agent-tools-config` | Session | Tool config for a session |
+| GET | `/api/agent/session/:id/report?format=markdown\|html\|json` | Session | Download the report (attachment; add `&inline=1` to preview in the browser) |
 | POST | `/api/task/*` | Session | Manage async tasks |
 | GET | `/api/workspace/*` | Session | Manage workspaces |
 | GET | `/api/mcp/*` | Session | MCP endpoints |
@@ -297,6 +310,30 @@ curl http://localhost:8081/api/telegram/status
 | `/usage` | Check today's usage (requests, tokens, cost) |
 | `/cancel` | Cancel subscription |
 | `/help` | Show command list |
+
+---
+
+## 🗄️ Database Migrations
+
+```bash
+cd backend
+pnpm migrate               # apply every pending migration
+pnpm migrate:status        # show applied / pending migrations
+pnpm migrate -- --dry-run  # plan the run without writing anything
+```
+
+- The ledger lives in the `migrations` collection (`id`, `appliedAt`, `durationMs`), so re-running is a no-op
+- On a VPS / inside a container use the compiled entry point: `docker compose exec backend node dist/migrations/cli.js --list`
+- For a new migration add `backend/src/migrations/002-...ts` and register it in `src/migrations/index.ts` (never reorder or rename an applied id)
+
+## 💾 Backup / Restore
+
+```bash
+bash deploy/backup.sh                     # stops backend/frontend → dumps volumes + kali-data → starts them again
+bash deploy/backup.sh --no-stop           # keep the stack running (dirty snapshot)
+bash deploy/backup.sh --out ~/backups/man # custom output directory
+bash deploy/restore.sh ./backups/<stamp>  # restore (asks for confirmation; --force overwrites existing data)
+```
 
 ---
 

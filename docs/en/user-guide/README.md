@@ -1,5 +1,7 @@
 # 🎯 VektorSec — Customer User Guides
 
+> 🇹🇭 **ไทย**: คู่มือภาษาไทยอยู่ใน [`docs/`](../../) — เช่น [User Guide](../../USER_GUIDE.md), [Install Guide](../../INSTALL_GUIDE.md)
+
 Welcome! Choose your platform below. Each guide walks you through
 **getting started, plans & payment, and using the AI agent** step by step.
 

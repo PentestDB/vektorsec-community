@@ -1,5 +1,7 @@
 # 📘 VektorSec — Quick Reference & Admin Manual (ฉบับสมบูรณ์)
 
+> 🇬🇧 **English**: [Quick Reference & Admin Manual](./en/QUICK_REFERENCE.md)
+
 เอกสารอ้างอิงฉบับเดียวที่รวม **Token/Secrets, API Endpoints, Panel Links, และคู่มือการใช้งาน** สำหรับ Admin/Developer
 
 ---
@@ -37,6 +39,7 @@
 | **Frontend (Web App)** | `http://localhost:3001` | `http://localhost:3001` |
 | **Backend API** | `http://localhost:8081` | `http://localhost:8081` |
 | **Healthcheck** | `http://localhost:8081/api/healthcheck` | — |
+| **Readiness (Mongo + Redis)** | `http://localhost:8081/api/ready` → `{"status":"ready"}` (503 = ยังไม่พร้อม) | — |
 | **Kali Box (ถ้ามี)** | ผ่าน Agent ในหน้าเว็บ | — |
 
 ---
@@ -65,6 +68,13 @@
 | `LANGFUSE_PUBLIC_KEY` | ⬜ ไม่บังคับ | Langfuse public key |
 | `LANGFUSE_SECRET_KEY` | ⬜ ไม่บังคับ | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | ⬜ ไม่บังคับ | Langfuse base URL |
+| `TOOLS_EXTENSIONS_DIR` | ⬜ ไม่บังคับ | โฟลเดอร์ plugin ที่จะโหลดอัตโนมัติตอน start (ค่าเริ่มต้น `backend/src/tools/extensions/`) |
+| `LOG_LEVEL` | ⬜ ไม่บังคับ | ระดับ log: `debug`\|`info`\|`warn`\|`error` (ค่าเริ่มต้น debug ใน dev, info ใน production) |
+| `LOG_JSON` | ⬜ ไม่บังคับ | `1` = ออก log เป็น JSON บรรทัดเดียว (ค่าเริ่มต้นเปิดเมื่อ production) |
+| `NOTIFY_WEBHOOK_URL` | ⬜ ไม่บังคับ | URL ปลายทางแจ้งเตือน (Slack/Discord/LINE/webhook) — ไม่ตั้ง = ปิดฟีเจอร์ |
+| `NOTIFY_WEBHOOK_KIND` | ⬜ ไม่บังคับ | `generic`\|`slack`\|`discord`\|`line` (ค่าเริ่มต้น generic) |
+| `NOTIFY_MIN_SEVERITY` | ⬜ ไม่บังคับ | ระดับต่ำสุดที่จะส่ง: `info`\|`warning`\|`critical` |
+| `NOTIFY_TYPES` | ⬜ ไม่บังคับ | รายการ event ที่จะส่ง คั่นด้วย `,` (เช่น `payment_confirmed,agent_run_failed`) |
 
 > ⚠️ **ห้าม commit ไฟล์ `.env` ลง Git** — `.gitignore` มีไว้แล้ว
 
@@ -141,6 +151,8 @@
 | GET | `/api/subscriptions/me/:channel` | Session | Subscription ของ channel นั้น |
 | GET | `/api/subscriptions/me/:channel/access` | Session | ตรวจสอบว่ามีสิทธิ์ใช้ไหม |
 | GET | `/api/subscriptions/me/:channel/usage` | Session | การใช้งาน channel นั้น |
+| GET | `/api/subscriptions/me/:channel/usage/export?days=30` | Session | ดาวน์โหลดประวัติการใช้งานเป็น CSV |
+| POST | `/api/subscriptions/me/:channel/trial` | Session | เริ่ม trial ฟรี (ใช้ได้ครั้งเดียว → 409 ถ้าใช้ไปแล้ว) |
 | POST | `/api/subscriptions/me/:channel/cancel` | Session | ยกเลิก subscription channel |
 | GET | `/api/subscriptions/admin` | Admin | Subscription ทั้งหมด |
 | POST | `/api/subscriptions/admin/expire-due` | Admin | Expire subscription ที่หมดอายุ |
@@ -176,6 +188,7 @@
 | Method | Endpoint | Auth | คำอธิบาย |
 |--------|----------|------|----------|
 | GET | `/api/agent/session/:id/agent-tools-config` | Session | Config tools ของ session |
+| GET | `/api/agent/session/:id/report?format=markdown\|html\|json` | Session | ดาวน์โหลดรายงาน (แนบไฟล์; ใส่ `&inline=1` เพื่อเปิดในเบราว์เซอร์) |
 | POST | `/api/task/*` | Session | จัดการ async tasks |
 | GET | `/api/workspace/*` | Session | จัดการ workspaces |
 | GET | `/api/mcp/*` | Session | MCP endpoints |
@@ -313,6 +326,30 @@ curl http://localhost:8081/api/telegram/status
 
 **ใช้ Agent:** ส่งข้อความปกติ เช่น `"สแกน http://testphp.vulnweb.com หน่อย"`
 → Bot จะรายงานความคืบหน้า real-time (💭 thinking, 🔧 tool running, ✅ tool done)
+
+---
+
+## 🗄️ Database Migrations
+
+```bash
+cd backend
+pnpm migrate               # รัน migration ที่ค้างอยู่ทั้งหมด
+pnpm migrate:status        # ดูว่า migration ไหน applied / pending
+pnpm migrate -- --dry-run  # ดูว่าจะรันอะไร โดยยังไม่เขียนข้อมูล
+```
+
+- Ledger เก็บใน collection `migrations` (`id`, `appliedAt`, `durationMs`) → รันซ้ำแล้วไม่ทำอะไร
+- บน VPS / ใน container ใช้ไฟล์ที่ compile แล้ว: `docker compose exec backend node dist/migrations/cli.js --list`
+- migration ใหม่ให้เพิ่มไฟล์ `backend/src/migrations/002-...ts` แล้วลงทะเบียนใน `src/migrations/index.ts` (ห้ามเรียงสลับหรือเปลี่ยน id ที่ applied แล้ว)
+
+## 💾 Backup / Restore
+
+```bash
+bash deploy/backup.sh                     # หยุด backend/frontend → dump volumes + kali-data → start กลับให้
+bash deploy/backup.sh --no-stop           # ไม่หยุด stack (ได้ snapshot แบบ dirty)
+bash deploy/backup.sh --out ~/backups/man # กำหนดโฟลเดอร์ปลายทางเอง
+bash deploy/restore.sh ./backups/<stamp>  # กู้คืน (ถามยืนยัน; ใส่ --force ถ้าจะทับข้อมูลเดิม)
+```
 
 ---
 

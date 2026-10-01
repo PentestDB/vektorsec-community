@@ -1,5 +1,7 @@
 # 📖 VektorSec — User Guide
 
+> 🇹🇭 **ไทย**: [คู่มือการใช้งาน](../USER_GUIDE.md)
+
 This guide covers all the new features of **VektorSec**, including
 the Payment & Plan system, Agentic Tools, Sandbox, Knowledge Base,
 Audit Trail, Vault, and more.
@@ -21,6 +23,7 @@ Audit Trail, Vault, and more.
 11. [Self-Correction](#-self-correction)
 12. [Scope Control & HITL](#-scope-control--hitl)
 13. [Multi-Model Routing](#-multi-model-routing)
+14. [Report & Usage Export](#-report--usage-export)
 
 ---
 
@@ -413,6 +416,14 @@ Every command is checked to ensure the target is in the **allowed scope** before
 BLOCKED: Target 192.168.1.1 is not in the allowed scope
 ```
 
+**In the chat transcript** a blocked result is labelled so you can see what happened at a glance
+(even while the output is collapsed):
+
+| Notice | Meaning | What to do |
+|--------|---------|------------|
+| 🚫 **Blocked by the scope guard** | target is not in the scope allowlist → nothing was executed | add the target under Workspace settings → Scope and retry |
+| ⚠️ **Out-of-scope target** | the agent warned the target is outside scope (non-strict mode) | stop unless you hold written authorization |
+
 ### Human-in-the-Loop (HITL)
 
 High-risk commands require **user approval** before running
@@ -438,6 +449,44 @@ The system automatically selects the model based on task complexity
 ### How to Configure
 
 **Settings → Models** → add multiple models → assign roles (orchestrator, racer)
+
+---
+
+## 📤 Report & Usage Export
+
+### Download the engagement report (Markdown / HTML / JSON)
+
+1. Open a session → **Vulnerabilities**
+2. Click **Export report** → pick a format (Markdown / HTML / JSON)
+3. The browser saves `*-report-YYYY-MM-DD.<ext>`
+
+The report contains a factual executive summary (findings per severity), the methodology,
+every finding ordered critical → info (with CVSS / CWE / CVE / evidence / reproduction steps),
+the evidence the agent collected, and recommendations derived from each finding's remediation.
+
+Call the API directly:
+
+```bash
+# Save as a file
+curl -b cookies.txt -o report.html \
+  "http://localhost:3001/api/agent/session/<sessionId>/report?format=html"
+
+# Preview in the browser (no attachment header)
+open "http://localhost:3001/api/agent/session/<sessionId>/report?format=markdown&inline=1"
+```
+
+### Download the usage history (CSV)
+
+- The **Billing → Usage** card has an **Export usage (CSV)** button where you pick a channel (Online / Telegram / Platform)
+- Or call the API directly: `GET /api/subscriptions/me/:channel/usage/export?days=30`
+- The file is `usage-<channel>-YYYY-MM-DD.csv` with columns: `date, channel, requests, tokens_in, tokens_out, total_tokens, cost_usd`
+
+### Start the free trial
+
+- **Pricing** page → the "Welcome Trial" card → **Start Free Trial**
+  (logged-in users start it immediately; anonymous visitors are sent to signup first)
+- Telegram: send `/trial` (or `/trial <planId>`)
+- A trial can be claimed **once per channel** — afterwards the API answers `409` and points to the paid plans
 
 ---
 

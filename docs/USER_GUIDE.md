@@ -1,5 +1,7 @@
 # 📖 VektorSec — คู่มือการใช้งาน (User Guide)
 
+> 🇬🇧 **English**: [User Guide](./en/USER_GUIDE.md)
+
 คู่มือนี้ครอบคลุมการใช้งานฟีเจอร์ใหม่ทั้งหมดของ **VektorSec เวอร์ชันใหม่**
 รวมถึงระบบ Payment & Plan, Agentic Tools, Sandbox, Knowledge Base,
 Audit Trail, Vault และอื่นๆ
@@ -21,6 +23,7 @@ Audit Trail, Vault และอื่นๆ
 11. [ระบบ Self-Correction](#-ระบบ-self-correction)
 12. [ระบบ Scope Control & HITL](#-ระบบ-scope-control--hitl)
 13. [Multi-Model Routing](#-multi-model-routing)
+14. [Export รายงาน & ประวัติการใช้งาน](#-export-รายงาน--ประวัติการใช้งาน)
 
 ---
 
@@ -460,6 +463,13 @@ Agent จะใช้ `query_knowledge` อัตโนมัติเมื่�
 BLOCKED: Target 192.168.1.1 is not in the allowed scope
 ```
 
+**ในหน้าแชท** ผลลัพธ์ที่ถูกบล็อกจะแสดงป้ายอธิบายให้เห็นทันที (แม้พับ output อยู่):
+
+| ป้าย | ความหมาย | ต้องทำอะไร |
+|------|----------|-------------|
+| 🚫 **Blocked by the scope guard** | target ไม่อยู่ใน scope allowlist → ระบบไม่รันอะไรเลย | เพิ่ม target ที่ Workspace settings → Scope แล้วลองใหม่ |
+| ⚠️ **Out-of-scope target** | agent เตือนว่าเป้าหมายนอกขอบเขต (โหมด non-strict) | หยุด ถ้าไม่มีหนังสืออนุญาตเป็นลายลักษณ์อักษร |
+
 ### Human-in-the-Loop (HITL)
 
 คำสั่งเสี่ยงสูงต้องได้รับ **การอนุมัติจากผู้ใช้** ก่อนรัน
@@ -485,6 +495,44 @@ Risk level: high
 ### วิธีตั้งค่า
 
 **Settings → Models** → เพิ่ม model หลายตัว → กำหนดบทบาท (orchestrator, racer)
+
+---
+
+## 📤 Export รายงาน & ประวัติการใช้งาน
+
+### ดาวน์โหลดรายงานผล (Markdown / HTML / JSON)
+
+1. เปิด session → เมนู **Vulnerabilities**
+2. กดปุ่ม **Export report** → เลือกรูปแบบ (Markdown / HTML / JSON)
+3. เบราว์เซอร์จะดาวน์โหลดไฟล์ `*-report-YYYY-MM-DD.<ext>`
+
+รายงานประกอบด้วย executive summary (สรุปจำนวน finding แยกตามระดับความรุนแรง),
+methodology, findings ทั้งหมด (เรียง critical → info พร้อม CVSS / CWE / CVE / evidence /
+ขั้นตอนทำซ้ำ), evidence ที่ agent เก็บไว้ และ recommendations ที่ดึงมาจาก remediation ของแต่ละ finding
+
+เรียก API ตรง ๆ:
+
+```bash
+# ดาวน์โหลดเป็นไฟล์
+curl -b cookies.txt -o report.html \
+  "http://localhost:3001/api/agent/session/<sessionId>/report?format=html"
+
+# เปิดดูในเบราว์เซอร์ (ไม่แนบไฟล์)
+open "http://localhost:3001/api/agent/session/<sessionId>/report?format=markdown&inline=1"
+```
+
+### ดาวน์โหลดประวัติการใช้งาน (CSV)
+
+- หน้า **Billing → Usage** มีปุ่ม **Export usage (CSV)** ให้เลือก channel (Online / Telegram / Platform)
+- หรือเรียก API ตรง ๆ: `GET /api/subscriptions/me/:channel/usage/export?days=30`
+- ได้ไฟล์ `usage-<channel>-YYYY-MM-DD.csv` คอลัมน์: `date, channel, requests, tokens_in, tokens_out, total_tokens, cost_usd`
+
+### เริ่ม Trial ฟรี
+
+- หน้า **Pricing** → การ์ด "Welcome Trial" → **Start Free Trial**
+  (ล็อกอินอยู่แล้วจะเริ่มทันที ถ้ายังไม่ล็อกอินระบบจะพาไปหน้าสมัครก่อน)
+- Telegram: ส่ง `/trial` (หรือ `/trial <planId>`)
+- Trial ใช้ได้ **ครั้งเดียวต่อ channel** — ถ้าเคยใช้แล้ว ระบบจะตอบ `409` และแนะนำให้อัปเกรดเป็นแผนเสียเงิน
 
 ---
 

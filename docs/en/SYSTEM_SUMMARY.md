@@ -1,5 +1,7 @@
 # 📘 VektorSec — System Summary
 
+> 🇹🇭 **ไทย**: [สรุประบบทั้งหมด](../SYSTEM_SUMMARY.md)
+
 > An overview of the architecture, modules, and features of VektorSec.
 > Last updated: August 2026
 

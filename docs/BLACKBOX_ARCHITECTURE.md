@@ -1,5 +1,7 @@
 # Black-Box Architecture (API Gateway / BFF)
 
+> 🇬🇧 **English**: [Black-Box Architecture](./en/BLACKBOX_ARCHITECTURE.md)
+
 > เอกสารนี้อธิบายโครงสร้างที่ปรับปรุงใหม่ของ VektorSec เพื่อให้ "Browser รู้แค่
 > Frontend origin เดียว" ส่วน Backend (Business Logic / DB / API Keys / Secrets)
 > จะถูกซ่อนไว้หลัง Gateway 100%
