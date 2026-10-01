@@ -5,9 +5,11 @@ import {
   createTranslator,
   DEFAULT_LOCALE,
   dictionaries,
-  LOCALE_COOKIE,
+  formatDate,
+  formatNumber,
   resolveLocale,
   SUPPORTED_LOCALES,
+  writeLocaleCookie,
 } from "./index";
 
 /**
@@ -20,17 +22,14 @@ import {
  */
 const I18nContext = createContext(null);
 
-function writeLocaleCookie(locale) {
-  if (typeof document === "undefined") return;
-  document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=31536000; samesite=lax`;
-}
-
 export function I18nProvider({ initialLocale = DEFAULT_LOCALE, children }) {
   const [locale, setLocaleState] = useState(() => resolveLocale(initialLocale));
 
   const setLocale = useCallback((next) => {
     const resolved = resolveLocale(next);
     setLocaleState(resolved);
+    // Shared with the server: the cookie is what makes the next request (and the
+    // first paint after a reload) already render in the chosen language.
     writeLocaleCookie(resolved);
   }, []);
 
@@ -67,6 +66,28 @@ export function useTranslation() {
 
   const fallback = createTranslator(DEFAULT_LOCALE, dictionaries);
   return { locale: DEFAULT_LOCALE, setLocale: () => {}, locales: SUPPORTED_LOCALES, t: fallback };
+}
+
+/**
+ * Locale-aware number/date formatting bound to the active locale:
+ *
+ *   const { formatNumber, formatDate } = useFormatters();
+ *   formatNumber(12500)                          // "12,500"
+ *   formatDate(finding.createdAt)                // "1 Sep 2026"
+ *
+ * Use this instead of `value.toLocaleString()` / `toLocaleDateString()` so the
+ * output follows the app language, not the browser's own settings.
+ */
+export function useFormatters() {
+  const { locale } = useTranslation();
+  return useMemo(
+    () => ({
+      locale,
+      formatNumber: (value, options) => formatNumber(value, locale, options),
+      formatDate: (value, options) => formatDate(value, locale, options),
+    }),
+    [locale],
+  );
 }
 
 export default I18nProvider;

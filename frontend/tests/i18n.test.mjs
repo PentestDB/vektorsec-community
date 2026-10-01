@@ -8,11 +8,18 @@ import {
   LOCALE_COOKIE,
   LOCALE_META,
   SUPPORTED_LOCALES,
+  buildLocaleCookie,
   createTranslator,
+  formatDate,
+  formatNumber,
+  getLocaleFromCookie,
   getMessage,
   interpolate,
+  intlTag,
   lookup,
+  readCookieValue,
   resolveLocale,
+  translate,
 } from "../src/i18n/index.js";
 
 /** Flatten a nested dictionary into "a.b.c" -> value pairs. */
@@ -120,4 +127,66 @@ test("createTranslator binds a locale and exposes it on the function", () => {
   const fallbackT = createTranslator("de");
   assert.equal(fallbackT.locale, DEFAULT_LOCALE);
   assert.equal(fallbackT("nav.home"), "Home");
+});
+
+test("readCookieValue parses document.cookie and Cookie headers", () => {
+  assert.equal(readCookieValue("a=1; vs_locale=th; b=2", LOCALE_COOKIE), "th");
+  assert.equal(readCookieValue("vs_locale=th-TH", LOCALE_COOKIE), "th-TH");
+  assert.equal(readCookieValue("vs_locale=th", "other"), undefined);
+  assert.equal(readCookieValue("novalue; vs_locale=en", LOCALE_COOKIE), "en");
+  assert.equal(readCookieValue("", LOCALE_COOKIE), undefined);
+  assert.equal(readCookieValue(undefined, LOCALE_COOKIE), undefined);
+});
+
+test("buildLocaleCookie writes the attributes the server reads back", () => {
+  const value = buildLocaleCookie("th-TH");
+  assert.ok(value.startsWith(`${LOCALE_COOKIE}=th;`), value);
+  assert.match(value, /path=\//);
+  assert.match(value, /max-age=\d+/);
+  assert.match(value, /samesite=lax/);
+  assert.match(buildLocaleCookie("de", { maxAge: 60 }), /max-age=60/);
+});
+
+test("getLocaleFromCookie resolves the locale and defaults to English", () => {
+  assert.equal(getLocaleFromCookie(`${LOCALE_COOKIE}=th`), "th");
+  assert.equal(getLocaleFromCookie(`${LOCALE_COOKIE}=th-TH`), "th");
+  assert.equal(getLocaleFromCookie(`${LOCALE_COOKIE}=de`), DEFAULT_LOCALE);
+  assert.equal(getLocaleFromCookie(""), DEFAULT_LOCALE);
+  // No argument and no `document` (this runs in Node) → default locale.
+  assert.equal(getLocaleFromCookie(), DEFAULT_LOCALE);
+});
+
+test("translate works outside React and honours an explicit locale", () => {
+  assert.equal(translate("nav.home", undefined, "th"), "หน้าแรก");
+  assert.equal(translate("nav.home", undefined, "en"), "Home");
+  assert.equal(translate("vulnerabilities.findingsCount", { count: 2 }, "th"), "2 รายการ");
+  // Falls back to the cookie, then to English.
+  assert.equal(translate("nav.home"), "Home");
+  assert.equal(translate("does.not.exist", undefined, "th"), "does.not.exist");
+});
+
+test("intlTag maps locales to Intl tags", () => {
+  assert.equal(intlTag("th"), "th-TH");
+  assert.equal(intlTag("th-TH"), "th-TH");
+  assert.equal(intlTag("en"), "en-US");
+  assert.equal(intlTag("de"), "en-US");
+});
+
+test("formatNumber and formatDate are locale-aware and never throw", () => {
+  assert.equal(formatNumber(1000, "en"), "1,000");
+  assert.equal(formatNumber("2500.5", "en"), "2,500.5");
+  assert.equal(formatNumber(1000, "th"), "1,000");
+  assert.equal(formatNumber(null, "th"), "");
+  assert.equal(formatNumber("not a number", "th"), "not a number");
+
+  const iso = "2026-09-01T00:00:00Z";
+  // Default short shape; `day: undefined` opts out of the default day field.
+  const monthYear = { timeZone: "UTC", year: "numeric", month: "long", day: undefined };
+  assert.equal(formatDate(iso, "en", monthYear), "September 2026");
+  assert.equal(formatDate(iso, "th", monthYear), "กันยายน 2026");
+  // Overriding only the time zone keeps the default shape.
+  assert.equal(formatDate(iso, "en", { timeZone: "UTC" }), "Sep 1, 2026");
+  assert.match(formatDate(iso, "th", { timeZone: "UTC" }), /2026/);
+  assert.equal(formatDate(null, "th"), "");
+  assert.equal(formatDate("not a date", "th"), "not a date");
 });
