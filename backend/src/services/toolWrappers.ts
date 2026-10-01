@@ -100,6 +100,32 @@ export async function runNmap(
   return runCliCommand(flags.join(" "), config);
 }
 
+// ─── Naabu wrapper ───────────────────────────────────────────────────
+
+export interface NaabuOptions {
+  target: string;
+  ports?: string;
+  topPorts?: number;
+  outputJson?: boolean;
+  extraFlags?: string[];
+}
+
+export async function runNaabu(
+  options: NaabuOptions,
+  config: ToolWrapperConfig = createDefaultToolWrapperConfig(),
+): Promise<ToolExecResult> {
+  await assertTargetIsExternal(options.target);
+  const flags: string[] = ["naabu", "-host", options.target];
+
+  if (options.ports) flags.push(`-p ${options.ports}`);
+  if (options.topPorts) flags.push(`-top-ports ${options.topPorts}`);
+  if (options.outputJson !== false) flags.push("-json");
+  flags.push("-silent");
+  if (options.extraFlags) flags.push(...options.extraFlags);
+
+  return runCliCommand(flags.join(" "), config);
+}
+
 // ─── Nuclei wrapper ─────────────────────────────────────────────────
 
 export interface NucleiOptions {

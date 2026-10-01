@@ -30,7 +30,8 @@ const checkScope: ToolDefinition = {
       return { output: "Error: command is required", exitCode: 1 };
     }
 
-    const scopeConfig = createDefaultScopeConfig();
+    // Workspace scope (when configured) takes precedence over the global env.
+    const scopeConfig = ctx.guardrails?.scope ?? createDefaultScopeConfig();
     const result = validateCommandScope(command, scopeConfig);
 
     if (result.allowed) {

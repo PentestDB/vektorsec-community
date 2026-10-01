@@ -26,6 +26,7 @@ import {
   writeModelRegistry,
 } from "../utils/modelRegistryStore";
 import { getMagnitudeModelIssue } from "../utils/magnitudeLlm";
+import { buildScanToolArgs, SCAN_TOOL_BY_ACTION } from "../utils/scanToolArgs";
 import { getCaidoHealth } from "./caido.client";
 import { getMythicHealth } from "./mythic.client";
 import {
@@ -35,6 +36,7 @@ import {
   registerAbortController,
   setPaused,
   SSEWriter,
+  loadSessionWorkspaceGuardrails,
 } from "./agent.service";
 
 const SERVER_NAME = "vektorsec";
@@ -416,11 +418,13 @@ async function getExecutionContext(sessionId: string, agentId: string) {
   if (!shellManager.isConnected) {
     await shellManager.connect();
   }
+  const { guardrails } = await loadSessionWorkspaceGuardrails(sessionId);
   return buildExecutionContext({
     sessionId,
     agentId,
     agentRole: "main",
     shellManager,
+    guardrails,
   });
 }
 
@@ -1615,6 +1619,71 @@ export function buildMcpServerForUser(user: UserDoc): McpServer {
       );
       const structured = toolResultPayload(result, { action, ...rest });
       return textResult(formatToolResult(result), structured);
+    },
+  );
+
+  registerMcpTool(
+    server,
+    user,
+    "scan_run",
+    {
+      description:
+        "Run a scanner against an in-scope target inside an engagement and get a structured JSON result " +
+        "(findings, open ports/services, risk score). Actions: " +
+        "nmap (port/service discovery), naabu (fast port scan), nuclei (template/vulnerability scan), " +
+        "ffuf (content or subdomain fuzz), gobuster (dir/dns/vhost fuzz). " +
+        "Targets are validated by the SSRF guard and the workspace scope allowlist before anything runs, " +
+        "so out-of-scope targets are rejected with a BLOCKED result.",
+      inputSchema: {
+        engagement_id: z.string(),
+        agent_id: z.string().optional(),
+        action: z.enum(["nmap", "naabu", "nuclei", "ffuf", "gobuster"]),
+        target: z
+          .string()
+          .describe("IP, hostname, CIDR or URL to scan — must be inside the engagement scope"),
+        ports: z.string().optional().describe("Port list/range, e.g. '80,443' or '1-1000'"),
+        top_ports: z.number().optional().describe("naabu: scan the top N ports"),
+        scan_type: z
+          .enum(["syn", "connect", "udp", "version", "os"])
+          .optional()
+          .describe("nmap: scan technique (default version)"),
+        mode: z
+          .enum(["content", "subdomain", "dir", "dns", "vhost"])
+          .optional()
+          .describe("ffuf: content|subdomain — gobuster: dir|dns|vhost"),
+        wordlist: z.string().optional().describe("ffuf/gobuster: wordlist path"),
+        extensions: z.array(z.string()).optional().describe("File extensions, e.g. ['php','bak']"),
+        templates: z.string().optional().describe("nuclei: template name/dir/list, e.g. 'cves/'"),
+        severity: z
+          .enum(["info", "low", "medium", "high", "critical"])
+          .optional()
+          .describe("nuclei: minimum severity"),
+        tags: z.string().optional().describe("nuclei: template tags, e.g. 'waf,tech'"),
+        method: z.string().optional().describe("ffuf: HTTP method (default GET)"),
+        threads: z.number().optional().describe("ffuf/gobuster: concurrency"),
+        extra_flags: z
+          .array(z.string())
+          .optional()
+          .describe("Extra flags passed to the scanner, e.g. ['-Pn']"),
+      },
+    },
+    async ({ engagement_id, agent_id = "mcp", action, ...rest }) => {
+      await getOwnedSession(user, engagement_id);
+      // Throws on an unknown action or missing required arguments.
+      const args = buildScanToolArgs(action, rest);
+      const toolName = SCAN_TOOL_BY_ACTION[action];
+      const { result } = await executeLowLevelTool(
+        engagement_id,
+        agent_id,
+        toolName,
+        args,
+      );
+      const structured = toolResultPayload(result, { action, ...args });
+      return textResult(
+        formatToolResult(result),
+        structured,
+        (result.exitCode ?? 0) !== 0,
+      );
     },
   );
 

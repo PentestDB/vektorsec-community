@@ -2,6 +2,7 @@ import { ToolDefinition } from "../types";
 import { isDangerousCommand } from "../../utils/commandSafety";
 import { assertCommandTargetsAreExternal, blockedTargetResult } from "../../utils/ssrfGuard";
 import { findCapabilityForCommand } from "../../capabilities/registry";
+import { validateCommandScope, createDefaultScopeConfig } from "../../utils/scopeValidator";
 
 const runBash: ToolDefinition = {
   name: "run_bash",
@@ -40,6 +41,15 @@ const runBash: ToolDefinition = {
       await assertCommandTargetsAreExternal(command);
     } catch {
       return blockedTargetResult();
+    }
+
+    // Scope allowlist: every IP/domain the command references must be inside
+    // the authorized workspace scope (or the global Admin > Scope config when
+    // the workspace scope is not enabled). Out-of-scope commands are blocked.
+    const scopeConfig = ctx.guardrails?.scope ?? createDefaultScopeConfig();
+    const scopeResult = validateCommandScope(command, scopeConfig);
+    if (!scopeResult.allowed) {
+      return { output: `BLOCKED: ${scopeResult.reason}`, exitCode: 1 };
     }
 
     const timeoutMs = args.timeout_seconds ? args.timeout_seconds * 1000 : this.timeoutMs;

@@ -1,6 +1,7 @@
 import { ToolDefinition } from "../types";
 import { isDangerousShellInput } from "../../utils/commandSafety";
 import { assertCommandTargetsAreExternal, blockedTargetResult } from "../../utils/ssrfGuard";
+import { validateCommandScope, createDefaultScopeConfig } from "../../utils/scopeValidator";
 
 const writeToShell: ToolDefinition = {
   name: "write_to_shell",
@@ -41,6 +42,14 @@ const writeToShell: ToolDefinition = {
       await assertCommandTargetsAreExternal(String(input));
     } catch {
       return blockedTargetResult();
+    }
+
+    // Scope allowlist (same policy as run_bash): input may embed scan/request
+    // commands against a target that must be inside the authorized scope.
+    const scopeConfig = ctx.guardrails?.scope ?? createDefaultScopeConfig();
+    const scopeResult = validateCommandScope(String(input), scopeConfig);
+    if (!scopeResult.allowed) {
+      return { output: `BLOCKED: ${scopeResult.reason}`, exitCode: 1 };
     }
 
     try {

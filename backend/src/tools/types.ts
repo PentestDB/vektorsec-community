@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { ShellInfo, ShellPurpose } from "../services/shell.manager";
 import { EngagementState } from "../services/engagement-state";
+import type { ScopeConfig } from "../utils/scopeValidator";
 
 export interface InstallSuggestion {
   name: string;
@@ -48,6 +49,15 @@ export interface ExecutionContext {
   engagementState?: EngagementState;
   /** Abort signal for the current tool call (timeout or caller cancellation). */
   abortSignal?: AbortSignal;
+  /**
+   * Workspace guardrails resolved for the current run. Tool handlers that
+   * touch network targets MUST validate against `guardrails.scope` and may
+   * skip HITL pauses when `guardrails.autonomousMode` is true.
+   */
+  guardrails?: {
+    autonomousMode: boolean;
+    scope: ScopeConfig;
+  };
 }
 
 

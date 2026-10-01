@@ -73,8 +73,8 @@ const runSecurityTool: ToolDefinition = {
       };
     }
 
-    // Validate scope
-    const scopeConfig = createDefaultScopeConfig();
+    // Validate scope (workspace allowlist when configured, else global env)
+    const scopeConfig = ctx.guardrails?.scope ?? createDefaultScopeConfig();
     const scopeResult = validateCommandScope(`${tool} ${target}`, scopeConfig);
     if (!scopeResult.allowed) {
       return {
@@ -83,11 +83,18 @@ const runSecurityTool: ToolDefinition = {
       };
     }
 
-    // Check HITL approval for high-risk commands
+    // Check HITL approval for high-risk commands. In autonomous workspace mode,
+    // high/medium-risk actions are pre-authorized — but only when they are
+    // non-destructive and already passed the scope check above. "dangerous" /
+    // "critical" commands always require a human.
     if (require_approval) {
       const hitl = getHITLManager();
       const assessment = hitl.shouldRequestApproval(`${tool} ${target}`);
-      if (assessment.requiresApproval) {
+      const autonomousSkip =
+        ctx.guardrails?.autonomousMode === true &&
+        assessment.category !== "dangerous" &&
+        assessment.riskLevel !== "critical";
+      if (assessment.requiresApproval && !autonomousSkip) {
         const approval = hitl.requestApproval(
           ctx.sessionId ?? "unknown",
           `${tool} ${target}`,

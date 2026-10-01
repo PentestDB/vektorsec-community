@@ -43,6 +43,11 @@ import broadcastToRacers from "./handlers/broadcast-to-racers";
 import readRacerTrace from "./handlers/read-racer-trace";
 import waitForRacers from "./handlers/wait-for-racers";
 import runSecurityTool from "./handlers/run-security-tool";
+import nmapScan from "./handlers/nmap-scan";
+import naabuScan from "./handlers/naabu-scan";
+import ffufFuzz from "./handlers/ffuf-fuzz";
+import gobusterFuzz from "./handlers/gobuster-fuzz";
+import nucleiScan from "./handlers/nuclei-scan";
 import trackAttackChain from "./handlers/track-attack-chain";
 import storeTargetMemory from "./handlers/store-target-memory";
 import collectEvidence from "./handlers/collect-evidence";
@@ -63,6 +68,11 @@ class ToolRegistry {
 
   register(tool: ToolDefinition) {
     this.tools.set(tool.name, tool);
+  }
+
+  /** Remove a tool (used by plugin tests / opt-out extensions). */
+  unregister(name: string): boolean {
+    return this.tools.delete(name);
   }
 
   get(name: string): ToolDefinition | undefined {
@@ -162,6 +172,11 @@ toolRegistry.register(broadcastToRacers);
 toolRegistry.register(readRacerTrace);
 toolRegistry.register(waitForRacers);
 toolRegistry.register(runSecurityTool);
+toolRegistry.register(nmapScan);
+toolRegistry.register(naabuScan);
+toolRegistry.register(ffufFuzz);
+toolRegistry.register(gobusterFuzz);
+toolRegistry.register(nucleiScan);
 toolRegistry.register(trackAttackChain);
 toolRegistry.register(storeTargetMemory);
 toolRegistry.register(collectEvidence);

@@ -12,6 +12,7 @@ import { parseToolArguments } from "../utils/toolArguments";
 import { executeWithTimeout } from "../utils/executeWithTimeout";
 import type { ToolExecutionMode } from "../models/User/User.model";
 import { decideToolConsent, ToolSafetyEvaluator } from "./tool-approval.service";
+import type { GuardrailRuntimeConfig } from "../utils/guardrails";
 
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
 const MAX_OUTPUT_CHARS = 12_000;
@@ -96,11 +97,12 @@ export function buildExecutionContext(params: {
   };
   maxSubagentIterations?: number;
   maxSwarmIterations?: number;
+  guardrails?: GuardrailRuntimeConfig;
 }): ExecutionContext {
   const {
     sessionId, agentId, shellManager, subagentManager, swarmManager,
     sse, userId, onChunk, abortSignal, engagementState, swarmDefaults,
-    maxSubagentIterations, maxSwarmIterations,
+    maxSubagentIterations, maxSwarmIterations, guardrails,
   } = params;
 
   const agentRole = params.agentRole ?? "main";
@@ -109,6 +111,7 @@ export function buildExecutionContext(params: {
     sessionId,
     agentId,
     agentRole,
+    guardrails,
     runCommand: (command: string, timeoutMs?: number) =>
       shellManager.execInShell(command, timeoutMs, onChunk, abortSignal),
     spawnShell: (label: string, type?: "pty" | "exec", purpose?: ShellPurpose) =>
