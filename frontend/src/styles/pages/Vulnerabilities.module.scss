@@ -63,6 +63,15 @@
   text-transform: capitalize;
 }
 
+// Export-report button + findings count, kept on one row in the header.
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -552,6 +552,46 @@
   border-radius: 4px;
 }
 
+// Guardrail feedback: explains why a tool call did not run (scope allowlist,
+// SSRF guard, safety protection). Visible even when the output is collapsed.
+.guardrailNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.35rem 0.75rem 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-left: 3px solid var(--border-default);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+
+  strong {
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--secondary-text);
+  }
+}
+
+.guardrailBlocked {
+  border-left-color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.08);
+
+  strong {
+    color: #ff7875;
+  }
+}
+
+.guardrailWarning {
+  border-left-color: #faad14;
+  background: rgba(250, 173, 20, 0.08);
+
+  strong {
+    color: #ffc53d;
+  }
+}
+
 .toolCallRunning {
   color: #00f2fe;
   background: rgba(0, 242, 254, 0.1);

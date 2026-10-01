@@ -385,7 +385,7 @@ const RepeaterModal = ({ open, onClose, record, onSendToWorkspace, integration }
       title={integration.replayName}
       className={styles.repeaterModal}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div className={styles.repeaterMeta}>
         <div className={styles.metaField}>
@@ -602,15 +602,21 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION }) => {
     { enabled: integrationConnected && integration.interceptSupported, refetchOnWindowFocus: false, retry: false }
   );
 
+  // The CA (HTTPS cert trust) service is optional and only provided by the Burp
+  // integration. For integrations that don't implement it (e.g. Caido) we must
+  // still hand react-query a real function, otherwise the query/mutation holds no
+  // queryFn and any fetch would fail with "Missing queryFn".
+  const hasCaService = typeof services.getCaStatus === "function";
+
   const {
     data: caStatus,
     isLoading: caStatusLoading,
     refetch: refetchCaStatus,
   } = useQuery(
     [`${integration.queryPrefix}-ca-status`],
-    services.getCaStatus,
+    hasCaService ? services.getCaStatus : () => undefined,
     {
-      enabled: integrationConnected && !!services.getCaStatus,
+      enabled: integrationConnected && hasCaService,
       staleTime: 15_000,
       refetchInterval: 30_000,
       refetchOnWindowFocus: false,
@@ -618,20 +624,25 @@ const BurpProxyPage = ({ sessionId, integration = BURP_INTEGRATION }) => {
     }
   );
 
-  const configureCaMutation = useMutation(services.configureCa, {
-    onSuccess: (status) => {
-      refetchCaStatus();
-      if (status?.trusted) {
-        message.success({ content: "Burp CA trusted by the Browser Agent", duration: 3 });
-      } else {
-        message.warning({ content: status?.message || "CA setup needs attention", duration: 4 });
-      }
-    },
-    onError: (err) => {
-      const msg = err?.response?.data?.message || "Failed to configure Burp CA trust";
-      message.error({ content: msg, duration: 5 });
-    },
-  });
+  const configureCaMutation = useMutation(
+    typeof services.configureCa === "function"
+      ? services.configureCa
+      : () => Promise.resolve({}),
+    {
+      onSuccess: (status) => {
+        refetchCaStatus();
+        if (status?.trusted) {
+          message.success({ content: "Burp CA trusted by the Browser Agent", duration: 3 });
+        } else {
+          message.warning({ content: status?.message || "CA setup needs attention", duration: 4 });
+        }
+      },
+      onError: (err) => {
+        const msg = err?.response?.data?.message || "Failed to configure Burp CA trust";
+        message.error({ content: msg, duration: 5 });
+      },
+    }
+  );
 
   const interceptMutation = useMutation(
     (enabled) => services.setIntercept({ enabled }),

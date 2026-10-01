@@ -1,14 +1,12 @@
 "use client";
 
 import CaidoProxyPage from "@/components/pages/session/caido/CaidoProxyPage";
-import { useParams } from "next/navigation";
-import { useEffect } from "react";
+import { use, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { updateSessions } from "@/store/user.slice";
 
 const CaidoPage = ({ params }) => {
-  const routeParams = useParams();
-  const sessionId = params?.session_id || routeParams?.session_id;
+  const { session_id: sessionId } = use(params);
   const dispatch = useDispatch();
   const { sessions } = useSelector((state) => state.user);
 

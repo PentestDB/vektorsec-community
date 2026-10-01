@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import styles from "@/styles/components/Chat.module.scss";
-import { SendOutlined, PauseCircleOutlined, CloseOutlined } from "@ant-design/icons";
+import { SendOutlined, PauseCircleOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import { useQuery } from "react-query";
 import { getCtfChallenges } from "@/services/ctf.service";
@@ -34,6 +34,7 @@ export default function ChatInput({
   sessionId,
   onSend,
   onPause,
+  onForceReset,
   agentState,
   disabled,
   burpAttachment,
@@ -384,13 +385,22 @@ export default function ChatInput({
         />
         <div className={styles.inputActions}>
           {isRunning ? (
-            <button
-              className={styles.pauseButton}
-              onClick={onPause}
-              title="Pause agent"
-            >
-              <PauseCircleOutlined />
-            </button>
+            <>
+              <button
+                className={styles.pauseButton}
+                onClick={onForceReset}
+                title="Force reset agent state (stuck agent)"
+              >
+                <ReloadOutlined />
+              </button>
+              <button
+                className={styles.pauseButton}
+                onClick={onPause}
+                title="Pause agent"
+              >
+                <PauseCircleOutlined />
+              </button>
+            </>
           ) : (
             <button
               className={styles.sendButton}

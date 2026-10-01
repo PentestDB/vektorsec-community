@@ -38,6 +38,25 @@ export const updateWorkspaceWorkHost = async ({ workspaceId, workHost }) => {
   return res.data;
 };
 
+export const getWorkspaceAgentConfig = async (workspaceId) => {
+  const res = await apiClient.get(`/workspace/${workspaceId}/agent-config`);
+  return res.data;
+};
+
+export const updateWorkspaceAgentConfig = async ({
+  workspaceId,
+  maxTurns,
+  autonomousMode,
+  scope,
+}) => {
+  const res = await apiClient.put(`/workspace/${workspaceId}/agent-config`, {
+    maxTurns,
+    autonomousMode,
+    scope,
+  });
+  return res.data;
+};
+
 export const deleteWorkspace = async ({ workspaceId }) => {
   const res = await apiClient.post("/workspace/delete", { workspaceId });
   return res.data;

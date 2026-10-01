@@ -15,7 +15,7 @@ import IterationLimitBanner from "./IterationLimitBanner";
 import SubagentBlock from "@/components/agent/SubagentBlock";
 import useAgentStream from "@/hooks/useAgentStream";
 import { useAgentStreamStore } from "@/store/agentStream.store";
-import { pauseAgent } from "@/services/agent.service";
+import { pauseAgent, forceResetAgent } from "@/services/agent.service";
 import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
 import { useQueryClient } from "react-query";
 
@@ -248,6 +248,35 @@ export default function ChatView({ sessionId }) {
     }
   }, [sessionId, abort, setSwarms, setAgentState]);
 
+  const handleForceReset = useCallback(async () => {
+    try {
+      const res = await forceResetAgent({ sessionId });
+      // Kill any in-flight stream and reset every piece of local state so the
+      // UI matches the server's "idle" state.
+      abort();
+      setAgentState("idle");
+      setPendingConsent(null);
+      setPendingManualExecution(null);
+      setIterationLimit(null);
+      setSwarms((prev) =>
+        prev.map((sw) => ({
+          ...sw,
+          status: sw.status === "running" ? "cancelled" : sw.status,
+          agents: sw.agents.map((a) =>
+            a.status === "running" ? { ...a, status: "cancelled" } : a,
+          ),
+        })),
+      );
+      queryClient.invalidateQueries(["session-info", sessionId]);
+      notification.success({ message: res?.message ?? "Agent state reset to idle" });
+    } catch (err) {
+      notification.error({
+        message: "Failed to reset agent state",
+        description: err?.response?.data?.message ?? "Something went wrong",
+      });
+    }
+  }, [sessionId, abort, setAgentState, setPendingConsent, setPendingManualExecution, setIterationLimit, setSwarms, queryClient]);
+
   const handleConsent = useCallback(
     (approved) => {
       setPendingConsent(null);
@@ -384,6 +413,7 @@ export default function ChatView({ sessionId }) {
         sessionId={sessionId}
         onSend={handleSend}
         onPause={handlePause}
+        onForceReset={handleForceReset}
         agentState={agentState}
         disabled={historyLoading || agentState === "waiting_consent" || agentState === "waiting_manual_execution"}
         burpAttachment={burpAttachment}

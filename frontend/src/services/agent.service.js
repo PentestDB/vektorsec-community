@@ -25,6 +25,17 @@ export const updateSessionAgentToolsConfig = async (sessionId, body) => {
   return res.data;
 };
 
+/**
+ * Same-origin download URL for the engagement report.
+ *
+ * Returned as a full `/api/...` path (not through `apiClient`) so the browser
+ * navigates to it directly: the session cookie is sent automatically and the
+ * gateway passes the `Content-Disposition: attachment` header through, which
+ * makes the browser save the file.
+ */
+export const sessionReportUrl = (sessionId, format = "markdown") =>
+  `/api/agent/session/${encodeURIComponent(sessionId)}/report?format=${encodeURIComponent(format)}`;
+
 export const getSessionHistory = async (sessionId) => {
   const res = await apiClient.get(`/agent/session/${sessionId}/history`);
   return res.data;
@@ -57,6 +68,11 @@ export const deleteSession = async ({ sessionId }) => {
 
 export const pauseAgent = async ({ sessionId }) => {
   const res = await apiClient.post("/agent/pause", { sessionId });
+  return res.data;
+};
+
+export const forceResetAgent = async ({ sessionId }) => {
+  const res = await apiClient.post("/agent/force-reset", { sessionId });
   return res.data;
 };
 

@@ -203,7 +203,7 @@ export default function WorkspaceConnectionPage({ sessionId }) {
               }))}
               notFoundContent="No SSH hosts found in the mounted SSH config"
               className={styles.select}
-              popupClassName={styles.selectPopup}
+              classNames={{ popup: styles.selectPopup }}
             />
             {selectedProfile?.error && <small className={styles.fieldError}>{selectedProfile.error}</small>}
             <small>Keys and passwords stay in your SSH config or agent; Pentest Copilot stores only the profile name.</small>

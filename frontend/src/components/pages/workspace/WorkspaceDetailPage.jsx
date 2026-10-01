@@ -1,5 +1,5 @@
 import styles from "@/styles/pages/WorkspaceDetail.module.scss";
-import { message, Tag, Tooltip, Input, Form, Radio, Empty, Button, Spin } from "antd";
+import { message, Tag, Tooltip, Input, Form, Radio, Empty, Button, Spin, Select, Switch, Popover } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import {
   PlusOutlined,
@@ -11,12 +11,13 @@ import {
   TrophyFilled,
   ClockCircleOutlined,
   LoadingOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
-import { useState, useMemo, useCallback, useRef } from "react";
-import { getWorkspaceDetail, createSessionInWorkspace } from "@/services/workspace.service";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { getWorkspaceDetail, createSessionInWorkspace, updateWorkspaceAgentConfig } from "@/services/workspace.service";
 import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd, startSolvingAll } from "@/services/ctf.service";
 import { deleteSession } from "@/services/agent.service";
 import { formatDurationSec } from "@/utils/formatDuration";
@@ -348,6 +349,138 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     [sessionsByName, onDeleteSession],
   );
 
+  // ── Agent turn limit (Workspace Settings → Agent Max Turns) ─────────────
+  const defaultAgentTurns = workspace?.defaultAgentMaxTurns ?? 25;
+  const turnChoices = workspace?.agentTurnLimitChoices?.length
+    ? workspace.agentTurnLimitChoices
+    : [25, 50, 100];
+  const effectiveTurnLimit = turnChoices.includes(workspace?.agentConfig?.maxTurns)
+    ? workspace.agentConfig.maxTurns
+    : defaultAgentTurns;
+  const [turnLimit, setTurnLimit] = useState(effectiveTurnLimit);
+
+  // ── Workspace guardrails: Autonomous Mode + Target Scope allowlist ─────
+  const initialScope = workspace?.agentConfig?.scope ?? {};
+  const [autonomousMode, setAutonomousMode] = useState(
+    workspace?.agentConfig?.autonomousMode === true,
+  );
+  const [scopeEnabled, setScopeEnabled] = useState(initialScope?.enabled === true);
+  const [scopeStrict, setScopeStrict] = useState(initialScope?.strictMode === true);
+  const [scopeEntries, setScopeEntries] = useState(initialScope?.entriesRaw ?? "");
+
+  useEffect(() => {
+    setTurnLimit(effectiveTurnLimit);
+    setAutonomousMode(workspace?.agentConfig?.autonomousMode === true);
+    const s = workspace?.agentConfig?.scope ?? {};
+    setScopeEnabled(s?.enabled === true);
+    setScopeStrict(s?.strictMode === true);
+    setScopeEntries(s?.entriesRaw ?? "");
+  }, [effectiveTurnLimit, workspace]);
+
+  const updateTurns = useMutation(
+    (value) => updateWorkspaceAgentConfig({ workspaceId, maxTurns: value }),
+    {
+      onSuccess: (data) => {
+        setTurnLimit(data?.maxTurns ?? defaultAgentTurns);
+        message.success("Workspace agent settings updated");
+        queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+      },
+      onError: (error) => {
+        message.error(
+          error?.response?.data?.message || "Failed to update workspace agent settings",
+        );
+      },
+    },
+  );
+
+  const saveGuardrails = useMutation(
+    () =>
+      updateWorkspaceAgentConfig({
+        workspaceId,
+        maxTurns: turnLimit,
+        autonomousMode,
+        scope: {
+          enabled: scopeEnabled,
+          strictMode: scopeStrict,
+          entriesRaw: scopeEntries,
+        },
+      }),
+    {
+      onSuccess: (data) => {
+        setTurnLimit(data?.maxTurns ?? defaultAgentTurns);
+        setAutonomousMode(data?.autonomousMode === true);
+        const s = data?.scope ?? {};
+        setScopeEnabled(s?.enabled === true);
+        setScopeStrict(s?.strictMode === true);
+        setScopeEntries(s?.entriesRaw ?? "");
+        message.success("Workspace guardrails updated");
+        queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+      },
+      onError: (error) => {
+        message.error(
+          error?.response?.data?.message || "Failed to update workspace guardrails",
+        );
+      },
+    },
+  );
+
+  const guardrailsPopoverContent = (
+    <div style={{ width: 340 }}>
+      <div style={{ marginBottom: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 4,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>Autonomous Mode</span>
+          <Switch size="small" checked={autonomousMode} onChange={setAutonomousMode} />
+        </div>
+        <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+          Agent runs high-risk in-scope actions (WAF bypass, origin-IP scan, active
+          recon) immediately without pausing for confirmation. Destructive or
+          out-of-scope actions are still blocked.
+        </div>
+      </div>
+      <div style={{ borderTop: "1px solid #1e293b", paddingTop: 12 }}>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Target Scope (Whitelist)</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            Enable allowlist
+            <Switch size="small" checked={scopeEnabled} onChange={setScopeEnabled} />
+          </span>
+          <span style={{ fontSize: 12, color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            Strict (block)
+            <Switch size="small" checked={scopeStrict} onChange={setScopeStrict} disabled={!scopeEnabled} />
+          </span>
+        </div>
+        <Input.TextArea
+          rows={4}
+          value={scopeEntries}
+          onChange={(e) => setScopeEntries(e.target.value)}
+          disabled={!scopeEnabled}
+          placeholder={"example.com\n*.corp.test\n10.10.0.0/16\n203.0.113.10"}
+          style={{ fontSize: 12 }}
+        />
+        <div style={{ fontSize: 11, color: "#64748b", margin: "4px 0 10px", lineHeight: 1.5 }}>
+          One per line: domain (covers subdomains), *.domain, IP or CIDR. The agent
+          skips tools targeting anything outside this list.
+        </div>
+        <Button
+          type="primary"
+          size="small"
+          loading={saveGuardrails.isLoading}
+          onClick={() => saveGuardrails.mutate()}
+          style={{ background: "#7c3aed", borderColor: "#7c3aed" }}
+        >
+          Save guardrails
+        </Button>
+      </div>
+    </div>
+  );
+
   if (!user || isLoading || !workspace) {
     return <Loader />;
   }
@@ -404,6 +537,39 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           </div>
         </div>
         <div className={styles.headerRight}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginRight: 8 }}>
+            <Tooltip title="Max agentic turns per run for sessions in this workspace (default 25). Affects new agent runs only.">
+              <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                Max turns
+              </span>
+            </Tooltip>
+            <Select
+              size="small"
+              value={turnLimit}
+              onChange={(val) => updateTurns.mutate(val)}
+              loading={updateTurns.isLoading}
+              style={{ width: 76 }}
+              options={turnChoices.map((n) => ({ value: n, label: `${n}` }))}
+              popupMatchSelectWidth={false}
+            />
+            <Popover
+              content={guardrailsPopoverContent}
+              title={
+                <span style={{ fontSize: 13 }}>
+                  Guardrails &amp; Scope
+                  {autonomousMode && (
+                    <Tag color="gold" style={{ marginLeft: 8, fontSize: 11 }}>
+                      AUTONOMOUS
+                    </Tag>
+                  )}
+                </span>
+              }
+              trigger="click"
+              placement="bottomRight"
+            >
+              <Button size="small" icon={<SettingOutlined />} title="Agent guardrails & scope settings" />
+            </Popover>
+          </div>
           {isCTF && ctfConnected && (
             <>
               <Tooltip

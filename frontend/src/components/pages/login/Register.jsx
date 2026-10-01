@@ -94,7 +94,7 @@ const RegisterPage = () => {
                 },
               ]}
             >
-              <Input placeholder="Jane Doe" bordered={false} />
+              <Input placeholder="Jane Doe" variant="borderless" />
             </Form.Item>
 
             <Form.Item
@@ -111,7 +111,7 @@ const RegisterPage = () => {
                 },
               ]}
             >
-              <Input placeholder="you@company.com" bordered={false} />
+              <Input placeholder="you@company.com" variant="borderless" />
             </Form.Item>
 
             <Form.Item
@@ -128,7 +128,7 @@ const RegisterPage = () => {
                 },
               ]}
             >
-              <Input.Password placeholder="Create a strong password" bordered={false} />
+              <Input.Password placeholder="Create a strong password" variant="borderless" />
             </Form.Item>
 
             <RecaptchaField

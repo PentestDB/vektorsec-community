@@ -17,6 +17,7 @@ export default function useShellSocket({ sessionId, onError }) {
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
+  const lastPongRef = useRef(Date.now());
   const subscribedShells = useRef(new Set());
   const shellOffsets = useRef({});
   const outputCallbacks = useRef(new Map());
@@ -43,6 +44,7 @@ export default function useShellSocket({ sessionId, onError }) {
       const wasReconnect = reconnectAttempt.current > 0;
       setWsConnected(true);
       reconnectAttempt.current = 0;
+      lastPongRef.current = Date.now();
       if (wasReconnect) {
         onErrorRef.current?.("Shell connection restored", "success");
       }
@@ -149,10 +151,31 @@ export default function useShellSocket({ sessionId, onError }) {
         setConnectionStatus(data);
         break;
 
-      case "error":
+      case "pong":
+        // Application-level heartbeat reply from the backend.
+        lastPongRef.current = Date.now();
+        break;
+
+      case "error": {
+        // Session หมดอายุ/ยังไม่ login → backend ปฏิเสธ WS ก่อนเปิด. เป็น
+        // สถานะที่คาดได้บนหน้า public/หลัง logout — อย่า toast/log สแปม
+        // และหยุด reconnect ลูป (ถ้า login ใหม่แล้ว mount hook ใหม่จะ connect ใหม่)
+        if (data?.message === "Unauthorized") {
+          console.info("[ShellSocket] Unauthorized — skipping reconnect");
+          reconnectAttempt.current = RECONNECT_MAX_ATTEMPTS;
+          setWsConnected(false);
+          try {
+            wsRef.current?.close();
+          } catch {
+            // ignore
+          }
+          wsRef.current = null;
+          break;
+        }
         console.error("[ShellSocket] Error:", data.message);
         onErrorRef.current?.(data.message, "error");
         break;
+      }
     }
   }, []);
 
@@ -197,7 +220,33 @@ export default function useShellSocket({ sessionId, onError }) {
 
   useEffect(() => {
     connect();
+
+    // Application-level heartbeat with the backend: send `ping` every 15s and
+    // expect a `pong` event. If no pong arrives for >45s the connection is
+    // treated as dead (gateway/browser stuck) and closed to force a reconnect
+    // (the server, in turn, cleans up shell subscriptions after 25-30s).
+    const appPing = setInterval(() => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: "ping", data: { t: Date.now() } }));
+      }
+    }, 15000);
+
+    const staleCheck = setInterval(() => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN && Date.now() - lastPongRef.current > 45000) {
+        console.warn("[ShellSocket] No pong for 45s — closing to force reconnect");
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      }
+    }, 10000);
+
     return () => {
+      clearInterval(appPing);
+      clearInterval(staleCheck);
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;

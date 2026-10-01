@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { message } from "antd";
 import { getPlans } from "@/services/billing.service";
+import { startTrial } from "@/services/subscription.service";
 import styles from "./PricingPage.module.scss";
 
 const FREE_PLAN_ID = "free";
 const PRO_PLAN_ID = "pro";
+
+/** Channel billed for plans bought on the web (see Subscription.model.ts). */
+const WEB_CHANNEL = "online";
 
 // Display overrides so the free plan card always shows the welcome-trial
 // copy regardless of what is stored in the DB (legacy seeds included).
@@ -32,6 +37,7 @@ const PricingPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [billing, setBilling] = useState("monthly");
+  const [startingTrial, setStartingTrial] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -49,6 +55,29 @@ const PricingPage = () => {
 
   const handleSelect = (plan) => {
     router.push("/register");
+  };
+
+  /**
+   * Free plan CTA. Logged-in users start the one-off trial straight away
+   * (`POST /api/subscriptions/me/online/trial`); anonymous visitors are sent to
+   * the signup page first.
+   */
+  const handleFreePlan = async (plan) => {
+    setStartingTrial(true);
+    try {
+      const data = await startTrial(WEB_CHANNEL, plan.id);
+      message.success(data?.message ?? "Trial started");
+      router.push("/dashboard");
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        router.push("/register");
+        return;
+      }
+      message.error(err?.response?.data?.message ?? "Could not start the trial");
+    } finally {
+      setStartingTrial(false);
+    }
   };
 
   if (loading) {
@@ -128,9 +157,14 @@ const PricingPage = () => {
 
               <button
                 className={`${styles.selectBtn} ${isFree ? styles.freeBtn : ""}`}
-                onClick={() => handleSelect(plan)}
+                onClick={() => (isFree ? handleFreePlan(plan) : handleSelect(plan))}
+                disabled={isFree && startingTrial}
               >
-                {isFree ? "Get Free Tokens" : "Choose Plan"}
+                {isFree
+                  ? startingTrial
+                    ? "Starting trial..."
+                    : "Start Free Trial"
+                  : "Choose Plan"}
               </button>
 
               <ul className={styles.features}>
