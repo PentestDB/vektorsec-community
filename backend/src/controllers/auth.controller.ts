@@ -65,56 +65,46 @@ export const logout = async (req: Request, res: Response) => {
 export const checkUserSession = async (req: Request, res: Response) => {
   try {
     const { user } = req.session;
-    if (user == null)
-      return res.status(400).json({
-        success: false,
-        message: "Invalid session!",
-      });
 
-    if (req.session.user != null) {
-      const u = await UserModel.findOne({ _id: user.userId });
-
-      if (u == null) {
-        return res.status(400).json({
-          success: false,
-          message: "User not found!",
-        });
-      }
-
-      const earlyAccess = await EarlyAccessModel.findOne({
-        email: u.email,
-      });
-
-      // const secretKey = await getSecrets("INTERCOM-SECRET"); // secret key (keep safe!)
-      // const userIdentifier = u.email; // user's email address
-
-      // const hash = crypto
-      //   .createHmac("sha256", secretKey)
-      //   .update(userIdentifier)
-      //   .digest("hex");
-
+    // No active session is a normal, expected state — answer 200 with a null
+    // user so the client can show the login page without a noisy AxiosError.
+    if (user == null) {
       return res.status(200).json({
-        success: true,
-        user: {
-          name: u.name,
-          email: u.email,
-          firstLogin: u.firstLogin,
-          profilePicture: u.profilePicture,
-          uid: u._id,
-          role: (u as any).role || "pentester",
-          twoFactorEnabled: (u as any).twoFactorEnabled || false,
-          access: earlyAccess ? true : false,
-        },
+        success: false,
+        user: null,
       });
-
     }
 
-    return res.status(400).json({
-      message: "Session not found!",
+    const u = await UserModel.findOne({ _id: user.userId });
+
+    // Session references a user that no longer exists → treat as signed out.
+    if (u == null) {
+      return res.status(200).json({
+        success: false,
+        user: null,
+      });
+    }
+
+    const earlyAccess = await EarlyAccessModel.findOne({
+      email: u.email,
+    });
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        name: u.name,
+        email: u.email,
+        firstLogin: u.firstLogin,
+        profilePicture: u.profilePicture,
+        uid: u._id,
+        role: (u as any).role || "pentester",
+        twoFactorEnabled: (u as any).twoFactorEnabled || false,
+        access: earlyAccess ? true : false,
+      },
     });
   } catch (err) {
     console.log(err);
-    return res.status(400).json({ message: "Session not found!" });
+    return res.status(500).json({ message: "Failed to check session" });
   }
 };
 
@@ -358,50 +348,57 @@ export const loginUser = async (req: Request, res: Response) => {
     const twoFactorEnabled = (user as any).twoFactorEnabled || false;
     let twoFactorSecret = (user as any).twoFactorSecret;
 
+    // Dev convenience: set AUTH_REQUIRE_2FA_SETUP=0 (see docker-compose.dev.yml)
+    // to skip the forced 2FA enrollment step so local logins are frictionless.
+    // Production keeps the forced enrollment (flag unset / anything but "0").
+    const require2faSetup = process.env.AUTH_REQUIRE_2FA_SETUP !== "0";
+
     if (!twoFactorSecret) {
       twoFactorSecret = generateSecret();
       (user as any).twoFactorSecret = twoFactorSecret;
       await user.save();
     }
 
-    if (!twoFactorCode) {
-      if (!twoFactorEnabled) {
-        // First login without 2FA → show QR setup step (do not log in yet).
+    if (!twoFactorCode && require2faSetup) {
+      // Accounts that already have 2FA enabled must always supply the current code.
+      if (twoFactorEnabled) {
         return res.status(400).json({
-          message: "Two-factor authentication setup required",
-          twoFactorSetupRequired: true,
+          message: "Two-factor authentication code required",
+          twoFactorRequired: true,
           otpauthUri: buildOtpAuthUri(twoFactorSecret, user.email),
           secret: twoFactorSecret,
         });
       }
+
+      // New users without 2FA → force enrollment (QR step) before logging in.
       return res.status(400).json({
-        message: "Two-factor authentication code required",
-        twoFactorRequired: true,
-        // Include the QR URI + raw secret so an account that already has 2FA
-        // enabled can re-scan / copy its key at any login (new device, recovery,
-        // backup). Only reachable after the email+password pair is verified.
+        message: "Two-factor authentication setup required",
+        twoFactorSetupRequired: true,
         otpauthUri: buildOtpAuthUri(twoFactorSecret, user.email),
         secret: twoFactorSecret,
       });
     }
+    // AUTH_REQUIRE_2FA_SETUP=0 (dev): skip the 2FA gate entirely and sign in.
 
-    if (!verifyTOTP(twoFactorSecret, twoFactorCode)) {
-      await logAuditFromRequest(req, res, "auth.login_failed", {
-        resourceType: "user",
-        resourceId: user._id.toString(),
-        details: { email, reason: "invalid_2fa_code" },
-      });
-      return res.status(401).json({ message: "Invalid two-factor code" });
-    }
+    if (twoFactorCode) {
+      if (!verifyTOTP(twoFactorSecret, twoFactorCode)) {
+        await logAuditFromRequest(req, res, "auth.login_failed", {
+          resourceType: "user",
+          resourceId: user._id.toString(),
+          details: { email, reason: "invalid_2fa_code" },
+        });
+        return res.status(401).json({ message: "Invalid two-factor code" });
+      }
 
-    // Code verified — if this was the first-time enrollment, activate 2FA now.
-    if (!twoFactorEnabled) {
-      (user as any).twoFactorEnabled = true;
-      await user.save();
-      await logAuditFromRequest(req, res, "auth.two_factor_enabled", {
-        resourceType: "user",
-        resourceId: user._id.toString(),
-      });
+      // Code verified — if this was the first-time enrollment, activate 2FA now.
+      if (!twoFactorEnabled) {
+        (user as any).twoFactorEnabled = true;
+        await user.save();
+        await logAuditFromRequest(req, res, "auth.two_factor_enabled", {
+          resourceType: "user",
+          resourceId: user._id.toString(),
+        });
+      }
     }
 
     const head = req.headers["x-forwarded-for"] as string;

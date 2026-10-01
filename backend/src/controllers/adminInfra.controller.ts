@@ -3,7 +3,7 @@ import os from "os";
 import mongoose from "mongoose";
 import NotificationLog from "../models/NotificationLog/NotificationLog.model";
 import { getCaidoHealth } from "../services/caido.client";
-import { redisClient } from "../server";
+import { getRedisClientOrNull } from "../utils/redis/client";
 import {
   isBotConfigured,
   isBotRunning,
@@ -661,6 +661,7 @@ export const getSystemHealth = async (_req: Request, res: Response) => {
     let redisOk = false;
     let redisDetails: Record<string, string> = { state: "disconnected" };
     try {
+      const redisClient = getRedisClientOrNull();
       if (redisClient && (redisClient as any).isOpen) {
         const t0 = Date.now();
         await redisClient.ping();

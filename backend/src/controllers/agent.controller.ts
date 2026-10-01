@@ -14,6 +14,9 @@ import {
   registerAbortController,
   abortSession,
   hasActiveController,
+  registerUserRunPresence,
+  clearUserRunPresence,
+  forceResetAgent,
 } from "../services/agent.service";
 import { parseSlashCommand, executeSlashCommand, matchCommands, SLASH_COMMANDS } from "../services/slash-commands";
 import { toolRegistry } from "../tools/registry";
@@ -25,6 +28,18 @@ import {
   getInstallCommandForOS,
 } from "../capabilities/registry";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
+import { getEvidenceCollector } from "../tools/handlers/collect-evidence";
+import { ReportGenerator } from "../services/evidenceCollector";
+import {
+  buildExecutiveSummary,
+  buildRecommendations,
+  compactEvidence,
+  parseReportFormat,
+  reportContentType,
+  reportFileName,
+  sortFindingsBySeverity,
+  toReportFinding,
+} from "../utils/report";
 import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
 
 export const createSession = async (req: Request, res: Response) => {
@@ -97,10 +112,12 @@ export const sendMessage = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
-    const abortCtrl = registerAbortController(sessionId);
+    const abortCtrl = registerAbortController(sessionId, { origin: "user" });
+    registerUserRunPresence(sessionId);
 
     req.on("close", () => {
       abortSession(sessionId);
+      clearUserRunPresence(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
@@ -162,10 +179,12 @@ export const resumeAgent = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
-    const abortCtrl = registerAbortController(sessionId);
+    const abortCtrl = registerAbortController(sessionId, { origin: "user" });
+    registerUserRunPresence(sessionId);
 
     req.on("close", () => {
       abortSession(sessionId);
+      clearUserRunPresence(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
@@ -201,10 +220,12 @@ export const respondToConsent = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
-    const abortCtrl = registerAbortController(sessionId);
+    const abortCtrl = registerAbortController(sessionId, { origin: "user" });
+    registerUserRunPresence(sessionId);
 
     req.on("close", () => {
       abortSession(sessionId);
+      clearUserRunPresence(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
@@ -234,10 +255,12 @@ export const submitManualOutput = async (req: Request, res: Response) => {
     }
 
     const sse = createSSEWriter(res);
-    const abortCtrl = registerAbortController(sessionId);
+    const abortCtrl = registerAbortController(sessionId, { origin: "user" });
+    registerUserRunPresence(sessionId);
 
     req.on("close", () => {
       abortSession(sessionId);
+      clearUserRunPresence(sessionId);
       setPaused(sessionId, true).catch(() => {});
     });
 
@@ -477,6 +500,85 @@ export const getSlashCommands = async (_req: Request, res: Response) => {
   return res.status(200).json(SLASH_COMMANDS);
 };
 
+/**
+ * GET /api/agent/session/:sessionId/report?format=markdown|html|json[&inline=1]
+ *
+ * Auth: build an engagement report from the session's stored findings and the
+ * evidence the agent collected, then send it as a file download (or inline when
+ * `inline=1`, which is handy for a browser preview).
+ */
+export const exportSessionReport = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+      return res.status(400).json({ message: "sessionId is required" });
+    }
+
+    const format = parseReportFormat(req.query.format);
+    if (!format) {
+      return res.status(400).json({ message: "format must be markdown, html or json" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const findings = sortFindingsBySeverity(
+      ((session.vulnerabilities ?? []) as any[]).map((vulnerability, index) =>
+        toReportFinding(vulnerability, index),
+      ),
+    );
+    const evidence = compactEvidence(getEvidenceCollector(sessionId).getAll());
+    const target = session.mcpContext?.target;
+    const scope = session.mcpContext?.scope;
+    const title = `${session.name || "Penetration test"} — report`;
+
+    const generator = new ReportGenerator(sessionId);
+    const report = generator.generateReport({
+      title,
+      engagementDate: session.createdAt ?? new Date(),
+      scope: scope ?? target,
+      executiveSummary: buildExecutiveSummary({
+        findings,
+        scope,
+        target,
+        evidenceCount: evidence.length,
+      }),
+      methodology: [
+        "Reconnaissance",
+        "Enumeration",
+        "Vulnerability Analysis",
+        "Exploitation",
+        "Post-Exploitation",
+        "Reporting",
+      ],
+      findings,
+      evidence,
+      recommendations: buildRecommendations(findings),
+    });
+
+    const body =
+      format === "html"
+        ? generator.toHtml(report)
+        : format === "json"
+          ? JSON.stringify(report, null, 2)
+          : generator.toMarkdown(report);
+
+    res.setHeader("Content-Type", reportContentType(format));
+    if (req.query.inline !== "1") {
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${reportFileName({ title, format })}"`,
+      );
+    }
+    return res.status(200).send(body);
+  } catch (err: any) {
+    console.error("[agent] exportSessionReport error:", err);
+    return res.status(500).json({ message: err?.message || "Failed to export report" });
+  }
+};
+
 export const getSessionAgentToolsConfig = async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId;
@@ -529,6 +631,30 @@ export const updateSessionAgentToolsConfig = async (req: Request, res: Response)
   } catch (err: any) {
     console.error("[agent] updateSessionAgentToolsConfig error:", err);
     return res.status(400).json({ message: "Failed to update agent tools config" });
+  }
+};
+
+export const forceResetAgentSession = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const sessionId = req.body?.sessionId || req.params?.sessionId;
+
+    if (!sessionId) {
+      return res.status(400).json({ message: "sessionId is required" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    const result = await forceResetAgent(sessionId);
+
+    return res.status(200).json({
+      message: "Agent state has been reset to idle",
+      ...result,
+    });
+  } catch (err: any) {
+    console.error("[agent] forceResetAgentSession error:", err);
+    return res.status(500).json({ message: "Failed to reset agent state" });
   }
 };
 

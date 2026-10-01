@@ -19,6 +19,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+/**
+ * The local work-host tests below execute real shell commands. The transport
+ * uses `/bin/sh`, which does not exist on Windows, so those cases are skipped
+ * there — they run on Linux/macOS and in CI.
+ */
+const needsPosixShell =
+  process.platform === "win32"
+    ? "requires a POSIX shell (/bin/sh) for local work-host execution"
+    : false;
+
 test("discovers only concrete SSH host aliases", () => {
   const aliases = parseSSHConfigAliases(`
 Host box-a box-b
@@ -146,7 +156,7 @@ test("work folder validation and quoting preserve spaces and remote home expansi
   assert.throws(() => validateWorkFolder("/tmp/a\ncmd"), /invalid/);
 });
 
-test("local work host creates and writes inside the selected folder", async () => {
+test("local work host creates and writes inside the selected folder", { skip: needsPosixShell }, async () => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pc-work-host-"));
   const folder = path.join(root, "folder with spaces");
   try {
@@ -159,7 +169,7 @@ test("local work host creates and writes inside the selected folder", async () =
   }
 });
 
-test("workspace command transport anchors relative files in workFolder", async () => {
+test("workspace command transport anchors relative files in workFolder", { skip: needsPosixShell }, async () => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pc-workspace-exec-"));
   const folder = path.join(root, "workspace with spaces");
   const target = { workspaceId: "workspace-one", kind: "local" as const, workFolder: folder };
@@ -176,7 +186,7 @@ test("workspace command transport anchors relative files in workFolder", async (
   }
 });
 
-test("local directory browser returns folders only with canonical navigation paths", async () => {
+test("local directory browser returns folders only with canonical navigation paths", { skip: needsPosixShell }, async () => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pc-directory-browser-"));
   try {
     await fs.promises.mkdir(path.join(root, "Alpha folder"));
@@ -195,7 +205,7 @@ test("local directory browser returns folders only with canonical navigation pat
   }
 });
 
-test("ShellManager runs local tool commands in the workspace folder", async () => {
+test("ShellManager runs local tool commands in the workspace folder", { skip: needsPosixShell }, async () => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pc-shell-host-"));
   const folder = path.join(root, "workspace");
   const manager = new ShellManager("session-one", async () => ({

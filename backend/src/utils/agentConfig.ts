@@ -39,4 +39,29 @@ export function normalizeMaxSwarmIterations(value: unknown): number {
   );
 }
 
+// ─── Workspace-level max turns ─────────────────────────────────────
+// Turn limit configurable per workspace (Workspace Settings). Unlike the
+// global user setting (5..200), the workspace level is intentionally a small
+// set of presets so a workspace can enforce a sane ceiling for its sessions.
+export const WORKSPACE_MAX_TURNS_CHOICES = [25, 50, 100] as const;
+export const DEFAULT_WORKSPACE_MAX_TURNS = 25;
+
+/**
+ * Normalize a workspace `maxTurns` value.
+ *
+ * - `undefined` / `null` / `""`  -> `undefined` (workspace unset: fall back to
+ *   the user-level maxAgentIterations).
+ * - anything that is not one of WORKSPACE_MAX_TURNS_CHOICES -> 25 (default).
+ */
+export function normalizeWorkspaceMaxTurns(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  const rounded = Math.round(parsed);
+  if ((WORKSPACE_MAX_TURNS_CHOICES as readonly number[]).includes(rounded)) {
+    return rounded;
+  }
+  return DEFAULT_WORKSPACE_MAX_TURNS;
+}
+
 

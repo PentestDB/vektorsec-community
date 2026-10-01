@@ -4,6 +4,9 @@ import { Server } from "http";
 import { sessionLifecycle } from "./session.lifecycle";
 import { ShellManager } from "./shell.manager";
 import SessionsModel from "../models/Sessions/Sessions.model";
+import { forceResetAgent } from "./agent.service";
+
+const WS_HEARTBEAT_INTERVAL_MS = 25_000;
 
 interface ShellSocketClient {
   ws: WebSocket;
@@ -14,6 +17,7 @@ interface ShellSocketClient {
 }
 
 const clients = new Map<WebSocket, ShellSocketClient>();
+const clientManagers = new Map<WebSocket, ShellManager>();
 const shellListeners = new Map<string, Map<string, (...args: any[]) => void>>();
 
 function send(ws: WebSocket, event: string, data: any): void {
@@ -140,6 +144,11 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
       shellSentOffsets: new Map(),
     };
     clients.set(ws, client);
+    // Heartbeat bookkeeping (see wss heartbeat interval below).
+    (ws as any).__isAlive = true;
+    ws.on("pong", () => {
+      (ws as any).__isAlive = true;
+    });
 
     let shellManager: ShellManager;
     try {
@@ -150,6 +159,7 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
       return;
     }
 
+    clientManagers.set(ws, shellManager);
     subscribeToShellEvents(client, shellManager);
 
     send(ws, "connection_status", { sshConnected: shellManager.isConnected });
@@ -168,14 +178,51 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
       console.info(`[ShellSocket] ws closed (client=${clientKey(ws)}, code=${code ?? "n/a"}, reason=${reason || ""})`);
       unsubscribeFromShellEvents(client, shellManager);
       clients.delete(ws);
+      clientManagers.delete(ws);
     });
 
     ws.on("error", (error?: Error) => {
       console.warn(`[ShellSocket] ws error (client=${clientKey(ws)}):`, error?.message ?? error);
       unsubscribeFromShellEvents(client, shellManager);
       clients.delete(ws);
+      clientManagers.delete(ws);
     });
   });
+
+  // ── Heartbeat: detect half-open / dead WebSocket connections ──────────
+  // Every 25s ping all clients. A client that fails to answer with a pong
+  // before the next tick (~25-30s later) is treated as dead and terminated so
+  // its session never holds stale shell subscriptions.
+  const heartbeat = setInterval(() => {
+    for (const [ws, client] of clients) {
+      if ((ws as any).__isAlive === false) {
+        console.warn(`[ShellSocket] Heartbeat timeout — terminating client ${clientKey(ws)} (session ${client.sessionId})`);
+        const mgr = clientManagers.get(ws);
+        if (mgr) {
+          try {
+            unsubscribeFromShellEvents(client, mgr);
+          } catch {
+            // ignore
+          }
+        }
+        clientManagers.delete(ws);
+        clients.delete(ws);
+        try {
+          ws.terminate();
+        } catch {
+          // already gone
+        }
+        continue;
+      }
+      (ws as any).__isAlive = false;
+      try {
+        ws.ping();
+      } catch {
+        // socket already closed
+      }
+    }
+  }, WS_HEARTBEAT_INTERVAL_MS);
+  heartbeat.unref?.();
 }
 
 async function handleMessage(
@@ -295,6 +342,34 @@ async function handleMessage(
         return;
       }
       shellManager.resizeShell(shellId, cols, rows);
+      break;
+    }
+
+    case "ping": {
+      // Application-level heartbeat. The server also sends protocol-level
+      // pings, but replying here keeps the pong visible to the gateway proxy
+      // and lets the client verify the round trip itself.
+      send(client.ws, "pong", { t: data?.t ?? Date.now() });
+      break;
+    }
+
+    case "force_reset_agent": {
+      // User hit "stuck agent" — abort any in-flight run, clear Redis pause
+      // flag and return the session to idle.
+      try {
+        const result = await forceResetAgent(client.sessionId);
+        send(client.ws, "agent_state_changed", {
+          sessionId: client.sessionId,
+          agentState: result.agentState,
+          reason: "force_reset_agent",
+        });
+        send(client.ws, "agent_reset", {
+          sessionId: client.sessionId,
+          message: "Agent state reset to idle",
+        });
+      } catch (err: any) {
+        send(client.ws, "error", { message: `Force reset failed: ${err.message}` });
+      }
       break;
     }
 

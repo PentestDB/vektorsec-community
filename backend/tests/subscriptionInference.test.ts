@@ -12,6 +12,16 @@ let binDir: string;
 let previousPath: string | undefined;
 const retryMarker = path.join(os.tmpdir(), "codex-subscription-retry-test");
 
+/**
+ * The fake CLIs below are POSIX shell shims (`#!/usr/bin/env node`, mode 0755)
+ * placed on PATH. Windows has no `/bin/sh` to execute them, so the cases that
+ * spawn a CLI are skipped there — they run on Linux/macOS and in CI.
+ */
+const needsPosixShell =
+  process.platform === "win32"
+    ? "requires a POSIX shell to execute the fake codex/claude shims"
+    : false;
+
 function writeExecutable(name: string, source: string) {
   const target = path.join(binDir, name);
   fs.writeFileSync(target, `#!/usr/bin/env node\n${source}\n`, { mode: 0o755 });
@@ -66,7 +76,7 @@ after(() => {
   fs.rmSync(binDir, { recursive: true, force: true });
 });
 
-test("Codex subscription maps structured tool calls into the normal contract", async () => {
+test("Codex subscription maps structured tool calls into the normal contract", { skip: needsPosixShell }, async () => {
   const result = await invokeSubscriptionInference({
     provider: "codex-subscription",
     model: "gpt-5.6-terra",
@@ -84,7 +94,7 @@ test("Codex subscription maps structured tool calls into the normal contract", a
   assert.equal(result.usage?.total_tokens, 19);
 });
 
-test("Claude subscription maps structured text into the normal contract", async () => {
+test("Claude subscription maps structured text into the normal contract", { skip: needsPosixShell }, async () => {
   const result = await invokeSubscriptionInference({
     provider: "claude-subscription",
     model: "claude-opus-5",
@@ -97,7 +107,7 @@ test("Claude subscription maps structured text into the normal contract", async 
   assert.equal(result.usage?.total_tokens, 7);
 });
 
-test("Codex stdout failure events are surfaced instead of unknown error", async () => {
+test("Codex stdout failure events are surfaced instead of unknown error", { skip: needsPosixShell }, async () => {
   await assert.rejects(
     invokeSubscriptionInference({
       provider: "codex-subscription",
@@ -116,7 +126,7 @@ test("Codex stdout failure events are surfaced instead of unknown error", async 
   );
 });
 
-test("transient subscription failures retry with bounded backoff", async () => {
+test("transient subscription failures retry with bounded backoff", { skip: needsPosixShell }, async () => {
   const result = await invokeSubscriptionInference({
     provider: "codex-subscription",
     model: "codex-retry-test",
@@ -128,7 +138,7 @@ test("transient subscription failures retry with bounded backoff", async () => {
   assert.equal(fs.readFileSync(retryMarker, "utf8"), "4");
 });
 
-test("subscription provider probe reports installed authenticated CLIs", async () => {
+test("subscription provider probe reports installed authenticated CLIs", { skip: needsPosixShell }, async () => {
   const statuses = await getSubscriptionProviderStatuses();
   assert.equal(
     statuses.every((status) => status.installed),

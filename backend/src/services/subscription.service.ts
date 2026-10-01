@@ -77,7 +77,11 @@ export async function startTrial(
     if (isSubscriptionActive(existing)) {
       return existing;
     }
-    if (existing.status === "trial") {
+
+    // The trial is a one-off: `trialUsed` is persisted, so cancelling the trial
+    // (or letting a paid plan expire) cannot be used to farm a new one.
+    const trialAlreadyUsed = existing.trialUsed === true || existing.status === "trial";
+    if (trialAlreadyUsed) {
       throw new Error("Trial already used. Upgrade to a paid plan to continue.");
     }
   }
@@ -93,6 +97,7 @@ export async function startTrial(
     existing.endsAt = undefined;
     existing.autoRenew = false;
     existing.trialTokensUsed = 0;
+    existing.trialUsed = true;
     return existing.save();
   }
 
@@ -105,6 +110,7 @@ export async function startTrial(
     endsAt: undefined,
     autoRenew: false,
     trialTokensUsed: 0,
+    trialUsed: true,
   });
 }
 

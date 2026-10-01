@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { getRedisClientOrNull } from "../utils/redis/client";
 
 // ─── Self-hosted Out-of-Band (OOB) Listener ──────────────────────────
 // Detects blind vulnerabilities (blind SSRF, blind XXE, blind SQLi,
@@ -20,25 +21,16 @@ const OOB_TTL_SECONDS = 60 * 60 * 24; // 24h
 const OOB_MAX_INTERACTIONS = 200;
 const OOB_TOKEN_RE = /^[a-f0-9]{16,64}$/i;
 
-// Redis client is resolved lazily so that importing this module (e.g. in unit
-// tests) does not boot the whole server. When Redis is unavailable we fall
-// back to an in-process store.
-let cachedRedisClient: any;
-
+// Redis is optional here: when a client is published (production) the listener
+// stores interactions in Redis; otherwise it falls back to an in-process store.
+// No server import is needed any more, so importing this module is side-effect
+// free (unit tests, HTTP tests, future workers).
 function getRedisClient(): any {
-  if (cachedRedisClient === undefined) {
-    try {
-      if (process.env.NODE_ENV === "test") {
-        // Do not boot the server (and its Redis connection) from unit tests.
-        cachedRedisClient = null;
-      } else {
-        cachedRedisClient = require("../server").redisClient ?? null;
-      }
-    } catch {
-      cachedRedisClient = null;
-    }
+  try {
+    return getRedisClientOrNull();
+  } catch {
+    return null;
   }
-  return cachedRedisClient;
 }
 
 function redisAvailable(): boolean {

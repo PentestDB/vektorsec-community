@@ -7,9 +7,11 @@ import {
   hasActiveAccess,
   listAllSubscriptions,
   listUserSubscriptions,
+  startTrial,
 } from "../services/subscription.service";
 import { SubscriptionChannel } from "../models/Subscription/Subscription.model";
-import { getTodayUsage, getUserTotalUsage } from "../services/usageTracker.service";
+import { getTodayUsage, getUserTotalUsage, getUsageHistory } from "../services/usageTracker.service";
+import { csvFileName, toCsv } from "../utils/csv";
 
 /** Validate a channel string against the allowed set. */
 function parseChannel(value: unknown): SubscriptionChannel | null {
@@ -17,6 +19,13 @@ function parseChannel(value: unknown): SubscriptionChannel | null {
     return value;
   }
   return null;
+}
+
+/** Clamp `?days=` to a sane window (1..365, default 30). */
+function clampUsageDays(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 30;
+  return Math.min(365, Math.max(1, Math.round(parsed)));
 }
 
 /**
@@ -116,6 +125,94 @@ export async function getMyUsage(req: Request, res: Response) {
     return res.status(200).json({ today, total30d: total });
   } catch (error: any) {
     return res.status(500).json({ message: error?.message || "Failed to load usage" });
+  }
+}
+
+/**
+ * POST /api/subscriptions/me/:channel/trial
+ * Auth: start the one-off free trial on a channel.
+ *
+ * Body: `{ planId?: string }` — the plan the trial grants access to
+ * (defaults to the service default). Sending the request again while a trial
+ * is still running returns the existing subscription (idempotent); trying to
+ * start a second trial after one was already used returns 409.
+ */
+export async function startTrialHandler(req: Request, res: Response) {
+  try {
+    const userId = res.locals.userId;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const channel = parseChannel(req.params.channel);
+    if (!channel) return res.status(400).json({ message: "Invalid channel" });
+
+    const planId =
+      typeof req.body?.planId === "string" && req.body.planId.trim()
+        ? req.body.planId.trim()
+        : undefined;
+
+    const before = await getSubscription(userId, channel);
+    const subscription = await startTrial(userId, channel, planId);
+
+    const startedNow = !before || before.status !== subscription.status;
+    return res.status(startedNow ? 201 : 200).json({
+      message: startedNow ? "Trial started" : "Trial already active",
+      subscription,
+    });
+  } catch (error: any) {
+    const message = error?.message || "Failed to start trial";
+    if (/already used/i.test(message)) {
+      return res.status(409).json({ message });
+    }
+    if (/plan/i.test(message) && /not found|unknown|invalid/i.test(message)) {
+      return res.status(400).json({ message });
+    }
+    return res.status(500).json({ message });
+  }
+}
+
+/**
+ * GET /api/subscriptions/me/:channel/usage/export?days=30
+ * Auth: download the caller's daily usage history as a CSV file.
+ */
+export async function exportMyUsage(req: Request, res: Response) {
+  try {
+    const userId = res.locals.userId;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const channel = parseChannel(req.params.channel);
+    if (!channel) return res.status(400).json({ message: "Invalid channel" });
+
+    const days = clampUsageDays(req.query.days);
+    const records = await getUsageHistory(userId, channel, days);
+
+    const rows = records.map((record) => ({
+      date: record.date,
+      channel: record.channel,
+      requests: record.requests,
+      tokens_in: record.tokensIn,
+      tokens_out: record.tokensOut,
+      total_tokens: (record.tokensIn ?? 0) + (record.tokensOut ?? 0),
+      cost_usd: Number((record.costUsd ?? 0).toFixed(6)),
+    }));
+
+    const csv = toCsv(rows, [
+      "date",
+      "channel",
+      "requests",
+      "tokens_in",
+      "tokens_out",
+      "total_tokens",
+      "cost_usd",
+    ]);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${csvFileName(`usage-${channel}`)}"`,
+    );
+    return res.status(200).send(csv);
+  } catch (error: any) {
+    return res.status(500).json({ message: error?.message || "Failed to export usage" });
   }
 }
 

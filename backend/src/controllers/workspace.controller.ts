@@ -12,6 +12,11 @@ import {
   resolveWorkspaceWorkHost,
   testWorkHost,
 } from "../services/work-host.service";
+import {
+  DEFAULT_WORKSPACE_MAX_TURNS,
+  WORKSPACE_MAX_TURNS_CHOICES,
+  normalizeWorkspaceMaxTurns,
+} from "../utils/agentConfig";
 
 export const createWorkspace = async (req: Request, res: Response) => {
   try {
@@ -158,11 +163,139 @@ export const getWorkspaceDetail = async (req: Request, res: Response) => {
         kind: "local",
         workFolder: defaultWorkFolder(workspace.workspaceId),
       },
+      // Per-workspace agent settings (Workspace Settings → Agent).
+      agentConfig: workspace.agentConfig ?? {},
+      agentTurnLimitChoices: WORKSPACE_MAX_TURNS_CHOICES,
+      defaultAgentMaxTurns: DEFAULT_WORKSPACE_MAX_TURNS,
       sessions,
     });
   } catch (err: any) {
     console.error("[workspace] getWorkspaceDetail error:", err);
     return res.status(400).json({ message: "Failed to get workspace details" });
+  }
+};
+
+/**
+ * GET /workspace/:workspaceId/agent-config
+ * Returns the per-workspace agent settings (currently just maxTurns).
+ */
+export const getWorkspaceAgentConfig = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+
+    const workspace = await WorkspaceModel.findOne({
+      workspaceId,
+      uid: userId,
+      status: "active",
+    })
+      .select("workspaceId agentConfig")
+      .lean();
+
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+
+    const maxTurns = normalizeWorkspaceMaxTurns(workspace.agentConfig?.maxTurns);
+
+    return res.status(200).json({
+      workspaceId,
+      maxTurns: maxTurns ?? null, // null = unset → fall back to user-level setting
+      autonomousMode: workspace.agentConfig?.autonomousMode === true,
+      scope: workspace.agentConfig?.scope ?? {
+        enabled: false,
+        strictMode: false,
+        entriesRaw: "",
+      },
+      choices: WORKSPACE_MAX_TURNS_CHOICES,
+      defaultMaxTurns: DEFAULT_WORKSPACE_MAX_TURNS,
+    });
+  } catch (err: any) {
+    console.error("[workspace] getWorkspaceAgentConfig error:", err);
+    return res.status(400).json({ message: "Failed to load workspace agent settings" });
+  }
+};
+
+/**
+ * PUT /workspace/:workspaceId/agent-config
+ * Body: { maxTurns?, autonomousMode?, scope? }
+ *   maxTurns      – one of WORKSPACE_MAX_TURNS_CHOICES, or null to clear
+ *   autonomousMode– boolean: allow high-risk in-scope actions without consent
+ *   scope         – { enabled, strictMode, entriesRaw } workspace allowlist
+ */
+export const updateWorkspaceAgentConfig = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+    const rawMaxTurns = req.body?.maxTurns;
+    const rawAutonomous = req.body?.autonomousMode;
+    const rawScope = req.body?.scope;
+
+    const workspace = await WorkspaceModel.findOne({
+      workspaceId,
+      uid: userId,
+      status: "active",
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+
+    if (!workspace.agentConfig) workspace.agentConfig = {};
+
+    // maxTurns
+    if (rawMaxTurns === undefined || rawMaxTurns === null || rawMaxTurns === "") {
+      workspace.agentConfig.maxTurns = undefined;
+    } else {
+      const maxTurns = normalizeWorkspaceMaxTurns(rawMaxTurns);
+      if (maxTurns === undefined) {
+        return res.status(400).json({
+          message: `maxTurns must be one of: ${WORKSPACE_MAX_TURNS_CHOICES.join(", ")}`,
+        });
+      }
+      workspace.agentConfig.maxTurns = maxTurns;
+    }
+
+    // autonomousMode
+    if (rawAutonomous !== undefined) {
+      if (typeof rawAutonomous !== "boolean") {
+        return res.status(400).json({ message: "autonomousMode must be a boolean" });
+      }
+      workspace.agentConfig.autonomousMode = rawAutonomous;
+    }
+
+    // scope
+    if (rawScope !== undefined) {
+      if (typeof rawScope !== "object" || rawScope === null) {
+        return res.status(400).json({ message: "scope must be an object" });
+      }
+      const enabled = rawScope.enabled ?? workspace.agentConfig.scope?.enabled ?? false;
+      const strictMode = rawScope.strictMode ?? workspace.agentConfig.scope?.strictMode ?? false;
+      const entriesRaw = rawScope.entriesRaw ?? workspace.agentConfig.scope?.entriesRaw ?? "";
+      if (typeof enabled !== "boolean" || typeof strictMode !== "boolean" || typeof entriesRaw !== "string") {
+        return res.status(400).json({ message: "scope.{enabled,strictMode,entriesRaw} are invalid" });
+      }
+      workspace.agentConfig.scope = { enabled, strictMode, entriesRaw };
+    }
+
+    await workspace.save();
+
+    return res.status(200).json({
+      workspaceId,
+      maxTurns: workspace.agentConfig?.maxTurns ?? null,
+      autonomousMode: workspace.agentConfig?.autonomousMode === true,
+      scope: workspace.agentConfig?.scope ?? {
+        enabled: false,
+        strictMode: false,
+        entriesRaw: "",
+      },
+      choices: WORKSPACE_MAX_TURNS_CHOICES,
+      defaultMaxTurns: DEFAULT_WORKSPACE_MAX_TURNS,
+      message: "Workspace agent settings updated",
+    });
+  } catch (err: any) {
+    console.error("[workspace] updateWorkspaceAgentConfig error:", err);
+    return res.status(400).json({ message: "Failed to update workspace agent settings" });
   }
 };
 

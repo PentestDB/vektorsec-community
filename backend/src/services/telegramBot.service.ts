@@ -12,6 +12,7 @@ import {
   cancelSubscription,
   getEffectivePlanId,
   activateSubscription,
+  startTrial,
   listAllSubscriptions,
 } from "./subscription.service";
 import { getPlanOrFree } from "./plan.service";
@@ -29,7 +30,7 @@ import getSecrets from "../utils/getSecrets";
  * Telegram Bot service.
  *
  * Connects to the Telegram Bot API via HTTP (no external dependency).
- * Handles commands: /start /subscribe /status /usage /cancel /help
+ * Handles commands: /start /subscribe /trial /status /usage /cancel /help
  * and forwards free-form messages to the Pentest Agent Engine.
  *
  * The bot token is read from the TELEGRAM_BOT_TOKEN env var.
@@ -264,6 +265,7 @@ async function handleStart(chatId: string, tu: any): Promise<void> {
     "*Available commands:*",
     "`/start` — Show this help",
     "`/subscribe` — View plans & subscribe",
+    "`/trial` — Start your free trial",
     "`/status` — Check your subscription",
     "`/usage` — Check your usage",
     "`/cancel` — Cancel subscription",
@@ -368,10 +370,63 @@ async function handleCancel(chatId: string, tu: any): Promise<void> {
   }
 }
 
+/**
+ * Start the one-off free trial for the Telegram channel.
+ *
+ * Uses the same service as the web checkout
+ * (`POST /api/subscriptions/me/telegram/trial`) so the trial rules — one per
+ * account, token-capped, no time-based expiry — are identical on every channel.
+ * Usage: `/trial` (or `/trial <planId>`).
+ */
+async function handleTrial(chatId: string, tu: any, args: string[] = []): Promise<void> {
+  if (!tu.userId) {
+    await sendMessage(chatId, "No linked account. Contact admin to link your account first.");
+    return;
+  }
+
+  const existing = await getSubscription(tu.userId, "telegram");
+  if (existing && isSubscriptionActive(existing)) {
+    const plan = await getPlanOrFree(existing.planId);
+    const label = existing.status === "trial" ? "Trial" : "Subscription";
+    await sendMessage(
+      chatId,
+      `${label} already active: *${plan.name}*.\nUse /usage to see the remaining quota.`,
+    );
+    return;
+  }
+
+  try {
+    const sub = await startTrial(tu.userId, "telegram", args[0]?.trim() || undefined);
+    const plan = await getPlanOrFree(sub.planId);
+    const trialCap = plan.limits?.maxTokensPerTrial;
+    const lines = [
+      "*Trial started* 🎉",
+      "",
+      `Plan: *${plan.name}*`,
+      `Included: ${trialCap ? `${trialCap.toLocaleString()} tokens` : "unlimited tokens"} ` +
+        "(the trial ends when this cap is reached — there is no time limit)",
+      `Requests/day: ${plan.limits?.maxRequestsPerDay || "∞"}`,
+      `Tokens/day: ${plan.limits?.maxTokensPerDay || "∞"}`,
+      "",
+      "Send me a target and I'll start testing. Use /usage to follow your quota.",
+    ];
+    await sendMessage(chatId, lines.join("\n"));
+  } catch (err: any) {
+    const message = err?.message ?? "unknown error";
+    if (/already used/i.test(message)) {
+      await sendMessage(
+        chatId,
+        "You have already used your free trial.\nUse /subscribe to see the paid plans.",
+      );
+      return;
+    }
+    await sendMessage(chatId, `Could not start the trial: ${message}`);
+  }
+}
+
 async function handleHelp(chatId: string, tu: any): Promise<void> {
   await handleStart(chatId, tu);
 }
-
 // ─── Admin command handlers ──────────────────────────────────────────
 
 /**
@@ -682,6 +737,9 @@ async function handleUpdate(update: any): Promise<void> {
         break;
       case "/subscribe":
         await handleSubscribe(chatId, tu);
+        break;
+      case "/trial":
+        await handleTrial(chatId, tu, args);
         break;
       case "/status":
         await handleStatus(chatId, tu);

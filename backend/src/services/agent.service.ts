@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { Response } from "express";
-import { redisClient } from "../server";
+import { lazyRedisClient } from "../utils/redis/client";
 import SessionsModel, {
   AgentMessageDoc,
   AgentState,
@@ -26,6 +26,7 @@ import {
 import { shouldSummarize, summarizeMessages, messagesToOpenAI } from "./context.service";
 import { buildSystemPrompt, AgentPromptConfig, BoxEnvInfo } from "../utils/copilot/prompts";
 import UserModel from "../models/User/User.model";
+import WorkspaceModel from "../models/Workspace/Workspace.model";
 import { sessionLifecycle } from "./session.lifecycle";
 import { SubagentManager } from "./subagent.manager";
 import { SwarmManager, CtfSwarmContext, SwarmResult } from "./swarm.manager";
@@ -40,9 +41,15 @@ import {
   normalizeMaxAgentIterations,
   normalizeMaxSubagentIterations,
   normalizeMaxSwarmIterations,
+  normalizeWorkspaceMaxTurns,
 } from "../utils/agentConfig";
 import { recordUsage } from "./usageTracker.service";
 import { createAiToolSafetyEvaluator } from "./tool-approval.service";
+import {
+  buildGuardrailPromptBlock,
+  resolveEffectiveScopeConfig,
+} from "../utils/guardrails";
+import type { GuardrailRuntimeConfig, WorkspaceAgentSettings } from "../utils/guardrails";
 
 const PAUSE_CHECK_KEY = (id: string) => `agent:pause:${id}`;
 const RACER_ORCHESTRATOR_PROMPT_ID = "sys_racer_orchestrator";
@@ -66,12 +73,70 @@ async function cachedUser(userId: string): Promise<any> {
 
 // ─── Abort controller registry (for immediate pause) ───────────────────
 
-const abortControllers = new Map<string, AbortController>();
+// In-memory abort controllers + run "generation" bookkeeping.
+//
+// Why a generation counter?
+//   When a run is force-reset or superseded (new message while an old,
+//   unresponsive loop is still unwinding) the old loop must not be allowed to
+//   overwrite the new run's persisted state. Every registerAbortController()
+//   bumps the session generation; agentState writes made by a run are gated
+//   through isRunCurrent() so a stale loop can never clobber a newer run.
 
-export function registerAbortController(sessionId: string): AbortController {
+const abortControllers = new Map<string, AbortController>();
+const runGenerations = new Map<string, number>();
+
+// Session "presence" leases. A lease is held while a *user-originated* run has
+// a live SSE client (see registerUserRunPresence / touchUserRunPresence). The
+// watchdog uses these to tell "run still being watched" from "orphaned run".
+const userRunLeases = new Map<string, { gen: number; lastSeen: number }>();
+
+export const STALE_RUN_GRACE_MS = 30_000;
+const WATCHDOG_INTERVAL_MS = 10_000;
+
+export interface RunOriginOptions {
+  origin?: "user" | "server";
+}
+
+export function registerAbortController(
+  sessionId: string,
+  opts?: RunOriginOptions,
+): AbortController {
+  const gen = (runGenerations.get(sessionId) ?? 0) + 1;
+  runGenerations.set(sessionId, gen);
   const ctrl = new AbortController();
+  (ctrl as any).__runGen = gen;
+  (ctrl as any).__runOrigin = opts?.origin ?? "server";
+  (ctrl as any).__runCreatedAt = Date.now();
   abortControllers.set(sessionId, ctrl);
   return ctrl;
+}
+
+export function getRunGeneration(sessionId: string): number {
+  return runGenerations.get(sessionId) ?? 0;
+}
+
+/** True when `signal` belongs to the latest registered run for this session. */
+export function isRunCurrent(sessionId: string, signal?: AbortSignal): boolean {
+  if (!signal) return true;
+  const ctrlGen = (signal as any).__runGen as number | undefined;
+  if (ctrlGen === undefined) return true; // untracked external signal – assume current
+  return ctrlGen === runGenerations.get(sessionId);
+}
+
+/** Marks a user-originated run as "being watched" by a live SSE client. */
+export function registerUserRunPresence(sessionId: string): void {
+  const gen = runGenerations.get(sessionId) ?? 0;
+  userRunLeases.set(sessionId, { gen, lastSeen: Date.now() });
+}
+
+/** Refreshes the presence lease (called on every SSE heartbeat). */
+export function touchUserRunPresence(sessionId: string): void {
+  const lease = userRunLeases.get(sessionId);
+  if (lease) lease.lastSeen = Date.now();
+}
+
+export function clearUserRunPresence(sessionId: string): void {
+  userRunLeases.delete(sessionId);
 }
 
 export function abortSession(sessionId: string): void {
@@ -89,6 +154,108 @@ export function abortSession(sessionId: string): void {
 export function hasActiveController(sessionId: string): boolean {
   const ctrl = abortControllers.get(sessionId);
   return !!ctrl && !ctrl.signal.aborted;
+}
+
+/**
+ * Hard-reset a session's agent runtime:
+ *  - aborts any in-flight run (an unresponsive loop stops at its next
+ *    checkpoint),
+ *  - clears the Redis pause flag,
+ *  - sets agentState to "idle" and drops any pending consent / manual prompt,
+ *  - bumps the run generation so a stale loop can no longer overwrite state.
+ *
+ * Safe to call at any time. Used by the REST + WS "force-reset-agent" actions
+ * and by the `/reset` slash command.
+ */
+export async function forceResetAgent(sessionId: string): Promise<{ agentState: string }> {
+  abortSession(sessionId);
+  clearUserRunPresence(sessionId);
+  try {
+    await setPaused(sessionId, false);
+  } catch {
+    // Redis unreachable – ignore, the DB reset below is the source of truth.
+  }
+  runGenerations.set(sessionId, (runGenerations.get(sessionId) ?? 0) + 1);
+  await SessionsModel.updateOne(
+    { sessionId },
+    {
+      $set: { agentState: "idle" },
+      $unset: { pendingConsent: 1, pendingManualExecution: 1 },
+    },
+  );
+  console.log(`[agent] forceResetAgent: ${sessionId} -> idle`);
+  return { agentState: "idle" };
+}
+
+// ─── Stale-run watchdog ──────────────────────────────────────────────
+// Sweeps persisted sessions that are still "running" but have no live run:
+//   - a run with an ACTIVE controller whose origin is "user" but nobody has
+//     been watching it for > STALE_RUN_GRACE_MS  -> abort + pause (orphaned),
+//   - a session with NO active controller while the DB still says "running"
+//     (stuck state from a crash / unresponsive loop / backend restart)
+//     -> reset to idle.
+let watchdogStarted = false;
+let watchdogTimer: NodeJS.Timeout | null = null;
+
+async function sweepStuckRuns(): Promise<void> {
+  try {
+    const docs = await SessionsModel.find({ agentState: "running" })
+      .select("sessionId")
+      .lean();
+
+    for (const doc of docs) {
+      const sessionId = (doc as any).sessionId as string;
+      const ctrl = abortControllers.get(sessionId);
+      const lease = userRunLeases.get(sessionId);
+      const now = Date.now();
+
+      if (ctrl && !ctrl.signal.aborted) {
+        const origin = (ctrl as any).__runOrigin as string | undefined;
+        const createdAt = (ctrl as any).__runCreatedAt as number | undefined;
+        const orphaned =
+          origin === "user" &&
+          (!lease || now - lease.lastSeen > STALE_RUN_GRACE_MS) &&
+          createdAt !== undefined &&
+          now - createdAt > STALE_RUN_GRACE_MS;
+        if (orphaned) {
+          console.warn(
+            `[agent] Watchdog: pausing orphaned user run for ${sessionId} (unwatched > ${STALE_RUN_GRACE_MS / 1000}s)`,
+          );
+          abortSession(sessionId);
+          try {
+            await setPaused(sessionId, true);
+          } catch {
+            // ignore
+          }
+        }
+        continue;
+      }
+
+      // No in-flight controller but the DB says running → stuck state.
+      const unwatchedFor = lease ? now - lease.lastSeen : Number.MAX_SAFE_INTEGER;
+      if (unwatchedFor >= STALE_RUN_GRACE_MS) {
+        console.warn(`[agent] Watchdog: resetting stale "running" state for ${sessionId}`);
+        try {
+          await setPaused(sessionId, false);
+        } catch {
+          // ignore
+        }
+        await SessionsModel.updateOne({ sessionId }, { $set: { agentState: "idle" } });
+      }
+    }
+  } catch (err) {
+    console.warn("[agent] Watchdog sweep error:", err);
+  }
+}
+
+export function startAgentStateWatchdog(): void {
+  if (watchdogStarted) return;
+  watchdogStarted = true;
+  watchdogTimer = setInterval(() => {
+    sweepStuckRuns().catch((err) => console.warn("[agent] Watchdog sweep failed:", err));
+  }, WATCHDOG_INTERVAL_MS);
+  watchdogTimer.unref?.();
+  console.log(`[agent] Agent state watchdog started (sweep every ${WATCHDOG_INTERVAL_MS / 1000}s)`);
 }
 
 /**
@@ -112,6 +279,12 @@ export function listActiveAgentSessions(): { sessionId: string; activeSince: num
 export interface SSEWriter {
   write: (event: string, data: any) => void;
   end: () => void;
+  /**
+   * Optional liveness probe. Returns true when the underlying response is
+   * destroyed/ended (client disconnected) so run loops can stop heartbeating
+   * and unwind instead of leaving a session stuck in "running".
+   */
+  clientGone?: () => boolean;
 }
 
 export function createSSEWriter(res: Response): SSEWriter {
@@ -136,6 +309,9 @@ export function createSSEWriter(res: Response): SSEWriter {
       } catch {
         // already ended
       }
+    },
+    clientGone() {
+      return res.destroyed || res.writableEnded;
     },
   };
 }
@@ -162,6 +338,9 @@ export function createDetachedSSEWriter(label: string): SSEWriter {
 
 // ─── State helpers ───────────────────────────────────────────────────
 
+// Resolved per call so importing this module never requires a live Redis.
+const redisClient = lazyRedisClient();
+
 async function isPaused(sessionId: string): Promise<boolean> {
   try {
     const val = await redisClient.GET(PAUSE_CHECK_KEY(sessionId));
@@ -179,7 +358,15 @@ export async function setPaused(sessionId: string, paused: boolean): Promise<voi
   }
 }
 
-async function setAgentState(sessionId: string, state: AgentState): Promise<void> {
+async function setAgentState(
+  sessionId: string,
+  state: AgentState,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (signal && !isRunCurrent(sessionId, signal)) {
+    // A newer run superseded this one — do not clobber its persisted state.
+    return;
+  }
   await SessionsModel.updateOne({ sessionId }, { $set: { agentState: state } });
 }
 
@@ -337,6 +524,7 @@ async function buildSystemMessage(
   sessionId: string,
   userId: string,
   envInfo?: BoxEnvInfo,
+  guardrails?: GuardrailRuntimeConfig | null,
 ): Promise<AgentMessageDoc> {
   const promptConfig = await buildAgentPromptConfig(sessionId, userId, envInfo);
   let systemContent = buildSystemPrompt(promptConfig);
@@ -357,6 +545,13 @@ async function buildSystemMessage(
     }
   } catch (err) {
     console.error("[agent] failed to inject attack chain into system prompt:", err);
+  }
+
+  // Append workspace guardrails (autonomous mode / authorized scope) so the
+  // model behaves consistently with the enforced consent + scope rules.
+  if (guardrails) {
+    const grBlock = buildGuardrailPromptBlock(guardrails);
+    if (grBlock) systemContent += grBlock;
   }
 
   return {
@@ -532,13 +727,84 @@ function appendSwarmResultMessages(
 
 // ─── Core agent loop ─────────────────────────────────────────────────
 
-export async function runAgentLoop(params: {
+export interface RunAgentLoopParams {
   sessionId: string;
   userId: string;
   sse: SSEWriter;
   abortSignal?: AbortSignal;
   channel?: "telegram" | "online" | "platform";
-}): Promise<void> {
+}
+
+const SSE_HEARTBEAT_MS = 15_000;
+
+/**
+ * Heartbeat wrapper around the core agent loop.
+ *
+ * - Sends SSE `heartbeat` events every 15s so proxies / load balancers do not
+ *   kill an idle stream, and refreshes the user-run presence lease.
+ * - When the underlying response is gone (client disconnected without a req
+ *   close) it aborts the run and marks the session paused instead of leaving
+ *   it stuck in "running".
+ */
+export async function runAgentLoop(params: RunAgentLoopParams): Promise<void> {
+  const heartbeat = setInterval(() => {
+    try {
+      if (typeof params.sse.clientGone === "function" && params.sse.clientGone()) {
+        clearInterval(heartbeat);
+        abortSession(params.sessionId);
+        clearUserRunPresence(params.sessionId);
+        setPaused(params.sessionId, true).catch(() => {});
+        console.warn(`[agent] SSE client for ${params.sessionId} is gone — pausing run`);
+        return;
+      }
+      params.sse.write("heartbeat", { t: Date.now() });
+      touchUserRunPresence(params.sessionId);
+    } catch {
+      // ignore – the loop cleans up on exit
+    }
+  }, SSE_HEARTBEAT_MS);
+  heartbeat.unref?.();
+  try {
+    await runAgentLoopCore(params);
+  } finally {
+    clearInterval(heartbeat);
+  }
+}
+
+/**
+ * Load the per-workspace agent settings (maxTurns / autonomousMode / scope)
+ * for a session and resolve the effective guardrail runtime config. Falls back
+ * to the global Admin > Scope env config when the workspace scope is disabled.
+ */
+export async function loadSessionWorkspaceGuardrails(
+  sessionId: string,
+): Promise<{ settings: WorkspaceAgentSettings | null; guardrails: GuardrailRuntimeConfig }> {
+  let settings: WorkspaceAgentSettings | null = null;
+
+  try {
+    const session = await SessionsModel.findOne({ sessionId })
+      .select("workspaceId")
+      .lean();
+    if (session?.workspaceId) {
+      const ws = await WorkspaceModel.findOne({ workspaceId: session.workspaceId })
+        .select("agentConfig")
+        .lean();
+      settings = ((ws as any)?.agentConfig as WorkspaceAgentSettings | undefined) ?? null;
+    }
+  } catch (err) {
+    console.warn(`[agent] Failed to load workspace guardrails for ${sessionId}:`, err);
+  }
+
+  return {
+    settings,
+    guardrails: {
+      autonomousMode: settings?.autonomousMode === true,
+      scope: resolveEffectiveScopeConfig(settings?.scope),
+    },
+  };
+}
+
+async function runAgentLoopCore(params: RunAgentLoopParams): Promise<void> {
   const { sessionId, userId, sse, channel = "platform" } = params;
 
   const session = await SessionsModel.findOne({ sessionId });
@@ -554,9 +820,26 @@ export async function runAgentLoop(params: {
   const toolExecutionMode = user?.configs?.toolExecutionMode ??
     (requireConsentForAllTools ? "requires_consent" : "auto");
   const disableSafetyProtections = user?.configs?.disableSafetyProtections ?? false;
-  const maxAgentIterations = normalizeMaxAgentIterations(
-    user?.configs?.maxAgentIterations,
-  );
+  // Turn-limit resolution order:
+  //   1. Workspace agent settings (Workspace Settings → Agent Max Turns —
+  //      presets 25/50/100) when the session belongs to a workspace that has
+  //      one set;
+  //   2. user-level maxAgentIterations (Settings → Agent Behavior);
+  //   3. default (25).
+  // Workspace settings: turn limit + guardrails (autonomous mode / scope).
+  const { settings: workspaceAgentConfig, guardrails } =
+    await loadSessionWorkspaceGuardrails(sessionId);
+  const workspaceMaxTurns = normalizeWorkspaceMaxTurns(workspaceAgentConfig?.maxTurns);
+  const maxAgentIterations =
+    workspaceMaxTurns ?? normalizeMaxAgentIterations(user?.configs?.maxAgentIterations);
+  // Autonomous workspace mode auto-executes high-risk (non-destructive)
+  // in-scope actions immediately. It never downgrades an explicit
+  // requires_consent policy chosen by the user.
+  const autonomousExecution =
+    guardrails.autonomousMode &&
+    toolExecutionMode !== "requires_consent" &&
+    requireConsentForAllTools !== true;
+  const effectiveToolExecutionMode = autonomousExecution ? "auto" : toolExecutionMode;
   const maxSubagentIterations = normalizeMaxSubagentIterations(
     user?.configs?.maxSubagentIterations,
   );
@@ -566,7 +849,7 @@ export async function runAgentLoop(params: {
   const disabledAgentTools: string[] = session.disabledAgentTools ?? [];
 
 
-  await setAgentState(sessionId, "running");
+  await setAgentState(sessionId, "running", params.abortSignal);
   await setPaused(sessionId, false);
 
   const shellManager = await sessionLifecycle.getShellManager(sessionId);
@@ -616,10 +899,10 @@ export async function runAgentLoop(params: {
     );
   }
 
-  // Refresh the system message on every turn so model/racer assignments changed
-  // in Settings are immediately visible to the orchestrator.
+  // Refresh the system message on every turn so model/racer assignments and
+  // workspace guardrails (autonomous mode / authorized scope) are current.
   if (messages.length > 0 && messages[0].role === "system") {
-    const updatedSysMsg = await buildSystemMessage(sessionId, userId, envInfo);
+    const updatedSysMsg = await buildSystemMessage(sessionId, userId, envInfo, guardrails);
     messages[0] = updatedSysMsg;
   }
 
@@ -640,7 +923,7 @@ export async function runAgentLoop(params: {
   const orchestratorConfig: ProviderConfig = await presetToProviderConfig(userModels.orchestrator);
   const orchestratorReasoningMode: ReasoningMode =
     (userModels.orchestrator.reasoningMode as ReasoningMode) || "off";
-  const toolSafetyEvaluator = toolExecutionMode === "auto_approve"
+  const toolSafetyEvaluator = effectiveToolExecutionMode === "auto_approve"
     ? createAiToolSafetyEvaluator({
         provider: orchestratorConfig,
         userId: session.uid.toString(),
@@ -738,6 +1021,7 @@ export async function runAgentLoop(params: {
     },
     maxSubagentIterations,
     maxSwarmIterations,
+    guardrails,
   });
 
 
@@ -759,7 +1043,7 @@ export async function runAgentLoop(params: {
 
       if (await isPaused(sessionId)) {
         await appendMessages(sessionId, newMessages);
-        await setAgentState(sessionId, "paused");
+        await setAgentState(sessionId, "paused", params.abortSignal);
         sse.write("paused", { message: "Agent paused by user" });
         sse.end();
         return;
@@ -1045,7 +1329,7 @@ export async function runAgentLoop(params: {
         executionCtx,
         requireConsentForAllTools,
         disableSafetyProtections,
-        toolExecutionMode,
+        effectiveToolExecutionMode,
         toolSafetyEvaluator,
       );
 
@@ -1096,24 +1380,26 @@ export async function runAgentLoop(params: {
         });
 
         await appendMessages(sessionId, newMessages);
-        await SessionsModel.updateOne(
-          { sessionId },
-          {
-            $set: {
-              agentState: "waiting_consent",
-              pendingConsent: {
-                toolCallId: firstConsent.toolCallId,
-                toolName: firstConsent.toolName,
-                arguments: parseToolArguments(
-                  assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
-                ).args,
-                safetyBlock: firstBatchItem.safetyBlock,
-                approvalReason: firstBatchItem.approvalReason,
-                batch: batch.length > 1 ? batch : undefined,
+        if (isRunCurrent(sessionId, params.abortSignal)) {
+          await SessionsModel.updateOne(
+            { sessionId },
+            {
+              $set: {
+                agentState: "waiting_consent",
+                pendingConsent: {
+                  toolCallId: firstConsent.toolCallId,
+                  toolName: firstConsent.toolName,
+                  arguments: parseToolArguments(
+                    assistantToolCalls.find((tc) => tc.id === firstConsent.toolCallId)?.arguments ?? "{}",
+                  ).args,
+                  safetyBlock: firstBatchItem.safetyBlock,
+                  approvalReason: firstBatchItem.approvalReason,
+                  batch: batch.length > 1 ? batch : undefined,
+                },
               },
             },
-          },
-        );
+          );
+        }
         sse.end();
         return;
       }
@@ -1204,10 +1490,10 @@ export async function runAgentLoop(params: {
 
     if (params.abortSignal?.aborted) {
       await subagentManager.cancelAll();
-      await setAgentState(sessionId, "paused");
+      await setAgentState(sessionId, "paused", params.abortSignal);
       sse.write("paused", { message: "Agent paused by user" });
     } else {
-      await setAgentState(sessionId, "idle");
+      await setAgentState(sessionId, "idle", params.abortSignal);
       if (reachedIterationLimit) {
         sse.write("iteration_limit", {
           maxIterations: maxAgentIterations,
@@ -1233,7 +1519,7 @@ export async function runAgentLoop(params: {
     } else {
       await swarmManager.cancelAll();
     }
-    await setAgentState(sessionId, isAbort ? "paused" : "idle");
+    await setAgentState(sessionId, isAbort ? "paused" : "idle", params.abortSignal);
     if (isAbort) {
       sse.write("paused", { message: "Agent paused by user" });
     } else {
@@ -1322,7 +1608,7 @@ export async function handleConsent(params: {
       turnIndex: session.turnIndex,
     }));
     await appendMessages(sessionId, denialMessages);
-    await setAgentState(sessionId, "idle");
+    await setAgentState(sessionId, "idle", abortSignal);
     await runAgentLoop({ sessionId, userId, sse, abortSignal, channel });
     return;
   }
@@ -1337,6 +1623,7 @@ export async function handleConsent(params: {
     agentId: "main",
     shellManager,
     abortSignal,
+    guardrails: (await loadSessionWorkspaceGuardrails(sessionId)).guardrails,
   });
 
   const callbacks: ToolExecutionCallbacks = {

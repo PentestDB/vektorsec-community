@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import SessionsModel, { AgentMessageDoc } from "../models/Sessions/Sessions.model";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
-import { SSEWriter } from "./agent.service";
+import { SSEWriter, forceResetAgent } from "./agent.service";
 import { invoke_llm, invoke_llm_streaming, getProvider } from "../utils/llm/providers";
 import { getModelContextLimit } from "../utils/modelMetadata";
 import { sessionLifecycle } from "./session.lifecycle";
@@ -227,16 +227,9 @@ const commandHandlers: Record<string, CommandHandler> = {
   },
 
   reset: async ({ sessionId, sse }) => {
-    await SessionsModel.updateOne(
-      { sessionId },
-      {
-        $set: {
-          agentState: "idle",
-          pendingConsent: null,
-          pendingManualExecution: null,
-        },
-      },
-    );
+    // Robust reset: abort any in-flight run, clear the Redis pause flag and
+    // return the session to idle (also clears pending consent/manual prompts).
+    await forceResetAgent(sessionId);
 
     sse.write("slash_command_result", {
       command: "reset",

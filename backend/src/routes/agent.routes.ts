@@ -5,6 +5,7 @@ import {
   sendMessage,
   pauseAgent,
   resumeAgent,
+  forceResetAgentSession,
   respondToConsent,
   submitManualOutput,
   getHistory,
@@ -16,6 +17,7 @@ import {
   getSlashCommands,
   getSessionAgentToolsConfig,
   updateSessionAgentToolsConfig,
+  exportSessionReport,
   installCapability,
 } from "../controllers/agent.controller";
 import {
@@ -32,6 +34,8 @@ router.get("/session/:sessionId", [verifySess], getSessionInfo);
 router.get("/session/:sessionId/history", [verifySess], getHistory);
 router.get("/session/:sessionId/agent-tools-config", [verifySess], getSessionAgentToolsConfig);
 router.post("/session/:sessionId/agent-tools-config", [verifySess], updateSessionAgentToolsConfig);
+// Engagement report export (markdown / html / json download)
+router.get("/session/:sessionId/report", [verifySess], exportSessionReport);
 router.get("/session/:sessionId/vulnerabilities", [verifySess], getVulnerabilities);
 router.get("/session/:sessionId/vulnerabilities/:vulnerabilityId", [verifySess], getVulnerability);
 router.post("/session/:sessionId/vulnerabilities/:vulnerabilityId/chat", [verifySess], chatAboutVulnerability);
@@ -40,6 +44,7 @@ router.post("/delete-session", [verifySess], deleteSession);
 router.post("/message", [verifySess], sendMessage);
 router.post("/pause", [verifySess], pauseAgent);
 router.post("/resume", [verifySess], resumeAgent);
+router.post("/force-reset", [verifySess], forceResetAgentSession);
 router.post("/consent", [verifySess], respondToConsent);
 router.post("/manual-output", [verifySess], submitManualOutput);
 router.post("/clear-context", [verifySess], clearContext);
