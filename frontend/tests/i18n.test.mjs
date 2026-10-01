@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import en from "../src/i18n/locales/en.js";
 import th from "../src/i18n/locales/th.js";
+import { getMagnitudeModelIssue } from "../src/utils/magnitudeModels.js";
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
@@ -127,6 +128,36 @@ test("createTranslator binds a locale and exposes it on the function", () => {
   const fallbackT = createTranslator("de");
   assert.equal(fallbackT.locale, DEFAULT_LOCALE);
   assert.equal(fallbackT("nav.home"), "Home");
+});
+
+test("every Browser Agent model issue maps to an existing translation key", () => {
+  const models = [
+    undefined,
+    { provider: "anthropic-compatible", baseURL: "https://api.minimax.io" },
+    { provider: "anthropic", baseURL: "https://proxy.internal" },
+    { provider: "openai-compatible", baseURL: "" },
+    { provider: "mistralai" },
+    { provider: "openai" },
+    { provider: "ollama" },
+  ];
+
+  const seen = new Set();
+  for (const model of models) {
+    const key = getMagnitudeModelIssue(model);
+    if (key === null) continue;
+    seen.add(key);
+    assert.equal(typeof enFlat[key], "string", `${key} is missing from en`);
+    assert.equal(typeof thFlat[key], "string", `${key} is missing from th`);
+  }
+
+  // All five rules are exercised above, so a new rule cannot ship untranslated.
+  assert.deepEqual([...seen].sort(), [
+    "browserAgent.modelIssueAnthropicBaseUrl",
+    "browserAgent.modelIssueAnthropicCustomBaseUrl",
+    "browserAgent.modelIssueNoModel",
+    "browserAgent.modelIssueOpenAiCompatibleBaseUrl",
+    "browserAgent.modelIssueUnsupportedProvider",
+  ]);
 });
 
 test("readCookieValue parses document.cookie and Cookie headers", () => {

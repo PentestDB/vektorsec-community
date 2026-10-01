@@ -20,6 +20,8 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
@@ -30,6 +32,7 @@ import {
 import { getMagnitudeModelIssue } from "@/utils/magnitudeModels";
 
 const MagnitudeSettingsPage = ({ onNavigate }) => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("magnitude-config", getMagnitudeConfig);
@@ -53,13 +56,13 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
 
   const saveMutation = useMutation(updateMagnitudeConfig, {
     onSuccess: () => {
-      message.success("Browser Agent configuration saved");
+      message.success(t("magnitudeSettings.saved"));
       queryClient.invalidateQueries("magnitude-config");
       setSaving(false);
     },
     onError: (err) => {
       message.error(
-        err?.response?.data?.message || "Failed to save Browser Agent config",
+        err?.response?.data?.message || t("magnitudeSettings.saveFailed"),
       );
       setSaving(false);
     },
@@ -89,7 +92,8 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
       if (err?.errorFields) return;
       setRunResult({
         success: false,
-        message: err?.response?.data?.message || "Failed to run browser agent",
+        message:
+          err?.response?.data?.message || t("magnitudeSettings.runFailed"),
       });
     } finally {
       setRunning(false);
@@ -110,11 +114,11 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
       <div className={styles.statusRow}>
         {configured ? (
           <Tag icon={<CheckCircleFilled />} color="success">
-            Enabled
+            {t("common.enabled")}
           </Tag>
         ) : (
           <Tag icon={<WarningOutlined />} color="warning">
-            Disabled
+            {t("common.disabled")}
           </Tag>
         )}
         {selectedModel ? (
@@ -122,17 +126,14 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
             {selectedModel.label}
           </Tag>
         ) : (
-          <Tag color="warning">No model selected</Tag>
+          <Tag color="warning">{t("magnitudeSettings.noModelSelected")}</Tag>
         )}
       </div>
 
       <div className={styles.warningBox}>
         <WarningOutlined />
         <span>
-          Browser Agent requires a Magnitude-compatible model. For MiniMax, use
-          an <strong>OpenAI-Compatible</strong> preset with base URL{" "}
-          <code>https://api.minimax.io/v1</code>. Incompatible presets are
-          hidden from the Browser Agent dropdown in Settings &gt; Models.
+          <RichText text={t("magnitudeSettings.modelWarning")} />
         </span>
       </div>
 
@@ -145,27 +146,26 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
 
       <div className={styles.infoBox}>
         <InfoCircleOutlined />
-        <span>
-          Browser Agent uses the model selected in Settings &gt; Models.
-          Configure credentials and assignments there once.
-        </span>
+        <span>{t("magnitudeSettings.info")}</span>
       </div>
 
       <div className={styles.mcpPanel}>
         <div className={styles.mcpPanelHeader} style={{ marginBottom: 0 }}>
           <div>
-            <div className={styles.mcpPanelTitle}>Browser Model</div>
+            <div className={styles.mcpPanelTitle}>
+              {t("magnitudeSettings.browserModelTitle")}
+            </div>
             <div className={styles.mcpPanelDescription}>
               {selectedModel
                 ? `${selectedModel.label} · ${selectedModel.provider}/${selectedModel.model}`
-                : "No Browser Agent model is assigned yet."}
+                : t("magnitudeSettings.noModelAssigned")}
             </div>
           </div>
           <PrimaryButton
             onClick={() => onNavigate?.("models")}
             style={{ height: "1.85rem", fontSize: "0.72rem" }}
           >
-            Open Models
+            {t("magnitudeSettings.openModels")}
           </PrimaryButton>
         </div>
       </div>
@@ -182,7 +182,7 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
         }}
       >
         <Form.Item
-          label="Enable Magnitude Browser Agent"
+          label={t("magnitudeSettings.enableLabel")}
           name="enabled"
           valuePropName="checked"
         >
@@ -192,8 +192,8 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
         <Form.Item
           label={
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Proxy URL
-              <Tooltip title="Route browser traffic through a proxy such as Burp Suite. Use http://host:port or socks5://host:port.">
+              {t("magnitudeSettings.proxyUrlLabel")}
+              <Tooltip title={t("magnitudeSettings.proxyUrlTooltip")}>
                 <InfoCircleOutlined
                   style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }}
                 />
@@ -206,7 +206,7 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
         </Form.Item>
 
         <Form.Item
-          label="Headless Mode"
+          label={t("magnitudeSettings.headlessLabel")}
           name="headless"
           valuePropName="checked"
         >
@@ -219,7 +219,10 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
         >
           {({ getFieldValue }) =>
             !getFieldValue("headless") && (
-              <Form.Item label="X Display" name="displayPort">
+              <Form.Item
+                label={t("magnitudeSettings.displayLabel")}
+                name="displayPort"
+              >
                 <Input placeholder="e.g. :99 or :1" />
               </Form.Item>
             )
@@ -235,7 +238,7 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
             purpleFilled
             style={{ height: "2rem", fontSize: "0.75rem" }}
           >
-            Save Configuration
+            {t("common.saveConfiguration")}
           </PrimaryButton>
         </div>
       </Form>
@@ -257,7 +260,7 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
               marginBottom: "0.75rem",
             }}
           >
-            Quick Test
+            {t("magnitudeSettings.quickTest")}
           </div>
 
           {runResult && (
@@ -280,21 +283,28 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
 
           <Form form={goalForm} layout="vertical">
             <Form.Item
-              label="Target URL"
+              label={t("magnitudeSettings.targetUrlLabel")}
               name="targetUrl"
-              rules={[{ required: true, message: "A target URL is required" }]}
+              rules={[
+                {
+                  required: true,
+                  message: t("magnitudeSettings.targetUrlRequired"),
+                },
+              ]}
             >
               <Input placeholder="e.g. https://target-app.com/login" />
             </Form.Item>
 
             <Form.Item
-              label="Goal"
+              label={t("magnitudeSettings.goalLabel")}
               name="goal"
-              rules={[{ required: true, message: "A goal is required" }]}
+              rules={[
+                { required: true, message: t("magnitudeSettings.goalRequired") },
+              ]}
             >
               <Input.TextArea
                 rows={3}
-                placeholder="e.g. Log in with admin/admin and navigate to the admin panel"
+                placeholder={t("magnitudeSettings.goalPlaceholder")}
               />
             </Form.Item>
 
@@ -308,7 +318,7 @@ const MagnitudeSettingsPage = ({ onNavigate }) => {
                   style={{ height: "2rem", fontSize: "0.75rem" }}
                 >
                   {running ? <LoadingOutlined /> : null}
-                  Run Test
+                  {t("magnitudeSettings.runTest")}
                 </PrimaryButton>
               </Col>
             </Row>

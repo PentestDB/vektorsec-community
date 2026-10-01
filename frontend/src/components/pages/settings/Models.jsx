@@ -33,6 +33,8 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
@@ -71,45 +73,46 @@ const REASONING_OPTIONS = ["off", "low", "medium", "high", "xhigh", "max"].map(
 const PROVIDER_META = {
   openai: {
     keyURL: "https://platform.openai.com/api-keys",
-    keyLabel: "Get OpenAI API Key",
+    keyName: "OpenAI",
   },
   anthropic: {
     keyURL: "https://console.anthropic.com/settings/keys",
-    keyLabel: "Get Claude API Key",
+    keyName: "Claude",
   },
   "anthropic-compatible": {
     keyURL:
       "https://platform.minimax.io/user-center/basic-information/interface-key",
-    keyLabel: "Get MiniMax API Key",
+    keyName: "MiniMax",
   },
   openrouter: {
     keyURL: "https://openrouter.ai/settings/keys",
-    keyLabel: "Get OpenRouter API Key",
+    keyName: "OpenRouter",
   },
   google: {
     keyURL: "https://aistudio.google.com/apikey",
-    keyLabel: "Get Google AI API Key",
+    keyName: "Google AI",
   },
   mistralai: {
     keyURL: "https://console.mistral.ai/api-keys",
-    keyLabel: "Get Mistral API Key",
+    keyName: "Mistral",
   },
   ollama: {
     keyURL: "https://ollama.com/library",
-    keyLabel: "Browse Ollama models",
+    keyName: "Ollama",
+    browseModels: true,
   },
   kimi: {
     keyURL: "https://platform.kimi.ai/",
-    keyLabel: "Get Kimi API Key",
+    keyName: "Kimi",
   },
   deepseek: {
     keyURL: "https://platform.deepseek.com/api_keys",
-    keyLabel: "Get DeepSeek API Key",
+    keyName: "DeepSeek",
   },
   bedrock: {
     keyURL:
       "https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html",
-    keyLabel: "Get Bedrock API Key",
+    keyName: "Bedrock",
   },
 };
 
@@ -248,6 +251,7 @@ const ModelModal = ({
   onCancel,
   onSubmit,
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const provider = Form.useWatch("provider", form) || initialValues.provider;
   const providerMeta = PROVIDER_META[provider] || {};
@@ -258,14 +262,16 @@ const ModelModal = ({
 
   return (
     <Modal
-      title={initialValues.id ? "Edit Model" : "Add Model"}
+      title={
+        initialValues.id ? t("modelsSettings.modalTitleEdit") : t("modelsSettings.modalTitleAdd")
+      }
       open={open}
       onCancel={onCancel}
       footer={null}
       width={720}
       centered
       className={styles.modelModal}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}
@@ -286,23 +292,25 @@ const ModelModal = ({
         <Row gutter={14}>
           <Col span={8}>
             <Form.Item
-              label="Label"
+              label={t("modelsSettings.labelLabel")}
               name="label"
-              rules={[{ required: true, message: "Label is required" }]}
+              rules={[
+                { required: true, message: t("modelsSettings.labelRequired") },
+              ]}
             >
-              <Input placeholder="e.g. Claude Sonnet" />
+              <Input placeholder={t("modelsSettings.labelPlaceholder")} />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item
-              label="Provider"
+              label={t("modelsSettings.providerLabel")}
               name="provider"
               rules={[{ required: true }]}
             >
               <Select
                 options={PROVIDER_OPTIONS}
                 popupMatchSelectWidth={false}
-                popupClassName={styles.modelSelectDropdown}
+                classNames={{ popup: styles.modelSelectDropdown }}
                 onChange={() => {
                   form.setFieldValue("model", "");
                   form.setFieldValue("baseURL", "");
@@ -312,14 +320,16 @@ const ModelModal = ({
           </Col>
           <Col span={8}>
             <Form.Item
-              label="Model"
+              label={t("modelsSettings.modelLabel")}
               name="model"
-              rules={[{ required: true, message: "Model is required" }]}
+              rules={[
+                { required: true, message: t("modelsSettings.modelRequired") },
+              ]}
             >
               <AutoComplete
                 allowClear
-                placeholder="Select or type a model"
-                popupClassName={styles.modelSelectDropdown}
+                placeholder={t("modelsSettings.modelPlaceholder")}
+                classNames={{ popup: styles.modelSelectDropdown }}
                 options={(modelSuggestions[provider] || []).map((model) => ({
                   value: model,
                   label: model,
@@ -338,22 +348,22 @@ const ModelModal = ({
               needsBaseURL(provider) ? 8 : isSubscriptionProvider(provider) ? 16 : 12
             }
           >
-            <Form.Item label="Reasoning" name="reasoningMode">
+            <Form.Item label={t("modelsSettings.reasoningLabel")} name="reasoningMode">
               <Select
                 options={REASONING_OPTIONS}
-                popupClassName={styles.modelSelectDropdown}
+                classNames={{ popup: styles.modelSelectDropdown }}
               />
             </Form.Item>
           </Col>
           {!isSubscriptionProvider(provider) && (
             <Col span={needsBaseURL(provider) ? 8 : 12}>
-              <Form.Item label="API Key" name="apiKey">
+              <Form.Item label={t("modelsSettings.apiKeyLabel")} name="apiKey">
                 <Input.Password
                   autoComplete="off"
                   placeholder={
                     provider === "ollama"
-                      ? "Optional for local Ollama"
-                      : "API key"
+                      ? t("modelsSettings.apiKeyPlaceholderOllama")
+                      : t("modelsSettings.apiKeyPlaceholder")
                   }
                 />
               </Form.Item>
@@ -362,14 +372,14 @@ const ModelModal = ({
           {needsBaseURL(provider) && (
             <Col span={8}>
               <Form.Item
-                label="Base URL"
+                label={t("modelsSettings.baseUrlLabel")}
                 name="baseURL"
                 rules={[
                   {
                     // Optional for Ollama (local default) and Bedrock (falls
                     // back to the configured AWS region's endpoint).
                     required: !["ollama", "bedrock"].includes(provider),
-                    message: "Base URL is required",
+                    message: t("modelsSettings.baseUrlRequired"),
                   },
                 ]}
               >
@@ -383,9 +393,9 @@ const ModelModal = ({
           <div className={styles.warningBox} style={{ marginBottom: "1rem" }}>
             <WarningOutlined />
             <span>
-              This preset can still be used for orchestrator or racers, but it
-              will not appear in the Browser Agent selector.{" "}
-              {browserModelIssue}
+              {t("modelsSettings.presetUnusableForBrowser", {
+                issue: t(browserModelIssue),
+              })}
             </span>
           </div>
         )}
@@ -400,7 +410,13 @@ const ModelModal = ({
                 className={styles.externalLink}
               >
                 <ExportOutlined style={{ fontSize: 11 }} />
-                {providerMeta.keyLabel}
+                {providerMeta.browseModels
+                  ? t("modelsSettings.browseProviderModels", {
+                      provider: providerMeta.keyName,
+                    })
+                  : t("modelsSettings.getApiKey", {
+                      provider: providerMeta.keyName,
+                    })}
               </a>
             )}
           </Col>
@@ -410,14 +426,14 @@ const ModelModal = ({
                 onClick={onCancel}
                 style={{ height: 32, fontSize: "0.75rem" }}
               >
-                <CloseOutlined /> Cancel
+                <CloseOutlined /> {t("common.cancel")}
               </PrimaryButton>
               <PrimaryButton
                 purpleFilled
                 htmlType="submit"
                 style={{ height: 32, fontSize: "0.75rem" }}
               >
-                <CheckOutlined /> Save
+                <CheckOutlined /> {t("common.save")}
               </PrimaryButton>
             </div>
           </Col>
@@ -428,6 +444,7 @@ const ModelModal = ({
 };
 
 const ModelsPage = () => {
+  const { t } = useTranslation();
   const { message, notification } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery(
@@ -475,44 +492,51 @@ const ModelsPage = () => {
 
   const persistMutation = useMutation(updateModels, {
     onSuccess: () => {
-      message.success("Models updated");
+      message.success(t("modelsSettings.updated"));
       queryClient.invalidateQueries("unified-models");
       queryClient.invalidateQueries("magnitude-config");
     },
     onError: (err) => {
       notification.error({
-        message: "Error",
-        description: err?.response?.data?.message ?? "Failed to update models",
+        message: t("common.error"),
+        description:
+          err?.response?.data?.message ?? t("modelsSettings.updateFailed"),
       });
     },
   });
 
   const connectSubscriptionMutation = useMutation(connectSubscriptionProvider, {
     onSuccess: (res) => {
-      message.success(res.message || "Subscription provider connected");
+      message.success(res.message || t("modelsSettings.subscriptionConnected"));
       queryClient.invalidateQueries("unified-models");
       queryClient.invalidateQueries("subscription-providers");
     },
     onError: (err) => {
       notification.error({
-        message: "Connection failed",
+        message: t("common.connectionFailed"),
         description:
           err?.response?.data?.message ??
-          "Failed to connect the local subscription provider",
+          t("modelsSettings.subscriptionConnectFailed"),
       });
     },
   });
 
   const testSubscriptionMutation = useMutation(testSubscriptionProvider, {
     onSuccess: (res) => {
-      if (res.ok) message.success(`${res.model} inference is working`);
-      else message.warning(`${res.model} responded, but the sanity reply was unexpected`);
+      if (res.ok) {
+        message.success(t("modelsSettings.inferenceWorking", { model: res.model }));
+      } else {
+        message.warning(
+          t("modelsSettings.inferenceUnexpected", { model: res.model }),
+        );
+      }
     },
     onError: (err) => {
       notification.error({
-        message: "Inference test failed",
+        message: t("modelsSettings.inferenceTestFailed"),
         description:
-          err?.response?.data?.message ?? "The local CLI inference test failed",
+          err?.response?.data?.message ??
+          t("modelsSettings.inferenceTestFailedBody"),
       });
     },
   });
@@ -531,9 +555,9 @@ const ModelsPage = () => {
       <Alert
         type="error"
         showIcon
-        message="Could not load model settings"
-        description="The backend did not return the model registry. Retry after checking the backend connection."
-        action={<Button onClick={() => refetch()}>Retry</Button>}
+        message={t("modelsSettings.loadErrorTitle")}
+        description={t("modelsSettings.loadErrorBody")}
+        action={<Button onClick={() => refetch()}>{t("common.retry")}</Button>}
       />
     );
   }
@@ -549,7 +573,7 @@ const ModelsPage = () => {
       label: `${model.label} · ${model.model}`,
     }));
   const optionalModelOptions = [
-    { value: NONE_MODEL_VALUE, label: "None" },
+    { value: NONE_MODEL_VALUE, label: t("common.none") },
     ...browserModelOptions,
   ];
   const selectedBrowserModel = models.find(
@@ -562,25 +586,20 @@ const ModelsPage = () => {
     <div className={styles.settingsContainer}>
       <div className={styles.infoBox}>
         <InfoCircleOutlined />
-        <span>
-          Configure model credentials once, then choose which model runs the
-          orchestrator, Browser Agent, and optional racers.
-        </span>
+        <span>{t("modelsSettings.info")}</span>
       </div>
 
       <div className={styles.warningBox}>
         <WarningOutlined />
         <span>
-          Browser Agent only shows Magnitude-compatible presets. For MiniMax,
-          use provider <strong>OpenAI-Compatible</strong> with base URL{" "}
-          <code>https://api.minimax.io/v1</code>. Anthropic-Compatible MiniMax
-          presets can still be used by orchestrator/racers, but not by Browser
-          Agent.
+          <RichText text={t("modelsSettings.browserAgentWarning")} />
         </span>
       </div>
 
       <div className={styles.settingSectionHeader}>
-        <div className={styles.heading}>Use an Existing Subscription</div>
+        <div className={styles.heading}>
+          {t("modelsSettings.subscriptionSection")}
+        </div>
         <div className={styles.divider} />
       </div>
       <div className={styles.mcpTokenList}>
@@ -601,18 +620,32 @@ const ModelsPage = () => {
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <Tag color={provider.installed ? "green" : "default"}>
-                    {provider.installed ? provider.version : "NOT INSTALLED"}
+                    {provider.installed
+                      ? provider.version
+                      : t("modelsSettings.notInstalled")}
                   </Tag>
                   <Tag color={provider.authenticated ? "green" : "warning"}>
-                    {provider.authenticated ? "SIGNED IN" : "SIGN-IN NEEDED"}
+                    {provider.authenticated
+                      ? t("modelsSettings.signedIn")
+                      : t("modelsSettings.signInNeeded")}
                   </Tag>
-                  {connected && <Tag color="#00f2fe">CONFIGURED</Tag>}
+                  {connected && (
+                    <Tag color="#00f2fe">
+                      {t("modelsSettings.configuredTag")}
+                    </Tag>
+                  )}
                 </div>
               </div>
               <div className={styles.mcpTokenMeta}>
                 {provider.authenticated
-                  ? `Uses the existing ${displayName} login for normal VektorSec inference. Default: ${provider.defaultModel}.`
-                  : provider.detail || `Run ${provider.loginCommand} on the backend host.`}
+                  ? t("modelsSettings.usesExistingLogin", {
+                      name: displayName,
+                      model: provider.defaultModel,
+                    })
+                  : provider.detail ||
+                    t("modelsSettings.runLoginCommand", {
+                      command: provider.loginCommand,
+                    })}
               </div>
               {provider.provider === "claude-subscription" && (
                 <div
@@ -622,9 +655,7 @@ const ModelsPage = () => {
                     color: "var(--secondary-text)",
                   }}
                 >
-                  Local CLI control only. Confirm your use complies with
-                  Anthropic&apos;s current third-party product and subscription
-                  terms.
+                  {t("modelsSettings.claudeTermsNote")}
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
@@ -644,7 +675,9 @@ const ModelsPage = () => {
                   }
                   style={{ height: 30, fontSize: "0.72rem" }}
                 >
-                  {connected ? "Refresh Configuration" : `Use ${displayName}`}
+                  {connected
+                    ? t("modelsSettings.refreshConfiguration")
+                    : t("modelsSettings.useProvider", { name: displayName })}
                 </PrimaryButton>
                 {connected && provider.authenticated && (
                   <PrimaryButton
@@ -661,7 +694,7 @@ const ModelsPage = () => {
                     }
                     style={{ height: 30, fontSize: "0.72rem" }}
                   >
-                    Test Inference
+                    {t("modelsSettings.testInference")}
                   </PrimaryButton>
                 )}
               </div>
@@ -672,23 +705,25 @@ const ModelsPage = () => {
 
       <div className={styles.settingSectionHeader}>
         <div className={styles.settingSectionHeaderRow}>
-          <div className={styles.heading}>Assignments</div>
+          <div className={styles.heading}>
+            {t("modelsSettings.assignmentsSection")}
+          </div>
           <PrimaryButton
             purple
             onClick={() => setEditingModel({ ...EMPTY_MODEL })}
             style={{ height: 30, fontSize: "0.72rem" }}
           >
-            <PlusOutlined /> Add Model
+            <PlusOutlined /> {t("modelsSettings.addModel")}
           </PrimaryButton>
         </div>
         <div className={styles.divider} />
       </div>
 
       <Form layout="vertical" requiredMark={false}>
-        <Form.Item label="Orchestrator">
+        <Form.Item label={t("modelsSettings.orchestratorLabel")}>
           <Select
             allowClear
-            placeholder="Select orchestrator model"
+            placeholder={t("modelsSettings.orchestratorPlaceholder")}
             value={assignments.orchestratorModelId}
             options={options}
             onChange={(value) =>
@@ -703,9 +738,9 @@ const ModelsPage = () => {
           />
         </Form.Item>
 
-        <Form.Item label="Browser Agent">
+        <Form.Item label={t("modelsSettings.browserAgentLabel")}>
           <Select
-            placeholder="Select browser model"
+            placeholder={t("modelsSettings.browserAgentPlaceholder")}
             value={browserModelIssue ? NONE_MODEL_VALUE : assignments.browserModelId}
             options={optionalModelOptions}
             onChange={(value) =>
@@ -722,9 +757,9 @@ const ModelsPage = () => {
           <div className={styles.errorBox} style={{ marginTop: "-0.5rem" }}>
             <WarningOutlined />
             <span>
-              The currently assigned Browser Agent model is incompatible and is
-              hidden from the selector. Choose a compatible preset or set
-              Browser Agent to None. {browserModelIssue}
+              {t("modelsSettings.browserIncompatible", {
+                issue: t(browserModelIssue),
+              })}
             </span>
           </div>
         )}
@@ -732,8 +767,8 @@ const ModelsPage = () => {
         <Form.Item
           label={
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Racers
-              <Tooltip title="Racers are optional parallel agents. Only selected models run as racers.">
+              {t("modelsSettings.racersLabel")}
+              <Tooltip title={t("modelsSettings.racersTooltip")}>
                 <InfoCircleOutlined
                   style={{ color: "var(--secondary-text)", fontSize: 11 }}
                 />
@@ -744,7 +779,7 @@ const ModelsPage = () => {
           <Select
             mode="multiple"
             allowClear
-            placeholder="Select optional racer models"
+            placeholder={t("modelsSettings.racersPlaceholder")}
             value={assignments.racerModelIds || []}
             options={options}
             onChange={(value) =>
@@ -755,14 +790,14 @@ const ModelsPage = () => {
       </Form>
 
       <div className={styles.settingSectionHeader}>
-        <div className={styles.heading}>Configured Models</div>
+        <div className={styles.heading}>{t("modelsSettings.configuredModels")}</div>
         <div className={styles.divider} />
       </div>
 
       {models.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="No models configured"
+          description={t("modelsSettings.noModels")}
           style={{ margin: "24px 0" }}
         />
       ) : (
@@ -779,31 +814,33 @@ const ModelsPage = () => {
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {assignments.orchestratorModelId === model.id && (
                       <Tag color="#00f2fe">
-                        <CrownFilled /> Orchestrator
+                        <CrownFilled /> {t("modelsSettings.roleOrchestrator")}
                       </Tag>
                     )}
                     {assignments.browserModelId === model.id && (
-                      <Tag color="blue">Browser</Tag>
+                      <Tag color="blue">{t("modelsSettings.roleBrowser")}</Tag>
                     )}
                     {(assignments.racerModelIds || []).includes(model.id) && (
                       <Tag color="gold">
-                        <ThunderboltFilled /> Racer
+                        <ThunderboltFilled /> {t("modelsSettings.roleRacer")}
                       </Tag>
                     )}
                   </div>
                 </div>
                 <div className={styles.mcpTokenMeta}>
-                  {providerLabel(model.provider)} · {model.model} · Reasoning{" "}
-                  {(model.reasoningMode || "off").toUpperCase()}
+                  {providerLabel(model.provider)} · {model.model} ·{" "}
+                  {t("modelsSettings.reasoningTag", {
+                    mode: (model.reasoningMode || "off").toUpperCase(),
+                  })}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {model.apiKey && <Tag>KEY</Tag>}
                   {model.baseURL && <Tag>URL</Tag>}
                   {isMagnitudeModelCompatible(model) ? (
-                    <Tag color="green">BROWSER OK</Tag>
+                    <Tag color="green">{t("modelsSettings.browserOk")}</Tag>
                   ) : (
-                    <Tooltip title={getMagnitudeModelIssue(model)}>
-                      <Tag color="warning">NO BROWSER</Tag>
+                    <Tooltip title={t(getMagnitudeModelIssue(model))}>
+                      <Tag color="warning">{t("modelsSettings.noBrowser")}</Tag>
                     </Tooltip>
                   )}
                   <Tag>
@@ -811,7 +848,7 @@ const ModelsPage = () => {
                     {(model.reasoningMode || "off").toUpperCase()}
                   </Tag>
                   <span style={{ flex: 1 }} />
-                  <Tooltip title="Edit model">
+                  <Tooltip title={t("modelsSettings.editModel")}>
                     <EditOutlined
                       onClick={() => setEditingModel(model)}
                       style={{
@@ -823,15 +860,15 @@ const ModelsPage = () => {
                   <Popconfirm
                     title={
                       isAssigned
-                        ? "Clear assignments before deleting this model."
-                        : "Delete this model?"
+                        ? t("modelsSettings.clearAssignmentsFirst")
+                        : t("modelsSettings.deleteModel")
                     }
                     onConfirm={() =>
                       !isAssigned &&
                       persist(models.filter((entry) => entry.id !== model.id))
                     }
-                    okText="Delete"
-                    cancelText="Cancel"
+                    okText={t("common.delete")}
+                    cancelText={t("common.cancel")}
                   >
                     <DeleteOutlined
                       style={{

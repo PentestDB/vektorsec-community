@@ -1,3 +1,10 @@
+/**
+ * Browser Agent / Magnitude model compatibility rules.
+ *
+ * `getMagnitudeModelIssue` returns a **dictionary key** (not a sentence) so the
+ * caller can translate it with `t(...)`; the UI only ever runs client-side,
+ * where the active locale is known. `null` means "compatible".
+ */
 const SUPPORTED_MAGNITUDE_PROVIDERS = new Set([
   "anthropic",
   "openai",
@@ -9,35 +16,25 @@ const SUPPORTED_MAGNITUDE_PROVIDERS = new Set([
 ]);
 
 export function getMagnitudeModelIssue(model) {
-  if (!model) return "No Browser Agent model is selected.";
+  if (!model) return "browserAgent.modelIssueNoModel";
 
   const provider = model.provider;
   const baseURL = model.baseURL?.trim();
 
   if (provider === "anthropic-compatible") {
-    return (
-      "Browser Agent cannot use Anthropic-compatible presets with custom " +
-      "base URLs. For MiniMax browser automation, create an OpenAI-Compatible " +
-      "preset with base URL https://api.minimax.io/v1."
-    );
+    return "browserAgent.modelIssueAnthropicCustomBaseUrl";
   }
 
   if (provider === "anthropic" && baseURL) {
-    return (
-      "Browser Agent cannot use custom base URLs with the Anthropic provider. " +
-      "Use the default Anthropic API or an OpenAI-Compatible preset."
-    );
+    return "browserAgent.modelIssueAnthropicBaseUrl";
   }
 
   if (provider === "openai-compatible" && !baseURL) {
-    return "OpenAI-Compatible Browser Agent presets require a base URL.";
+    return "browserAgent.modelIssueOpenAiCompatibleBaseUrl";
   }
 
   if (!SUPPORTED_MAGNITUDE_PROVIDERS.has(provider)) {
-    return (
-      "This provider is not supported by Browser Agent. Use an " +
-      "OpenAI-Compatible preset if the provider exposes one."
-    );
+    return "browserAgent.modelIssueUnsupportedProvider";
   }
 
   return null;

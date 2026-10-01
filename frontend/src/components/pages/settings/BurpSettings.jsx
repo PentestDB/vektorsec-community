@@ -20,6 +20,8 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getBurpConfig, updateBurpConfig } from "@/services/user.service";
@@ -30,6 +32,7 @@ import {
 } from "@/services/burp.service";
 
 const BurpSettingsPage = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("burp-config", getBurpConfig);
@@ -67,13 +70,15 @@ const BurpSettingsPage = () => {
       refetchCaStatus();
       queryClient.invalidateQueries("burp-ca-status");
       if (status?.trusted) {
-        message.success("Burp CA trusted by the Browser Agent");
+        message.success(t("burpSettings.caTrusted"));
       } else {
-        message.warning(status?.message || "Burp CA setup needs attention");
+        message.warning(status?.message || t("burpSettings.caNeedsAttention"));
       }
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to configure Burp CA trust");
+      message.error(
+        err?.response?.data?.message || t("burpSettings.caConfigureFailed"),
+      );
     },
   });
 
@@ -88,14 +93,14 @@ const BurpSettingsPage = () => {
 
   const saveMutation = useMutation(updateBurpConfig, {
     onSuccess: () => {
-      message.success("Burp configuration saved");
+      message.success(t("burpSettings.saved"));
       queryClient.invalidateQueries("burp-config");
       queryClient.invalidateQueries("burp-connection-status");
       queryClient.invalidateQueries("burp-settings-connection-status");
       setSaving(false);
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save Burp config");
+      message.error(err?.response?.data?.message || t("burpSettings.saveFailed"));
       setSaving(false);
     },
   });
@@ -117,8 +122,11 @@ const BurpSettingsPage = () => {
       setTestResult({
         success: result.connected,
         message: result.connected
-          ? `Connected — Burp ${result.burpVersion || ""} (extension ${result.extensionVersion || ""})`.trim()
-          : result.message || "Connection failed",
+          ? t("burpSettings.connectedVersions", {
+              burpVersion: result.burpVersion || "?",
+              extensionVersion: result.extensionVersion || "?",
+            })
+          : result.message || t("common.connectionFailed"),
       });
     } catch (err) {
       setTestResult({
@@ -138,9 +146,13 @@ const BurpSettingsPage = () => {
     <div className={styles.settingsContainer}>
       <div className={styles.statusRow}>
         {configured ? (
-          <Tag icon={<CheckCircleFilled />} color="success">Configured</Tag>
+          <Tag icon={<CheckCircleFilled />} color="success">
+            {t("common.configured")}
+          </Tag>
         ) : (
-          <Tag icon={<WarningOutlined />} color="warning">Not Configured</Tag>
+          <Tag icon={<WarningOutlined />} color="warning">
+            {t("common.notConfigured")}
+          </Tag>
         )}
         {configured && (
           <Button
@@ -150,7 +162,7 @@ const BurpSettingsPage = () => {
             loading={testing}
             onClick={handleTestConnection}
           >
-            Test Connection
+            {t("common.testConnection")}
           </Button>
         )}
       </div>
@@ -180,10 +192,12 @@ const BurpSettingsPage = () => {
           </div>
           <div className={styles.burpHttpsContent}>
             <div className={styles.burpHttpsTitle}>
-              {caStatus?.trusted ? "HTTPS interception ready" : "Enable HTTPS interception"}
+              {caStatus?.trusted
+                ? t("burpSettings.httpsReady")
+                : t("burpSettings.httpsEnable")}
             </div>
             <div className={styles.burpHttpsDescription}>
-              {caStatus?.message || "Checking whether Chromium trusts Burp's CA…"}
+              {caStatus?.message || t("burpSettings.checkingCa")}
             </div>
             {caStatus?.fingerprint && (
               <code className={styles.burpHttpsFingerprint} title={caStatus.fingerprint}>
@@ -201,10 +215,10 @@ const BurpSettingsPage = () => {
             className={styles.burpHttpsButton}
           >
             {caStatus?.trusted
-              ? "Refresh CA trust"
+              ? t("burpSettings.refreshCaTrust")
               : caStatus?.needsRefresh
-                ? "Refresh CA trust"
-                : "Configure in one click"}
+                ? t("burpSettings.refreshCaTrust")
+                : t("burpSettings.configureCa")}
           </Button>
         </div>
       )}
@@ -221,18 +235,18 @@ const BurpSettingsPage = () => {
         <Row gutter={16}>
           <Col span={16}>
             <Form.Item
-              label="Burp RPC Host"
+              label={t("burpSettings.hostLabel")}
               name="host"
-              rules={[{ required: true, message: "Host is required" }]}
+              rules={[{ required: true, message: t("burpSettings.hostRequired") }]}
             >
               <Input placeholder="e.g. 10.69.0.4 or localhost" />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item
-              label="Port"
+              label={t("burpSettings.portLabel")}
               name="port"
-              rules={[{ required: true, message: "Port required" }]}
+              rules={[{ required: true, message: t("burpSettings.portRequired") }]}
             >
               <InputNumber
                 min={1}
@@ -251,7 +265,7 @@ const BurpSettingsPage = () => {
             purpleFilled
             style={{ height: "2rem", fontSize: "0.75rem" }}
           >
-            Save Configuration
+            {t("common.saveConfiguration")}
           </PrimaryButton>
         </div>
       </Form>
@@ -269,7 +283,7 @@ const BurpSettingsPage = () => {
           color: "var(--primary-text)",
           marginBottom: "0.75rem",
         }}>
-          Setup Guide
+          {t("common.setupGuide")}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
@@ -281,7 +295,7 @@ const BurpSettingsPage = () => {
               fontSize: "0.65rem", fontWeight: 700,
             }}>1</span>
             <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)" }}>
-              <span>Download the Burp RPC extension</span>
+              <span>{t("burpSettings.guideDownload")}</span>
               <div style={{ marginTop: "0.35rem" }}>
                 <Button
                   type="default"
@@ -304,13 +318,13 @@ const BurpSettingsPage = () => {
               fontSize: "0.65rem", fontWeight: 700,
             }}>2</span>
             <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)" }}>
-              Import it as an extension in Burp Suite:
+              {t("burpSettings.guideImport")}
               <br />
               <code style={{
                 fontSize: "0.7rem", color: "var(--primary-purple)",
                 background: "rgba(127, 86, 217, 0.08)", padding: "1px 4px", borderRadius: 3,
               }}>
-                Extensions → Add → Java → select burp-rpc.jar
+                {t("burpSettings.guideImportCommand")}
               </code>
             </div>
           </div>
@@ -323,7 +337,7 @@ const BurpSettingsPage = () => {
               fontSize: "0.65rem", fontWeight: 700,
             }}>3</span>
             <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)" }}>
-              Enter the host and port above, then save and test the connection.
+              {t("burpSettings.guideConnect")}
             </div>
           </div>
         </div>
@@ -332,13 +346,9 @@ const BurpSettingsPage = () => {
       <div className={styles.notesSection} style={{ marginTop: "1rem" }}>
         <ul>
           <li>
-            Default port is <code>50051</code>. Use <code>0.0.0.0</code> binding
-            in the extension to allow remote connections.
+            <RichText text={t("burpSettings.noteDefaultPort")} />
           </li>
-          <li>
-            Make sure the firewall on the Burp machine allows inbound traffic
-            on the configured port.
-          </li>
+          <li>{t("burpSettings.noteFirewall")}</li>
         </ul>
       </div>
     </div>
