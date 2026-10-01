@@ -160,8 +160,11 @@ export default function useShellSocket({ sessionId, onError }) {
         // Session หมดอายุ/ยังไม่ login → backend ปฏิเสธ WS ก่อนเปิด. เป็น
         // สถานะที่คาดได้บนหน้า public/หลัง logout — อย่า toast/log สแปม
         // และหยุด reconnect ลูป (ถ้า login ใหม่แล้ว mount hook ใหม่จะ connect ใหม่)
-        if (data?.message === "Unauthorized") {
-          console.info("[ShellSocket] Unauthorized — skipping reconnect");
+        // เพิ่ม "Session not found" (session ถูกลบ/เก็บเข้าคลังไปแล้ว หรือ URL
+        // เก่าค้าง) — retry ไปก็ไม่มีทางสำเร็จ จึงหยุด reconnect ลูปแทนการ log
+        // ทุกครั้ง (mount ใหม่ = login ใหม่/session ใหม่ จะ connect เอง)
+        if (data?.message === "Unauthorized" || data?.message === "Session not found") {
+          console.info(`[ShellSocket] ${data?.message}: skipping reconnect`);
           reconnectAttempt.current = RECONNECT_MAX_ATTEMPTS;
           setWsConnected(false);
           try {

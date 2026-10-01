@@ -64,6 +64,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   (`backend/src/middlewares/RateLimit.middleware.ts`, `backend/tests/rateLimit.test.ts`).
   Buckets left behind by that bug without an expiry are repaired on the next request, so a stale
   counter cannot keep answering 429 for longer than one window.
+- **Opening a deleted or archived session no longer floods the API**: the session layout treated a
+  400/404 as a live session and kept polling — session info, vulnerabilities and the shell
+  WebSocket — so the console filled with `Session not found`. It now stops polling and shows a
+  translated "Session not available" screen with a link back to the workspaces
+  (`frontend/src/app/session/[session_id]/layout.js`, `frontend/src/hooks/useShellSocket.js`).
 - Notification/cron-style log lines no longer print credentials (`[REDACTED]` plus structured fields).
 
 ### Security

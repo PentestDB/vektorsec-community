@@ -104,7 +104,10 @@ export default {
     "toolModeConsent": "Requires consent",
     "toolModeAutoHint": "Run automatically; built-in destructive-action protections still ask.",
     "toolModeAutoApproveHint": "AI reviews every action and asks whenever it is unsafe or uncertain.",
-    "toolModeConsentHint": "Ask before every tool action."
+    "toolModeConsentHint": "Ask before every tool action.",
+    "missingTitle": "Session not available",
+    "missingBody": "This session was deleted or archived together with its workspace, so its history can no longer be opened. Create a new session from a workspace to continue.",
+    "backToDashboard": "Back to workspaces"
   },
   "chat": {
     "emptyDescription": "Describe your target and goals below. The agent will autonomously perform reconnaissance, enumerate services, identify vulnerabilities, and attempt exploitation.",

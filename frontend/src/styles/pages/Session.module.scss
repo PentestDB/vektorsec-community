@@ -807,3 +807,35 @@
   font-size: 0.72rem;
   filter: drop-shadow(0 0 4px rgba(0, 242, 254, 0.6));
 }
+
+// Shown instead of the session shell when the session behind the URL is gone
+// (deleted/archived workspace, or a stale link). Replacing the whole shell is
+// what stops its pollers and the shell WebSocket from requesting a session that
+// can never come back.
+.sessionMissing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 2rem;
+  text-align: center;
+  background: #0d1117;
+
+  h2 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #e6edf3;
+  }
+
+  p {
+    margin: 0;
+    max-width: 34rem;
+    line-height: 1.6;
+    color: #8b9bb0;
+  }
+}
