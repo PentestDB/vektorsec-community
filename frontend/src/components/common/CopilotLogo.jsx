@@ -1,34 +1,34 @@
 import React from "react";
-import { FaShieldAlt } from "react-icons/fa";
 
-// VektorSec brand logo: neon-cyan shield icon + wordmark.
+// VektorSec brand logo (transparent lockup derived from logo/gemini-svg.svg):
+// neon shield icon + VEKTORSEC wordmark rendered from /vektorsec-logo.svg.
 // `plain` renders a slightly muted variant (used on auth/onboarding pages).
-const CopilotLogo = ({ plain }) => {
+const CopilotLogo = ({ plain, height = 30 }) => {
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: "0.5rem",
-        color: plain ? "rgba(0, 242, 254, 0.8)" : "#00f2fe",
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        fontSize: "1.15rem",
         lineHeight: 1,
         userSelect: "none",
         whiteSpace: "nowrap",
-        textShadow: "0 0 14px rgba(0, 242, 254, 0.45)",
       }}
     >
-      <FaShieldAlt
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/vektorsec-logo.svg"
+        alt="VektorSec"
+        width={280}
+        height={54}
         style={{
-          color: plain ? "rgba(0, 242, 254, 0.65)" : "#00f2fe",
-          fontSize: "1.35rem",
+          display: "block",
+          width: "auto",
+          height,
           flexShrink: 0,
-          filter: "drop-shadow(0 0 6px rgba(0, 242, 254, 0.6))",
+          opacity: plain ? 0.78 : 1,
+          filter: plain ? "saturate(0.85)" : "none",
         }}
       />
-      <span>VEKTORSEC</span>
     </span>
   );
 };

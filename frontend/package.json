@@ -11,10 +11,13 @@
     "dev": "cross-env NODE_ENV=development node server.js",
     "build": "next build --turbopack",
     "start": "cross-env NODE_ENV=production node server.js",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "test:gateway": "node scripts/test-gateway.mjs",
     "lint": "next lint"
   },
   "dependencies": {
     "@ant-design/icons": "5.6.1",
+    "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@next/env": "16.1.7",
     "@reduxjs/toolkit": "1.9.7",
     "@stripe/stripe-js": "1.54.2",
