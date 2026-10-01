@@ -55,11 +55,20 @@ export function createMemoryCounter(now: () => number = Date.now): RateLimitCoun
   };
 }
 
-/** Minimal shape of the Redis commands this limiter needs. */
+/**
+ * Minimal shape of the Redis commands this limiter needs.
+ *
+ * The names are the raw Redis commands in upper case, which is what node-redis
+ * v4 exposes (`PEXPIRE`, `PTTL` — the same style as `utils/redis/store.ts`).
+ * Lower-case multi-word spellings (`pexpire`, `pttl`) do **not** exist on the
+ * client: calling them threw on every request and silently downgraded the shared
+ * limiter to the in-process counter, so the regression test asserts these names
+ * against the installed client.
+ */
 export interface RateLimitRedisClient {
-  incr(key: string): Promise<number>;
-  pexpire(key: string, ms: number): Promise<unknown>;
-  pttl(key: string): Promise<number>;
+  INCR(key: string): Promise<number>;
+  PEXPIRE(key: string, ms: number): Promise<unknown>;
+  PTTL(key: string): Promise<number>;
 }
 
 /**
@@ -69,16 +78,16 @@ export interface RateLimitRedisClient {
 export function createRedisCounter(client: RateLimitRedisClient): RateLimitCounter {
   return {
     async increment(key, windowMs) {
-      const count = await client.incr(key);
+      const count = await client.INCR(key);
       if (count === 1) {
-        await client.pexpire(key, windowMs);
+        await client.PEXPIRE(key, windowMs);
         return { count, resetInMs: windowMs };
       }
 
-      const ttl = await client.pttl(key);
+      const ttl = await client.PTTL(key);
       // -1 = key without expiry (a window that started before a restart), -2 = gone.
       const resetInMs = ttl > 0 ? ttl : windowMs;
-      if (ttl === -1) await client.pexpire(key, windowMs);
+      if (ttl === -1) await client.PEXPIRE(key, windowMs);
       return { count, resetInMs };
     },
   };
@@ -146,24 +155,49 @@ export function rateLimit(options: {
   };
 }
 
+/**
+ * Positive integer from the environment (same style as `config/constants.ts`).
+ *
+ * Missing, empty, non-numeric, zero and negative values keep the default, so a
+ * typo in the environment can never switch a limiter off by accident.
+ */
+export function rateLimitEnvInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * Effective limits of the pre-configured limiters.
+ *
+ * Read once at import time, so overriding them (compose `environment:`,
+ * `backend/.env` or `config.toml`) needs a backend restart. Tuning matters
+ * mostly in development, where one browser shares a single bucket per IP with
+ * every poller in the UI: `RATE_LIMIT_API_MAX=600` removes the 429 noise
+ * without touching production behaviour.
+ */
+export const rateLimitDefaults = {
+  auth: { windowMs: 15 * 60 * 1000, max: rateLimitEnvInt("RATE_LIMIT_AUTH_MAX", 20) },
+  api: { windowMs: 60 * 1000, max: rateLimitEnvInt("RATE_LIMIT_API_MAX", 120) },
+  agent: { windowMs: 60 * 1000, max: rateLimitEnvInt("RATE_LIMIT_AGENT_MAX", 30) },
+};
+
 /** Pre-configured limiters for common use cases. */
 export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 login/register attempts per 15 min
+  ...rateLimitDefaults.auth,
   keyPrefix: "auth",
   message: "Too many authentication attempts. Please try again in 15 minutes.",
 });
 
 export const apiRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 120, // 120 requests per minute
+  ...rateLimitDefaults.api,
   keyPrefix: "api",
   message: "Too many requests. Please slow down.",
 });
 
 export const agentRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // 30 agent actions per minute
+  ...rateLimitDefaults.agent,
   keyPrefix: "agent",
   message: "Too many agent actions. Please wait a moment.",
 });

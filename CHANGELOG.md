@@ -25,6 +25,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   plumbing, plugins, migrations and notifications use it.
 - **Rate limiting** now uses Redis (`INCR`/`PEXPIRE`) when available and falls back to the
   in-process counter, so limits are shared across replicas.
+- **Rate limits are tunable**: `RATE_LIMIT_API_MAX`, `RATE_LIMIT_AUTH_MAX` and
+  `RATE_LIMIT_AGENT_MAX` override the defaults (120 req/min, 20 per 15 min, 30/min) without a code
+  change — invalid values keep the default, so a typo cannot disable a limiter
+  (`backend/.env.example`, `docker-compose.dev.yml`).
 - **Readiness probe** `GET /api/ready` (Mongo + Redis) — separate from the liveness check — and a
   matching compose healthcheck on the backend service.
 - **CI** (`.github/workflows/ci.yml`): backend typecheck + unit tests (with a MongoDB service for
@@ -52,6 +56,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - **Agent Tools panel hid 34 of 60 tools**: it is now data-driven, so every registered tool appears
   (unknown tools fall back to an "Other tools" group).
 - Rate-limit keys no longer grow without bound, and a failing Redis no longer breaks requests.
+- **Redis rate limiting never actually used Redis**: the counter called `pexpire`/`pttl`, which
+  node-redis v4 does not expose (the client has `PEXPIRE`/`PTTL`, like `utils/redis/store.ts`), so
+  every request threw and silently fell back to the per-process counter — the limits were not
+  shared between replicas and the log filled with warnings. The counter now uses the commands the
+  installed client really has, with a regression test that checks them against `redis` itself
+  (`backend/src/middlewares/RateLimit.middleware.ts`, `backend/tests/rateLimit.test.ts`).
+  Buckets left behind by that bug without an expiry are repaired on the next request, so a stale
+  counter cannot keep answering 429 for longer than one window.
 - Notification/cron-style log lines no longer print credentials (`[REDACTED]` plus structured fields).
 
 ### Security

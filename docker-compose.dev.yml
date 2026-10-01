@@ -71,6 +71,11 @@ services:
       WORKSPACE_DIR: /srv/data/workspaces
       CODEX_HOME: /root/.codex
       SSH_CONFIG_FILE: /root/.ssh/config
+      # Rate limit (ค่าเริ่มต้น: api 120 req/min ต่อ IP, auth 20 ครั้ง/15 นาที)
+      # dev เปิดหลายหน้า / มี poller เยอะ อาจชน 120/min แล้วได้ 429 "Too many requests"
+      # ปลดคอมเมนต์บรรทัดล่างเพื่อเพิ่มโควตา (แก้แล้วต้อง restart backend container)
+      # RATE_LIMIT_API_MAX: "600"
+      # RATE_LIMIT_AUTH_MAX: "100"
     volumes:
       # เรียกดู/แก้ source ได้ทันทีจาก host (root repo mount ลง /app)
       - .:/app:rw
