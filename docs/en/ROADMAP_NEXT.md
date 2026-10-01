@@ -43,10 +43,15 @@
 | Repo hygiene | `repair-docs.js` is tracked but empty (0 bytes); local artifacts (`.zip` 668 MB, `.tar.gz` 17 MB, `*.log`) are ignored but take disk space | `git ls-files`, `.gitignore` |
 | Community/policy files | no `SECURITY.md`, `CHANGELOG.md`, PR template or CODEOWNERS | only `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md` |
 | Old roadmap | `docs/ARCHITECTURE_PLAN.md` checkboxes are still all `- [ ]` even for finished work | `docs/ARCHITECTURE_PLAN.md` roadmap section |
+| i18n (Thai/English) | core + shell shipped, the wider UI is still English | `frontend/src/i18n/**`; 25 of 97 `.jsx` files use the translator (23 screens/components + the provider/switcher) — Rounds 5–6 |
 
 **In one sentence:** the core product (agent + tools + billing + 3 delivery channels) is done.
 What is missing is **engineering discipline** (CI/tests/observability), **keeping docs and UI in
 sync with the real tool registry**, and **committing the work in progress** — not new features.
+
+> The table above is the **pre-round baseline** (measured before Round 1). Rounds 1–6 below record
+> what has since been fixed — CI, frontend tests, the logger, the migration runner, backups, HTTP
+> integration tests, the bilingual UI — so read it as "where we started", not as today's status.
 
 ---
 
@@ -106,6 +111,20 @@ Work completed in this round (each item has code evidence):
 |---|---|
 | **Bilingual UI (English/Thai) on a dependency-free core** | `frontend/src/i18n/{index.js,I18nProvider.jsx,LanguageSwitcher.jsx,locales/{en,th}.js}`; the `vs_locale` cookie is read in `app/layout.js`, so the server renders the right language on the first paint (no hydration mismatch, matching `<html lang>`); tests in `frontend/tests/i18n.test.mjs` (10 tests → frontend suite 19/19) |
 | **i18n wired through the shell and the key pages** | `Navbar`, `HeaderLinks`, `Sidebar`, `Footer`, `SettingsOverlay`, `ModelSetupGate`, `FeedbackModal`, `Login`, `BillingPage`, `ToolCallBlock`, `VulnerabilitiesPage` |
+
+### Round 6
+
+| Item | Files / evidence |
+|---|---|
+| **i18n core extended for non-React code + locale-aware formatting** | `frontend/src/i18n/index.js` adds `readCookieValue`, `buildLocaleCookie`, `writeLocaleCookie`, `getLocaleFromCookie`, `translate` (static — reads the locale cookie, so services/utils/toasts can translate) and `formatNumber`/`formatDate`/`intlTag` on `Intl`; `I18nProvider.jsx` adds `useFormatters()` (`formatNumber`/`formatDate`/`formatDateTime`) and shares the cookie writer with the server; tests in `frontend/tests/i18n.test.mjs` (25 → **32 tests**) |
+| **Inline markup can live inside translations** | `frontend/src/utils/richText.js` (`parseRichText`, pure) + `frontend/src/components/common/RichText.jsx`: setup guides keep `` `commands` `` and `**bold labels**` in the dictionary, so translators see whole sentences instead of JSX fragments; tests in `frontend/tests/richText.test.mjs` (6 tests) |
+| **All 12 settings tabs translated** | `AgentBehavior`, `MyAccount`, `MCPSettings`, `CaidoSettings`, `MythicSettings`, `Capabilities`, `BurpSettings`, `MagnitudeSettings`, `Models`, `Tools`, `SSH`, `GUISettings` — 12 new dictionary sections (`agentBehavior`, `myAccount`, `mcpSettings`, `caidoSettings`, `mythicSettings`, `capabilities`, `burpSettings`, `magnitudeSettings`, `modelsSettings`, `toolsSettings`, `sshSettings`, `guiSettings`) |
+| **Generic strings de-duplicated into `common.*`** | `Configured`, `Not Configured`, `Connected`, `Connection failed`, `Test Connection`, `Setup Guide`, `Save Configuration`, `URL`, `Port`, `Host is required`, `Test`, `Remove`, `Required`, `Enabled`, `Disabled`, `Error`, `None` — reused by Caido, Mythic, Burp, SSH and GUI instead of five copies |
+| **Browser-model compatibility rules return keys, not sentences** | `frontend/src/utils/magnitudeModels.js` — `getMagnitudeModelIssue()` returns a dictionary key, `Models.jsx` translates it, and a test asserts every rule resolves in both locales |
+| **Guard test: an unknown `t()` key can no longer ship** | `frontend/tests/i18nKeys.test.mjs` scans `src/**/*.{js,jsx}` for literal `t("...")`/`translate("...")` keys and compares them with `en.js`; on its first run it caught a stale `burpSettings.hostRequired` and two leftover `caidoSettings` duplicates |
+| **Locale dates/numbers replace `toLocaleString()`** | MCP token timestamps (and the shared `useFormatters()` helper) now follow the app language instead of the visitor's browser settings |
+| **Stale brand mentions fixed in passing** | The Mythic notes/setup guide said "Pentest Copilot" → now "VektorSec" |
+| **Remaining i18n inventory measured from the repo** | 97 `components/**/*.jsx` (25 wired — 23 screens/components + the provider and switcher — 72 to go) · 151 hardcoded English JSX text nodes in 41 files · 204 English props in 42 files · 159 toast strings in 33 files · 7 route files with server-side SEO `title`/`description` |
 
 > ⚠️ **Verification note**: on this dev machine `backend`/`frontend` `node_modules` are incomplete
 > and Docker is not running, so only dependency-free checks ran here (frontend `pnpm test` → 9/9
@@ -224,7 +243,7 @@ There is no workflow at all → add at least:
 | 1 | **Report export (HTML/PDF/JSON)** | `generate_report` returns `ReportData` but there is no way to download it as a file for the client | `services/evidenceCollector.ts`, `tools/handlers/generate-report.ts`, `frontend/src/app/admin/reports` |
 | 2 | **Auto-load plugins from a folder** | the plugin API exists but plugins still have to be imported by hand at bootstrap | `tools/plugin.ts`, `tools/extensions/`, `server.ts` + a `TOOLS_EXTENSIONS_DIR` env var |
 | 3 | **Human-readable scope/HITL feedback** | users need to understand why the agent was BLOCKED or asked for approval | `utils/guardrails.ts`, `ChatView.jsx`, `ToolCallBlock.jsx` |
-| 4 | **i18n (Thai/English)** | the docs are bilingual already but the UI is English only | `frontend/src/**` (add a dictionary + locale switcher) |
+| 4 | **i18n (Thai/English)** | dictionaries + the cookie-driven switcher are shipped; the app shell and all 12 settings tabs are translated, the rest of the app is not | `frontend/src/i18n/**`, `frontend/src/components/pages/settings/**` (Rounds 5–6) |
 | 5 | **Usage/Cost analytics** | you must know the cost per workspace/model to price and profit | `services/usageTracker.service.ts`, `models/UsageRecord`, `app/topup`, `app/admin/quotas` |
 | 6 | **Complete Telegram Bot flow** | the service and controller exist but the real commands (`/usage` `/status` `/report`) and account linking are missing | `services/telegramBot.service.ts`, `controllers/telegramBot.controller.ts`, `app/admin/telegram` |
 | 7 | **External notifications (Slack/LINE/Discord)** | notify when a run finishes, needs approval or stalls | `services/notificationLog.service.ts` + a webhook endpoint |

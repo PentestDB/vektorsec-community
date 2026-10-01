@@ -42,10 +42,15 @@
 | Repo hygiene | `repair-docs.js` ถูก track แต่ไฟล์ว่าง 0 byte; มี artifact ในเครื่อง (`.zip` 668 MB, `.tar.gz` 17 MB, `*.log`) ที่ถูก ignore แล้ว | `git ls-files`, `.gitignore` |
 | ไฟล์ชุมชน/นโยบาย | ไม่มี `SECURITY.md`, `CHANGELOG.md`, PR template, CODEOWNERS | มีแค่ `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md` |
 | Roadmap เดิม | `docs/ARCHITECTURE_PLAN.md` checkbox ยัง `- [ ]` ทั้งหมดแม้ทำไปแล้ว | `docs/ARCHITECTURE_PLAN.md` หัวข้อ Roadmap |
+| i18n ไทย/อังกฤษ | core + shell เสร็จแล้ว แต่ UI ส่วนที่เหลือยังเป็นอังกฤษ | `frontend/src/i18n/**`; มี 25 จาก 97 ไฟล์ `.jsx` ที่เรียกใช้ตัวแปล (23 หน้าจอ/คอมโพเนนต์ + provider/switcher) — รอบ 5–6 |
 
 **อ่านสรุปสั้น ๆ:** ตัวระบบหลัก (agent + tools + billing + 3 ช่องทาง) ทำเสร็จแล้ว
 สิ่งที่ขาดคือ **วินัยวิศวกรรม** (CI/test/observability), **การซิงก์เอกสาร-UI กับ registry ของจริง**,
 และ **การปิดงานค้างที่ยังไม่ commit** — ไม่ใช่การสร้างฟีเจอร์ใหม่
+
+> ตารางด้านบนคือ **ภาพก่อนเริ่มรอบงาน** (วัดก่อนรอบที่ 1) ส่วนรอบที่ 1–6 ด้านล่างบันทึกสิ่งที่แก้ไปแล้ว
+> — CI, เทสต์ฝั่ง frontend, logger, migration runner, backup, HTTP integration test และ UI สองภาษา —
+> จึงควรอ่านเป็น "จุดเริ่มต้น" ไม่ใช่สถานะปัจจุบัน
 
 ---
 
@@ -105,6 +110,20 @@
 |---|---|
 | **UI สองภาษา (อังกฤษ/ไทย) บน core ที่ไม่พึ่ง dependency** | `frontend/src/i18n/{index.js,I18nProvider.jsx,LanguageSwitcher.jsx,locales/{en,th}.js}` + อ่านคุกกี้ `vs_locale` ใน `app/layout.js` (server เรนเดอร์ภาษาที่ถูกตั้งแต่ paint แรก ไม่มี hydration mismatch และ `<html lang>` ตรงกัน) + เทสต์ `frontend/tests/i18n.test.mjs` (10 tests → รวมชุด frontend 19/19 ผ่าน) |
 | **ต่อ i18n เข้า shell และหน้าหลัก** | `Navbar`, `HeaderLinks`, `Sidebar`, `Footer`, `SettingsOverlay`, `ModelSetupGate`, `FeedbackModal`, `Login`, `BillingPage`, `ToolCallBlock`, `VulnerabilitiesPage` |
+
+### รอบที่ 6
+
+| งาน | ไฟล์ / หลักฐาน |
+|---|---|
+| **ขยาย core ของ i18n ให้ใช้ได้นอก React + จัดรูปแบบตาม locale** | `frontend/src/i18n/index.js` เพิ่ม `readCookieValue`, `buildLocaleCookie`, `writeLocaleCookie`, `getLocaleFromCookie`, `translate` (อ่านคุกกี้ locale จึงใช้แปลใน service/utils/toast ได้) และ `formatNumber`/`formatDate`/`intlTag` บน `Intl`; `I18nProvider.jsx` เพิ่ม `useFormatters()` (`formatNumber`/`formatDate`/`formatDateTime`) และใช้ตัวเขียนคุกกี้ร่วมกับฝั่ง server; เทสต์ `frontend/tests/i18n.test.mjs` (25 → **32 tests**) |
+| **ใส่ markup ไว้ในคำแปลได้** | `frontend/src/utils/richText.js` (`parseRichText` แบบ pure) + `frontend/src/components/common/RichText.jsx`: คู่มือ setup เก็บ `` `คำสั่ง` `` และ `**ข้อความตัวหนา**` ไว้ใน dictionary ทำให้นักแปลเห็นประโยคครบทั้งประโยค ไม่ต้องแยกเป็น JSX; เทสต์ `frontend/tests/richText.test.mjs` (6 tests) |
+| **แปลครบทั้ง 12 แท็บของ Settings** | `AgentBehavior`, `MyAccount`, `MCPSettings`, `CaidoSettings`, `MythicSettings`, `Capabilities`, `BurpSettings`, `MagnitudeSettings`, `Models`, `Tools`, `SSH`, `GUISettings` — เพิ่ม section ใหม่ 12 ชุด (`agentBehavior`, `myAccount`, `mcpSettings`, `caidoSettings`, `mythicSettings`, `capabilities`, `burpSettings`, `magnitudeSettings`, `modelsSettings`, `toolsSettings`, `sshSettings`, `guiSettings`) |
+| **รวมคำซ้ำไปที่ `common.*`** | `Configured`, `Not Configured`, `Connected`, `Connection failed`, `Test Connection`, `Setup Guide`, `Save Configuration`, `URL`, `Port`, `Host is required`, `Test`, `Remove`, `Required`, `Enabled`, `Disabled`, `Error`, `None` — ใช้ร่วมกันใน Caido, Mythic, Burp, SSH และ GUI แทนที่จะมี 5 ชุด |
+| **กฎความเข้ากันได้ของโมเดลบราวเซอร์คืนค่าเป็น key ไม่ใช่ประโยค** | `frontend/src/utils/magnitudeModels.js` — `getMagnitudeModelIssue()` คืนค่าเป็น key ของ dictionary, `Models.jsx` เป็นตัวแปล และมีเทสต์ยืนยันว่าทุกกฎมีคำแปลครบทั้งสองภาษา |
+| **Guard test: คีย์ `t()` ที่ไม่มีในพจนานุกรมหลุดไปไม่ได้อีก** | `frontend/tests/i18nKeys.test.mjs` สแกน `src/**/*.{js,jsx}` หาคีย์ `t("...")`/`translate("...")` แบบ literal แล้วเทียบกับ `en.js` — รันครั้งแรกก็เจอ `burpSettings.hostRequired` ที่ตกค้าง และคีย์ `caidoSettings` ซ้ำ 2 ตัว |
+| **วันที่/ตัวเลขตาม locale แทน `toLocaleString()`** | เวลาสร้าง/ใช้ล่าสุดของโทเคน MCP (และตัวช่วย `useFormatters()`) ใช้ภาษาของแอป ไม่ใช่ค่าที่ตั้งในบราวเซอร์ของผู้เข้าชม |
+| **แก้ชื่อแบรนด์ตกค้างที่เจอระหว่างทาง** | ข้อความ notes/คู่มือ Mythic เขียนว่า "Pentest Copilot" → เปลี่ยนเป็น "VektorSec" |
+| **สรุปงาน i18n ที่เหลือจากข้อมูลจริงใน repo** | `components/**/*.jsx` 97 ไฟล์ (ต่อแล้ว 25 — 23 หน้าจอ/คอมโพเนนต์ + provider และ switcher — เหลือ 72) · ข้อความอังกฤษ hardcode 151 จุดใน 41 ไฟล์ · prop อังกฤษ 204 จุดใน 42 ไฟล์ · ข้อความ toast 159 จุดใน 33 ไฟล์ · 7 route ที่มี SEO `title`/`description` ฝั่ง server |
 
 > ⚠️ **หมายเหตุการตรวจสอบ**: เครื่อง dev เครื่องนี้ `node_modules` ของ backend/frontend ไม่ครบ
 > และ Docker ยังไม่เปิด จึงรันได้เฉพาะเทสต์ที่ไม่พึ่ง dependency (ฝั่ง frontend `pnpm test` ผ่าน 9/9
@@ -216,7 +235,7 @@ git commit -m "chore(dev): dev-mode Dockerfiles and brand assets"
 | 1 | **Report export (HTML/PDF/JSON)** | `generate_report` คืน `ReportData` แต่ยังไม่มีทางดาวน์โหลดเป็นไฟล์ให้ลูกค้า | `services/evidenceCollector.ts`, `tools/handlers/generate-report.ts`, `frontend/src/app/admin/reports` |
 | 2 | **โหลด plugin อัตโนมัติจากโฟลเดอร์** | plugin API พร้อมแล้ว แต่ยังต้อง import มือใน bootstrap | `tools/plugin.ts`, `tools/extensions/`, `server.ts` + env `TOOLS_EXTENSIONS_DIR` |
 | 3 | **Scope/HITL feedback ที่อ่านรู้เรื่อง** | ผู้ใช้ต้องเข้าใจว่าทำไม agent ถูก BLOCK หรือถูกขออนุมัติ | `utils/guardrails.ts`, `ChatView.jsx`, `ToolCallBlock.jsx` |
-| 4 | **i18n ไทย/อังกฤษ** | docs มี 2 ภาษาแล้ว แต่ UI เป็นอังกฤษล้วน | `frontend/src/**` (เพิ่ม dictionary + locale switcher) |
+| 4 | **i18n ไทย/อังกฤษ** | dictionary + ตัวสลับภาษาผ่านคุกกี้เสร็จแล้ว; shell ของแอปและ Settings ทั้ง 12 แท็บแปลแล้ว ส่วนที่เหลือยังเป็นอังกฤษ | `frontend/src/i18n/**`, `frontend/src/components/pages/settings/**` (รอบ 5–6) |
 | 5 | **Usage/Cost analytics** | ต้องรู้ต้นทุนต่อ workspace/model เพื่อตั้งราคาและทำกำไร | `services/usageTracker.service.ts`, `models/UsageRecord`, `app/topup`, `app/admin/quotas` |
 | 6 | **Telegram Bot ครบ flow** | มี service + controller แล้ว แต่ขาดคำสั่งใช้งานจริง (`/usage` `/status` `/report`) และการผูกบัญชีผู้ใช้ | `services/telegramBot.service.ts`, `controllers/telegramBot.controller.ts`, `app/admin/telegram` |
 | 7 | **Notification ภายนอก (Slack/LINE/Discord)** | แจ้งเมื่อ run จบ / ต้องอนุมัติ / งานค้างเกินเวลา | `services/notificationLog.service.ts` + webhook endpoint |
