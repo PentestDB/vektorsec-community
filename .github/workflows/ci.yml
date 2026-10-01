@@ -1,0 +1,128 @@
+name: CI
+
+# Baseline gates for the repo:
+#   backend  -> install, type-check (tsc), unit tests, lint (advisory)
+#   frontend -> install, unit tests, production build, black-box gateway smoke test
+# The Docker job is manual (workflow_dispatch) because building the backend image
+# downloads Chromium and takes several minutes on a cold cache.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — typecheck + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      # Used by the opt-in database integration tests
+      # (backend/tests/dbIntegration.test.ts) via MONGO_TEST_URI below.
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      MONGO_TEST_URI: mongodb://127.0.0.1:27017
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Unit tests
+        run: pnpm test
+
+      # Coverage report (Node's built-in reporter). Advisory for now: the suite
+      # spans a large legacy surface, so a threshold would be noise until more
+      # of the runtime is covered.
+      - name: Coverage (advisory)
+        continue-on-error: true
+        run: pnpm run test:coverage
+
+      # The repo still uses a legacy .eslintrc.json, which ESLint 9 only reads
+      # with ESLINT_USE_FLAT_CONFIG=false. Advisory for now: it must not block a
+      # green baseline while the config is migrated to flat config.
+      - name: Lint (advisory)
+        continue-on-error: true
+        env:
+          ESLINT_USE_FLAT_CONFIG: "false"
+        run: pnpm run lint
+
+  frontend:
+    name: Frontend — unit tests + build + gateway smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests (pure helpers)
+        run: node --test "tests/*.test.mjs"
+
+      - name: Build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm run build
+
+      # Verifies the black-box gateway: HTTP + WS proxying, sensitive-field
+      # stripping, SSE pass-through, security headers, no x-powered-by and the
+      # absence of browser source maps. Needs the build from the step above.
+      - name: Black-box gateway smoke test
+        run: node scripts/test-gateway.mjs
+
+  docker:
+    name: Docker images (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose file
+        run: docker compose -f docker-compose.yml config > /dev/null
+
+      - name: Build backend image
+        run: docker build -t vektorsec-backend:ci ./backend
+
+      - name: Build frontend image
+        run: docker build -t vektorsec-frontend:ci ./frontend

@@ -1,30 +1,122 @@
+# ============================================================================
+#  VektorSec — Local Development Stack (hot reload, no VPS required)
+# ----------------------------------------------------------------------------
+#  Usage:
+#    1) (ครั้งแรก) copy env files  ->  cp backend/.env.example backend/.env
+#    2) docker compose -f docker-compose.dev.yml up --build
+#    3) เปิด http://localhost:3001
+#
+#  Hot reload:
+#    - backend  : tsx watch -> แก้ไฟล์ .ts แล้ว process restart อัตโนมัติ
+#    - frontend : Next.js dev (ผ่าน server.js gateway) -> Fast Refresh
+#
+#  Kali container ในตัว (optional) เริ่มด้วย:
+#    docker compose -f docker-compose.dev.yml --profile kali up -d
+# ============================================================================
+
 services:
   mongodb:
     image: mongo:latest
+    # Dev only: no auth. ถ้าต้องการ auth ให้ใช้ docker-compose.yml (production)
+    command: ["mongod", "--quiet"]
     volumes:
       - mongodb-data:/data/db
     ports:
-      - "27017:27017"
-    restart: always
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
 
   redis:
     image: redis:latest
+    # Dev only: no password.
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
     ports:
-      - "6379:6379"
-    restart: always
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
 
+  # ── Backend (hot reload via tsx watch) ──────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      DEPLOYMENT: LOCAL
+      PORT: "8081"
+      MONGO_URI: mongodb://mongodb:27017/vektorsec
+      MONGO_DATABASE: vektorsec
+      REDIS_URL: redis://redis:6379
+      SESS_SECRET: dev-insecure-session-secret-change-me-0123456789abcdef
+      # Dev only: อย่าบังคับตั้ง 2FA ตอน login (production ต้องบังคับ)
+      AUTH_REQUIRE_2FA_SETUP: "0"
+      WORKSPACE_DIR: /srv/data/workspaces
+      CODEX_HOME: /root/.codex
+      SSH_CONFIG_FILE: /root/.ssh/config
+    volumes:
+      # เรียกดู/แก้ source ได้ทันทีจาก host (root repo mount ลง /app)
+      - .:/app:rw
+      # node_modules ใช้ของที่ติดตั้งใน image (กัน mount ทับ)
+      - /app/backend/node_modules
+      # runtime data (backend/.env, model-registry.json ฯลฯ) persistent
+      - backend-dev-data:/srv/data
+      # workspace ไฟล์ของ agent (bind — เห็นจาก host ได้)
+      - ./kali-data:/kali-data
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Frontend (Next.js dev + Fast Refresh ผ่าน server.js gateway) ────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      PORT: "3001"
+      # server.js (gateway) forward /api + /ws ไปหา backend service
+      BACKEND_URI: http://backend:8081
+      VNC_ORIGIN_URI: http://backend:6080
+      DEPLOYMENT: LOCAL
+      NEXT_PUBLIC_DEPLOYMENT: LOCAL
+      NEXT_PUBLIC_SITE_URL: http://localhost:3001
+    volumes:
+      - .:/app:rw
+      - /app/frontend/node_modules
+      - /app/frontend/.next
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ── Kali attack box ในตัว (optional — เริ่มด้วย --profile kali) ──────
   kali:
+    profiles: ["kali"]
     build: ./kali
     container_name: kali
     privileged: true
     ports:
-      - "4242:22"
-      - "4200:4200"
-      - "1194:1194/udp"
-      - "9020:9020"
-      - "5901:5901"
+      - "127.0.0.1:4242:22"
+      - "127.0.0.1:4200:4200"
+      - "127.0.0.1:1194:1194/udp"
+      - "127.0.0.1:9020:9020"
+      - "127.0.0.1:5901:5901"
     volumes:
       - ./kali-data:/kali-data
     healthcheck:
@@ -40,5 +132,6 @@ volumes:
     driver: local
   redis-data:
     driver: local
-  kali-data:
+  backend-dev-data:
     driver: local
+

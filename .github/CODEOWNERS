@@ -1,0 +1,33 @@
+# CODEOWNERS — who reviews what.
+#
+# Adjust the handles below to your own teams; the default owner comes from the
+# repository organisation. See
+# https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository.
+*                       @PentestDB
+
+# Core agent runtime: extra review for anything that can execute commands.
+/backend/src/services/agent.service.ts     @PentestDB
+/backend/src/services/agent.tools.ts       @PentestDB
+/backend/src/tools/                        @PentestDB
+/backend/src/middlewares/                  @PentestDB
+/backend/src/utils/guardrails.ts           @PentestDB
+/backend/src/utils/scopeValidator.ts       @PentestDB
+/backend/src/utils/ssrfGuard.ts            @PentestDB
+
+# Auth, billing and anything that touches money.
+/backend/src/controllers/auth.controller.ts         @PentestDB
+/backend/src/controllers/payment.controller.ts      @PentestDB
+/backend/src/controllers/subscription.controller.ts @PentestDB
+/backend/src/models/User/                           @PentestDB
+
+# Infrastructure: deploy, compose and CI are reviewed before merge.
+/deploy/                @PentestDB
+/docker-compose*.yml    @PentestDB
+/.github/               @PentestDB
+
+# Documentation must stay bilingual (Thai in docs/, English in docs/en/).
+/docs/                  @PentestDB
+/README.md              @PentestDB
+/README.th.md           @PentestDB

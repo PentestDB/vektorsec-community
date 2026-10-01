@@ -13,6 +13,61 @@ Before you begin, ensure you have the following installed:
 ### Setting Up Your Development Environment
 Follow the instructions in the [README](https://github.com/PentestDB/vektorsec-community/blob/main/README.md) to set up VektorSec on your local machine.
 
+### Checks to run before opening a PR
+
+CI runs these too (`.github/workflows/ci.yml`), so running them locally saves a round trip:
+
+```bash
+# Backend — type-check + unit tests
+cd backend
+pnpm install --frozen-lockfile
+npx tsc --noEmit -p tsconfig.json
+pnpm test
+
+# Frontend — unit tests + build + black-box gateway smoke test
+cd frontend
+pnpm install --frozen-lockfile
+pnpm test                 # pure helper tests (node --test)
+pnpm run build
+node scripts/test-gateway.mjs
+```
+
+## Documentation policy
+
+| Language | Location |
+|---|---|
+| 🇬🇧 English | root `README.md`, `docs/en/` |
+| 🇹🇭 Thai | `README.th.md`, `docs/` |
+
+The root **`README.md` is English-only**; the Thai version lives in `README.th.md`.
+Every manual exists in both languages and links to its counterpart at the top of the file
+(see `docs/README.md` and `docs/en/README.md` for the indexes).
+
+When you change behaviour, configuration or commands, update **both** the Thai and the English
+document, then check that relative links still resolve.
+
+## Adding a new agent tool
+
+1. Add a handler in `backend/src/tools/handlers/` and register it in `backend/src/tools/registry.ts`.
+2. Route any network access through `handlers/scan-guard.ts` (SSRF + workspace scope) and gate
+   risky commands with `requiresConsent` / `shouldRequireConsent`.
+3. Keep parsing/scoring logic pure and place it in `backend/src/utils/` with unit tests in
+   `backend/tests/` (see `utils/scanOutput.ts` and `utils/scanToolArgs.ts` as examples).
+4. Add a label/group for the tool in `frontend/src/utils/agentTools.js` so it shows up in the
+   Agent Tools panel — tools without metadata still appear, but under "Other tools".
+5. Expose it over MCP in `backend/src/services/mcp-tools.service.ts` if operators should be able
+   to use it from Claude Code / Codex.
+6. Building a **plugin** (rather than a built-in tool)? Drop the module in
+   `backend/src/tools/extensions/` — it is auto-loaded at startup (copy
+   `example-plugin.ts.example` as a starting point, see `tools/extensions/README.md`).
+   Point `TOOLS_EXTENSIONS_DIR` at another directory to load customer plugins from a mount.
+
+## Security
+
+Never commit `config.toml`, `*.env`, `deploy/secrets.env`, `backend/model-registry.json` or
+`kali-data/` — see [SECURITY.md](./SECURITY.md) for the full policy and how to report a
+vulnerability privately (please don't open a public issue for security problems).
+
 ## How to Contribute
 
 ### Reporting Bugs

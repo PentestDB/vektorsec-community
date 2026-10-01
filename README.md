@@ -5,9 +5,14 @@
 <h1 align="center">🛡️ VektorSec — AI Penetration Testing Agent</h1>
 
 <p align="center">
-  Open-source AI agent สำหรับงาน <b>penetration testing / CTF / boot2root</b> —
-  ต่อเข้า Kali attack box, รันเครื่องมือ, วิเคราะห์ผล และวนลูปเองจนจบงาน<br />
-  คุณแค่บอกเป้าหมาย ที่เหลือ agent จัดการ
+  <b>English</b> · <a href="./README.th.md">ไทย</a>
+</p>
+
+<p align="center">
+  Open-source AI agent for <b>penetration testing / CTF / boot2root</b> —
+  it connects to your Kali attack box, runs the tools, analyses the output and
+  keeps looping on its own until the job is done.<br />
+  You name the target, the agent handles the rest.
 </p>
 
 <p align="center">
@@ -16,37 +21,39 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%2F%20Docker-9cf.svg" />
 </p>
 
-> ⚠️ **Disclaimer**: VektorSec มีไว้สำหรับ **งานทดสอบความปลอดภัยที่ได้รับอนุญาตเท่านั้น**
-> ต้องได้รับ permission ชัดเจนจากเจ้าของระบบก่อนทดสอบทุกครั้ง ผู้ใช้งานต้องรับผิดชอบต่อการใช้งานเอง
+> ⚠️ **Disclaimer**: VektorSec is intended for **authorized security testing only**.
+> Always obtain explicit permission from the system owner before testing. You are
+> responsible for how you use it.
 
 ---
 
-## 📑 สารบัญ
+## 📑 Table of Contents
 
-- [VektorSec คืออะไร](#-vektorsec-คืออะไร)
-- [ความสามารถหลัก](#-ความสามารถหลัก)
-- [สถาปัตยกรรม](#-สถาปัตยกรรม)
-- [ความต้องการระบบ](#-ความต้องการระบบ)
-- [โครงสร้างโปรเจกต์](#-โครงสร้างโปรเจกต์)
-- [ไฟล์ตั้งค่า Config](#-ไฟล์ตั้งค่า-config)
-- [เริ่มต้นอย่างรวดเร็ว (Docker)](#-เริ่มต้นอย่างรวดเร็ว-docker)
-- [Deploy ขึ้น Production ด้วย Docker + Nginx + SSL](#-deploy-ขึ้น-production-docker--nginx--ssl)
-- [Deploy อัตโนมัติด้วยสคริปต์ / Caddy](#-deploy-อัตโนมัติด้วยสคริปต์--caddy)
-- [อัปเดต และ Backup](#-อัปเดต-และ-backup)
+- [What is VektorSec](#-what-is-vektorsec)
+- [Key Capabilities](#-key-capabilities)
+- [Architecture](#-architecture)
+- [Requirements](#-requirements)
+- [Project Structure](#-project-structure)
+- [Configuration Files](#-configuration-files)
+- [Quick Start (Docker)](#-quick-start-docker)
+- [Production Deploy with Docker + Nginx + SSL](#-production-deploy-with-docker--nginx--ssl)
+- [Automated Deploy Scripts / Caddy](#-automated-deploy-scripts--caddy)
+- [Updating and Backup](#-updating-and-backup)
 - [Security Checklist](#-security-checklist)
-- [การพัฒนา (Developer mode)](#-การพัฒนา-developer-mode)
-- [เอกสารเพิ่มเติม](#-เอกสารเพิ่มเติม)
-- [เครดิตและ License](#-เครดิตและ-license)
+- [Development (Developer mode)](#-development-developer-mode)
+- [More Documentation](#-more-documentation)
+- [Credits and License](#-credits-and-license)
 
 ---
 
-## 🧠 VektorSec คืออะไร
+## 🧠 What is VektorSec
 
-VektorSec คือ AI penetration-testing agent แบบ agentic: มันรันคำสั่งจริงบน attack box
-(SSH/Kali หรือ Kali container ในตัว) อ่าน output วิเคราะห์ แล้วตัดสินใจขั้นต่อไปเอง
-โดยไม่ต้องมีคนคอยจ้ำจี้ — เหมาะกับงาน pentest จริง, boot2root box และ CTF
+VektorSec is an agentic AI penetration-testing agent: it executes real commands on an
+attack box (SSH/Kali, or the built-in Kali container), reads the output, analyses it and
+decides the next step by itself — no hand-holding. It is built for real engagements,
+boot2root boxes and CTFs.
 
-ตัวอย่างการทำงานจริง: agent บุก auth bypass ใน [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/)
+Real-world example: the agent exploits an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/)
 
 <p align="center">
   <img src="./assets/dashboard_with_backdrop.png" alt="VektorSec Dashboard" width="800" />
@@ -56,22 +63,22 @@ VektorSec คือ AI penetration-testing agent แบบ agentic: มันร
   <img src="./assets/operationa_dashboard_with_backdrop.png" alt="VektorSec Operational Dashboard" width="800" />
 </p>
 
-## ✨ ความสามารถหลัก
+## ✨ Key Capabilities
 
-- **Agentic execution** — agent รันคำสั่งบน attack box อ่านผล แล้วลูปต่อเนื่องได้ถึง 25 iteration/turn
-- **16 agent tools** — bash, Python script, ติดตั้งเครื่องมือ, จัดการ shell, Google search, spawn subagent, Burp Suite (proxy history/Repeater/Intruder/Collaborator) และ browser automation
-- **100+ capabilities** — registry เครื่องมือ/แพ็กเกจสำหรับ network, rev, pwn, crypto, forensics, stego, core
-- **Burp Suite integration** — ดู proxy history, ส่ง request ไป Repeater/Intruder, ใช้ Collaborator สำหรับ OOB testing
-- **Browser agent (Magnitude)** — browser automation จริง, ส่องหน้าเว็บผ่าน VNC stream ในโหมด Docker
-- **VPN management** — อัปโหลดไฟล์ `.ovpn` แล้ว connect/disconnect ได้จากหน้าเว็บ (ต่อพร้อมกันหลายตัวได้)
-- **Subagent parallelism** — รันงานย่อยพร้อมกัน เช่น directory brute-force + subdomain enum ในเวลาเดียว
-- **Safety checks** — คำสั่งอันตราย (ลบ recursive, เขียน device, fork bomb) ต้องได้รับการอนุมัติก่อนเสมอ
-- **Bring your own model** — OpenAI, Anthropic (API key หรือ OAuth), Google, Mistral, หรือ endpoint แบบ OpenAI-compatible; รองรับ Codex CLI / Claude Code ที่ login บนเครื่อง
-- **MCP access** — เปิด control plane ผ่าน MCP ให้ Claude Code / Codex เรียกใช้ได้
+- **Agentic execution** — the agent runs commands on the attack box, reads the results and keeps looping for up to 25 iterations per turn
+- **60 agent tools** — bash, Python scripts, tool installation, shell management, Google search, subagents, Burp Suite (proxy history/Repeater/Intruder/Collaborator), Caido, Mythic C2, nmap/nuclei/ffuf/gobuster/naabu scans, browser automation and more
+- **100+ capabilities** — a registry of tools/packages for network, rev, pwn, crypto, forensics, stego and core work
+- **Burp Suite integration** — read proxy history, send requests to Repeater/Intruder, use Collaborator for OOB testing
+- **Browser agent (Magnitude)** — real browser automation, streamed into the UI over VNC in Docker mode
+- **VPN management** — upload `.ovpn` files and connect/disconnect from the web UI (multiple at once)
+- **Subagent parallelism** — run sub-tasks concurrently, e.g. directory brute-force plus subdomain enumeration at the same time
+- **Safety checks** — dangerous commands (recursive delete, writing to devices, fork bombs) always require approval first
+- **Bring your own model** — OpenAI, Anthropic (API key or OAuth), Google, Mistral or any OpenAI-compatible endpoint; Codex CLI / Claude Code already logged in on the host also work
+- **MCP access** — expose the control plane over MCP so Claude Code / Codex can drive it
 
 ---
 
-## 🏗️ สถาปัตยกรรม
+## 🏗️ Architecture
 
 ```
                         ┌───────────────────────────────┐
@@ -79,7 +86,7 @@ VektorSec คือ AI penetration-testing agent แบบ agentic: มันร
                         └──────────────┬────────────────┘
                                        │ http://127.0.0.1:3001
                         ┌──────────────▼────────────────┐
-                        │  frontend (Next.js gateway)    │  (ไม่เปิดสู่ public)
+                        │  frontend (Next.js gateway)    │  (never public)
                         │  server.js: proxy /api /ws /novnc
                         └──────────────┬────────────────┘
                                        │ http://backend:8081
@@ -90,198 +97,200 @@ VektorSec คือ AI penetration-testing agent แบบ agentic: มันร
                  ┌─────────────▼─────┐   ┌────▼─────────────┐
                  │  mongodb (data)   │   │ redis (session)  │
                  └───────────────────┘   └──────────────────┘
-  (kali-data/ bind mount ใช้เป็น workspace + Kali container ในตัว ถ้าเปิด docker-compose.kali.yml)
+  (kali-data/ bind mount is the workspace, plus the built-in Kali container
+   when you enable docker-compose.kali.yml)
 ```
 
-| Service  | บทบาท | ข้อมูล |
-|----------|-------|-------|
-| `frontend` | Next.js + API gateway (server.js) | port host `127.0.0.1:3001` |
-| `backend`  | Express API + AI agent loop + SSH/exploit box | port host `127.0.0.1:8081`, `6080`, `9020` |
-| `mongodb`  | เก็บ user/session/workspace/ผลลัพธ์ (เปิด `--auth`) | volume `mongodb-data` |
-| `redis`    | session store (บังคับ password) | volume `redis-data` |
-| `kali` *(optional)* | Kali attack box ในตัว (docker-compose.kali.yml) | volume `kali-data` + `./kali-data/` |
+| Service  | Role | Data |
+|----------|------|------|
+| `frontend` | Next.js + API gateway (server.js) | host port `127.0.0.1:3001` |
+| `backend`  | Express API + AI agent loop + SSH/exploit box | host ports `127.0.0.1:8081`, `6080`, `9020` |
+| `mongodb`  | stores users/sessions/workspaces/results (runs with `--auth`) | volume `mongodb-data` |
+| `redis`    | session store (password required) | volume `redis-data` |
+| `kali` *(optional)* | built-in Kali attack box (docker-compose.kali.yml) | volume `kali-data` + `./kali-data/` |
 
-ข้อมูลที่เซฟไว้ (Mongo/Redis/backend workspace) อยู่ใน **Docker named volumes** และโฟลเดอร์ `kali-data/`
-ซึ่งถูก `.gitignore` ไว้แล้ว — **ไม่มีวันหลุดเข้า Git**
+Persisted data (Mongo/Redis/backend workspace) lives in **Docker named volumes** and the
+`kali-data/` folder, which are already covered by `.gitignore` — **they never leak into Git**.
 
 ---
-## 📦 ความต้องการระบบ
+## 📦 Requirements
 
-| | ขั้นต่ำ |
+| | Minimum |
 |---|---------|
-| RAM | 8 GB (+2 GB ถ้าเปิด Kali container ในตัว) |
+| RAM | 8 GB (+2 GB if you run the built-in Kali container) |
 | Disk | 20 GB+ |
-| OS | Linux (Ubuntu/Debian แนะนำ), macOS สำหรับ dev |
-| Docker | v20+ พร้อม Compose v2+ |
-| Node.js / pnpm | v22+ / v9+ (เฉพาะโหมด dev รันนอก Docker) |
-| Domain (แนะนำ) | ชี้ DNS A record ไป IP VPS เพื่อใช้ HTTPS |
+| OS | Linux (Ubuntu/Debian recommended), macOS for development |
+| Docker | v20+ with Compose v2+ |
+| Node.js / pnpm | v22+ / v9+ (only when running outside Docker in dev mode) |
+| Domain (recommended) | Point a DNS A record at your VPS IP to use HTTPS |
 
-> แรก build อาจใช้ RAM เยอะ (compile backend + Chromium) — ถ้า VPS RAM น้อย ให้สร้าง swap ก่อน:
+> The first build is RAM-hungry (compiling the backend + Chromium) — on a small VPS create swap first:
 > `sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`
 
-## 📁 โครงสร้างโปรเจกต์
+## 📁 Project Structure
 
 ```
 .
 ├── backend/                 # Express + AI agent (TypeScript)
-│   ├── .env.example         # ← copy เป็น backend/.env แล้วใส่ค่าของคุณ
+│   ├── .env.example         # ← copy to backend/.env and fill in your values
 │   ├── src/                 # controllers / services / tools / routes
 │   ├── tests/
 │   └── Dockerfile
 ├── frontend/                # Next.js UI + black-box gateway (server.js)
-│   ├── .env.example         # ← copy เป็น frontend/.env แล้วใส่ค่าของคุณ
+│   ├── .env.example         # ← copy to frontend/.env and fill in your values
 │   └── Dockerfile
-├── kali/                    # Dockerfile สำหรับ Kali attack box ในตัว (optional)
-├── deploy/                  # ตัวช่วย deploy ขึ้น VPS
-│   ├── secrets.env.example  # ← copy เป็น deploy/secrets.env (DB passwords)
-│   ├── nginx.example.conf   # reverse proxy + วิธีทำ SSL (Nginx/certbot)
-│   ├── Caddyfile.example    # อีกทางเลือก: HTTPS อัตโนมัติด้วย Caddy
-│   ├── deploy-to-vps.sh     # rsync + setup/update ขึ้น VPS
-│   ├── vps-setup.sh         # ติดตั้ง Docker + สร้าง config + build (รันบน VPS)
-│   └── vps-update.sh        # rebuild + restart เร็ว
-├── config.example.toml      # ← copy เป็น config.toml แล้วใส่ค่าของคุณ
-├── docker-compose.yml       # stack หลัก (production-ready)
-├── docker-compose.kali.yml  # stack แบบมี Kali container ในตัว
-├── docker-compose.dev.yml   # infra สำหรับ dev (mongo/redis/kali)
-├── run.sh                   # launcher รวม (config/build/start/stop)
-└── docs/                    # คู่มือ (ไทย/อังกฤษ)
+├── kali/                    # Dockerfile for the built-in Kali attack box (optional)
+├── deploy/                  # helpers for deploying to a VPS
+│   ├── secrets.env.example  # ← copy to deploy/secrets.env (DB passwords)
+│   ├── nginx.example.conf   # reverse proxy + how to set up SSL (Nginx/certbot)
+│   ├── Caddyfile.example    # alternative: automatic HTTPS with Caddy
+│   ├── deploy-to-vps.sh     # rsync + setup/update to a VPS
+│   ├── vps-setup.sh         # install Docker + generate config + build (runs on the VPS)
+│   └── vps-update.sh        # fast rebuild + restart
+├── config.example.toml      # ← copy to config.toml and fill in your values
+├── docker-compose.yml       # main stack (production-ready)
+├── docker-compose.kali.yml  # stack with the built-in Kali container
+├── docker-compose.dev.yml   # dev infra (mongo/redis/kali)
+├── run.sh                   # all-in-one launcher (config/build/start/stop)
+└── docs/                    # manuals (Thai in docs/, English in docs/en/)
 ```
 
-## ⚙️ ไฟล์ตั้งค่า Config
+## ⚙️ Configuration Files
 
-ระบบใช้ไฟล์ตั้งค่า 4 กลุ่ม (ทุกไฟล์ `.example` คือ template — copy ไปเป็นชื่อจริงแล้วกรอกค่าเอง):
+The system uses four groups of configuration files (every `.example` file is a template —
+copy it to the real name and fill in your own values):
 
-| Template (commit ได้) | copy ไปเป็น | เก็บอะไร |
+| Template (safe to commit) | Copy to | What it holds |
 |---|---|---|
 | `config.example.toml` | `config.toml` | static config: port, deployment, mongo/redis URI, **session secret** |
 | `backend/.env.example` | `backend/.env` | dynamic config: admin, SSH box, Telegram, OAuth, VNC/Burp/Caido/Mythic, reCAPTCHA |
 | `frontend/.env.example` | `frontend/.env` | gateway URL, deployment mode, site URL, reCAPTCHA site key |
-| `deploy/secrets.env.example` | `deploy/secrets.env` *(หรือ root `.env`)* | `MONGO_USER`, `MONGO_PASSWORD`, `REDIS_PASSWORD` — ใช้ตอน `docker compose` |
+| `deploy/secrets.env.example` | `deploy/secrets.env` *(or root `.env`)* | `MONGO_USER`, `MONGO_PASSWORD`, `REDIS_PASSWORD` — used by `docker compose` |
 
-> 🔒 ห้าม commit `config.toml`, `*.env`, `deploy/secrets.env`, `backend/model-registry.json`
-> และ `kali-data/` — `.gitignore` จัดการให้แล้ว ใคร clone ไปก็มีแค่ `.example`
+> 🔒 Never commit `config.toml`, `*.env`, `deploy/secrets.env`, `backend/model-registry.json`
+> or `kali-data/` — `.gitignore` already handles them, so anyone who clones the repo only gets the `.example` files.
 
 ---
 
-## 🚀 เริ่มต้นอย่างรวดเร็ว (Docker)
+## 🚀 Quick Start (Docker)
 
-รันทั้ง stack ด้วย Docker Compose (วิธีนี้ใช้ได้ทั้งเครื่อง dev และ VPS):
+Run the whole stack with Docker Compose (this works on both a dev machine and a VPS):
 
-### 1. Clone + สร้างไฟล์ตั้งค่าจาก template
+### 1. Clone + create configuration files from the templates
 
 ```bash
 git clone https://<YOUR_GIT_REPO_URL>.git vektorsec
 cd vektorsec
 
-# DB passwords — docker compose อ่านไฟล์ .env ที่ root อัตโนมัติ
+# DB passwords — docker compose reads the .env at the repo root automatically
 cp deploy/secrets.env.example .env
-# แล้วแก้ .env: ตั้ง MONGO_PASSWORD / REDIS_PASSWORD เป็นค่าสุ่ม เช่น
+# then edit .env: set MONGO_PASSWORD / REDIS_PASSWORD to random values, e.g.
 #   openssl rand -hex 24
 
 # static config
 cp config.example.toml config.toml
 
-# env ของ backend / frontend
+# backend / frontend env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-### 2. ใส่ค่าสำคัญ (แก้ไฟล์จริง)
+### 2. Fill in the important values (edit the real files)
 
 ```bash
-# (ก) session secret ใน config.toml — สุ่มใหม่ทุกครั้ง
+# (a) session secret in config.toml — generate a fresh one every time
 openssl rand -hex 32
-#     เอาไปใส่ [session] secret ใน config.toml
-#     (run.sh / deploy/vps-setup.sh สุ่มให้อัตโนมัติ ถ้าเห็น placeholder CHANGE_ME...)
+#     put it in [session] secret of config.toml
+#     (run.sh / deploy/vps-setup.sh generate one automatically if they see a CHANGE_ME... placeholder)
 
-# (ข) backend/.env — optional แต่แนะนำ: กำหนด admin เองตั้งแต่แรก
+# (b) backend/.env — optional but recommended: define the admin up front
 #   ADMIN_EMAIL=you@example.com
-#   ADMIN_PASSWORD=<รหัสที่แข็งแรง>
-#   (ถ้าปล่อยว่าง backend จะสร้าง admin@vektorsec.local + สุ่มรหัสแล้วพิมพ์ใน logs)
-
-# (ค) frontend/.env — ตอนรันใน Docker ตัว backend จะถูก gateway เรียกผ่าน service name
+#   ADMIN_PASSWORD=<strong password>
+#   (if left empty the backend creates admin@vektorsec.local with a random
+#    password and prints it in the logs)
+# (c) frontend/.env — in Docker the backend is reached through the service name
 #   BACKEND_URI=http://backend:8081
 #   VNC_ORIGIN_URI=http://backend:6080
-#   (ถ้ารัน dev แบบแยก process ให้ใช้ http://localhost:8081 แทน)
+#   (for a split dev setup use http://localhost:8081 instead)
 ```
 
-### 3. Build + Start
+### 3. Build + start
 
 ```bash
 docker compose up -d --build
 ```
 
-ครั้งแรก build ใช้เวลาพอสมควร (backend ลง Chromium/Codex CLI + compile) แล้วรอให้ทุก container healthy:
+The first build takes a while (the backend installs Chromium/Codex CLI and compiles). Wait until every container is healthy:
 
 ```bash
-docker compose ps          # ทุกตัว status = running / healthy
+docker compose ps          # every container should be running / healthy
 docker compose logs -f backend
 ```
 
-### 4. เข้าใช้งานครั้งแรก
+### 4. First login
 
-1. เปิด `http://localhost:3001` (ถ้ารันบน VPS ให้ใช้ SSH tunnel หรือทำ Nginx ตามหัวข้อถัดไป)
-2. login ด้วย admin — หารหัสผ่านชั่วคราวจาก log ของ backend:
+1. Open `http://localhost:3001` (on a VPS use an SSH tunnel or set up Nginx as described below)
+2. Log in as admin — grab the temporary password from the backend log:
    ```bash
    docker compose logs backend | grep -i -A1 "temporary password"
    ```
-   (หรือใช้ `ADMIN_EMAIL` / `ADMIN_PASSWORD` ที่ตั้งไว้ใน `backend/.env`)
-3. เปลี่ยนรหัสผ่าน admin ทันที + เปิด 2FA
-4. ไปที่ **Settings → Models** เพิ่ม Model Preset + API key ของคุณ แล้วตั้ง Orchestrator
+   (or use the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you set in `backend/.env`)
+3. Change the admin password immediately and turn on 2FA
+4. Go to **Settings → Models**, add a Model Preset + your API key, then pick the Orchestrator
 
-### ทางลัด: ใช้ `run.sh`
+### Shortcut: use `run.sh`
 
-`run.sh` สร้าง config/env จาก template, สุ่ม session secret และจัดการ Docker ให้อัตโนมัติ:
+`run.sh` creates config/env from the templates, generates a session secret and drives Docker for you:
 
 ```bash
-./run.sh start      # guided start (ถาม provider/API key ครั้งแรก)
-./run.sh start -q   # quick start โดยใช้ config เดิม
-./run.sh status     # สถานะ container
-./run.sh logs       # ดู log
-./run.sh stop       # หยุดทุก container
+./run.sh start      # guided start (asks for provider/API key the first time)
+./run.sh start -q   # quick start reusing the existing config
+./run.sh status     # container status
+./run.sh logs       # tail logs
+./run.sh stop       # stop every container
 ```
 
 ---
-## 🌐 Deploy ขึ้น Production ด้วย Docker + Nginx + SSL
+## 🌐 Production Deploy with Docker + Nginx + SSL
 
-> ภาพรวม: โค้ด (frontend+backend) รันใน Docker Compose โดยทุกพอร์ต bind ไว้ที่
-> `127.0.0.1` บน VPS — Nginx บนเครื่องเดียวกันเป็นตัวรับ traffic จากอินเทอร์เน็ต
-> (`80/443`) แล้ว reverse proxy ไป `http://127.0.0.1:3001` พร้อม SSL อัตโนมัติ
-> → ไม่ต้องเปิดพอร์ต `8081/27017/6379` ออก public เลย
+> Overview: the code (frontend + backend) runs in Docker Compose and every port is bound to
+> `127.0.0.1` on the VPS — Nginx on the same machine receives traffic from the internet
+> (`80/443`) and reverse-proxies it to `http://127.0.0.1:3001` with automatic SSL.
+> → You never expose `8081/27017/6379` publicly.
 
-### Step 0 — เตรียม VPS + Domain
+### Step 0 — Prepare the VPS + domain
 
 ```bash
-# VPS: Ubuntu 22.04/24.04, RAM ≥ 8GB (ดูหัวข้อ swap ด้านบน)
-# ติดตั้ง Docker + Compose plugin:
+# VPS: Ubuntu 22.04/24.04, RAM ≥ 8GB (see the swap note above)
+# Install Docker + Compose plugin:
 curl -fsSL https://get.docker.com | sudo sh
 sudo systemctl enable --now docker
 
-# DNS: ชี้ A record ของ <YOUR_DOMAIN> → <YOUR_VPS_IP>
+# DNS: point the A record of <YOUR_DOMAIN> → <YOUR_VPS_IP>
 
-# Firewall: เปิดแค่ HTTP/HTTPS/SSH
+# Firewall: open only HTTP/HTTPS/SSH
 sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
-### Step 1 — วางโค้ดบน VPS
+### Step 1 — Get the code onto the VPS
 
 ```bash
-# วิธีที่ 1: clone ตรงบน VPS
+# Option 1: clone directly on the VPS
 cd /opt && sudo git clone https://<YOUR_GIT_REPO_URL>.git vektorsec
 sudo chown -R $USER:$USER /opt/vektorsec && cd /opt/vektorsec
 
-# วิธีที่ 2: อัปโหลดจากเครื่องเรา (ดู deploy/README.md มี rsync/package ให้)
+# Option 2: upload from your machine (see deploy/README.md for rsync/package helpers)
 ```
 
-### Step 2 — สร้างไฟล์ตั้งค่า (บน VPS)
+### Step 2 — Create the configuration files (on the VPS)
 
 ```bash
-# DB passwords สำหรับ docker compose
+# DB passwords for docker compose
 cp deploy/secrets.env.example .env
-# แก้ .env → MONGO_PASSWORD / REDIS_PASSWORD = ค่าสุ่ม (openssl rand -hex 24)
+# edit .env → MONGO_PASSWORD / REDIS_PASSWORD = random values (openssl rand -hex 24)
 
 # config
 cp config.example.toml config.toml
@@ -291,30 +300,30 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-แก้ `config.toml` ให้เป็นค่า production:
+Edit `config.toml` with production values:
 
 ```toml
 [server]
 port = 8081
-deployment = "PROD"                          # สำคัญ: PROD จะบังคับ secret ที่แข็งแรง
-base_url_frontend = "https://<YOUR_DOMAIN>"   # เปลี่ยน <YOUR_DOMAIN>
+deployment = "PROD"                          # important: PROD enforces a strong secret
+base_url_frontend = "https://<YOUR_DOMAIN>"   # replace <YOUR_DOMAIN>
 cors_origins = "https://<YOUR_DOMAIN>"
 
 [session]
-secret = "<ค่าจาก openssl rand -hex 32>"     # อย่าใช้ค่า CHANGE_ME...
+secret = "<output of openssl rand -hex 32>"  # never keep CHANGE_ME...
 lifetime = 1000
 ```
 
-แก้ `backend/.env` (optional แต่แนะนำ):
+Edit `backend/.env` (optional but recommended):
 
 ```bash
 ADMIN_EMAIL=admin@<YOUR_DOMAIN>
-ADMIN_PASSWORD=<รหัสที่แข็งแรง>       # ถ้าปล่อยว่าง → สุ่มแล้วพิมพ์ใน log
+ADMIN_PASSWORD=<strong password>       # if empty → random value printed in the log
 FRONTEND_URL=https://<YOUR_DOMAIN>
-OOB_BASE_URL=https://<YOUR_DOMAIN>/api   # สำหรับ OOB/Collaborator payload
+OOB_BASE_URL=https://<YOUR_DOMAIN>/api   # for OOB/Collaborator payloads
 ```
 
-แก้ `frontend/.env` ให้เว็บถูก index + URL ถูกต้อง:
+Edit `frontend/.env` so the site is indexed correctly and URLs are right:
 
 ```bash
 BACKEND_URI=http://backend:8081
@@ -324,7 +333,7 @@ NEXT_PUBLIC_DEPLOYMENT=PRODUCTION
 NEXT_PUBLIC_SITE_URL=https://<YOUR_DOMAIN>
 ```
 
-### Step 3 — Build และรัน stack
+### Step 3 — Build and start the stack
 
 ```bash
 docker compose up -d --build
@@ -332,103 +341,103 @@ docker compose ps
 docker compose logs -f backend
 ```
 
-### Step 4 — ตั้ง Nginx + SSL (Let's Encrypt)
+### Step 4 — Set up Nginx + SSL (Let's Encrypt)
 
 ```bash
 sudo apt-get install -y nginx certbot python3-certbot-nginx
 
-# ใช้ config ตัวอย่าง แล้วแก้ <YOUR_DOMAIN> → โดเมนจริงของคุณ (มีทั้งหมด 5 จุด)
+# use the example config, then replace <YOUR_DOMAIN> with your real domain (5 occurrences)
 sudo cp deploy/nginx.example.conf /etc/nginx/sites-available/vektorsec
 sudo nano /etc/nginx/sites-available/vektorsec
 sudo ln -s /etc/nginx/sites-available/vektorsec /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
-# ออก SSL อัตโนมัติ (เลือก redirect HTTP→HTTPS เมื่อถาม)
+# issue SSL automatically (choose the HTTP→HTTPS redirect when asked)
 sudo certbot --nginx -d <YOUR_DOMAIN>
 ```
 
-ตรวจสอบ: เปิด `https://<YOUR_DOMAIN>` แล้ว login
+Verify: open `https://<YOUR_DOMAIN>` and log in.
 
-> ทางเลือก: ใช้ **Caddy** ก็ได้ — ดู `deploy/Caddyfile.example` (ออก Let's Encrypt ให้อัตโนมัติ
-> ไม่ต้องแตะ nginx/certbot เลย)
+> Alternative: use **Caddy** instead — see `deploy/Caddyfile.example` (it issues Let's Encrypt
+> certificates automatically, so you never touch nginx/certbot).
 
-### Step 5 — หลังติดตั้ง
+### Step 5 — After installation
 
-1. หา admin + รหัสผ่านชั่วคราว: `docker compose logs backend | grep -i -A1 "temporary password"`
-2. login แล้วเปลี่ยนรหัสทันที + เปิด 2FA
-3. **Settings → Models** → เพิ่ม API key ของ model ที่จะใช้ → ตั้ง Orchestrator
-4. ทดสอบ workspace จริง (สร้าง session ใหม่ → เลือก SSH/Kali/scope)
+1. Find the admin account + temporary password: `docker compose logs backend | grep -i -A1 "temporary password"`
+2. Log in, change the password right away and enable 2FA
+3. **Settings → Models** → add the API key of the model you will use → set the Orchestrator
+4. Test a real workspace (create a new session → pick SSH/Kali/scope)
 
 ---
 
-## 🤖 Deploy อัตโนมัติด้วยสคริปต์ / Caddy
+## 🤖 Automated Deploy Scripts / Caddy
 
-ถ้าอยาก deploy ซ้ำๆ แบบเร็ว (rsync + rebuild อัตโนมัติ) ดูคู่มือเต็มที่ **`deploy/README.md`**
+For fast, repeatable deploys (rsync + automatic rebuild) see the full guide in **`deploy/README.md`**:
 
 ```bash
-# จากเครื่องเรา (ต้องมี ssh/rsync)
-bash deploy/deploy-to-vps.sh root@<YOUR_VPS_IP>            # ครั้งแรก
-bash deploy/deploy-to-vps.sh root@<YOUR_VPS_IP> --update  # อัปเดตรอบถัดไป
+# from your machine (needs ssh/rsync)
+bash deploy/deploy-to-vps.sh root@<YOUR_VPS_IP>            # first time
+bash deploy/deploy-to-vps.sh root@<YOUR_VPS_IP> --update  # subsequent updates
 # Windows PowerShell:  powershell -File deploy\deploy.ps1
 ```
 
-หรือถ้าไม่มี rsync ให้สร้าง package อัปโหลดเอง:
+Or, if you have no rsync, build a package and upload it yourself:
 
 ```bash
-bash deploy/make-package.sh        # ได้ vektorsec-vps.tar.gz (ตัด secrets/log ออก)
-# อัปโหลดขึ้น VPS แล้วรัน: tar xzf vektorsec-vps.tar.gz && cd vektorsec && bash deploy/vps-setup.sh
+bash deploy/make-package.sh        # produces vektorsec-vps.tar.gz (secrets/logs stripped)
+# upload it to the VPS and run: tar xzf vektorsec-vps.tar.gz && cd vektorsec && bash deploy/vps-setup.sh
 ```
 
 ---
 
-## 🔄 อัปเดต และ Backup
+## 🔄 Updating and Backup
 
-**อัปเดตเวอร์ชันใหม่** (ข้อมูล/config บน VPS ไม่ถูกแตะ):
+**Update to a newer version** (data/config on the VPS is untouched):
 
 ```bash
 git pull
-# ถ้าไฟล์ .example เปลี่ยนและอยากได้ key ใหม่ → merge ทีละ key เอง (ห้ามทับ .env ที่มีค่าแล้ว)
+# if the .example files changed and you want the new keys → merge key by key (never overwrite a filled .env)
 docker compose up -d --build
 ```
 
-**ข้อมูลอยู่ที่ไหน** — ทั้งหมดอยู่นอก Git:
+**Where the data lives** — all of it is outside Git:
 
 ```bash
 docker volume ls | grep vektorsec
 # vektorsec_mongodb-data, vektorsec_redis-data, vektorsec_backend-data
-ls ./kali-data          # workspace / ไฟล์ที่ agent สร้าง (bind mount)
+ls ./kali-data          # workspace / files created by the agent (bind mount)
 ```
 
-**Backup** (จอด container ก่อน หรือยอมรับ dirty snapshot):
+**Backup** (stop the containers first, or accept a dirty snapshot):
 
 ```bash
-# ตัวอย่าง backup volume mongodb-data ไปที่ ~/backup/
+# example: back up the mongodb-data volume to ~/backup/
 mkdir -p ~/backup
 sudo docker run --rm -v vektorsec_mongodb-data:/data -v ~/backup:/backup \
   alpine tar czf /backup/mongodb-data-$(date +%F).tgz -C /data .
-# ทำแบบเดียวกันกับ redis-data และ backend-data แล้วคัดลอก ./kali-data ไปเก็บด้วย
+# do the same for redis-data and backend-data, and copy ./kali-data as well
 ```
 
-**Restore**: เอาไฟล์ tgz กลับด้วย tar xzf แล้ว `docker compose up -d` (volume ต้องว่าง/ใหม่)
+**Restore**: bring the tgz back with `tar xzf`, then `docker compose up -d` (the volume must be empty/new).
 
 ---
 
 ## 🔒 Security Checklist
 
-- [x] `config.toml`, `*.env`, `deploy/secrets.env`, `kali-data/` ถูก `.gitignore` — ตรวจอีกทีด้วย `git status` ก่อน push
-- [ ] `[session] secret` ใน `config.toml` เป็นค่าสุ่ม ≥ 32 ตัวอักษร (ไม่ใช่ `CHANGE_ME`)
-- [ ] เปลี่ยนรหัสผ่าน admin เริ่มต้นทันที + เปิด 2FA
-- [ ] `deployment = "PROD"` และ domain ถูกใน `base_url_frontend` / `cors_origins`
-- [ ] ห้ามเปิดพอร์ต `8081` (backend), `27017` (MongoDB), `6379` (Redis) สู่สาธารณะ
-- [ ] ถ้าใช้ Kali ในตัว จำกัดพอร์ต `4242/4200/5901/9020` ให้เฉพาะ internal
-- [ ] SSH/exploit box: ใช้ SSH key แทน password และจำกัด source IP
-- [ ] API key ของ LLM เก็บผ่าน UI (Settings → Models) ซึ่งอยู่ใน `model-registry.json` (local เท่านั้น)
+- [x] `config.toml`, `*.env`, `deploy/secrets.env`, `kali-data/` are covered by `.gitignore` — double-check with `git status` before pushing
+- [ ] `[session] secret` in `config.toml` is a random value ≥ 32 characters (not `CHANGE_ME`)
+- [ ] The default admin password has been changed and 2FA is enabled
+- [ ] `deployment = "PROD"` and the domain is correct in `base_url_frontend` / `cors_origins`
+- [ ] Never expose ports `8081` (backend), `27017` (MongoDB) or `6379` (Redis) to the public internet
+- [ ] If you use the built-in Kali box, restrict ports `4242/4200/5901/9020` to internal traffic
+- [ ] SSH/exploit box: use SSH keys instead of passwords and restrict the source IP
+- [ ] LLM API keys are stored through the UI (Settings → Models) in `model-registry.json` (local only)
 
 ---
 
-## 💻 การพัฒนา (Developer mode)
+## 💻 Development (Developer mode)
 
-รันแค่ infra (MongoDB/Redis/Kali) ใน Docker แล้วรัน frontend/backend บนเครื่อง:
+Run only the infrastructure (MongoDB/Redis/Kali) in Docker and the frontend/backend on your machine:
 
 ```bash
 ./run.sh dev
@@ -440,26 +449,43 @@ cd backend && pnpm run dev        # port 8081
 cd frontend && pnpm install && pnpm run dev   # port 3001
 ```
 
+**Alternative — run the whole stack in Docker (hot reload, no VPS needed):**
+
+```bash
+cp backend/.env.example backend/.env        # first time only
+docker compose -f docker-compose.dev.yml up --build
+```
+
+- backend: `tsx watch` → restarts automatically when a `.ts` file changes
+- frontend: Next.js dev (Fast Refresh) through the gateway at `http://localhost:3001`
+- Start the built-in Kali box: `docker compose -f docker-compose.dev.yml --profile kali up -d`
+
 ---
 
-## 📚 เอกสารเพิ่มเติม
+## 📚 More Documentation
 
-| ไฟล์ | เนื้อหา |
+| File | Contents |
 |---|---|
-| `docs/INSTALL_GUIDE.md` / `docs/en/INSTALL_GUIDE.md` | คู่มือติดตั้งฉบับเต็ม (ไทย/อังกฤษ) |
-| `docs/USER_GUIDE.md` | คู่มือการใช้งาน |
-| `docs/QUICK_REFERENCE.md` | รวมคำสั่ง/ค่า config ที่ใช้บ่อย |
-| `docs/SYSTEM_SUMMARY.md`, `docs/ARCHITECTURE_PLAN.md` | สถาปัตยกรรมระบบ |
-| `docs/en/user-guide/` | คู่มือผู้ใช้ (อังกฤษ): online web, platform, telegram bot |
-| `deploy/README.md` | คู่มือ deploy ขึ้น VPS ฉบับเต็ม (rsync/Caddy/แก้ปัญหา) |
+| `docs/en/INSTALL_GUIDE.md` / `docs/INSTALL_GUIDE.md` | Full installation guide (English / Thai) |
+| `docs/en/USER_GUIDE.md` / `docs/USER_GUIDE.md` | User guide (English / Thai) |
+| `docs/en/QUICK_REFERENCE.md` / `docs/QUICK_REFERENCE.md` | Common commands and config values |
+| `docs/en/SYSTEM_SUMMARY.md`, `docs/ARCHITECTURE_PLAN.md` | System architecture |
+| `docs/en/ROADMAP_NEXT.md` / `docs/ROADMAP_NEXT.md` | Next roadmap — remaining work / gap analysis (CI, tests, observability, next features) |
+| `docs/en/BLACKBOX_ARCHITECTURE.md` / `docs/BLACKBOX_ARCHITECTURE.md` | Black-box gateway architecture (BFF) |
+| `docs/README.md` and `docs/en/README.md` | Index of the Thai and English manuals |
+| `docs/en/user-guide/` | Task-oriented guides: online web, platform, Telegram bot |
+| `deploy/README.md` | Full VPS deploy guide (rsync/Caddy/troubleshooting) |
+
+> 📖 **Language split**: Thai manuals live in `docs/`, English manuals live in `docs/en/`.
+> This README is English-only; the Thai version is [`README.th.md`](./README.th.md).
 
 ---
 
-## 📜 เครดิตและ License
+## 📜 Credits and License
 
-โปรเจกต์นี้พัฒนาต่อยอดจากงานวิจัย/โอเพนซอร์ส VektorSec และเผยแพร่ภายใต้
-[**MIT License**](./LICENSE) — ดูรายละเอียดในไฟล์ LICENSE และคู่มือการร่วมพัฒนา
-[CONTRIBUTING.md](./CONTRIBUTING.md) / [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+This project builds on the research/open-source work behind VektorSec and is released under the
+[**MIT License**](./LICENSE) — see the LICENSE file, plus [CONTRIBUTING.md](./CONTRIBUTING.md)
+and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 
 ```bibtex
 @article{goyal2024hacking,
@@ -469,8 +495,3 @@ cd frontend && pnpm install && pnpm run dev   # port 3001
   year={2024}
 }
 ```
-
----
-
-_⚠️ VektorSec มีไว้สำหรับงานที่ได้รับอนุญาตเท่านั้น — ใช้ผิดกฎหมาย/โดยไม่ได้รับอนุญาต
-ผู้ใช้ต้องรับผิดชอบเองทั้งหมด_

@@ -48,6 +48,20 @@ services:
         condition: service_started
       kali:
         condition: service_healthy
+    healthcheck:
+      # Readiness endpoint (Mongo + Redis). Node 22 ships global fetch, so the
+      # image needs no extra tooling for this probe.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8081/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     restart: unless-stopped
 
   frontend:

@@ -993,9 +993,11 @@ prompt_rebuild_normal() {
 compose() {
     local args=()
     [[ -n "${COMPOSE_FILE:-}" ]] && args+=(-f "$COMPOSE_FILE")
-    # Skip override in dev mode: docker-compose.dev.yml has no backend service,
-    # and the override only customizes backend. Merging would create an invalid
-    # backend service with no image/build.
+    # Skip override in dev mode: dev compose already defines the full stack and
+    # the override only customizes the backend of the production file. run.sh
+    # dev mode intentionally starts ONLY the infra services (mongodb/redis/kali)
+    # and leaves backend/frontend to run on the host or via the full
+    # `docker compose -f docker-compose.dev.yml up`.
     if [[ "${DEV_MODE:-false}" != true ]] && [[ -f "$COMPOSE_OVERRIDE" ]]; then
         args+=(-f "$COMPOSE_OVERRIDE")
     fi
@@ -1137,6 +1139,8 @@ launch_dev() {
     echo
     echo -e "   ${CYAN}Frontend:${NC}"
     echo -e "     ${DIM}cd frontend && pnpm run dev${NC}"
+    echo
+    hint "Full-stack containers with hot reload:  docker compose -f docker-compose.dev.yml up"
     echo
     local frontend_url backend_url
     frontend_url=$(get_toml_var "$CONFIG_TOML" "base_url_frontend" 2>/dev/null)

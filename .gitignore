@@ -65,3 +65,7 @@ run-out.txt
 /.claude/
 /.codex-tmp/
 /output/
+
+# ── Raw brand artwork (source images stay on disk, only the vectors ship) ──
+/logo/banner/
+/frontend/public/logo/logo.jpg
