@@ -18,6 +18,7 @@ import { useAgentStreamStore } from "@/store/agentStream.store";
 import { pauseAgent, forceResetAgent } from "@/services/agent.service";
 import { PENDING_CTF_SOLVE_KEY, PENDING_SOLVE_READY_EVENT } from "@/constants/ctfUi";
 import { useQueryClient } from "react-query";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 export default function ChatView({ sessionId }) {
   const messagesEndRef = useRef(null);
@@ -27,6 +28,7 @@ export default function ChatView({ sessionId }) {
   const [installSuggestions, setInstallSuggestions] = useState([]);
   const [iterationLimit, setIterationLimit] = useState(null);
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const FAR_UP_THRESHOLD = 250;
 
@@ -240,13 +242,13 @@ export default function ChatView({ sessionId }) {
       setAgentState("paused"); // override to "paused" so resume flow works
     } catch (err) {
       notification.error({
-        message: "Failed to pause",
-        description: err?.response?.data?.message ?? "Something went wrong",
+        message: t("chat.pauseFailed"),
+        description: err?.response?.data?.message ?? t("common.somethingWentWrong"),
       });
       abort();
       setAgentState("paused");
     }
-  }, [sessionId, abort, setSwarms, setAgentState]);
+  }, [sessionId, abort, setSwarms, setAgentState, t]);
 
   const handleForceReset = useCallback(async () => {
     try {
@@ -268,14 +270,14 @@ export default function ChatView({ sessionId }) {
         })),
       );
       queryClient.invalidateQueries(["session-info", sessionId]);
-      notification.success({ message: res?.message ?? "Agent state reset to idle" });
+      notification.success({ message: res?.message ?? t("chat.resetOk") });
     } catch (err) {
       notification.error({
-        message: "Failed to reset agent state",
-        description: err?.response?.data?.message ?? "Something went wrong",
+        message: t("chat.resetFailed"),
+        description: err?.response?.data?.message ?? t("common.somethingWentWrong"),
       });
     }
-  }, [sessionId, abort, setAgentState, setPendingConsent, setPendingManualExecution, setIterationLimit, setSwarms, queryClient]);
+  }, [sessionId, abort, setAgentState, setPendingConsent, setPendingManualExecution, setIterationLimit, setSwarms, queryClient, t]);
 
   const handleConsent = useCallback(
     (approved) => {
@@ -333,11 +335,7 @@ export default function ChatView({ sessionId }) {
               className={styles.emptyStateLogo}
             />
             <h2>VektorSec</h2>
-            <p>
-              Describe your target and goals below. The agent will autonomously
-              perform reconnaissance, enumerate services, identify
-              vulnerabilities, and attempt exploitation.
-            </p>
+            <p>{t("chat.emptyDescription")}</p>
           </div>
         )}
 
@@ -401,11 +399,11 @@ export default function ChatView({ sessionId }) {
         <button
           type="button"
           onClick={() => scrollToBottom("smooth")}
-          title="Scroll to latest"
+          title={t("chat.scrollToLatestTitle")}
           className={styles.scrollToBottomBtn}
         >
           <DownOutlined />
-          <span>scroll to latest</span>
+          <span>{t("chat.scrollToLatest")}</span>
         </button>
       )}
 

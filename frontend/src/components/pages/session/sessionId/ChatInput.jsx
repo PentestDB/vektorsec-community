@@ -6,28 +6,29 @@ import { useQuery } from "react-query";
 import { getCtfChallenges } from "@/services/ctf.service";
 import { getSessionInfo } from "@/services/agent.service";
 import { formatDurationSec } from "@/utils/formatDuration";
+import { useFormatters, useTranslation } from "@/i18n/I18nProvider";
 
 function challengeStatusBadge(ch) {
   const raw = (ch.status || "pending").toLowerCase();
   const map = {
-    pending: { label: "Pending", tone: "pending" },
-    solving: { label: "Solving", tone: "solving" },
-    solved: { label: "Solved", tone: "solved" },
-    submitted: { label: "Submitted", tone: "submitted" },
+    pending: { labelKey: "chat.challengePending", tone: "pending" },
+    solving: { labelKey: "chat.challengeSolving", tone: "solving" },
+    solved: { labelKey: "chat.challengeSolved", tone: "solved" },
+    submitted: { labelKey: "chat.challengeSubmitted", tone: "submitted" },
   };
   return map[raw] || map.pending;
 }
 
 const SLASH_COMMANDS = [
-  { name: "summarize", description: "Summarize the entire session so far" },
-  { name: "status", description: "Show current engagement status" },
-  { name: "clear", description: "Clear the conversation context" },
-  { name: "help", description: "List all available slash commands" },
-  { name: "targets", description: "Extract and list all targets/IPs" },
-  { name: "export", description: "Export findings as a structured report" },
-  { name: "shells", description: "List all shell sessions" },
-  { name: "reset", description: "Reset agent state to idle" },
-  { name: "solve", description: "Focus on a CTF challenge" },
+  { name: "summarize", descriptionKey: "chat.slash.summarize" },
+  { name: "status", descriptionKey: "chat.slash.status" },
+  { name: "clear", descriptionKey: "chat.slash.clear" },
+  { name: "help", descriptionKey: "chat.slash.help" },
+  { name: "targets", descriptionKey: "chat.slash.targets" },
+  { name: "export", descriptionKey: "chat.slash.export" },
+  { name: "shells", descriptionKey: "chat.slash.shells" },
+  { name: "reset", descriptionKey: "chat.slash.reset" },
+  { name: "solve", descriptionKey: "chat.slash.solve" },
 ];
 
 export default function ChatInput({
@@ -42,6 +43,8 @@ export default function ChatInput({
 }) {
   const [value, setValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const { t } = useTranslation();
+  const { formatNumber } = useFormatters();
   const textareaRef = useRef(null);
   const menuRef = useRef(null);
 
@@ -251,14 +254,14 @@ export default function ChatInput({
 
   const statusLabel =
     agentState === "running"
-      ? "Agent is working..."
+      ? t("chat.statusWorking")
       : agentState === "paused"
-        ? "Agent paused"
+        ? t("chat.statusPaused")
         : agentState === "waiting_consent"
-          ? "Waiting for your approval"
+          ? t("chat.statusWaitingConsent")
           : agentState === "waiting_manual_execution"
-            ? "Waiting for command output"
-            : "Ready";
+            ? t("chat.statusWaitingManual")
+            : t("chat.statusReady");
 
   const isReady = !["running", "paused", "waiting_consent", "waiting_manual_execution"].includes(agentState);
 
@@ -294,7 +297,7 @@ export default function ChatInput({
           <button
             className={styles.attachmentDismiss}
             onClick={onDismissBurpAttachment}
-            title="Remove attachment"
+            title={t("chat.removeAttachmentTitle")}
           >
             <CloseOutlined style={{ fontSize: "0.6rem" }} />
           </button>
@@ -303,7 +306,7 @@ export default function ChatInput({
 
       {showChallengeMenu && (
         <div className={styles.slashMenu} ref={menuRef}>
-          <div className={styles.slashMenuHeader}>Challenges</div>
+          <div className={styles.slashMenuHeader}>{t("chat.challenges")}</div>
           {filteredChallenges.map((ch, i) => {
             const st = challengeStatusBadge(ch);
             return (
@@ -322,16 +325,20 @@ export default function ChatInput({
                     <span
                       className={`${styles.challengeStatusPill} ${styles[`challengeStatus_${st.tone}`]}`}
                     >
-                      {st.label}
+                      {t(st.labelKey)}
                     </span>
                   </div>
                   <span className={styles.slashMenuDesc}>
-                    {ch.category} &middot; {ch.value} pts
+                    {ch.category} &middot;{" "}
+                    {t("chat.challengePoints", { value: formatNumber(ch.value) })}
                     {ch.timeToSolveSec != null &&
                       (ch.status === "solved" || ch.status === "submitted") && (
                         <>
                           {" "}
-                          &middot; {formatDurationSec(ch.timeToSolveSec)} to flag
+                          &middot;{" "}
+                          {t("chat.challengeTimeToFlag", {
+                            duration: formatDurationSec(ch.timeToSolveSec),
+                          })}
                         </>
                       )}
                   </span>
@@ -344,7 +351,7 @@ export default function ChatInput({
 
       {showMenu && (
         <div className={styles.slashMenu} ref={menuRef}>
-          <div className={styles.slashMenuHeader}>Commands</div>
+          <div className={styles.slashMenuHeader}>{t("chat.commands")}</div>
           {slashMatches.map((cmd, i) => (
             <div
               key={cmd.name}
@@ -360,7 +367,7 @@ export default function ChatInput({
               }}
             >
               <span className={styles.slashMenuCmd}>/{cmd.name}</span>
-              <span className={styles.slashMenuDesc}>{cmd.description}</span>
+              <span className={styles.slashMenuDesc}>{t(cmd.descriptionKey)}</span>
             </div>
           ))}
         </div>
@@ -375,10 +382,10 @@ export default function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={
             isRunning
-              ? "Agent is working... click pause to interrupt"
+              ? t("chat.placeholderWorking")
               : burpAttachment
-                ? "Add instructions for this request, or press Enter to analyze..."
-                : "Describe your target or type / for commands..."
+                ? t("chat.placeholderAttachment")
+                : t("chat.placeholderDefault")
           }
           rows={1}
           disabled={isRunning}
@@ -389,14 +396,14 @@ export default function ChatInput({
               <button
                 className={styles.pauseButton}
                 onClick={onForceReset}
-                title="Force reset agent state (stuck agent)"
+                title={t("chat.forceResetTitle")}
               >
                 <ReloadOutlined />
               </button>
               <button
                 className={styles.pauseButton}
                 onClick={onPause}
-                title="Pause agent"
+                title={t("chat.pauseTitle")}
               >
                 <PauseCircleOutlined />
               </button>
@@ -406,7 +413,7 @@ export default function ChatInput({
               className={styles.sendButton}
               onClick={handleSend}
               disabled={!canSend}
-              title="Send message"
+              title={t("chat.sendTitle")}
             >
               <SendOutlined />
             </button>

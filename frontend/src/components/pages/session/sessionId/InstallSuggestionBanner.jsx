@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { DownloadOutlined, LoadingOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import styles from "@/styles/components/Chat.module.scss";
 import { installCapability } from "@/services/agent.service";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 export default function InstallSuggestionBanner({ suggestion, sessionId, onDismiss }) {
+  const { t } = useTranslation();
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -23,7 +25,7 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
         setErrorMessage(
           res.message ||
             res.output ||
-            `Installation exited with code ${res.exitCode ?? "unknown"}.`,
+            t("chat.install.exitCode", { code: res.exitCode ?? t("common.unknown") }),
         );
       }
     } catch (error) {
@@ -31,7 +33,7 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
       setErrorMessage(
         error?.response?.data?.message ||
           error?.message ||
-          "The installation request failed.",
+          t("chat.install.failedDefault"),
       );
     } finally {
       setInstalling(false);
@@ -45,11 +47,11 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
           <div className={styles.installHeader}>
             <div className={styles.installBadgeSuccess}>
               <CheckOutlined />
-              <span>Installed</span>
+              <span>{t("chat.install.badgeInstalled")}</span>
             </div>
             <div className={styles.installTitleGroup}>
               <div className={styles.installTitle}>
-                {suggestion.label} installed successfully
+                {t("chat.install.installed", { label: suggestion.label })}
               </div>
             </div>
           </div>
@@ -64,11 +66,11 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
         <div className={styles.installHeader}>
           <div className={styles.installBadge}>
             <DownloadOutlined />
-            <span>Missing Tool</span>
+            <span>{t("chat.install.badgeMissing")}</span>
           </div>
           <div className={styles.installTitleGroup}>
             <div className={styles.installTitle}>
-              {suggestion.label} is not installed
+              {t("chat.install.notInstalled", { label: suggestion.label })}
             </div>
             <div className={styles.installSubtitle}>
               {suggestion.size} &middot; {suggestion.installCommand}
@@ -81,7 +83,13 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
               disabled={installing}
             >
               {installing ? <LoadingOutlined spin /> : <DownloadOutlined />}
-              <span>{installing ? "Installing…" : result === "failed" ? "Retry" : "Install"}</span>
+              <span>
+                {installing
+                  ? t("chat.install.installing")
+                  : result === "failed"
+                    ? t("common.retry")
+                    : t("chat.install.install")}
+              </span>
             </button>
             <button
               className={styles.installDismissBtn}
@@ -89,13 +97,13 @@ export default function InstallSuggestionBanner({ suggestion, sessionId, onDismi
               disabled={installing}
             >
               <CloseOutlined />
-              <span>Dismiss</span>
+              <span>{t("chat.install.dismiss")}</span>
             </button>
           </div>
         </div>
         {result === "failed" && (
           <div className={styles.installError}>
-            <strong>Installation failed.</strong>
+            <strong>{t("chat.install.failedTitle")}</strong>
             <span>{errorMessage}</span>
           </div>
         )}

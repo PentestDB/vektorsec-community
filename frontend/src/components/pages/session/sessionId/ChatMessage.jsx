@@ -3,10 +3,13 @@ import { BulbOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import ReactMarkdown from "react-markdown";
 import styles from "@/styles/components/Chat.module.scss";
+import { useFormatters, useTranslation } from "@/i18n/I18nProvider";
 import ToolCallBlock from "./ToolCallBlock";
 
 function ReasoningBlock({ reasoning, isStreaming }) {
   const [collapsed, setCollapsed] = useState(false);
+  const { t } = useTranslation();
+  const { formatNumber } = useFormatters();
 
   useEffect(() => {
     if (!isStreaming && reasoning) {
@@ -23,11 +26,11 @@ function ReasoningBlock({ reasoning, isStreaming }) {
         onClick={() => setCollapsed(!collapsed)}
       >
         <BulbOutlined className={styles.reasoningIcon} />
-        <span className={styles.reasoningLabel}>Reasoning</span>
-        {isStreaming && <span className={styles.reasoningLive}>thinking...</span>}
+        <span className={styles.reasoningLabel}>{t("chat.reasoning")}</span>
+        {isStreaming && <span className={styles.reasoningLive}>{t("chat.reasoningThinking")}</span>}
         {!isStreaming && reasoning && (
           <span className={styles.reasoningMeta}>
-            {reasoning.length.toLocaleString()} chars
+            {t("chat.reasoningChars", { count: formatNumber(reasoning.length) })}
           </span>
         )}
         <span className={styles.reasoningChevron}>

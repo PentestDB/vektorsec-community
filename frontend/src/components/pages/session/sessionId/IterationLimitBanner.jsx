@@ -1,18 +1,19 @@
 import React from "react";
 import { CaretRightOutlined, StopOutlined } from "@ant-design/icons";
 import styles from "@/styles/components/Chat.module.scss";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 export default function IterationLimitBanner({ limit, onContinue, onStop }) {
+  const { t } = useTranslation();
   return (
     <div className={styles.iterationLimitBanner} role="status">
       <div className={styles.iterationLimitCopy}>
-        <div className={styles.iterationLimitEyebrow}>Turn limit reached</div>
+        <div className={styles.iterationLimitEyebrow}>{t("chat.iteration.eyebrow")}</div>
         <div className={styles.iterationLimitTitle}>
-          The agent completed {limit} agentic turns
+          {t("chat.iteration.title", { limit })}
         </div>
         <div className={styles.iterationLimitDescription}>
-          Keep the current context and continue for up to {limit} more turns,
-          or stop here. You can change this limit in Settings → Agent Behavior.
+          {t("chat.iteration.description", { limit })}
         </div>
       </div>
       <div className={styles.iterationLimitActions}>
@@ -22,7 +23,7 @@ export default function IterationLimitBanner({ limit, onContinue, onStop }) {
           onClick={onContinue}
         >
           <CaretRightOutlined />
-          <span>Continue {limit} turns</span>
+          <span>{t("chat.iteration.continue", { limit })}</span>
         </button>
         <button
           type="button"
@@ -30,7 +31,7 @@ export default function IterationLimitBanner({ limit, onContinue, onStop }) {
           onClick={onStop}
         >
           <StopOutlined />
-          <span>Stop here</span>
+          <span>{t("chat.iteration.stop")}</span>
         </button>
       </div>
     </div>
