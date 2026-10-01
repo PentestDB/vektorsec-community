@@ -126,20 +126,37 @@ Work completed in this round (each item has code evidence):
 | **Stale brand mentions fixed in passing** | The Mythic notes/setup guide said "Pentest Copilot" → now "VektorSec" |
 | **Remaining i18n inventory measured from the repo** | 97 `components/**/*.jsx` (25 wired — 23 screens/components + the provider and switcher — 72 to go) · 151 hardcoded English JSX text nodes in 41 files · 204 English props in 42 files · 159 toast strings in 33 files · 7 route files with server-side SEO `title`/`description` |
 
-> ⚠️ **Verification note**: on this dev machine `backend`/`frontend` `node_modules` are incomplete
-> and Docker is not running, so only dependency-free checks ran here (frontend `pnpm test` → 9/9
-> passing, plus YAML validation of the compose files and workflows). Backend checks and the full CI
-> suite will run automatically on GitHub once pushed.
+### Round 7
+
+| Item | Files / evidence |
+|---|---|
+| **Session chat translated end-to-end** | `ChatView`, `ChatMessage`, `ChatInput`, `ConsentBanner`, `IterationLimitBanner`, `InstallSuggestionBanner` — new `chat.*` section (~60 keys, nested `chat.slash.*`, `chat.consent.*`, `chat.iteration.*`, `chat.install.*`); dynamic values stay as placeholders (`{limit}`, `{count}`, `{label}`, `{value}`, `{duration}`) |
+| **Numbers inside the chat follow the app language** | `useFormatters().formatNumber` for the reasoning length and the CTF challenge points/`to flag`; `common.somethingWentWrong`, `common.retry`, `common.unknown` reused instead of new copies |
+| **The guard test also checks keys that hide in props** | `frontend/tests/i18nKeys.test.mjs` now scans `titleKey: "chat.consent.x"`-style props (keys that only reach `t()` later), and ConsentBanner's summary rules call `t()` directly so the existing scan covers them |
+| **Rounds 1–5 work committed in reviewable chunks** | 9 commits: brand assets + Ant Design v5 patch → agent tools panel + first frontend suite → workspace/chat/session pages → CI/community/compose/deploy → scan tools → plugin loader → runtime hardening (logger, redis split, rate limit, notifications, migrations) → reports/CSV/trials/workspaces → auth bootstrap |
+| **Local verification is green again** | backend `pnpm test` → **211 tests / 188 pass / 0 fail / 23 skipped**; frontend `pnpm test` → **33/33**; frontend `next build` → "Compiled successfully" |
+| **`pnpm test` no longer hangs** | `backend/package.json` runs the suite with `--test-timeout=60000 --test-force-exit`: the runner used to sit forever on open handles after the last assertion |
+| **Repo hygiene** | `repair-docs.js` (0 bytes) deleted; ~1.6 MB of raw brand JPEGs ignored in `.gitignore` while the vectors (`vektorsec-logo.svg`, `logo/gemini-svg.svg`) ship |
+| **Known limit of this slice** | The Burp/Caido request text the chat sends to the agent stays English on purpose: `ChatMessage.detectBurpMeta()` parses `Analyze and pentest …` / `Target:` back out of the transcript, so translating it would break the attachment preview |
+| **i18n inventory after this round** | 97 `.jsx` under `frontend/src` (31 wired — 25 + the 6 chat components — 66 to go) · 151 hardcoded text nodes in 41 files · 204 English props in 42 files · 159 toast strings in 33 files (unblocked by the non-React `translate()`) · 7 server-side SEO routes |
+
+> ✅ **Verification on this machine (September 2026)**: backend `pnpm test` → 211 tests / 188 pass /
+> 0 fail / 23 skipped (the skips need `MONGO_TEST_URI` or a POSIX shell); frontend `pnpm test` →
+> 33/33; frontend `next build --turbopack` → "Compiled successfully" and `Generating static pages (40/40)`.
+> Docker-based checks (compose build) still have to run in CI.
 
 ---
 
 ## 🔴 P0 — Close out work-in-progress / stop the bleeding (1–3 days)
 
-### 1. Commit the WIP in reviewable chunks
+### 1. ✅ Commit the WIP in reviewable chunks — done in this round
 The working tree currently holds uncommitted work: the scan tools (`nmap_scan`, `nuclei_scan`,
 `ffuf_fuzz`, `gobuster_fuzz`, `naabu_scan`), `tools/plugin.ts` (public plugin API),
 `utils/guardrails.ts`, `utils/scanOutput.ts`, `handlers/scan-guard.ts`, `backend/Dockerfile.dev`
 and `frontend/Dockerfile.dev`.
+
+**Status (Round 7): done** — nine scoped commits landed (see Round 7). The split below is the
+original plan, kept for reference.
 
 Suggested commits:
 
@@ -182,10 +199,17 @@ To do: make the panel **data-driven** from the `getSessionAgentToolsConfig` resp
 - `repair-docs.js` (0 bytes) → delete
 - `.zip` / `*.tar.gz` / `*.log` at the repo root → move them out of the repo directory
   (already ignored, but they waste disk and slow down IDE globbing)
+- **Status (Round 7): ✅** `repair-docs.js` is deleted from git and the ~1.6 MB of raw brand JPEGs
+  under `logo/` and `frontend/public/logo/` are ignored; only the vectors ship. The loose root
+  archives still deserve a cleanup pass.
 
-### 5. Make sure the dev checkout can actually run the tests
-On this machine `backend/node_modules` is incomplete (`tsx` is missing, so `pnpm test` dies with
-`Cannot find module .../tsx/dist/cli.mjs`). Run a fresh `pnpm install` first, then the rest of the suite.
+### 5. ✅ Make sure the dev checkout can actually run the tests — it does again
+On this machine `backend/node_modules` was incomplete (`tsx` was missing, so `pnpm test` died with
+`Cannot find module .../tsx/dist/cli.mjs`). After a fresh `pnpm install` the whole suite runs:
+`backend` → 211 tests / 188 pass / 0 fail / 23 skipped, `frontend` → 33/33.
+
+The runner also used to hang *after* the last assertion (open handles kept the process alive); the
+test script now passes `--test-timeout=60000 --test-force-exit` so `pnpm test` exits on its own.
 
 ---
 

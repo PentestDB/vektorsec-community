@@ -125,18 +125,36 @@
 | **แก้ชื่อแบรนด์ตกค้างที่เจอระหว่างทาง** | ข้อความ notes/คู่มือ Mythic เขียนว่า "Pentest Copilot" → เปลี่ยนเป็น "VektorSec" |
 | **สรุปงาน i18n ที่เหลือจากข้อมูลจริงใน repo** | `components/**/*.jsx` 97 ไฟล์ (ต่อแล้ว 25 — 23 หน้าจอ/คอมโพเนนต์ + provider และ switcher — เหลือ 72) · ข้อความอังกฤษ hardcode 151 จุดใน 41 ไฟล์ · prop อังกฤษ 204 จุดใน 42 ไฟล์ · ข้อความ toast 159 จุดใน 33 ไฟล์ · 7 route ที่มี SEO `title`/`description` ฝั่ง server |
 
-> ⚠️ **หมายเหตุการตรวจสอบ**: เครื่อง dev เครื่องนี้ `node_modules` ของ backend/frontend ไม่ครบ
-> และ Docker ยังไม่เปิด จึงรันได้เฉพาะเทสต์ที่ไม่พึ่ง dependency (ฝั่ง frontend `pnpm test` ผ่าน 9/9
-> และ node/`yaml` ตรวจไฟล์ compose+workflow ผ่าน) — ส่วน backend/CI จะถูกตรวจอัตโนมัติเมื่อ push ขึ้น GitHub
+### รอบที่ 7
+
+| งาน | ไฟล์ / หลักฐาน |
+|---|---|
+| **แปล session chat ครบทั้งชุด** | `ChatView`, `ChatMessage`, `ChatInput`, `ConsentBanner`, `IterationLimitBanner`, `InstallSuggestionBanner` — เพิ่ม section `chat.*` (~60 คีย์ ซ้อนเป็น `chat.slash.*`, `chat.consent.*`, `chat.iteration.*`, `chat.install.*`); ค่าที่เปลี่ยนตาม runtime ใช้ placeholder (`{limit}`, `{count}`, `{label}`, `{value}`, `{duration}`) |
+| **ตัวเลขในแชทใช้ภาษาของแอป** | ใช้ `useFormatters().formatNumber` กับความยาว reasoning และคะแนนโจทย์ CTF/`to flag`; ใช้ `common.somethingWentWrong`, `common.retry`, `common.unknown` ร่วมกันแทนการเพิ่มคีย์ซ้ำ |
+| **Guard test ตรวจคีย์ที่ซ่อนอยู่ในพร็อพด้วย** | `frontend/tests/i18nKeys.test.mjs` สแกนพร็อพแบบ `titleKey: "chat.consent.x"` เพิ่ม (คีย์ที่ถูกเรียกผ่าน `t()` ทีหลัง) และกฎสรุปของ ConsentBanner เรียก `t()` ตรง ๆ จึงครอบคลุมด้วยการสแกนเดิม |
+| **commit งานรอบ 1–5 เป็นชุดที่รีวิวได้** | 9 commit: แบรนด์ + แพตช์ Ant Design v5 → Agent Tools panel + ชุดเทสต์ frontend ชุดแรก → หน้า workspace/chat/session → CI/community/compose/deploy → เครื่องมือสแกน → plugin loader → runtime hardening (logger, แยก redis, rate limit, notification, migration) → report/CSV/trial/workspace → auth bootstrap |
+| **ผลตรวจสอบบนเครื่องนี้เขียวอีกครั้ง** | backend `pnpm test` → **211 tests / 188 pass / 0 fail / 23 skipped**; frontend `pnpm test` → **33/33**; frontend `next build` → "Compiled successfully" |
+| **`pnpm test` ไม่ค้างอีกแล้ว** | `backend/package.json` รัน suite ด้วย `--test-timeout=60000 --test-force-exit`: เดิมตัวรันค้างรอ open handle หลังเทสต์ตัวสุดท้ายจบ |
+| **ความสะอาดของ repo** | ลบ `repair-docs.js` (0 ไบต์); ignore ไฟล์ภาพ JPEG ต้นฉบับ ~1.6 MB ใน `.gitignore` แต่ยัง commit ไฟล์เวกเตอร์ (`vektorsec-logo.svg`, `logo/gemini-svg.svg`) |
+| **ข้อจำกัดของรอบนี้** | ข้อความคำขอ Burp/Caido ที่แชทส่งให้ agent ยังเป็นภาษาอังกฤษโดยตั้งใจ: `ChatMessage.detectBurpMeta()` อ่าน `Analyze and pentest …` / `Target:` กลับจากบทสนทนา ถ้าแปลจะทำให้พรีวิวไฟล์แนบพัง |
+| **สถานะ i18n หลังรอบนี้** | `frontend/src` มี `.jsx` 97 ไฟล์ (ต่อ i18n แล้ว 31 — 25 + คอมโพเนนต์แชท 6 ตัว — เหลือ 66) · ข้อความ hardcode 151 จุดใน 41 ไฟล์ · prop อังกฤษ 204 จุดใน 42 ไฟล์ · ข้อความ toast 159 จุดใน 33 ไฟล์ (ปลดล็อกแล้วด้วย `translate()` ที่ใช้นอก React ได้) · 7 route ที่มี SEO title/description ฝั่ง server |
+
+> ✅ **ผลตรวจสอบบนเครื่องนี้ (กันยายน 2026)**: backend `pnpm test` → 211 tests / 188 pass / 0 fail /
+> 23 skipped (ที่ skip ต้องมี `MONGO_TEST_URI` หรือ POSIX shell); frontend `pnpm test` → 33/33;
+> frontend `next build --turbopack` → "Compiled successfully" และ `Generating static pages (40/40)`
+> ส่วนการตรวจด้วย Docker (compose build) ยังต้องรันใน CI
 
 ---
 
 ## 🔴 P0 — ปิดงานค้าง / กันพัง (1–3 วัน)
 
-### 1. Commit งาน WIP ให้เป็นชุดที่รีวิวได้
+### 1. ✅ Commit งาน WIP ให้เป็นชุดที่รีวิวได้ — ทำเสร็จในรอบนี้
 working tree ตอนนี้มีงานใหม่ที่ยังไม่เข้า git: เครื่องมือสแกน (`nmap_scan`, `nuclei_scan`, `ffuf_fuzz`,
 `gobuster_fuzz`, `naabu_scan`), `tools/plugin.ts` (public plugin API), `utils/guardrails.ts`,
 `utils/scanOutput.ts`, `handlers/scan-guard.ts`, `backend/Dockerfile.dev`, `frontend/Dockerfile.dev`
+
+**สถานะ (รอบที่ 7): ทำเสร็จแล้ว** — commit 9 ชุด (ดูรอบที่ 7) ส่วนการแบ่ง commit ด้านล่างเป็นแผนเดิม
+เก็บไว้เป็นข้อมูลอ้างอิง
 
 แนะนำแบ่ง commit:
 
@@ -175,10 +193,17 @@ git commit -m "chore(dev): dev-mode Dockerfiles and brand assets"
 ### 4. ลบ/ย้ายของที่ไม่ควรอยู่ใน git
 - `repair-docs.js` (0 byte) → ลบ
 - `.zip` / `*.tar.gz` / `*.log` ที่ root → ย้ายออกจาก repo dir (ถูก ignore แล้วแต่กินดิสก์ + ทำให้ IDE ช้า)
+- **สถานะ (รอบที่ 7): ✅** ลบ `repair-docs.js` ออกจาก git แล้ว และ ignore ไฟล์ภาพ JPEG ต้นฉบับ
+  ~1.6 MB ใต้ `logo/` และ `frontend/public/logo/` — commit เฉพาะไฟล์เวกเตอร์ ส่วนไฟล์ archive ที่ราก
+  repo ยังควรเก็บกวาดอีกรอบ
 
-### 5. ตรวจว่าเครื่อง dev รัน test ได้จริง
+### 5. ✅ ตรวจว่าเครื่อง dev รัน test ได้จริง — รันได้แล้ว
 เครื่องปัจจุบัน `backend/node_modules` ไม่ครบ (`tsx` หาย → `pnpm test` ล้มด้วย
-`Cannot find module .../tsx/dist/cli.mjs`) ต้อง `pnpm install` ใหม่ก่อนแล้วจึงรันชุดที่เหลือ
+`Cannot find module .../tsx/dist/cli.mjs`) ต้อง `pnpm install` ใหม่ก่อนแล้วจึงรันชุดที่เหลือ — ตอนนี้รันผ่านครบ:
+`backend` → 211 tests / 188 pass / 0 fail / 23 skipped, `frontend` → 33/33
+
+ตัวรันยังค้าง *หลัง* เทสต์ตัวสุดท้ายจบด้วย (open handle ทำให้โปรเซสไม่ยอมจบ) สคริปต์เทสต์จึงส่ง
+`--test-timeout=60000 --test-force-exit` ให้ `pnpm test` ออกเองได้
 
 ---
 
