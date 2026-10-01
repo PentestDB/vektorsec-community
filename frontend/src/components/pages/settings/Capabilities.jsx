@@ -35,6 +35,7 @@ import {
 } from "react-icons/hi2";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const BUCKET_ICONS = {
   core: HiOutlineCog6Tooth,
@@ -50,6 +51,7 @@ const BUCKET_ICONS = {
 const BUCKET_ICON_FALLBACK = HiOutlineCube;
 
 const CapabilityItem = ({ cap, checked, installed, onChange }) => {
+  const { t } = useTranslation();
   return (
     <div className={styles.capabilityItem}>
       <div className={styles.capLeft}>
@@ -64,12 +66,12 @@ const CapabilityItem = ({ cap, checked, installed, onChange }) => {
               {cap.type === "binary" ? "CLI" : "Python"}
             </Tag>
             {installed && (
-              <Tooltip title="Installed on exploit box">
+              <Tooltip title={t("capabilities.installedTooltip")}>
                 <MdOutlineCheckCircle className={styles.installedIcon} />
               </Tooltip>
             )}
             {!installed && checked && (
-              <Tooltip title="Not detected on exploit box">
+              <Tooltip title={t("capabilities.notInstalledTooltip")}>
                 <MdOutlineRadioButtonUnchecked className={styles.notInstalledIcon} />
               </Tooltip>
             )}
@@ -86,6 +88,7 @@ const CapabilityItem = ({ cap, checked, installed, onChange }) => {
 };
 
 const CapabilitiesPage = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [detecting, setDetecting] = useState(false);
@@ -95,11 +98,11 @@ const CapabilitiesPage = () => {
 
   const updateMutation = useMutation(updateCapabilities, {
     onSuccess: () => {
-      message.success("Capabilities updated");
+      message.success(t("capabilities.updated"));
       queryClient.invalidateQueries("capabilities");
     },
     onError: () => {
-      message.error("Failed to update capabilities");
+      message.error(t("capabilities.updateFailed"));
     },
   });
 
@@ -107,12 +110,14 @@ const CapabilitiesPage = () => {
     onSuccess: (result) => {
       setDetecting(false);
       const installed = result?.installedCapabilities ?? [];
-      message.success(`Detection complete: ${installed.length} capabilities found`);
+      message.success(
+        t("capabilities.detectionComplete", { count: installed.length }),
+      );
       queryClient.invalidateQueries("capabilities");
     },
     onError: () => {
       setDetecting(false);
-      message.error("Detection failed. Ensure SSH/Exploit Box is connected.");
+      message.error(t("capabilities.detectionFailed"));
     },
   });
 
@@ -212,10 +217,14 @@ const CapabilitiesPage = () => {
             </span>
             <span>{bucket.label}</span>
             <span className={styles.bucketCount}>
-              {selectedCount}/{filteredCaps.length} selected
+              {t("capabilities.bucketSelected", {
+                selected: selectedCount,
+                total: filteredCaps.length,
+              })}
               {installedCount > 0 && (
                 <span className={styles.installedCount}>
-                  {" "}· {installedCount} installed
+                  {" "}
+                  {t("capabilities.installedSuffix", { count: installedCount })}
                 </span>
               )}
             </span>
@@ -227,7 +236,9 @@ const CapabilitiesPage = () => {
               handleSelectBucket(filteredCaps, !allSelected);
             }}
           >
-            {allSelected ? "Deselect All" : "Select All"}
+            {allSelected
+              ? t("capabilities.deselectAll")
+              : t("capabilities.selectAll")}
           </div>
         </div>
       ),
@@ -255,7 +266,7 @@ const CapabilitiesPage = () => {
       <div className={styles.topBar}>
         <div className={styles.searchWrapper}>
           <Input
-            placeholder="Search capabilities..."
+            placeholder={t("capabilities.searchPlaceholder")}
             prefix={<HiOutlineMagnifyingGlass className={styles.searchIcon} />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -264,9 +275,13 @@ const CapabilitiesPage = () => {
           />
         </div>
         <div className={styles.stats}>
-          <span>{selectedSet.size} capabilities selected</span>
+          <span>
+            {t("capabilities.selectedCount", { count: selectedSet.size })}
+          </span>
           <span className={styles.statDivider}>·</span>
-          <span>{installedSet.size} installed</span>
+          <span>
+            {t("capabilities.installedCount", { count: installedSet.size })}
+          </span>
         </div>
         <Button
           type="primary"
@@ -275,7 +290,9 @@ const CapabilitiesPage = () => {
           loading={detecting}
           className={styles.detectBtn}
         >
-          {detecting ? "Detecting..." : "Detect Installed"}
+          {detecting
+            ? t("capabilities.detecting")
+            : t("capabilities.detectInstalled")}
         </Button>
       </div>
       <Collapse

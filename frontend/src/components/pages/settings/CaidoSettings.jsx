@@ -10,22 +10,12 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
 import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCaidoConfig, updateCaidoConfig } from "@/services/user.service";
 import { getCaidoConnectionStatus } from "@/services/caido.service";
-
-/**
- * Render `backticked` spans of a translated string as inline <code> elements,
- * so translators keep the command names inside the sentence they translate.
- */
-const renderWithCode = (text) =>
-  text
-    .split("`")
-    .map((part, index) =>
-      index % 2 === 1 ? <code key={index}>{part}</code> : part,
-    );
 
 const CaidoSettingsPage = () => {
   const { t } = useTranslation();
@@ -58,7 +48,7 @@ const CaidoSettingsPage = () => {
     },
     onError: (err) => {
       message.error(
-        err?.response?.data?.message || t("caidoSettings.saveFailed"),
+        err?.response?.data?.message || t("common.saveConfigurationFailed"),
       );
       setSaving(false);
     },
@@ -84,14 +74,14 @@ const CaidoSettingsPage = () => {
         message: result.connected
           ? result.viewer?.id
             ? t("caidoSettings.connectedAs", { id: result.viewer.id })
-            : t("caidoSettings.connected")
-          : result.message || t("caidoSettings.connectionFailed"),
+            : t("common.connected")
+          : result.message || t("common.connectionFailed"),
       });
     } catch (err) {
       setTestResult({
         success: false,
         message:
-          err?.response?.data?.message || t("caidoSettings.connectionFailed"),
+          err?.response?.data?.message || t("common.connectionFailed"),
       });
     } finally {
       setTesting(false);
@@ -107,11 +97,11 @@ const CaidoSettingsPage = () => {
       <div className={styles.statusRow}>
         {configured ? (
           <Tag icon={<CheckCircleFilled />} color="success">
-            {t("caidoSettings.configured")}
+            {t("common.configured")}
           </Tag>
         ) : (
           <Tag icon={<WarningOutlined />} color="warning">
-            {t("caidoSettings.notConfigured")}
+            {t("common.notConfigured")}
           </Tag>
         )}
         {data?.patConfigured && (
@@ -127,7 +117,7 @@ const CaidoSettingsPage = () => {
             loading={testing}
             onClick={handleTestConnection}
           >
-            {t("caidoSettings.testConnection")}
+            {t("common.testConnection")}
           </Button>
         )}
       </div>
@@ -161,9 +151,9 @@ const CaidoSettingsPage = () => {
         }}
       >
         <Form.Item
-          label={t("caidoSettings.urlLabel")}
+          label={t("common.urlLabel")}
           name="url"
-          rules={[{ required: true, message: t("caidoSettings.urlRequired") }]}
+          rules={[{ required: true, message: t("common.urlRequired") }]}
         >
           <Input placeholder="http://192.168.160.1:8096" />
         </Form.Item>
@@ -200,7 +190,7 @@ const CaidoSettingsPage = () => {
             purpleFilled
             style={{ height: "2rem", fontSize: "0.75rem" }}
           >
-            {t("caidoSettings.saveConfig")}
+            {t("common.saveConfiguration")}
           </PrimaryButton>
         </div>
       </Form>
@@ -218,20 +208,20 @@ const CaidoSettingsPage = () => {
           color: "var(--primary-text)",
           marginBottom: "0.75rem",
         }}>
-          {t("caidoSettings.setupGuide")}
+          {t("common.setupGuide")}
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)", lineHeight: 1.7 }}>
           <div style={{ marginBottom: "0.6rem" }}>
             <strong>{t("caidoSettings.guideWslTitle")}</strong>{" "}
-            {renderWithCode(t("caidoSettings.guideWsl"))}
+            <RichText text={t("caidoSettings.guideWsl")} />
           </div>
           <div style={{ marginBottom: "0.6rem" }}>
             <strong>{t("caidoSettings.guideServerTitle")}</strong>{" "}
-            {renderWithCode(t("caidoSettings.guideServer"))}
+            <RichText text={t("caidoSettings.guideServer")} />
           </div>
           <div>
             <strong>{t("caidoSettings.guideHeadlessTitle")}</strong>{" "}
-            {renderWithCode(t("caidoSettings.guideHeadless"))}
+            <RichText text={t("caidoSettings.guideHeadless")} />
           </div>
         </div>
       </div>

@@ -10,6 +10,8 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
@@ -19,6 +21,7 @@ import {
 } from "@/services/mythic.service";
 
 const MythicSettingsPage = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("mythic-config", getMythicConfig);
@@ -40,14 +43,16 @@ const MythicSettingsPage = () => {
 
   const saveMutation = useMutation(updateMythicConfig, {
     onSuccess: () => {
-      message.success("Mythic configuration saved");
+      message.success(t("mythicSettings.saved"));
       queryClient.invalidateQueries("mythic-config");
       queryClient.invalidateQueries("mythic-connection-status");
       setSaving(false);
       form.setFieldsValue({ token: "" });
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save configuration");
+      message.error(
+        err?.response?.data?.message || t("common.saveConfigurationFailed"),
+      );
       setSaving(false);
     },
   });
@@ -72,14 +77,23 @@ const MythicSettingsPage = () => {
       setTestResult({
         success: result.connected,
         message: result.connected
-          ? `Connected${result.operation ? ` to operation "${result.operation}"` : ""} — ` +
-            `${result.callbackCount ?? 0} callback(s) visible`
-          : result.error || "Connection failed",
+          ? t("mythicSettings.testSuccess", {
+              status: result.operation
+                ? t("mythicSettings.connectedToOperation", {
+                    operation: result.operation,
+                  })
+                : t("common.connected"),
+              callbacks: t("mythicSettings.callbacksVisible", {
+                count: result.callbackCount ?? 0,
+              }),
+            })
+          : result.error || t("common.connectionFailed"),
       });
     } catch (err) {
       setTestResult({
         success: false,
-        message: err?.response?.data?.message || "Connection failed",
+        message:
+          err?.response?.data?.message || t("common.connectionFailed"),
       });
     } finally {
       setTesting(false);
@@ -94,11 +108,19 @@ const MythicSettingsPage = () => {
     <div className={styles.settingsContainer}>
       <div className={styles.statusRow}>
         {configured ? (
-          <Tag icon={<CheckCircleFilled />} color="success">Configured</Tag>
+          <Tag icon={<CheckCircleFilled />} color="success">
+            {t("common.configured")}
+          </Tag>
         ) : (
-          <Tag icon={<WarningOutlined />} color="warning">Not Configured</Tag>
+          <Tag icon={<WarningOutlined />} color="warning">
+            {t("common.notConfigured")}
+          </Tag>
         )}
-        {data?.tokenConfigured && <Tag icon={<KeyOutlined />} color="blue">Token Saved</Tag>}
+        {data?.tokenConfigured && (
+          <Tag icon={<KeyOutlined />} color="blue">
+            {t("mythicSettings.tokenSaved")}
+          </Tag>
+        )}
         {configured && (
           <Button
             type="default"
@@ -107,7 +129,7 @@ const MythicSettingsPage = () => {
             loading={testing}
             onClick={handleTestConnection}
           >
-            Test Connection
+            {t("common.testConnection")}
           </Button>
         )}
       </div>
@@ -141,24 +163,28 @@ const MythicSettingsPage = () => {
         }}
       >
         <Form.Item
-          label="Mythic Server URL"
+          label={t("mythicSettings.urlLabel")}
           name="url"
-          rules={[{ required: true, message: "URL is required" }]}
+          rules={[{ required: true, message: t("common.urlRequired") }]}
         >
           <Input placeholder="https://10.0.0.5:7443" />
         </Form.Item>
 
-        <Form.Item label="API Token" name="token">
+        <Form.Item label={t("mythicSettings.tokenLabel")} name="token">
           <Input.Password
-            placeholder={data?.tokenConfigured ? "Leave blank to keep existing token" : "mtk_..."}
+            placeholder={
+              data?.tokenConfigured
+                ? t("mythicSettings.tokenPlaceholderKeep")
+                : "mtk_..."
+            }
           />
         </Form.Item>
 
         <Form.Item
-          label="Allow self-signed certificate"
+          label={t("mythicSettings.insecureTlsLabel")}
           name="insecureTls"
           valuePropName="checked"
-          extra="Mythic ships a self-signed certificate by default. Enabling this disables certificate verification for requests to this server only — leave it off if you have given Mythic a trusted certificate."
+          extra={t("mythicSettings.insecureTlsHelp")}
         >
           <Switch />
         </Form.Item>
@@ -170,7 +196,7 @@ const MythicSettingsPage = () => {
             purpleFilled
             style={{ height: "2rem", fontSize: "0.75rem" }}
           >
-            Save Configuration
+            {t("common.saveConfiguration")}
           </PrimaryButton>
         </div>
       </Form>
@@ -188,47 +214,33 @@ const MythicSettingsPage = () => {
           color: "var(--primary-text)",
           marginBottom: "0.75rem",
         }}>
-          Setup Guide
+          {t("common.setupGuide")}
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)", lineHeight: 1.7 }}>
           <div style={{ marginBottom: "0.6rem" }}>
-            <strong>1. Start Mythic:</strong> on your C2 host, run{" "}
-            <code>sudo ./mythic-cli start</code>. The UI and GraphQL API listen on{" "}
-            <code>7443</code> by default.
+            <strong>{t("mythicSettings.guideStartTitle")}</strong>{" "}
+            <RichText text={t("mythicSettings.guideStart")} />
           </div>
           <div style={{ marginBottom: "0.6rem" }}>
-            <strong>2. Create an API token:</strong> in the Mythic UI go to{" "}
-            <strong>Operations → API Tokens</strong> and create one. Scope it to the
-            minimum you need — read-only is enough if you only want visibility; the
-            tasking, payload and pivot tools need write access.
+            <strong>{t("mythicSettings.guideTokenTitle")}</strong>{" "}
+            <RichText text={t("mythicSettings.guideToken")} />
           </div>
           <div style={{ marginBottom: "0.6rem" }}>
-            <strong>3. Reachability:</strong> Mythic binds its ports to{" "}
-            <code>127.0.0.1</code> by default. Pentest Copilot must be able to reach{" "}
-            the URL above, and — separately — your work host must be able to reach any{" "}
-            SOCKS port you open, since those listeners bind on the Mythic server rather
-            than on the work host.
+            <strong>{t("mythicSettings.guideReachTitle")}</strong>{" "}
+            <RichText text={t("mythicSettings.guideReach")} />
           </div>
           <div>
-            <strong>4. Verify the schema:</strong> Mythic&apos;s GraphQL schema varies by
-            version and installed agents. If a tool reports a schema error, run{" "}
-            <code>pnpm mythic:introspect</code> in the backend to dump what your server
-            actually exposes.
+            <strong>{t("mythicSettings.guideSchemaTitle")}</strong>{" "}
+            <RichText text={t("mythicSettings.guideSchema")} />
           </div>
         </div>
       </div>
 
       <div className={styles.notesSection} style={{ marginTop: "1rem" }}>
         <ul>
-          <li>
-            All C2 data — callbacks, tasks, payloads, files and credentials — stays in
-            Mythic. Pentest Copilot stores only this connection config.
-          </li>
-          <li>
-            Tasking an implant, opening a pivot, building a payload and uploading to a
-            target all require your explicit approval before they run.
-          </li>
-          <li>Manage live callbacks from the Mythic C2 tab inside a session.</li>
+          <li>{t("mythicSettings.notesData")}</li>
+          <li>{t("mythicSettings.notesApproval")}</li>
+          <li>{t("mythicSettings.notesCallbacks")}</li>
         </ul>
       </div>
     </div>
