@@ -237,7 +237,7 @@ const BurpSettingsPage = () => {
             <Form.Item
               label={t("burpSettings.hostLabel")}
               name="host"
-              rules={[{ required: true, message: t("burpSettings.hostRequired") }]}
+              rules={[{ required: true, message: t("common.hostRequired") }]}
             >
               <Input placeholder="e.g. 10.69.0.4 or localhost" />
             </Form.Item>

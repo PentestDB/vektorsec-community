@@ -313,8 +313,6 @@ export default {
     "patPlaceholderKeep": "เว้นว่างไว้เพื่อใช้ PAT เดิม",
     "proxyUrlLabel": "Proxy URL",
     "proxyUrlPlaceholder": "ใช้ค่าเดียวกับ URL",
-    "saveConfig": "บันทึกการตั้งค่า",
-    "setupGuide": "คู่มือการตั้งค่า",
     "guideWslTitle": "WSL:",
     "guideWsl": "ตั้งค่า instance ให้รับฟังบน `0.0.0.0:8096` อนุญาต `caido-cli` ผ่าน Windows Firewall แล้วใช้ IP gateway ของ WSL ในช่อง URL ด้านบน ดู gateway ได้ด้วย `ip route show | grep -i default | awk '{ print $3 }'`",
     "guideServerTitle": "เซิร์ฟเวอร์ / ไม่ใช่ localhost:",
