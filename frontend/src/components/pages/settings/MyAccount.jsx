@@ -18,8 +18,10 @@ import { updateUserProfile } from "@/services/user.service";
 import { setup2FA, verify2FA, disable2FA } from "@/services/auth.service";
 import { useMutation, useQueryClient } from "react-query";
 import { update } from "@/store/user.slice";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const MyAccount = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.user);
@@ -33,11 +35,13 @@ const MyAccount = () => {
 
   const updateUserProfileMutation = useMutation(updateUserProfile, {
     onSuccess: async () => {
-      message.success("Profile updated");
+      message.success(t("myAccount.profileUpdated"));
       await queryClient.invalidateQueries("check-session");
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message ?? "Failed to update profile");
+      message.error(
+        err?.response?.data?.message ?? t("myAccount.profileUpdateFailed"),
+      );
     },
   });
 
@@ -55,14 +59,12 @@ const MyAccount = () => {
   const setupMutation = useMutation(setup2FA, {
     onSuccess: (data) => setSetupData(data),
     onError: (err) =>
-      message.error(
-        err?.response?.data?.message ?? "Failed to start 2FA setup"
-      ),
+      message.error(err?.response?.data?.message ?? t("myAccount.setupFailed")),
   });
 
   const verifyMutation = useMutation(verify2FA, {
     onSuccess: async () => {
-      message.success("Two-factor authentication enabled");
+      message.success(t("myAccount.enabled"));
       setTwoFactorEnabled(true);
       setSetupData(null);
       setCode("");
@@ -70,52 +72,51 @@ const MyAccount = () => {
       await queryClient.invalidateQueries("check-session");
     },
     onError: (err) =>
-      message.error(
-        err?.response?.data?.message ?? "Invalid code, please try again"
-      ),
+      message.error(err?.response?.data?.message ?? t("myAccount.invalidCode")),
   });
 
   const disableMutation = useMutation(disable2FA, {
     onSuccess: async () => {
-      message.success("Two-factor authentication disabled");
+      message.success(t("myAccount.disabled"));
       setTwoFactorEnabled(false);
       dispatch(update({ twoFactorEnabled: false }));
       await queryClient.invalidateQueries("check-session");
     },
     onError: (err) =>
       message.error(
-        err?.response?.data?.message ?? "Failed to disable two-factor"
+        err?.response?.data?.message ?? t("myAccount.disableFailed"),
       ),
   });
 
   return (
     <div className={styles.settingsContainer}>
-      <Form onValuesChange={handleUpdateName} layout="vertical">
+      <Form
+        initialValues={{ name: user.name }}
+        onValuesChange={handleUpdateName}
+        layout="vertical"
+      >
         <Form.Item
-          label="Name"
+          label={t("myAccount.name")}
           name="name"
           rules={[
-            { required: true, message: "Please enter your name" },
-            { min: 3, message: "Name must be minimum 3 characters." },
-            { max: 30, message: "Name must be maximum 30 characters." },
+            { required: true, message: t("myAccount.nameRequired") },
+            { min: 3, message: t("myAccount.nameMin") },
+            { max: 30, message: t("myAccount.nameMax") },
           ]}
         >
-          <Input defaultValue={user.name} />
+          <Input />
         </Form.Item>
       </Form>
 
       <div className={styles.fieldGroup}>
-        <label className={styles.fieldLabel}>Email</label>
+        <label className={styles.fieldLabel}>{t("myAccount.email")}</label>
         <div className={styles.fieldValue}>{user.email}</div>
       </div>
 
       <div className={styles.fieldGroup} style={{ marginTop: 28 }}>
-        <label className={styles.fieldLabel}>
-          Two-Factor Authentication
-        </label>
+        <label className={styles.fieldLabel}>{t("myAccount.twoFactor")}</label>
         <div className={styles.fieldValue} style={{ marginTop: 4 }}>
-          Add an extra layer of security to your account using Google
-          Authenticator, Authy, or any other TOTP-compatible app.
+          {t("myAccount.twoFactorDescription")}
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -124,19 +125,19 @@ const MyAccount = () => {
               <Alert
                 type="success"
                 showIcon
-                message="Two-factor authentication is enabled"
-                description="You will be asked for a 6-digit code every time you sign in."
+                message={t("myAccount.enabledTitle")}
+                description={t("myAccount.enabledDescription")}
               />
               <Popconfirm
-                title="Disable two-factor authentication?"
-                description="Your account will lose this extra layer of security."
-                okText="Yes, disable"
+                title={t("myAccount.disableTitle")}
+                description={t("myAccount.disableDescription")}
+                okText={t("myAccount.disableOk")}
                 okButtonProps={{ danger: true }}
-                cancelText="Cancel"
+                cancelText={t("common.cancel")}
                 onConfirm={() => disableMutation.mutate()}
               >
                 <Button danger loading={disableMutation.isLoading}>
-                  Disable 2FA
+                  {t("myAccount.disableButton")}
                 </Button>
               </Popconfirm>
             </Space>
@@ -145,13 +146,13 @@ const MyAccount = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Scan the QR code with your authenticator app"
-                description="Then enter the 6-digit code below to activate two-factor authentication."
+                message={t("myAccount.scanTitle")}
+                description={t("myAccount.scanDescription")}
               />
               <QRCode value={setupData.otpAuthUri} size={180} />
               <div>
                 <div style={{ fontSize: 13, color: "#8c8c8c", marginBottom: 4 }}>
-                  Or enter this secret manually:
+                  {t("myAccount.manualSecret")}
                 </div>
                 <Input.TextArea
                   value={setupData.secret}
@@ -176,7 +177,7 @@ const MyAccount = () => {
                   disabled={code.length !== 6}
                   onClick={() => verifyMutation.mutate({ code })}
                 >
-                  Verify &amp; Enable
+                  {t("myAccount.verifyEnable")}
                 </Button>
               </Space.Compact>
             </Space>
@@ -186,7 +187,7 @@ const MyAccount = () => {
               loading={setupMutation.isLoading}
               onClick={() => setupMutation.mutate()}
             >
-              Enable 2FA
+              {t("myAccount.enableButton")}
             </Button>
           )}
         </div>

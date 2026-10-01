@@ -10,9 +10,11 @@ import {
   getAgentBehaviorConfig,
   updateAgentBehaviorConfig,
 } from "@/services/user.service";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 
 export default function AgentBehaviorPage() {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
@@ -31,7 +33,7 @@ export default function AgentBehaviorPage() {
 
   const mutation = useMutation(updateAgentBehaviorConfig, {
     onSuccess: (result) => {
-      message.success("Agent behavior updated");
+      message.success(t("agentBehavior.updated"));
       form.setFieldsValue({
         maxAgentIterations: result.maxAgentIterations,
       });
@@ -39,7 +41,7 @@ export default function AgentBehaviorPage() {
     },
     onError: (error) => {
       message.error(
-        error?.response?.data?.message || "Failed to update agent behavior",
+        error?.response?.data?.message || t("agentBehavior.updateFailed"),
       );
     },
   });
@@ -53,20 +55,17 @@ export default function AgentBehaviorPage() {
     <div className={styles.settingsContainer}>
       <div className={styles.infoBox}>
         <InfoCircleOutlined />
-        <span>
-          This limit applies to each orchestrator run. When it is reached, the
-          session pauses cleanly and lets you continue for another block of
-          turns or stop there.
-        </span>
+        <span>{t("agentBehavior.info")}</span>
       </div>
 
       <div className={styles.mcpPanel}>
         <div className={styles.mcpPanelHeader}>
           <div>
-            <div className={styles.mcpPanelTitle}>Agentic turn limit</div>
+            <div className={styles.mcpPanelTitle}>
+              {t("agentBehavior.title")}
+            </div>
             <div className={styles.mcpPanelDescription}>
-              Maximum model/tool cycles before VektorSec asks whether to
-              continue. Higher values can consume more subscription usage.
+              {t("agentBehavior.description")}
             </div>
           </div>
         </div>
@@ -77,15 +76,15 @@ export default function AgentBehaviorPage() {
           onFinish={(values) => mutation.mutate(values)}
         >
           <Form.Item
-            label="Maximum agentic turns"
+            label={t("agentBehavior.fieldLabel")}
             name="maxAgentIterations"
             rules={[
-              { required: true, message: "Enter a turn limit" },
+              { required: true, message: t("agentBehavior.fieldRequired") },
               {
                 type: "number",
                 min,
                 max,
-                message: `Choose a value from ${min} to ${max}`,
+                message: t("agentBehavior.fieldRange", { min, max }),
               },
             ]}
           >
@@ -97,7 +96,7 @@ export default function AgentBehaviorPage() {
             htmlType="submit"
             loading={mutation.isLoading}
           >
-            Save agent settings
+            {t("agentBehavior.submit")}
           </PrimaryButton>
         </Form>
       </div>
