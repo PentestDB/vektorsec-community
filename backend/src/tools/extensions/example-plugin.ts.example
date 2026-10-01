@@ -1,0 +1,76 @@
+/**
+ * EXAMPLE plugin — copy this file to `my-plugin.ts` (same folder) and it is
+ * auto-loaded at startup by `backend/src/tools/plugin-loader.ts`:
+ *
+ *   1. cp example-plugin.ts.example my-plugin.ts
+ *   2. edit the tool below
+ *   3. restart the backend — the tool appears in the Agent Tools panel and is
+ *      callable by the orchestrator (and MCP, if you expose it there)
+ *
+ * The `.example` suffix keeps this template out of the auto-loader; remove it
+ * (or copy the file, as above) to activate a plugin.
+ *
+ * `register()` is the only required export. Both of these work:
+ *   export function register() { … }        // named export (used here)
+ *   export default { register }             // default object
+ *
+ * The tool list itself lives in the shared registry, so nothing else in the
+ * codebase has to change.
+ */
+
+import { defineTool, registerTool, unregisterTool, isToolRegistered } from "../plugin";
+import type { ExecutionContext } from "../types";
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+const customWhoisTool = defineTool({
+  name: "example_whois_lite",
+  allowedRoles: ["orchestrator", "swarm_agent"],
+  description:
+    "EXAMPLE PLUGIN: performs a lightweight whois-style domain summary. Replace with your real extension.",
+  parameters: {
+    type: "object",
+    properties: {
+      domain: { type: "string", description: "Domain to look up (must be in scope)" },
+    },
+    required: ["domain"],
+  },
+  timeoutMs: 20_000,
+  async execute(args: Record<string, any>, ctx: ExecutionContext) {
+    const { domain } = args;
+    // Plugins receive the full ExecutionContext, so scope/SSRF guards and
+    // shell access are all available:
+    //   const blocked = await guardScanTarget(ctx, domain);
+    await wait(10);
+    return {
+      output: JSON.stringify(
+        {
+          plugin: "example_whois_lite",
+          domain,
+          note: "Replace this with a real whois/rdap implementation.",
+          ctxSessionId: ctx.sessionId,
+        },
+        null,
+        2,
+      ),
+      exitCode: 0,
+    };
+  },
+});
+
+/**
+ * Entry point called by the plugin loader. Idempotent, so a hot-reload style
+ * re-registration (or the tests) can call it more than once.
+ */
+export function register(): boolean {
+  if (isToolRegistered(customWhoisTool.name)) return false;
+  registerTool(customWhoisTool);
+  return true;
+}
+
+/** Optional: allow operators to disable the plugin through a flag. */
+export function unregister(): boolean {
+  return unregisterTool(customWhoisTool.name);
+}
