@@ -85,6 +85,12 @@ export function useFormatters() {
       locale,
       formatNumber: (value, options) => formatNumber(value, locale, options),
       formatDate: (value, options) => formatDate(value, locale, options),
+      formatDateTime: (value, options) =>
+        formatDate(value, locale, {
+          dateStyle: "medium",
+          timeStyle: "short",
+          ...options,
+        }),
     }),
     [locale],
   );

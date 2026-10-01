@@ -10,12 +10,25 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCaidoConfig, updateCaidoConfig } from "@/services/user.service";
 import { getCaidoConnectionStatus } from "@/services/caido.service";
 
+/**
+ * Render `backticked` spans of a translated string as inline <code> elements,
+ * so translators keep the command names inside the sentence they translate.
+ */
+const renderWithCode = (text) =>
+  text
+    .split("`")
+    .map((part, index) =>
+      index % 2 === 1 ? <code key={index}>{part}</code> : part,
+    );
+
 const CaidoSettingsPage = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("caido-config", getCaidoConfig);
@@ -37,14 +50,16 @@ const CaidoSettingsPage = () => {
 
   const saveMutation = useMutation(updateCaidoConfig, {
     onSuccess: () => {
-      message.success("Configuration saved");
+      message.success(t("caidoSettings.saved"));
       queryClient.invalidateQueries("caido-config");
       queryClient.invalidateQueries("caido-connection-status");
       setSaving(false);
       form.setFieldsValue({ pat: "" });
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save configuration");
+      message.error(
+        err?.response?.data?.message || t("caidoSettings.saveFailed"),
+      );
       setSaving(false);
     },
   });
@@ -67,13 +82,16 @@ const CaidoSettingsPage = () => {
       setTestResult({
         success: result.connected,
         message: result.connected
-          ? `Connected${result.viewer?.id ? ` as ${result.viewer.id}` : ""}`
-          : result.message || "Connection failed",
+          ? result.viewer?.id
+            ? t("caidoSettings.connectedAs", { id: result.viewer.id })
+            : t("caidoSettings.connected")
+          : result.message || t("caidoSettings.connectionFailed"),
       });
     } catch (err) {
       setTestResult({
         success: false,
-        message: err?.response?.data?.message || "Connection failed",
+        message:
+          err?.response?.data?.message || t("caidoSettings.connectionFailed"),
       });
     } finally {
       setTesting(false);
@@ -88,11 +106,19 @@ const CaidoSettingsPage = () => {
     <div className={styles.settingsContainer}>
       <div className={styles.statusRow}>
         {configured ? (
-          <Tag icon={<CheckCircleFilled />} color="success">Configured</Tag>
+          <Tag icon={<CheckCircleFilled />} color="success">
+            {t("caidoSettings.configured")}
+          </Tag>
         ) : (
-          <Tag icon={<WarningOutlined />} color="warning">Not Configured</Tag>
+          <Tag icon={<WarningOutlined />} color="warning">
+            {t("caidoSettings.notConfigured")}
+          </Tag>
         )}
-        {data?.patConfigured && <Tag icon={<KeyOutlined />} color="blue">PAT Saved</Tag>}
+        {data?.patConfigured && (
+          <Tag icon={<KeyOutlined />} color="blue">
+            {t("caidoSettings.patSaved")}
+          </Tag>
+        )}
         {configured && (
           <Button
             type="default"
@@ -101,7 +127,7 @@ const CaidoSettingsPage = () => {
             loading={testing}
             onClick={handleTestConnection}
           >
-            Test Connection
+            {t("caidoSettings.testConnection")}
           </Button>
         )}
       </div>
@@ -135,24 +161,34 @@ const CaidoSettingsPage = () => {
         }}
       >
         <Form.Item
-          label="URL"
+          label={t("caidoSettings.urlLabel")}
           name="url"
-          rules={[{ required: true, message: "URL is required" }]}
+          rules={[{ required: true, message: t("caidoSettings.urlRequired") }]}
         >
           <Input placeholder="http://192.168.160.1:8096" />
         </Form.Item>
 
         <Row gutter={16}>
           <Col span={14}>
-            <Form.Item label="Personal Access Token" name="pat">
+            <Form.Item
+              label={t("caidoSettings.patLabel")}
+              name="pat"
+            >
               <Input.Password
-                placeholder={data?.patConfigured ? "Leave blank to keep existing PAT" : "caido_..."}
+                placeholder={
+                  data?.patConfigured
+                    ? t("caidoSettings.patPlaceholderKeep")
+                    : "caido_..."
+                }
               />
             </Form.Item>
           </Col>
           <Col span={10}>
-            <Form.Item label="Proxy URL" name="proxyUrl">
-              <Input placeholder="Defaults to URL" />
+            <Form.Item
+              label={t("caidoSettings.proxyUrlLabel")}
+              name="proxyUrl"
+            >
+              <Input placeholder={t("caidoSettings.proxyUrlPlaceholder")} />
             </Form.Item>
           </Col>
         </Row>
@@ -164,7 +200,7 @@ const CaidoSettingsPage = () => {
             purpleFilled
             style={{ height: "2rem", fontSize: "0.75rem" }}
           >
-            Save Configuration
+            {t("caidoSettings.saveConfig")}
           </PrimaryButton>
         </div>
       </Form>
@@ -182,38 +218,28 @@ const CaidoSettingsPage = () => {
           color: "var(--primary-text)",
           marginBottom: "0.75rem",
         }}>
-          Setup Guide
+          {t("caidoSettings.setupGuide")}
         </div>
         <div style={{ fontSize: "0.75rem", color: "var(--secondary-text)", lineHeight: 1.7 }}>
           <div style={{ marginBottom: "0.6rem" }}>
-            <strong>WSL:</strong> Set the instance to listen on{" "}
-            <code>0.0.0.0:8096</code>, allow <code>caido-cli</code> through
-            Windows Firewall, then use the WSL gateway IP in the URL above. Get
-            the gateway with{" "}
-            <code>ip route show | grep -i default | awk '{"{ print $3 }"}'</code>.
+            <strong>{t("caidoSettings.guideWslTitle")}</strong>{" "}
+            {renderWithCode(t("caidoSettings.guideWsl"))}
           </div>
           <div style={{ marginBottom: "0.6rem" }}>
-            <strong>Server / non-localhost:</strong> When the backend reaches
-            Caido over a Docker network (a service name or gateway IP as the
-            Host), the instance replies <code>Domain &lt;name&gt; not allowed</code>.
-            Start <code>caido-cli</code> with the host allow-listed, e.g.{" "}
-            <code>--ui-domain caido --ui-domain localhost --ui-domain 127.0.0.1</code>.
+            <strong>{t("caidoSettings.guideServerTitle")}</strong>{" "}
+            {renderWithCode(t("caidoSettings.guideServer"))}
           </div>
           <div>
-            <strong>Headless needs a Teams plan:</strong> registering a headless{" "}
-            <code>caido-cli</code> instance requires a registration key
-            (<code>ckey_</code>), which is a Caido Teams feature. On an Individual
-            plan a headless instance serves GraphQL but device approval fails with{" "}
-            <code>Unregistered instance</code> — use a desktop Caido (already
-            registered) reached over a reverse SSH tunnel instead.
+            <strong>{t("caidoSettings.guideHeadlessTitle")}</strong>{" "}
+            {renderWithCode(t("caidoSettings.guideHeadless"))}
           </div>
         </div>
       </div>
 
       <div className={styles.notesSection} style={{ marginTop: "1rem" }}>
         <ul>
-          <li>HTTP History, Replay, Automate, and Intercept controls are available.</li>
-          <li>Traffic and API calls are proxied through the backend.</li>
+          <li>{t("caidoSettings.notesHistory")}</li>
+          <li>{t("caidoSettings.notesProxy")}</li>
         </ul>
       </div>
     </div>

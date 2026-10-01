@@ -19,13 +19,19 @@ import {
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useMemo } from "react";
+import { translate } from "@/i18n";
+import { useFormatters, useTranslation } from "@/i18n/I18nProvider";
 
+/**
+ * Copy helper — lives outside React, so it uses the non-React `translate()`
+ * (which reads the locale cookie) instead of a hook.
+ */
 const copyText = async (messageApi, text, label) => {
   try {
     await navigator.clipboard.writeText(text);
-    messageApi.success(`${label} copied`);
+    messageApi.success(translate("mcpSettings.copied", { label }));
   } catch {
-    messageApi.error(`Failed to copy ${label.toLowerCase()}`);
+    messageApi.error(translate("mcpSettings.copyFailed", { label }));
   }
 };
 
@@ -33,37 +39,45 @@ const redactConfigSecret = (value = "") =>
   value.replace(/token:\s*\S+/g, "token: *****");
 
 const MCPSettingsPage = () => {
+  const { t } = useTranslation();
+  const { formatDateTime } = useFormatters();
   const queryClient = useQueryClient();
   const { message } = App.useApp();
   const { data, isLoading } = useQuery("mcp-config", getMcpConfig);
 
   const createTokenMutation = useMutation(createMcpAccessToken, {
     onSuccess: async () => {
-      message.success("New MCP token created");
+      message.success(t("mcpSettings.tokenCreated"));
       await queryClient.invalidateQueries("mcp-config");
     },
     onError: (error) => {
-      message.error(error?.response?.data?.message || "Failed to create token");
+      message.error(
+        error?.response?.data?.message || t("mcpSettings.tokenCreateFailed"),
+      );
     },
   });
 
   const revokeTokenMutation = useMutation(revokeMcpAccessToken, {
     onSuccess: async () => {
-      message.success("MCP token revoked");
+      message.success(t("mcpSettings.tokenRevoked"));
       await queryClient.invalidateQueries("mcp-config");
     },
     onError: (error) => {
-      message.error(error?.response?.data?.message || "Failed to revoke token");
+      message.error(
+        error?.response?.data?.message || t("mcpSettings.tokenRevokeFailed"),
+      );
     },
   });
 
   const safetyMutation = useMutation(updateMcpSafety, {
     onSuccess: async (res) => {
-      message.success(res?.message || "MCP safety updated");
+      message.success(res?.message || t("mcpSettings.safetyUpdated"));
       await queryClient.invalidateQueries("mcp-config");
     },
     onError: (error) => {
-      message.error(error?.response?.data?.message || "Failed to update MCP safety");
+      message.error(
+        error?.response?.data?.message || t("mcpSettings.safetyUpdateFailed"),
+      );
     },
   });
 
@@ -75,11 +89,7 @@ const MCPSettingsPage = () => {
     <div className={styles.settingsContainer}>
       <div className={styles.infoBox}>
         <WarningOutlined />
-        <span>
-          Treat MCP access as local admin access. A token can run commands on
-          the exploit box, operate Burp, browser automation, and VPN flows, read
-          artifacts, write findings, and update local configuration.
-        </span>
+        <span>{t("mcpSettings.warning")}</span>
       </div>
 
       <section className={styles.mcpPanel}>
@@ -87,21 +97,24 @@ const MCPSettingsPage = () => {
           <div>
             <div className={styles.mcpPanelTitle}>
               <FileTextOutlined />
-              Client Config
+              {t("mcpSettings.clientConfigTitle")}
             </div>
             <div className={styles.mcpPanelDescription}>
-              Copy one config block into Claude Code, Codex, or another
-              MCP-capable client.
+              {t("mcpSettings.clientConfigDescription")}
             </div>
           </div>
           <Button
             type="primary"
             icon={<CopyOutlined />}
             onClick={() =>
-              copyText(message, data?.configTemplate || "", "Config")
+              copyText(
+                message,
+                data?.configTemplate || "",
+                t("mcpSettings.labelConfig"),
+              )
             }
           >
-            Copy Config
+            {t("mcpSettings.copyConfig")}
           </Button>
         </div>
 
@@ -113,21 +126,27 @@ const MCPSettingsPage = () => {
           <Button
             icon={<FileTextOutlined />}
             onClick={() =>
-              copyText(message, data?.envTemplate || "", "Env Block")
+              copyText(
+                message,
+                data?.envTemplate || "",
+                t("mcpSettings.labelEnvBlock"),
+              )
             }
           >
-            Copy Env Block
+            {t("mcpSettings.copyEnvBlock")}
           </Button>
           <Button
             icon={<PlusOutlined />}
             onClick={() =>
               createTokenMutation.mutateAsync({
-                label: `Extra Token ${Date.now()}`,
+                label: t("mcpSettings.extraTokenLabel", {
+                  timestamp: Date.now(),
+                }),
               })
             }
             loading={createTokenMutation.isLoading}
           >
-            Create Additional Token
+            {t("mcpSettings.createToken")}
           </Button>
         </div>
       </section>
@@ -137,12 +156,10 @@ const MCPSettingsPage = () => {
           <div>
             <div className={styles.mcpPanelTitle}>
               <WarningOutlined />
-              Allow Consent-Gated MCP Tools
+              {t("mcpSettings.safetyTitle")}
             </div>
             <div className={styles.mcpPanelDescription}>
-              Enables MCP clients to run tools that normally require in-app
-              approval, including browser automation and other side-effecting
-              actions. Keep this off unless you trust the connected client.
+              {t("mcpSettings.safetyDescription")}
             </div>
           </div>
           <Switch
@@ -156,7 +173,7 @@ const MCPSettingsPage = () => {
       </section>
 
       <div className={styles.settingSectionHeader}>
-        <div className={styles.heading}>Active Tokens</div>
+        <div className={styles.heading}>{t("mcpSettings.activeTokens")}</div>
         <div className={styles.divider} />
       </div>
 
@@ -169,14 +186,16 @@ const MCPSettingsPage = () => {
                 {token.label}
               </div>
               {primaryToken?.tokenId === token.tokenId && (
-                <Tag color="processing">Primary</Tag>
+                <Tag color="processing">{t("mcpSettings.primaryTag")}</Tag>
               )}
             </div>
             <div className={styles.mcpTokenMeta}>
-              Created {new Date(token.createdAt).toLocaleString()} - Last used{" "}
-              {token.lastUsedAt
-                ? new Date(token.lastUsedAt).toLocaleString()
-                : "Never"}
+              {t("mcpSettings.createdMeta", {
+                created: formatDateTime(token.createdAt),
+                lastUsed: token.lastUsedAt
+                  ? formatDateTime(token.lastUsedAt)
+                  : t("mcpSettings.neverUsed"),
+              })}
             </div>
             <div className={styles.mcpInlineControl}>
               <Input.Password
@@ -185,18 +204,20 @@ const MCPSettingsPage = () => {
                 readOnly
                 visibilityToggle
               />
-              <Tooltip title="Copy token">
+              <Tooltip title={t("mcpSettings.copyToken")}>
                 <Button
                   icon={<CopyOutlined />}
-                  onClick={() => copyText(message, token.token, "Token")}
+                  onClick={() =>
+                    copyText(message, token.token, t("mcpSettings.labelToken"))
+                  }
                 />
               </Tooltip>
               <Tooltip
                 title={
                   primaryToken?.tokenId === token.tokenId &&
                   (data?.tokens || []).length === 1
-                    ? "Create another token before revoking the only token"
-                    : "Revoke token"
+                    ? t("mcpSettings.revokeOnlyToken")
+                    : t("mcpSettings.revokeToken")
                 }
               >
                 <Button

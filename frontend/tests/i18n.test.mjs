@@ -187,6 +187,11 @@ test("formatNumber and formatDate are locale-aware and never throw", () => {
   // Overriding only the time zone keeps the default shape.
   assert.equal(formatDate(iso, "en", { timeZone: "UTC" }), "Sep 1, 2026");
   assert.match(formatDate(iso, "th", { timeZone: "UTC" }), /2026/);
+  // `dateStyle`/`timeStyle` cannot be mixed with the component defaults.
+  assert.equal(
+    formatDate(iso, "en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }),
+    "Sep 1, 2026, 12:00 AM",
+  );
   assert.equal(formatDate(null, "th"), "");
   assert.equal(formatDate("not a date", "th"), "not a date");
 });

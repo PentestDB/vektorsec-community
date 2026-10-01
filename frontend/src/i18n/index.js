@@ -184,7 +184,12 @@ export function formatDate(value, locale = DEFAULT_LOCALE, options) {
   if (value === undefined || value === null || value === "") return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  const shape = { calendar: "gregory", ...DEFAULT_DATE_OPTIONS, ...options };
+  // `dateStyle`/`timeStyle` cannot be combined with component options (Intl
+  // throws), so they replace the default shape instead of merging into it.
+  const styled = options && (options.dateStyle || options.timeStyle);
+  const shape = styled
+    ? { calendar: "gregory", ...options }
+    : { calendar: "gregory", ...DEFAULT_DATE_OPTIONS, ...options };
   try {
     return new Intl.DateTimeFormat(intlTag(locale), shape).format(date);
   } catch {
