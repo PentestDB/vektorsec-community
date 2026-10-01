@@ -35,6 +35,8 @@ import {
 } from "@ant-design/icons";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
@@ -46,15 +48,17 @@ import {
   repairVNC,
 } from "@/services/user.service";
 
+/** Auto-setup progress titles; `titleKey` is resolved with `t` at render time. */
 const AUTO_SETUP_STEPS = [
-  { title: "Connecting to workspace host", icon: <CloudServerOutlined /> },
-  { title: "Installing VNC & GUI packages", icon: <SettingOutlined /> },
-  { title: "Configuring VNC server", icon: <DesktopOutlined /> },
-  { title: "Starting VNC server (DISPLAY=:89)", icon: <PlayCircleOutlined /> },
-  { title: "Starting noVNC proxy", icon: <ApiOutlined /> },
+  { titleKey: "guiSettings.stepConnect", icon: <CloudServerOutlined /> },
+  { titleKey: "guiSettings.stepInstall", icon: <SettingOutlined /> },
+  { titleKey: "guiSettings.stepConfigure", icon: <DesktopOutlined /> },
+  { titleKey: "guiSettings.stepStart", icon: <PlayCircleOutlined /> },
+  { titleKey: "guiSettings.stepProxy", icon: <ApiOutlined /> },
 ];
 
 const GUISettingsPage = ({ sessionId }) => {
+  const { t } = useTranslation();
   const { message, notification } = App.useApp();
   const [form] = Form.useForm();
   const [advForm] = Form.useForm();
@@ -69,13 +73,14 @@ const GUISettingsPage = ({ sessionId }) => {
     onSuccess: (data) => {
       setDiagResults(data);
       if (data.allPassed) {
-        message.success("All checks passed");
+        message.success(t("guiSettings.allChecksPassed"));
       }
     },
     onError: (err) => {
       notification.error({
-        message: "Diagnostics Failed",
-        description: err?.response?.data?.message ?? "Could not run diagnostics. Check the workspace connection.",
+        message: t("guiSettings.diagnosticsFailed"),
+        description:
+          err?.response?.data?.message ?? t("guiSettings.diagnosticsFailedBody"),
       });
     },
   });
@@ -84,15 +89,16 @@ const GUISettingsPage = ({ sessionId }) => {
     onSuccess: (data) => {
       setDiagResults(data);
       if (data.allPassed) {
-        message.success("Repair successful — all checks pass now");
+        message.success(t("guiSettings.repairSuccess"));
       } else {
-        message.warning("Repair completed but some checks still fail");
+        message.warning(t("guiSettings.repairPartial"));
       }
     },
     onError: (err) => {
       notification.error({
-        message: "Repair Failed",
-        description: err?.response?.data?.message ?? "Could not repair VNC. Check the workspace connection.",
+        message: t("guiSettings.repairFailed"),
+        description:
+          err?.response?.data?.message ?? t("guiSettings.repairFailedBody"),
       });
     },
   });
@@ -101,13 +107,13 @@ const GUISettingsPage = ({ sessionId }) => {
     (body) => updateVNCConfig({ ...body, ...(sessionId ? { sessionId } : {}) }),
     {
       onSuccess: () => {
-        message.success("VNC configuration saved");
+        message.success(t("guiSettings.saved"));
         queryClient.invalidateQueries(vncQueryKey);
       },
       onError: (err) => {
         notification.error({
-          message: "Error",
-          description: err?.response?.data?.message ?? "Failed to save VNC config",
+          message: t("common.error"),
+          description: err?.response?.data?.message ?? t("guiSettings.saveFailed"),
         });
       },
     },
@@ -117,7 +123,7 @@ const GUISettingsPage = ({ sessionId }) => {
     (body) => resetVNCConfig({ ...body, ...(sessionId ? { sessionId } : {}) }),
     {
       onSuccess: () => {
-        message.success("VNC configuration reset");
+        message.success(t("guiSettings.resetDone"));
         queryClient.invalidateQueries(vncQueryKey);
         form.resetFields();
         setSetupMode(null);
@@ -125,8 +131,8 @@ const GUISettingsPage = ({ sessionId }) => {
       },
       onError: (err) => {
         notification.error({
-          message: "Error",
-          description: err?.response?.data?.message ?? "Failed to reset",
+          message: t("common.error"),
+          description: err?.response?.data?.message ?? t("guiSettings.resetFailed"),
         });
       },
     },
@@ -148,17 +154,16 @@ const GUISettingsPage = ({ sessionId }) => {
     },
     onSuccess: (data) => {
       setCurrentStep(AUTO_SETUP_STEPS.length);
-      message.success("VNC setup completed! You can now use the GUI tab.");
+      message.success(t("guiSettings.setupCompleted"));
       queryClient.invalidateQueries(vncQueryKey);
     },
     onError: (err, _vars, interval) => {
       if (interval) clearInterval(interval);
       setCurrentStep(-1);
       notification.error({
-        message: "Auto-Setup Failed",
+        message: t("guiSettings.setupFailedTitle"),
         description:
-          err?.response?.data?.message ??
-          "Failed to auto-setup VNC. Make sure the workspace host is reachable and has internet access.",
+          err?.response?.data?.message ?? t("guiSettings.setupFailedBody"),
         duration: 8,
       });
     },
@@ -200,11 +205,13 @@ const GUISettingsPage = ({ sessionId }) => {
       <div className={styles.statusRow}>
         {configured ? (
           <Tag icon={<CheckCircleFilled />} color="success">
-            {data.mode === "auto" ? "Auto-Configured" : "Configured (Manual)"}
+            {data.mode === "auto"
+              ? t("guiSettings.statusAuto")
+              : t("guiSettings.statusManual")}
           </Tag>
         ) : (
           <Tag icon={<WarningOutlined />} color="warning">
-            Not Configured
+            {t("common.notConfigured")}
           </Tag>
         )}
         {configured && (
@@ -215,18 +222,18 @@ const GUISettingsPage = ({ sessionId }) => {
             loading={diagnoseMutation.isLoading}
             onClick={() => diagnoseMutation.mutate({ sessionId })}
           >
-            Diagnose
+            {t("guiSettings.diagnose")}
           </Button>
         )}
         {configured && (
           <Popconfirm
-            title="Reset VNC configuration?"
-            description="This will remove saved VNC settings. You'll need to set up again."
+            title={t("guiSettings.resetTitle")}
+            description={t("guiSettings.resetBody")}
             onConfirm={() => resetMutation.mutate({})}
-            okText="Reset"
-            cancelText="Cancel"
+            okText={t("guiSettings.resetAction")}
+            cancelText={t("common.cancel")}
           >
-            <Tooltip title="Reset VNC config">
+            <Tooltip title={t("guiSettings.resetTooltip")}>
               <DeleteOutlined
                 style={{ color: "var(--secondary-text)", fontSize: 14, cursor: "pointer" }}
               />
@@ -239,9 +246,11 @@ const GUISettingsPage = ({ sessionId }) => {
         <div className={styles.infoBox}>
           <CheckCircleFilled style={{ color: "#52c41a" }} />
           <span>
-            VNC is auto-configured on{" "}
-            <strong>{data.baseUrl || `${data.host}:${data.port}`}</strong>.
-            The GUI desktop will start automatically when you open a GUI session.
+            <RichText
+              text={t("guiSettings.autoInfo", {
+                target: data.baseUrl || `${data.host}:${data.port}`,
+              })}
+            />
           </span>
         </div>
       )}
@@ -250,8 +259,11 @@ const GUISettingsPage = ({ sessionId }) => {
         <div className={styles.infoBox}>
           <CheckCircleFilled style={{ color: "#52c41a" }} />
           <span>
-            VNC is configured to connect to{" "}
-            <strong>{data.baseUrl || `${data.host}:${data.port}`}</strong>.
+            <RichText
+              text={t("guiSettings.manualInfo", {
+                target: data.baseUrl || `${data.host}:${data.port}`,
+              })}
+            />
           </span>
         </div>
       )}
@@ -272,7 +284,7 @@ const GUISettingsPage = ({ sessionId }) => {
           }}>
             <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--primary-text)" }}>
               <MedicineBoxOutlined style={{ marginRight: 6 }} />
-              Diagnostics
+              {t("guiSettings.diagnosticsTitle")}
             </span>
             {!diagResults.allPassed && (
               <Button
@@ -288,7 +300,7 @@ const GUISettingsPage = ({ sessionId }) => {
                   height: 28,
                 }}
               >
-                Repair All
+                {t("guiSettings.repairAll")}
               </Button>
             )}
           </div>
@@ -342,7 +354,7 @@ const GUISettingsPage = ({ sessionId }) => {
               gap: 6,
             }}>
               <CheckCircleFilled />
-              All checks passed — VNC services are healthy.
+              {t("guiSettings.allHealthy")}
             </div>
           )}
           {diagResults.repairLog && diagResults.repairLog.length > 0 && (
@@ -367,13 +379,12 @@ const GUISettingsPage = ({ sessionId }) => {
       {configured && (
         <div style={{ marginBottom: "1.25rem" }}>
           <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--secondary-text)", marginBottom: "0.75rem" }}>
-            Advanced
+            {t("guiSettings.advancedTitle")}
           </div>
           <div className={styles.infoBox} style={{ marginBottom: "0.75rem" }}>
             <InfoCircleOutlined />
             <span>
-              Base URL must be reachable from your <strong>browser</strong>. Use{" "}
-              <code>localhost</code> if running locally, or your VPN hostname if behind a VPN.
+              <RichText text={t("guiSettings.baseUrlHint")} />
             </span>
           </div>
           <Form
@@ -401,17 +412,17 @@ const GUISettingsPage = ({ sessionId }) => {
               <Col span={16}>
                 <Form.Item
                   name="host"
-                  label="noVNC Host"
-                  rules={[{ required: true, message: "Host is required" }]}
+                  label={t("guiSettings.hostLabel")}
+                  rules={[{ required: true, message: t("common.hostRequired") }]}
                 >
-                  <Input placeholder="e.g. localhost or 192.168.1.100" />
+                  <Input placeholder={t("guiSettings.hostPlaceholderAdvanced")} />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item
                   name="port"
-                  label="Port"
-                  rules={[{ required: true, message: "Port required" }]}
+                  label={t("common.portLabel")}
+                  rules={[{ required: true, message: t("common.portRequired") }]}
                 >
                   <InputNumber
                     min={1}
@@ -426,27 +437,27 @@ const GUISettingsPage = ({ sessionId }) => {
               name="password"
               label={
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  VNC Password
-                  <Tooltip title="Use alphanumeric only to avoid connection errors. Leave blank to keep current.">
+                  {t("guiSettings.passwordLabel")}
+                  <Tooltip title={t("guiSettings.passwordTooltipAdvanced")}>
                     <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
                   </Tooltip>
                 </span>
               }
             >
-              <Input.Password placeholder="Leave blank to keep current" />
+              <Input.Password placeholder={t("guiSettings.passwordPlaceholderKeep")} />
             </Form.Item>
             <Form.Item
               name="baseUrl"
               label={
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Base URL Override
-                  <Tooltip title="Overrides host:port when set. Use full URL (e.g. http://localhost:9020). Leave empty to use host:port above.">
+                  {t("guiSettings.baseUrlLabel")}
+                  <Tooltip title={t("guiSettings.baseUrlTooltipAdvanced")}>
                     <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
                   </Tooltip>
                 </span>
               }
             >
-              <Input placeholder="e.g. http://localhost:9020 (leave empty to use host:port)" />
+              <Input placeholder={t("guiSettings.baseUrlPlaceholderAdvanced")} />
             </Form.Item>
             <Row justify="end">
               <PrimaryButton
@@ -455,7 +466,7 @@ const GUISettingsPage = ({ sessionId }) => {
                 loading={saveMutation.isLoading}
                 style={{ height: 30, fontSize: "0.75rem" }}
               >
-                Save
+                {t("common.save")}
               </PrimaryButton>
             </Row>
           </Form>
@@ -466,14 +477,11 @@ const GUISettingsPage = ({ sessionId }) => {
         <>
           <div className={styles.infoBox}>
             <InfoCircleOutlined />
-            <span>
-              A GUI desktop lets you use graphical tools (browsers, Burp Suite, etc.) on
-              your workspace host. Choose how to set it up:
-            </span>
+            <span>{t("guiSettings.intro")}</span>
           </div>
 
           <Form.Item
-            label="Setup Mode"
+            label={t("guiSettings.setupModeLabel")}
             style={{ marginBottom: 16 }}
           >
             <Radio.Group
@@ -487,13 +495,13 @@ const GUISettingsPage = ({ sessionId }) => {
                 value="auto"
                 style={{ fontSize: "0.72rem", height: 30, lineHeight: "28px" }}
               >
-                <PlayCircleOutlined /> One-Click Setup
+                <PlayCircleOutlined /> {t("guiSettings.modeAuto")}
               </Radio.Button>
               <Radio.Button
                 value="manual"
                 style={{ fontSize: "0.72rem", height: 30, lineHeight: "28px" }}
               >
-                <SettingOutlined /> Manual (Existing VNC)
+                <SettingOutlined /> {t("guiSettings.modeManual")}
               </Radio.Button>
             </Radio.Group>
           </Form.Item>
@@ -504,12 +512,7 @@ const GUISettingsPage = ({ sessionId }) => {
         <>
           <div className={styles.infoBox}>
             <InfoCircleOutlined />
-            <span>
-              This will install a VNC server (TigerVNC / Xvnc) and noVNC web client on
-              your selected workspace host. A lightweight GUI session (xterm) is started by
-              default; if Xfce or Openbox is available it will be used instead. DISPLAY=:89
-              is always set. The workspace host must have internet access.
-            </span>
+            <span>{t("guiSettings.autoDescription")}</span>
           </div>
 
           {isAutoRunning && (
@@ -521,7 +524,7 @@ const GUISettingsPage = ({ sessionId }) => {
                 items={AUTO_SETUP_STEPS.map((step, i) => ({
                   title: (
                     <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>
-                      {step.title}
+                      {t(step.titleKey)}
                     </span>
                   ),
                   icon:
@@ -540,9 +543,7 @@ const GUISettingsPage = ({ sessionId }) => {
           {currentStep === AUTO_SETUP_STEPS.length && (
             <div className={styles.infoBox} style={{ borderColor: "#52c41a" }}>
               <CheckCircleFilled style={{ color: "#52c41a" }} />
-              <span>
-                Setup complete! VNC desktop is ready. Open a GUI session to start using it.
-              </span>
+              <span>{t("guiSettings.setupComplete")}</span>
             </div>
           )}
 
@@ -555,7 +556,10 @@ const GUISettingsPage = ({ sessionId }) => {
                 onClick={handleAutoSetup}
                 style={{ height: 34, fontSize: "0.78rem" }}
               >
-                <PlayCircleOutlined /> {isAutoRunning ? "Setting up..." : "Start Auto-Setup"}
+                <PlayCircleOutlined />{" "}
+                {isAutoRunning
+                  ? t("guiSettings.settingUp")
+                  : t("guiSettings.startAutoSetup")}
               </PrimaryButton>
             </Col>
           </Row>
@@ -566,10 +570,7 @@ const GUISettingsPage = ({ sessionId }) => {
         <>
           <div className={styles.infoBox}>
             <InfoCircleOutlined />
-            <span>
-              If you already have a VNC/noVNC server running on your workspace host,
-              enter the connection details below.
-            </span>
+            <span>{t("guiSettings.manualDescription")}</span>
           </div>
 
           <Form
@@ -588,17 +589,17 @@ const GUISettingsPage = ({ sessionId }) => {
               <Col span={16}>
                 <Form.Item
                   name="host"
-                  label="noVNC Host"
-                  rules={[{ required: true, message: "Host is required" }]}
+                  label={t("guiSettings.hostLabel")}
+                  rules={[{ required: true, message: t("common.hostRequired") }]}
                 >
-                  <Input placeholder="e.g. 192.168.1.100 or localhost" />
+                  <Input placeholder={t("guiSettings.hostPlaceholderManual")} />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item
                   name="port"
-                  label="Port"
-                  rules={[{ required: true, message: "Port required" }]}
+                  label={t("common.portLabel")}
+                  rules={[{ required: true, message: t("common.portRequired") }]}
                 >
                   <InputNumber
                     min={1}
@@ -614,29 +615,29 @@ const GUISettingsPage = ({ sessionId }) => {
               name="password"
               label={
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  VNC Password
-                  <Tooltip title="Use alphanumeric only. Special characters (e.g. !@#) can cause connection errors.">
+                  {t("guiSettings.passwordLabel")}
+                  <Tooltip title={t("guiSettings.passwordTooltipManual")}>
                     <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
                   </Tooltip>
                 </span>
               }
-              rules={[{ required: true, message: "Password is required" }]}
+              rules={[{ required: true, message: t("guiSettings.passwordRequired") }]}
             >
-              <Input.Password placeholder="Enter VNC password" />
+              <Input.Password placeholder={t("guiSettings.passwordPlaceholder")} />
             </Form.Item>
 
             <Form.Item
               name="baseUrl"
               label={
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Base URL Override
-                  <Tooltip title="Optional. Must be reachable from your browser (e.g. localhost or your VPN hostname).">
+                  {t("guiSettings.baseUrlLabel")}
+                  <Tooltip title={t("guiSettings.baseUrlTooltipManual")}>
                     <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
                   </Tooltip>
                 </span>
               }
             >
-              <Input placeholder="e.g. http://localhost:9020 or http://192.168.1.100:9020" />
+              <Input placeholder={t("guiSettings.baseUrlPlaceholderManual")} />
             </Form.Item>
 
             <Row justify="end" style={{ marginTop: 4 }}>
@@ -647,7 +648,7 @@ const GUISettingsPage = ({ sessionId }) => {
                   loading={saveMutation.isLoading}
                   style={{ height: 34, fontSize: "0.78rem" }}
                 >
-                  Save Configuration
+                  {t("common.saveConfiguration")}
                 </PrimaryButton>
               </Col>
             </Row>
@@ -658,25 +659,21 @@ const GUISettingsPage = ({ sessionId }) => {
       <Divider style={{ borderColor: "var(--border-color-100)", margin: "1.25rem 0 0.75rem" }} />
 
       <div className={styles.notesSection}>
-        <strong>About GUI / VNC</strong>
+        <strong>{t("guiSettings.aboutTitle")}</strong>
         <ul>
           <li>
-            <strong>One-Click Setup</strong> installs TigerVNC (Xvnc) + noVNC on
-            your exploit box with a lightweight GUI. Takes 1-2 minutes depending on internet speed.
+            <RichText text={t("guiSettings.aboutOneClick")} />
           </li>
           <li>
-            <strong>Manual mode</strong> connects to an existing noVNC instance — use this
-            if you've already set up VNC yourself.
+            <RichText text={t("guiSettings.aboutManual")} />
           </li>
           <li>
-            <strong>Base URL Override</strong> must be reachable from your browser (e.g. localhost or VPN hostname).
+            <RichText text={t("guiSettings.aboutBaseUrl")} />
           </li>
           <li>
-            The GUI session is accessible from the <code>/gui</code> tab in any session.
+            <RichText text={t("guiSettings.aboutTab")} />
           </li>
-          <li>
-            Select and save the workspace host before running one-click setup.
-          </li>
+          <li>{t("guiSettings.aboutWorkspace")}</li>
         </ul>
       </div>
     </div>
