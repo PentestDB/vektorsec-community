@@ -9,6 +9,7 @@ import PrimaryButton from "@/components/common/PrimaryButton";
 import SettingsOverlay from "@/components/common/SettingsOverlay";
 import { getModels } from "@/services/user.service";
 import styles from "@/styles/components/Common.module.scss";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 function hasUsableOrchestrator(data) {
   const models = data?.models || [];
@@ -20,6 +21,7 @@ function hasUsableOrchestrator(data) {
 }
 
 const ModelSetupGate = ({ children }) => {
+  const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(true);
   const { data, isLoading, isError, refetch } = useQuery(
     "unified-models",
@@ -43,20 +45,18 @@ const ModelSetupGate = ({ children }) => {
   return (
     <div className={styles.modelSetupGate}>
       <div className={styles.modelSetupPanel}>
-        <div className={styles.modelSetupEyebrow}>Setup Required</div>
-        <h1>Configure a model before starting</h1>
-        <p>
-          Add at least one reusable model preset in Settings, then assign the
-          orchestrator model. API keys, provider details, racers, and Browser
-          Agent model selection all live in Settings &gt; Models.
-        </p>
+        <div className={styles.modelSetupEyebrow}>
+          {t("modelSetup.eyebrow")}
+        </div>
+        <h1>{t("modelSetup.title")}</h1>
+        <p>{t("modelSetup.body")}</p>
 
         {isError && (
           <Alert
             type="warning"
             showIcon
-            message="Could not load model settings"
-            description="Check that the backend is running, then retry."
+            message={t("modelSetup.loadErrorTitle")}
+            description={t("modelSetup.loadErrorBody")}
             className={styles.modelSetupAlert}
           />
         )}
@@ -67,10 +67,12 @@ const ModelSetupGate = ({ children }) => {
             icon={<SettingOutlined />}
             onClick={() => setSettingsOpen(true)}
           >
-            Configure Models
+            {t("modelSetup.configure")}
           </PrimaryButton>
           {isError && (
-            <PrimaryButton onClick={() => refetch()}>Retry</PrimaryButton>
+            <PrimaryButton onClick={() => refetch()}>
+              {t("common.retry")}
+            </PrimaryButton>
           )}
         </div>
       </div>

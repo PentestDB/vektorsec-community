@@ -1,3 +1,5 @@
+// React 19 compatibility bridge for antd v5 — client-side, loaded first.
+import AntdCompat from "@/components/common/AntdCompat";
 // styles
 import "./globals.scss";
 import "antd/dist/reset.css";
@@ -7,11 +9,14 @@ import "@xterm/xterm/css/xterm.css";
 // client-side JS to promote a preload into an applied stylesheet.
 import "./admin/admin.module.scss";
 import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import QueryClientContext from "@/components/common/auth/QueryClient";
 import StoreProvider from "@/components/common/auth/StoreProvider";
 import IntercommMessenger from "@/components/common/IntercommMessenger";
 import AnnouncementPopup from "@/components/common/AnnouncementPopup";
 import SeoJsonLd from "@/components/common/SeoJsonLd";
+import { I18nProvider } from "@/i18n/I18nProvider";
+import { LOCALE_COOKIE, resolveLocale } from "@/i18n";
 import { baseMetadata } from "@/lib/seo";
 import { getSeoSite } from "@/lib/seoSettings";
 const inter = Inter({ subsets: ["latin"] });
@@ -47,21 +52,32 @@ export async function generateMetadata() {
   };
 }
 
-export default function RootLayout({ children }) {
+/**
+ * The active locale comes from the `vs_locale` cookie, so the server already
+ * renders the right language on the first paint and `<html lang>` matches the
+ * content (accessibility + SEO). The client-side switcher updates the cookie.
+ */
+export default async function RootLayout({ children }) {
+  const cookieStore = await cookies();
+  const locale = resolveLocale(cookieStore.get(LOCALE_COOKIE)?.value);
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         {/* Schema.org structured data (Organization, SoftwareApplication, WebSite) */}
         <SeoJsonLd />
       </head>
       <body className={inter.className}>
-        <StoreProvider>
-          <QueryClientContext>
-            <IntercommMessenger />
-            <AnnouncementPopup />
-            {children}
-          </QueryClientContext>
-        </StoreProvider>
+        <AntdCompat />
+        <I18nProvider initialLocale={locale}>
+          <StoreProvider>
+            <QueryClientContext>
+              <IntercommMessenger />
+              <AnnouncementPopup />
+              {children}
+            </QueryClientContext>
+          </StoreProvider>
+        </I18nProvider>
       </body>
     </html>
   );

@@ -14,12 +14,14 @@ import AuthShowcase from "./AuthShowcase";
 import { useEffect, useState } from "react";
 import RecaptchaField from "@/components/common/RecaptchaField";
 import { QRCodeSVG } from "qrcode.react";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const LoginPage = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const { message } = App.useApp();
+  const { t } = useTranslation();
 
   // Two-step sign-in: credentials first, then the TOTP code when 2FA is on.
   const [twoFactorStep, setTwoFactorStep] = useState(false);
@@ -57,8 +59,7 @@ const LoginPage = () => {
         return;
       }
       message.error(
-        error?.response?.data?.message ??
-          "Failed to login, please try again later!"
+        error?.response?.data?.message ?? t("login.failed")
       );
       // reCAPTCHA tokens are single-use — force a fresh solve on the next attempt.
       setRecaptchaResetKey((k) => k + 1);
@@ -74,7 +75,7 @@ const LoginPage = () => {
         return;
       }
 
-      message.success(data?.message ?? "Logged in successfully!");
+      message.success(data?.message ?? t("login.loggedIn"));
       localStorage.removeItem("antiCSRF");
       dispatch(loginUser(data.user));
       await queryClient.invalidateQueries("check-session");
@@ -138,17 +139,17 @@ const LoginPage = () => {
           <div className={styles.formHeader}>
             <h1 className={styles.formTitle}>
               {twoFactorSetup
-                ? "Set Up Two-Factor Authentication"
+                ? t("login.setupTitle")
                 : twoFactorStep
-                ? "Two-Factor Authentication"
-                : "Welcome Back"}
+                ? t("login.twoFactorTitle")
+                : t("login.title")}
             </h1>
             <p className={styles.formSubtitle}>
               {twoFactorSetup
-                ? "Scan the QR code with your authenticator app, then enter the 6-digit code to activate 2FA and finish sign-in."
+                ? t("login.setupSubtitle")
                 : twoFactorStep
-                ? "Enter the 6-digit code from your authenticator app to complete sign-in."
-                : "Sign in to your VektorSec workspace to resume your security operations."}
+                ? t("login.twoFactorSubtitle")
+                : t("login.subtitle")}
             </p>
           </div>
 
@@ -178,27 +179,27 @@ const LoginPage = () => {
                       color: "var(--secondary-text)",
                     }}
                   >
-                    Scan with Google Authenticator, Authy, or 1Password
+                    {t("login.scanHint")}
                   </div>
                 </div>
 
                 <Form.Item
                   name="twoFactorCode"
-                  label="Enter the 6-digit code"
+                  label={t("login.enterCode")}
                   rules={[
                     {
                       required: true,
-                      message: "Please enter your 6-digit code",
+                      message: t("login.enterCodeRequired"),
                     },
                     {
                       len: 6,
-                      message: "Code must be 6 digits",
+                      message: t("login.codeMustBe6"),
                     },
                   ]}
                 >
                   <Input
                     placeholder="000000"
-                    bordered={false}
+                    variant="borderless"
                     maxLength={6}
                     inputMode="numeric"
                     autoFocus
@@ -246,21 +247,21 @@ const LoginPage = () => {
               <>
                 <Form.Item
                   name="twoFactorCode"
-                  label="Authenticator code"
+                  label={t("login.authenticatorCode")}
                   rules={[
                     {
                       required: true,
-                      message: "Please enter your 6-digit code",
+                      message: t("login.enterCodeRequired"),
                     },
                     {
                       len: 6,
-                      message: "Code must be 6 digits",
+                      message: t("login.codeMustBe6"),
                     },
                   ]}
                 >
                   <Input
                     placeholder="000000"
-                    bordered={false}
+                    variant="borderless"
                     maxLength={6}
                     inputMode="numeric"
                     autoFocus
@@ -306,7 +307,7 @@ const LoginPage = () => {
                     htmlType="submit"
                     loading={loginMutation.isLoading}
                   >
-                    Verify &amp; Sign In
+                    {t("login.verifySignIn")}
                   </Button>
                 </Form.Item>
 
@@ -316,39 +317,45 @@ const LoginPage = () => {
                   disabled={loginMutation.isLoading}
                   style={{ width: "100%" }}
                 >
-                  ← Back to login
+                  ← {t("login.backToLogin")}
                 </Button>
               </>
             ) : (
               <>
                 <Form.Item
                   name="email"
-                  label="Email address"
+                  label={t("login.email")}
                   rules={[
                     {
                       required: true,
-                      message: "Please enter your email",
+                      message: t("login.emailRequired"),
                     },
                     {
                       type: "email",
-                      message: "Invalid email",
+                      message: t("login.emailInvalid"),
                     },
                   ]}
                 >
-                  <Input placeholder="you@company.com" bordered={false} />
+                  <Input
+                    placeholder={t("login.emailPlaceholder")}
+                    variant="borderless"
+                  />
                 </Form.Item>
 
                 <Form.Item
                   name="password"
-                  label="Password"
+                  label={t("login.password")}
                   rules={[
                     {
                       required: true,
-                      message: "Please enter your password",
+                      message: t("login.passwordRequired"),
                     },
                   ]}
                 >
-                  <Input.Password placeholder="Enter your password" bordered={false} />
+                  <Input.Password
+                    placeholder={t("login.passwordPlaceholder")}
+                    variant="borderless"
+                  />
                 </Form.Item>
 
                 <RecaptchaField
@@ -362,7 +369,7 @@ const LoginPage = () => {
                     htmlType="submit"
                     loading={loginMutation.isLoading}
                   >
-                    Login
+                    {t("login.signIn")}
                   </Button>
                 </Form.Item>
               </>
@@ -372,7 +379,7 @@ const LoginPage = () => {
           {!twoFactorStep && !twoFactorSetup && (
             <>
               <div className={styles.dividerRow}>
-                <span>or continue with</span>
+                <span>{t("login.continueWith")}</span>
               </div>
 
               <div className={styles.socialRow}>
@@ -382,7 +389,7 @@ const LoginPage = () => {
                   onClick={() => handleSocial("GitHub")}
                 >
                   <FaGithub size={18} />
-                  Continue with GitHub
+                  {t("login.withGitHub")}
                 </button>
                 <button
                   type="button"
@@ -390,12 +397,13 @@ const LoginPage = () => {
                   onClick={() => handleSocial("Google")}
                 >
                   <FaGoogle size={18} />
-                  Continue with Google
+                  {t("login.withGoogle")}
                 </button>
               </div>
 
               <div className={styles.authSwitch}>
-                New here? <Link href="/register">Create an account</Link>
+                {t("login.newHere")}{" "}
+                <Link href="/register">{t("login.createAccount")}</Link>
               </div>
             </>
           )}

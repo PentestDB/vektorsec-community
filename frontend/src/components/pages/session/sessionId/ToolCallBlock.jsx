@@ -14,6 +14,7 @@ import {
   CopyOutlined,
   CheckOutlined,
 } from "@ant-design/icons";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const TOOL_LABELS = {
   run_bash: "Bash",
@@ -177,11 +178,46 @@ const highlighterCustomStyle = {
   padding: "0.6rem 0.75rem",
 };
 
+/**
+ * Detect guardrail outcomes in a tool result so the transcript can explain *why*
+ * an action did not run: workspace scope allowlist, SSRF guard, or the safety
+ * protection for destructive commands.
+ *
+ * Handlers return these markers as plain text (see
+ * `backend/src/tools/handlers/scan-guard.ts` and `utils/guardrails.ts`), so the
+ * check is intentionally text-based and defensive.
+ *
+ * Returns `{ tone, detail }` — `detail` is the backend-provided reason (empty
+ * when the backend only emitted the marker). Titles/fallback copy are added by
+ * the component through i18n, so this function stays pure and testable.
+ */
+export function detectGuardrailNotice(content) {
+  if (!content) return null;
+  const text = String(content);
+  const detail =
+    text
+      .split(/\r?\n/)
+      .find((line) => /BLOCKED|OUT OF SCOPE|safety/i.test(line))
+      ?.replace(/^BLOCKED:\s*/i, "")
+      .trim() || "";
+
+  if (/^\s*BLOCKED:/im.test(text) || /\bOUT OF SCOPE\b/i.test(text)) {
+    return { tone: "blocked", detail };
+  }
+
+  if (/^\s*WARNING:/im.test(text) && /out of scope/i.test(text)) {
+    return { tone: "warning", detail };
+  }
+
+  return null;
+}
+
 const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
   const [codeCollapsed, setCodeCollapsed] = useState(false);
   const [outputCollapsed, setOutputCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const outputRef = useRef(null);
+  const { t } = useTranslation();
 
   const { toolName, args, content, streaming, exitCode } = message;
 
@@ -198,6 +234,18 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
   const isSuccess = exitCode != null && exitCode === 0;
   const hasContent = content && content.length > 0;
   const hasCode = codePreview && codePreview.code;
+  // Guardrail notices are localised: the backend supplies the raw reason when it
+  // has one, otherwise we fall back to the translated explanation.
+  const guardrail = useMemo(() => {
+    const notice = detectGuardrailNotice(content);
+    if (!notice) return null;
+    const prefix = notice.tone === "blocked" ? "guardrails.blocked" : "guardrails.warning";
+    return {
+      tone: notice.tone,
+      title: t(`${prefix}Title`),
+      detail: notice.detail || t(`${prefix}Detail`),
+    };
+  }, [content, t]);
 
   useEffect(() => {
     if (streaming && outputRef.current) {
@@ -297,6 +345,17 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
           )}
         </span>
       </div>
+
+      {guardrail && (
+        <div
+          className={`${styles.guardrailNotice} ${
+            guardrail.tone === "blocked" ? styles.guardrailBlocked : styles.guardrailWarning
+          }`}
+        >
+          <strong>{guardrail.title}</strong>
+          <span>{guardrail.detail}</span>
+        </div>
+      )}
 
       {hasCode && !codeCollapsed && (
         <div className={styles.toolCallCodePreview}>

@@ -24,94 +24,89 @@ import MCPSettingsPage from "@/components/pages/settings/MCPSettings";
 import AgentBehaviorPage from "@/components/pages/settings/AgentBehavior";
 import SSHPage from "@/components/pages/settings/SSH";
 import BillingPage from "@/components/pages/BillingPage";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const TABS = [
   {
     key: "account",
-    label: "My Account",
+    labelKey: "settings.tabs.account",
     icon: RiAccountCircleLine,
     component: MyAccount,
   },
   {
     key: "billing",
-    label: "Billing",
-    description: "Manage your plan, subscription, and usage.",
+    labelKey: "settings.tabs.billing",
+    descriptionKey: "settings.descriptions.billing",
     icon: TbCreditCard,
     component: BillingPage,
   },
   {
     key: "capabilities",
-    label: "Capabilities",
-    description:
-      "Manage CLI tools and Python packages available on your exploit box.",
+    labelKey: "settings.tabs.capabilities",
+    descriptionKey: "settings.descriptions.capabilities",
     icon: TbTools,
     component: CapabilitiesPage,
   },
   {
     key: "models",
-    label: "Models",
-    description:
-      "Configure reusable model presets and assign them to orchestrator, racers, and browser agent.",
+    labelKey: "settings.tabs.models",
+    descriptionKey: "settings.descriptions.models",
     icon: TbBrain,
     component: ModelsPage,
   },
   {
     key: "agent-behavior",
-    label: "Agent Behavior",
-    description:
-      "Configure how long autonomous agent runs can continue before pausing.",
+    labelKey: "settings.tabs.agentBehavior",
+    descriptionKey: "settings.descriptions.agentBehavior",
     icon: TbAdjustmentsHorizontal,
     component: AgentBehaviorPage,
   },
   {
     key: "ssh",
-    label: "SSH / Exploit Box",
-    description:
-      "Configure the SSH connection to your exploit box (legacy fallback; prefer the per-session Connection tab).",
+    labelKey: "settings.tabs.ssh",
+    descriptionKey: "settings.descriptions.ssh",
     icon: TbTerminal2,
     component: SSHPage,
   },
   {
     key: "burp",
-    label: "Burp Suite",
-    description: "Connect to a Burp Suite instance via the Burp RPC extension.",
+    labelKey: "settings.tabs.burp",
+    descriptionKey: "settings.descriptions.burp",
     icon: TbRadar,
     component: BurpSettingsPage,
   },
   {
     key: "caido",
-    label: "Caido",
-    description: "Configure URL, token, and proxy settings.",
+    labelKey: "settings.tabs.caido",
+    descriptionKey: "settings.descriptions.caido",
     icon: TbRadar,
     component: CaidoSettingsPage,
   },
   {
     key: "mythic",
-    label: "Mythic C2",
-    description:
-      "Connect a Mythic command-and-control server for post-exploitation and pivoting.",
+    labelKey: "settings.tabs.mythic",
+    descriptionKey: "settings.descriptions.mythic",
     icon: TbTopologyStar3,
     component: MythicSettingsPage,
   },
   {
     key: "magnitude",
-    label: "Browser Agent",
-    description:
-      "Configure Magnitude for agentic browser automation during pentests.",
+    labelKey: "settings.tabs.magnitude",
+    descriptionKey: "settings.descriptions.magnitude",
     icon: TbWorldWww,
     component: MagnitudeSettingsPage,
   },
   {
     key: "mcp",
-    label: "MCP Access",
-    description:
-      "Generate MCP tokens and copy the backend-integrated MCP endpoint config.",
+    labelKey: "settings.tabs.mcp",
+    descriptionKey: "settings.descriptions.mcp",
     icon: TbWorldWww,
     component: MCPSettingsPage,
   },
 ];
 
 const SettingsOverlay = ({ open, onClose, initialTab }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(initialTab || "account");
 
   useEffect(() => {
@@ -140,14 +135,14 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
 
   if (!open) return null;
 
-  const currentTab = TABS.find((t) => t.key === activeTab) || TABS[0];
+  const currentTab = TABS.find((tab) => tab.key === activeTab) || TABS[0];
   const ActiveComponent = currentTab.component;
 
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.sidebar}>
-          <div className={styles.sidebarTitle}>Settings</div>
+          <div className={styles.sidebarTitle}>{t("settings.title")}</div>
           <div className={styles.navItems}>
             {TABS.map((tab) => (
               <div
@@ -158,7 +153,7 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
                 onClick={() => setActiveTab(tab.key)}
               >
                 <tab.icon className={styles.navIcon} />
-                {tab.label}
+                {t(tab.labelKey)}
               </div>
             ))}
           </div>
@@ -167,10 +162,10 @@ const SettingsOverlay = ({ open, onClose, initialTab }) => {
         <div className={styles.content}>
           <div className={styles.contentHeader}>
             <div>
-              <div className={styles.contentTitle}>{currentTab.label}</div>
-              {currentTab.description && (
+              <div className={styles.contentTitle}>{t(currentTab.labelKey)}</div>
+              {currentTab.descriptionKey && (
                 <div className={styles.contentDescription}>
-                  {currentTab.description}
+                  {t(currentTab.descriptionKey)}
                 </div>
               )}
             </div>

@@ -10,14 +10,16 @@ import {
   FiMessageSquare,
   FiStar,
 } from "react-icons/fi";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const FEEDBACK_TYPES = [
-  { key: "bug", label: "Bug Report", icon: FiAlertOctagon },
-  { key: "feature", label: "Feature Request", icon: FiZap },
-  { key: "general", label: "General Feedback", icon: FiMessageSquare },
+  { key: "bug", labelKey: "feedback.typeBug", icon: FiAlertOctagon },
+  { key: "feature", labelKey: "feedback.typeFeature", icon: FiZap },
+  { key: "general", labelKey: "feedback.typeGeneral", icon: FiMessageSquare },
 ];
 
 const FeedbackModal = ({ open, onClose }) => {
+  const { t } = useTranslation();
   const [type, setType] = useState("bug");
   const [message, setMessage] = useState("");
   const [rating, setRating] = useState(0);
@@ -58,7 +60,7 @@ const FeedbackModal = ({ open, onClose }) => {
 
   const handleSubmit = () => {
     if (!message.trim()) {
-      setError("Please enter your feedback message.");
+      setError(t("feedback.emptyMessage"));
       return;
     }
     setSubmitting(true);
@@ -78,12 +80,12 @@ const FeedbackModal = ({ open, onClose }) => {
     <div className={styles.overlay} onClick={handleClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>Share Your Feedback</h2>
+          <h2 className={styles.modalTitle}>{t("feedback.title")}</h2>
           <button
             type="button"
             className={styles.closeBtn}
             onClick={handleClose}
-            aria-label="Close feedback modal"
+            aria-label={t("feedback.closeAria")}
           >
             <FiX />
           </button>
@@ -93,43 +95,44 @@ const FeedbackModal = ({ open, onClose }) => {
           {success ? (
             <div className={styles.successBox}>
               <FiCheck className={styles.successIcon} size={26} />
-              <p className={styles.successText}>
-                Thank you for your feedback! VektorSec Team received your message.
-              </p>
+              <p className={styles.successText}>{t("feedback.thanks")}</p>
             </div>
           ) : (
             <>
-              <div className={styles.fieldLabel}>Feedback Type</div>
+              <div className={styles.fieldLabel}>{t("feedback.typeLabel")}</div>
               <div className={styles.typePills}>
-                {FEEDBACK_TYPES.map((t) => {
-                  const Icon = t.icon;
+                {FEEDBACK_TYPES.map((option) => {
+                  const Icon = option.icon;
                   return (
                     <button
-                      key={t.key}
+                      key={option.key}
                       type="button"
                       className={`${styles.typePill} ${
-                        type === t.key ? styles.typePillActive : ""
+                        type === option.key ? styles.typePillActive : ""
                       }`}
-                      onClick={() => setType(t.key)}
+                      onClick={() => setType(option.key)}
                     >
                       <Icon size={14} />
-                      {t.label}
+                      {t(option.labelKey)}
                     </button>
                   );
                 })}
               </div>
 
-              <div className={styles.fieldLabel}>Message</div>
+              <div className={styles.fieldLabel}>{t("feedback.messageLabel")}</div>
               <textarea
                 className={styles.textarea}
-                placeholder="Describe the bug, feature request, or your general thoughts..."
+                placeholder={t("feedback.messagePlaceholder")}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
               />
 
               <div className={styles.fieldLabel}>
-                Rating <span className={styles.optionalLabel}>(optional)</span>
+                {t("feedback.ratingLabel")}{" "}
+                <span className={styles.optionalLabel}>
+                  {t("feedback.optional")}
+                </span>
               </div>
               <div className={styles.starRow}>
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -142,7 +145,7 @@ const FeedbackModal = ({ open, onClose }) => {
                     onMouseEnter={() => setHoverRating(n)}
                     onMouseLeave={() => setHoverRating(0)}
                     onClick={() => setRating(n)}
-                    aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                    aria-label={t("feedback.starAria", { count: n })}
                   >
                     <FiStar size={22} />
                   </button>
@@ -163,7 +166,7 @@ const FeedbackModal = ({ open, onClose }) => {
               onClick={handleSubmit}
               disabled={submitting}
             >
-              {submitting ? "Sending..." : "Submit Feedback"}
+              {submitting ? t("feedback.sending") : t("feedback.submit")}
             </button>
           </div>
         )}

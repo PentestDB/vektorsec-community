@@ -31,6 +31,7 @@ import {
 import { useAgentStreamStore } from "@/store/agentStream.store";
 import ContextUsageIndicator from "@/components/agent/ContextUsageIndicator";
 import FeedbackModal from "@/components/common/FeedbackModal";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const EMPTY_RACERS = [];
 
@@ -87,35 +88,43 @@ const RACER_STATUS = {
 // fallback when the menu API is unreachable.
 const DEFAULT_SESSION_MENUS = [
   {
-    label: "Orchestrator",
+    labelKey: "session.orchestrator",
     url: "/session/{sessionId}",
     order: -1,
   },
   {
-    label: "Vulnerabilities",
+    labelKey: "session.vulnerabilities",
     url: "/session/{sessionId}/vulnerabilities",
     order: 0,
   },
   {
-    label: "Connection",
+    labelKey: "session.connection",
     url: "/session/{sessionId}/connection",
     order: 1,
   },
-  { label: "VPN", url: "/session/{sessionId}/vpn", order: 2, locked: true },
-  { label: "GUI", url: "/session/{sessionId}/gui", order: 3, locked: true },
-  { label: "Burp", url: "/session/{sessionId}/burp", order: 4, locked: true },
-  { label: "Caido", url: "/session/{sessionId}/caido", order: 5, locked: true },
+  { labelKey: "session.vpn", url: "/session/{sessionId}/vpn", order: 2, locked: true },
+  { labelKey: "session.gui", url: "/session/{sessionId}/gui", order: 3, locked: true },
+  { labelKey: "session.burp", url: "/session/{sessionId}/burp", order: 4, locked: true },
+  { labelKey: "session.caido", url: "/session/{sessionId}/caido", order: 5, locked: true },
   {
-    label: "Mythic C2",
+    labelKey: "session.mythicC2",
     url: "/session/{sessionId}/mythic",
     order: 6,
   },
   {
-    label: "Browser Agent",
+    labelKey: "session.browser",
     url: "/session/{sessionId}/browser-agent",
     order: 7,
   },
 ];
+
+/**
+ * Resolve a menu label: built-in menus carry an i18n `labelKey`, admin-created
+ * menus carry a plain `label` that is shown verbatim.
+ */
+function menuLabel(menu, t) {
+  return menu?.labelKey ? t(menu.labelKey) : menu?.label;
+}
 
 /** A session menu item whose URL is the base chat page (e.g. Orchestrator). */
 function isChatMenuUrl(url) {
@@ -148,6 +157,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const { modal, message } = App.useApp();
+  const { t } = useTranslation();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [customMenus, setCustomMenus] = useState([]);
   const [sessionMenus, setSessionMenus] = useState([]);
@@ -385,7 +395,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
         className={isActive ? styles.activeTab : styles.tab}
       >
         {icon}
-        <span style={{ flex: 1 }}>{m.label}</span>
+        <span style={{ flex: 1 }}>{menuLabel(m, t)}</span>
         {kind === "vulnerabilities" && (vulnerabilitiesData?.total ?? 0) > 0 && (
           <span className={styles.navBadge}>{vulnerabilitiesData.total}</span>
         )}
@@ -394,7 +404,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     );
     const key = m._id || url;
     return m.locked ? (
-      <Tooltip key={key} title="Upgrade to Pro Plan to unlock" placement="right">
+      <Tooltip key={key} title={t("session.proLockTooltip")} placement="right">
         {tabContent}
       </Tooltip>
     ) : (
@@ -406,7 +416,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     <div className={styles.sidebar}>
       <div className={styles.createNew}>
         <div className={styles.navRow}>
-          <Tooltip title="All workspaces" placement="right">
+          <Tooltip title={t("session.allWorkspaces")} placement="right">
             <button
               className={styles.navBtn}
               onClick={() => { dispatch(setRecon(false)); router.push("/dashboard"); }}
@@ -418,17 +428,17 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             className={styles.navLabel}
             onClick={() => { dispatch(setRecon(false)); router.push(exitTarget); }}
           >
-            {workspaceId ? "Workspace" : "Dashboard"}
+            {workspaceId ? t("session.workspace") : t("nav.dashboard")}
           </button>
         </div>
 
         <Tooltip
           placement="right"
           title={toolExecutionMode === "auto"
-            ? "Run automatically; built-in destructive-action protections still ask."
+            ? t("session.toolModeAutoHint")
             : toolExecutionMode === "auto_approve"
-              ? "AI reviews every action and asks whenever it is unsafe or uncertain."
-              : "Ask before every tool action."}
+              ? t("session.toolModeAutoApproveHint")
+              : t("session.toolModeConsentHint")}
         >
         <div
           style={{
@@ -450,7 +460,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
         >
           <FiShield size={12} style={{ flexShrink: 0 }} />
           <select
-            aria-label="Tool execution mode"
+            aria-label={t("session.toolExecutionMode")}
             value={toolExecutionMode}
             disabled={updateCapabilitiesMutation.isLoading}
             onChange={(event) => handleExecutionModeChange(event.target.value)}
@@ -465,9 +475,9 @@ const Sidebar = ({ sessionId, workspaceId }) => {
               fontSize: "0.72rem",
             }}
           >
-            <option value="auto">Auto run</option>
-            <option value="auto_approve">Auto approve (AI)</option>
-            <option value="requires_consent">Requires consent</option>
+            <option value="auto">{t("session.toolModeAuto")}</option>
+            <option value="auto_approve">{t("session.toolModeAutoApprove")}</option>
+            <option value="requires_consent">{t("session.toolModeConsent")}</option>
           </select>
         </div>
         </Tooltip>
@@ -484,7 +494,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
                 className={sess?.is_active ? styles.activeTab : styles.tab}
               >
                 <Image src={quad} width={14} height={14} alt="" />
-                Main Workspace
+                {t("session.mainWorkspace")}
               </div>
             ))}
 
@@ -497,7 +507,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
                 className={sess?.is_active ? styles.activeTab : styles.tab}
               >
                 <Image src={rect} width={14} height={14} alt="" />
-                Sub Workspace {i + 1}
+                {t("session.subWorkspace", { index: i + 1 })}
               </div>
             ))}
 
@@ -507,7 +517,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
               className={isOnWorkspace ? styles.activeTab : styles.tab}
             >
               <Image src={quad} width={14} height={14} alt="" />
-              {chatMenu?.label || "Orchestrator"}
+              {chatMenu ? menuLabel(chatMenu, t) : t("session.orchestrator")}
             </div>
           )}
 
@@ -515,7 +525,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             <div className={styles.racerSection}>
               <div className={styles.racerHeader}>
                 <ThunderboltFilled style={{ color: "#f0c000", fontSize: 10 }} />
-                <span>Racers</span>
+                <span>{t("session.racers")}</span>
                 <span className={styles.racerBadge}>
                   {activeRacerCount > 0
                     ? `${activeRacerCount}/${allRacers.length}`
@@ -559,7 +569,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
                         backgroundColor: "#f0c00015",
                         fontWeight: 600,
                       }}>
-                        Winner
+                        {t("session.winner")}
                       </span>
                     )}
                     {racer.status === "failed" && !racer.isWinner && (
@@ -568,7 +578,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
                         padding: "0 3px", borderRadius: 3,
                         backgroundColor: "#f8514915",
                       }}>
-                        Failed
+                        {t("session.failed")}
                       </span>
                     )}
                   </div>
@@ -597,7 +607,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
               marginBottom: "0.35rem",
             }}
           >
-            Quick Links
+            {t("session.quickLinks")}
           </div>
           {customMenus.map((m) =>
             m.openInNewTab ? (
@@ -614,7 +624,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
                   textDecoration: "none",
                 }}
               >
-                {m.label}
+                {menuLabel(m, t)}
               </a>
             ) : (
               <Link
@@ -628,7 +638,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
                   textDecoration: "none",
                 }}
               >
-                {m.label}
+                {menuLabel(m, t)}
               </Link>
             )
           )}
@@ -642,38 +652,38 @@ const Sidebar = ({ sessionId, workspaceId }) => {
             className={styles.options}
             onClick={() => {
               modal.confirm({
-                title: "Clear context?",
-                content: "This will erase all conversation history for this session. The system prompt and shells will be preserved.",
-                okText: "Clear",
+                title: t("session.clearContextTitle"),
+                content: t("session.clearContextBody"),
+                okText: t("session.clearContextOk"),
                 okType: "danger",
-                cancelText: "Cancel",
+                cancelText: t("common.cancel"),
                 centered: true,
                 async onOk() {
                   try {
                     await clearContext({ sessionId });
-                    message.success("Context cleared");
+                    message.success(t("session.clearedOk"));
                     window.dispatchEvent(new CustomEvent("context-cleared", { detail: { sessionId } }));
                     queryClient.invalidateQueries(["session-info", sessionId]);
                   } catch {
-                    message.error("Failed to clear context");
+                    message.error(t("session.clearFailed"));
                   }
                 },
               });
             }}
           >
             <MdOutlineDeleteSweep size={15} />
-            Clear Context
+            {t("session.clearContext")}
           </div>
           <div className={styles.options}>
             <Image src={docs} width={14} height={14} alt="" />
-            Documentation
+            {t("session.documentation")}
           </div>
           <div
             className={styles.options}
             onClick={() => setFeedbackOpen(true)}
           >
             <Image src={help} width={14} height={14} alt="" />
-            Share Feedback
+            {t("session.shareFeedback")}
           </div>
         </div>
       </div>

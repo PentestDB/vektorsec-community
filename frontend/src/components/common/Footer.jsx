@@ -4,10 +4,12 @@ import { FaInstagram, FaLinkedin, FaYoutube } from "react-icons/fa";
 import { Col, Form, Row } from "antd";
 import {  MailFilled } from "@ant-design/icons";
 import CopilotLogo from "./CopilotLogo";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const Footer = () => {
   const [form] = Form.useForm();
   const email = Form.useWatch("email", form);
+  const { t } = useTranslation();
 
   const socialLinks = [
     {
@@ -47,10 +49,7 @@ const Footer = () => {
         <Row gutter={[48, 24]} justify="space-between">
           <Col lg={8} md={12} sm={24} xs={24}>
             <CopilotLogo />
-            <p className={styles.footerText}>
-              VektorSec takes you through each step of the journey, making
-              your life easier.
-            </p>
+            <p className={styles.footerText}>{t("footer.tagline")}</p>
             <p className={`${styles.footerText} ${styles.footerMailLink}`} style={{
               display: "flex",
               alignItems: "center",
@@ -66,32 +65,34 @@ const Footer = () => {
           <Col lg={15} md={12} sm={24} xs={24}>
             <Row gutter={[32, 32]} justify="start">
               <Col lg={5} md={12} sm={12} xs={12}>
-                <h3 className={styles.footerHeading}>Quick Links</h3>
+                <h3 className={styles.footerHeading}>{t("footer.quickLinks")}</h3>
                 <div className={styles.footerList}>
                   <a className={styles.footerLink} href="/login">
-                    Login
+                    {t("footer.login")}
                   </a>
                 </div>
               </Col>
               <Col lg={5} md={12} sm={12} xs={12}>
-                <h3 className={styles.footerHeading}>Resources</h3>
+                <h3 className={styles.footerHeading}>{t("footer.resources")}</h3>
                 <div className={styles.footerList}>
                   <a className={styles.footerLink} href="/terms">
-                    Terms & Conditions
+                    {t("footer.terms")}
                   </a>
 
-                  <span className={styles.footerLink}>Documentation</span>
+                  <span className={styles.footerLink}>
+                    {t("footer.documentation")}
+                  </span>
 
                   <a
                     className={styles.footerLink}
                     href="https://discord.gg/vektorsec"
                   >
-                    Community
+                    {t("footer.community")}
                   </a>
                 </div>
               </Col>
               <Col lg={5} md={12} sm={12} xs={12}>
-                <h3 className={styles.footerHeading}>Social</h3>
+                <h3 className={styles.footerHeading}>{t("footer.social")}</h3>
                 <div className={styles.footerList}>
                   {socialLinks.map((socialLink, index) => (
                     <a
@@ -113,22 +114,14 @@ const Footer = () => {
       </div>
 
       <div className={styles.footerBottom}>
-        <p>VektorSec Pte Ltd © 2025</p>
+        <p>{t("footer.copyright")}</p>
         <div className={styles.socialIcons}>
           <span
             style={{
               color: "#FFF",
             }}
           >
-            Made with{" "}
-            <span
-              style={{
-                color: "#FF0000",
-              }}
-            >
-              ❤
-            </span>{" "}
-            by Team VektorSec
+            {t("footer.madeWith")}
           </span>
           <span
             style={{

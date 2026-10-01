@@ -21,6 +21,8 @@ import { logout } from "@/store/user.slice";
 import CopilotLogo from "./CopilotLogo";
 import SettingsOverlay from "./SettingsOverlay";
 import { FaCoins } from "react-icons/fa";
+import { useTranslation } from "@/i18n/I18nProvider";
+import LanguageSwitcher from "@/i18n/LanguageSwitcher";
 
 const CTF_STATUS = {
   solved: { icon: <CheckCircleFilled />, label: "Solved", cls: "ctfStatusSolved" },
@@ -36,6 +38,7 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.user);
   const { message } = App.useApp();
+  const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState(null);
 
@@ -54,11 +57,11 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
     onSuccess: (data) => {
       router.push("/");
       dispatch(logout());
-      message.success(data?.message ?? "Logged out successfully!");
+      message.success(data?.message ?? t("nav.loggedOut"));
     },
     onError: (err) => {
       message.error(
-        err?.response?.data?.message ?? "Failed to logout. Please try again."
+        err?.response?.data?.message ?? t("nav.logoutFailed")
       );
     },
   });
@@ -123,7 +126,7 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
         <div className={styles.options}>
           <div className={styles.tokenWidget}>
             <FaCoins className={styles.tokenIcon} />
-            <span className={styles.tokenLabel}>Tokens</span>
+            <span className={styles.tokenLabel}>{t("nav.tokens")}</span>
             <span className={styles.tokenValue}>
               {(user?.credits ?? 10000).toLocaleString()}
             </span>
@@ -132,30 +135,31 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
               className={styles.topUpBtn}
               onClick={() => router.push("/topup")}
             >
-              + Top Up
+              + {t("nav.topUp")}
             </button>
           </div>
           <div className={styles.username}>{user.name}</div>
+          <LanguageSwitcher className={styles.headerIconBtn} />
           <a
             href="https://github.com/PentestDB"
             target="_blank"
             rel="noopener noreferrer"
             className={styles.headerIconBtn}
-            title="Star on GitHub"
+            title={t("nav.starOnGitHub")}
           >
             <FaGithub />
           </a>
           <button
             className={styles.headerIconBtn}
             onClick={() => setSettingsOpen(true)}
-            title="Settings"
+            title={t("nav.settings")}
           >
             <RiSettings3Line />
           </button>
           <button
             className={`${styles.headerIconBtn} ${styles.headerLogoutBtn}`}
             onClick={async () => await logoutMutation.mutateAsync()}
-            title="Logout"
+            title={t("nav.logout")}
           >
             <RiLogoutCircleRLine />
           </button>

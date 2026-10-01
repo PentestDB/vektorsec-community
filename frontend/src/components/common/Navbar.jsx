@@ -9,22 +9,28 @@ import { useRouter } from "next/navigation";
 import CopilotLogo from "./CopilotLogo";
 import { checkSession, logoutUser } from "@/services/auth.service";
 import { getMenuItems } from "@/services/menu.service";
+import { useTranslation } from "@/i18n/I18nProvider";
+import LanguageSwitcher from "@/i18n/LanguageSwitcher";
 
 // Default navigation links — shown until the database menus load, and used as
 // a fallback if the menu API is unreachable. The same list is seeded into the
 // DB on first run so admins can manage these from the Admin Panel.
+// `labelKey` (i18n) is used for these built-in labels; admin-created menus ship
+// their own plain-text label so both shapes are handled at render time.
 const DEFAULT_MENUS = [
-  { label: "Home", url: "/", order: 0 },
-  { label: "Pricing", url: "/pricing", order: 1 },
-  { label: "Top Up", url: "/topup", order: 2 },
-  { label: "Docs", url: "/docs", order: 3 },
+  { labelKey: "nav.home", url: "/", order: 0 },
+  { labelKey: "nav.pricing", url: "/pricing", order: 1 },
+  { labelKey: "nav.topUp", url: "/topup", order: 2 },
+  { labelKey: "nav.docs", url: "/docs", order: 3 },
   {
-    label: "GitHub",
+    labelKey: "nav.github",
     url: "https://github.com/PentestDB",
     order: 4,
     openInNewTab: true,
   },
 ];
+
+const menuLabel = (menu, t) => (menu.labelKey ? t(menu.labelKey) : menu.label);
 
 const Navbar = ({ nobg }) => {
   const [toggle, setToggle] = useState(false);
@@ -32,6 +38,7 @@ const Navbar = ({ nobg }) => {
   const [loading, setLoading] = useState(true);
   const [customMenus, setCustomMenus] = useState(DEFAULT_MENUS);
   const router = useRouter();
+  const { t } = useTranslation();
 
   const openSidebar = () => {
     setToggle(true);
@@ -115,48 +122,51 @@ const Navbar = ({ nobg }) => {
       </a>
 
       <div className={styles.navItems}>
-        {customMenus.map((m) =>
+        {customMenus.map((m, idx) =>
           m.openInNewTab ? (
             <a
-              key={m._id}
+              key={m._id ?? `nav-${idx}`}
               href={m.url}
               target="_blank"
               rel="noopener noreferrer"
               className={styles.navItem}
               style={{ textDecoration: "none" }}
             >
-              {m.label}
+              {menuLabel(m, t)}
             </a>
           ) : (
-            <Link key={m._id} href={m.url} className={styles.navItem}>
-              {m.label}
+            <Link key={m._id ?? `nav-${idx}`} href={m.url} className={styles.navItem}>
+              {menuLabel(m, t)}
             </Link>
           )
         )}
+
+        {/* Language switcher: available before and after login */}
+        <LanguageSwitcher className={styles.navItem} />
 
         {loading ? null : user ? (
           <>
             {isAdmin && (
               <Link href="/admin/dashboard" className={styles.navItem}>
-                Admin Panel
+                {t("nav.admin")}
               </Link>
             )}
             <Link href="/dashboard" className={styles.navItem}>
-              Dashboard
+              {t("nav.dashboard")}
             </Link>
             <div className={styles.login}>
-              <PrimaryButton onClick={handleLogout}>Logout</PrimaryButton>
+              <PrimaryButton onClick={handleLogout}>{t("nav.logout")}</PrimaryButton>
             </div>
           </>
         ) : (
           <>
             {/* Admin link goes to the admin login page first */}
             <Link href="/admin" className={styles.navItem}>
-              Admin
+              {t("nav.admin")}
             </Link>
             <div className={styles.login}>
               <PrimaryButton onClick={() => router.push("/login")}>
-                Sign In
+                {t("nav.login")}
               </PrimaryButton>
             </div>
           </>
@@ -202,12 +212,16 @@ const Navbar = ({ nobg }) => {
                           rel="noopener noreferrer"
                           style={{ color: "inherit", textDecoration: "none" }}
                         >
-                          {m.label}
+                          {menuLabel(m, t)}
                         </a>
                       ) : (
-                        <Link href={m.url}>{m.label}</Link>
+                        <Link href={m.url}>{menuLabel(m, t)}</Link>
                       ),
                   })),
+                  {
+                    key: "language",
+                    label: <LanguageSwitcher />,
+                  },
                   ...(loading
                     ? []
                     : user
@@ -218,7 +232,7 @@ const Navbar = ({ nobg }) => {
                                 key: "admin",
                                 label: (
                                   <Link href="/admin/dashboard">
-                                    Admin Panel
+                                    {t("nav.admin")}
                                   </Link>
                                 ),
                               },
@@ -226,7 +240,9 @@ const Navbar = ({ nobg }) => {
                           : []),
                         {
                           key: "dashboard",
-                          label: <Link href="/dashboard">Dashboard</Link>,
+                          label: (
+                            <Link href="/dashboard">{t("nav.dashboard")}</Link>
+                          ),
                         },
                         {
                           key: "logout",
@@ -235,7 +251,7 @@ const Navbar = ({ nobg }) => {
                               onClick={handleLogout}
                               className={styles.loginBtn}
                             >
-                              Logout
+                              {t("nav.logout")}
                             </div>
                           ),
                         },
@@ -243,11 +259,13 @@ const Navbar = ({ nobg }) => {
                     : [
                         {
                           key: "admin",
-                          label: <Link href="/admin">Admin</Link>,
+                          label: <Link href="/admin">{t("nav.admin")}</Link>,
                         },
                         {
                           key: "signin",
-                          label: <Link href="/login">Sign In</Link>,
+                          label: (
+                            <Link href="/login">{t("nav.login")}</Link>
+                          ),
                           className: styles.loginBtn,
                         },
                       ]),

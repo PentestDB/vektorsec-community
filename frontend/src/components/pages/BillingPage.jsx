@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, Dropdown } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
 import {
   cancelPlan,
   getMyBilling,
@@ -10,10 +12,13 @@ import {
   resumePlan,
   upgradePlan,
 } from "@/services/billing.service";
+import { usageExportUrl } from "@/services/subscription.service";
 import styles from "./BillingPage.module.scss";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const BillingPage = () => {
   const router = useRouter();
+  const { t } = useTranslation();
   const [billing, setBilling] = useState(null);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,6 +27,13 @@ const BillingPage = () => {
   const [couponMsg, setCouponMsg] = useState("");
   const [couponError, setCouponError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+
+  /** Channels a usage CSV can be exported for (see Subscription.model.ts). */
+  const usageExportChannels = [
+    { key: "online", label: t("billing.exportChannelOnline") },
+    { key: "telegram", label: t("billing.exportChannelTelegram") },
+    { key: "platform", label: t("billing.exportChannelPlatform") },
+  ];
 
   const loadData = async () => {
     try {
@@ -49,7 +61,7 @@ const BillingPage = () => {
       await upgradePlan({ plan, interval: "monthly" });
       await loadData();
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to upgrade plan");
+      setError(err?.response?.data?.message || t("billing.upgradeFailed"));
     } finally {
       setActionLoading(false);
     }
@@ -62,7 +74,7 @@ const BillingPage = () => {
       await cancelPlan();
       await loadData();
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to cancel plan");
+      setError(err?.response?.data?.message || t("billing.cancelFailed"));
     } finally {
       setActionLoading(false);
     }
@@ -85,17 +97,17 @@ const BillingPage = () => {
     setCouponMsg("");
     setCouponError("");
     if (!coupon.trim()) {
-      setCouponError("Please enter a coupon code");
+      setCouponError(t("billing.enterCoupon"));
       return;
     }
     setActionLoading(true);
     try {
       const result = await redeemCoupon(coupon.trim());
-      setCouponMsg(result?.message || "Coupon redeemed!");
+      setCouponMsg(result?.message || t("billing.couponRedeemed"));
       setCoupon("");
       await loadData();
     } catch (err) {
-      setCouponError(err?.response?.data?.message || "Failed to redeem coupon");
+      setCouponError(err?.response?.data?.message || t("billing.redeemFailed"));
     } finally {
       setActionLoading(false);
     }
@@ -109,29 +121,29 @@ const BillingPage = () => {
     return <div className={styles.error}>{error}</div>;
   }
 
-  const planName = billing?.planName || "Free";
+  const planName = billing?.planName || t("billing.free");
   const isPaid = billing?.plan !== "free";
   const cancelAtPeriodEnd = billing?.cancelAtPeriodEnd;
 
   const usageBars = usage?.usage
     ? [
         {
-          label: "Concurrent Sessions",
+          label: t("billing.concurrentSessions"),
           current: usage.usage.concurrentSessions.current,
           limit: usage.usage.concurrentSessions.limit,
         },
         {
-          label: "Sessions / Period",
+          label: t("billing.sessionsPerPeriod"),
           current: usage.usage.sessionsPerPeriod.current,
           limit: usage.usage.sessionsPerPeriod.limit,
         },
         {
-          label: "Workspaces",
+          label: t("billing.workspaces"),
           current: usage.usage.workspaces.current,
           limit: usage.usage.workspaces.limit,
         },
         {
-          label: "MCP Tokens",
+          label: t("billing.mcpTokens"),
           current: usage.usage.mcpTokens.current,
           limit: usage.usage.mcpTokens.limit,
         },
@@ -141,8 +153,8 @@ const BillingPage = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Billing & Subscription</h1>
-        <p className={styles.subtitle}>Manage your plan and usage</p>
+        <h1 className={styles.title}>{t("billing.title")}</h1>
+        <p className={styles.subtitle}>{t("billing.subtitle")}</p>
       </div>
 
       {error && <div className={styles.errorBanner}>{error}</div>}
@@ -150,25 +162,27 @@ const BillingPage = () => {
       {/* Current plan card */}
       <div className={styles.planCard}>
         <div className={styles.planInfo}>
-          <h2 className={styles.planName}>{planName} Plan</h2>
+          <h2 className={styles.planName}>
+            {t("billing.planTitle", { plan: planName })}
+          </h2>
           <p className={styles.planPrice}>
             {billing?.planPriceMonthly > 0 ? (
               <>
                 ${billing.planPriceMonthly}
-                <span className={styles.perMonth}>/month</span>
+                <span className={styles.perMonth}>{t("billing.perMonth")}</span>
               </>
             ) : (
-              "Free forever"
+              t("billing.freeForever")
             )}
           </p>
           {cancelAtPeriodEnd && (
-            <div className={styles.cancelNotice}>
-              Your subscription will be canceled at the end of the billing period.
-            </div>
+            <div className={styles.cancelNotice}>{t("billing.cancelNotice")}</div>
           )}
           {billing?.planExpiresAt && (
             <div className={styles.expiry}>
-              Plan expires: {new Date(billing.planExpiresAt).toLocaleDateString()}
+              {t("billing.planExpires", {
+                date: new Date(billing.planExpiresAt).toLocaleDateString(),
+              })}
             </div>
           )}
         </div>
@@ -179,7 +193,7 @@ const BillingPage = () => {
               className={styles.upgradeBtn}
               onClick={() => router.push("/pricing")}
             >
-              Upgrade Plan
+              {t("billing.upgradePlan")}
             </button>
           )}
           {isPaid && !cancelAtPeriodEnd && (
@@ -188,7 +202,7 @@ const BillingPage = () => {
               onClick={handleCancel}
               disabled={actionLoading}
             >
-              Cancel Subscription
+              {t("billing.cancelSubscription")}
             </button>
           )}
           {isPaid && cancelAtPeriodEnd && (
@@ -197,7 +211,7 @@ const BillingPage = () => {
               onClick={handleResume}
               disabled={actionLoading}
             >
-              Resume Subscription
+              {t("billing.resumeSubscription")}
             </button>
           )}
         </div>
@@ -205,7 +219,7 @@ const BillingPage = () => {
 
       {/* Plan features */}
       <div className={styles.featuresCard}>
-        <h3 className={styles.sectionTitle}>Included Features</h3>
+        <h3 className={styles.sectionTitle}>{t("billing.includedFeatures")}</h3>
         <ul className={styles.features}>
           {(billing?.planFeatures || []).map((feature, i) => (
             <li key={i} className={styles.feature}>
@@ -218,7 +232,23 @@ const BillingPage = () => {
 
       {/* Usage */}
       <div className={styles.usageCard}>
-        <h3 className={styles.sectionTitle}>Usage</h3>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>{t("billing.usage")}</h3>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: usageExportChannels,
+              onClick: ({ key }) => {
+                // Same-origin download: the gateway relays Content-Disposition.
+                window.location.assign(usageExportUrl(key, 30));
+              },
+            }}
+          >
+            <Button size="small" icon={<DownloadOutlined />}>
+              {t("common.exportUsage")}
+            </Button>
+          </Dropdown>
+        </div>
         <div className={styles.usageGrid}>
           {usageBars.map((item) => {
             const pct =
@@ -248,19 +278,23 @@ const BillingPage = () => {
         </div>
         {usage?.usage?.credits && (
           <div className={styles.credits}>
-            <strong>Credits:</strong> {usage.usage.credits.current} available
-            {usage.usage.credits.used > 0 && ` (${usage.usage.credits.used} used)`}
+            <strong>{t("billing.credits")}</strong>{" "}
+            {t("billing.creditsAvailable", {
+              count: usage.usage.credits.current,
+            })}
+            {usage.usage.credits.used > 0 &&
+              ` ${t("billing.creditsUsed", { count: usage.usage.credits.used })}`}
           </div>
         )}
       </div>
 
       {/* Coupon redemption */}
       <div className={styles.couponCard}>
-        <h3 className={styles.sectionTitle}>Redeem Coupon</h3>
+        <h3 className={styles.sectionTitle}>{t("billing.redeemCoupon")}</h3>
         <div className={styles.couponRow}>
           <input
             className={styles.couponInput}
-            placeholder="Enter coupon code"
+            placeholder={t("billing.couponPlaceholder")}
             value={coupon}
             onChange={(e) => setCoupon(e.target.value)}
           />
@@ -269,7 +303,7 @@ const BillingPage = () => {
             onClick={handleRedeemCoupon}
             disabled={actionLoading}
           >
-            Redeem
+            {t("billing.redeem")}
           </button>
         </div>
         {couponMsg && <div className={styles.couponSuccess}>{couponMsg}</div>}
