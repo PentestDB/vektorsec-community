@@ -448,9 +448,12 @@ cd frontend && pnpm install && pnpm run dev   # port 3001
 
 ```bash
 cp backend/.env.example backend/.env        # ครั้งแรก
-docker compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
+- ต้องรันจาก repo root: service ใช้ bind mount `.` → `/app` และ compose project
+  ตั้งชื่อตายตัวว่า `vektorsec-dev` (ไม่ผูกกับชื่อโฟลเดอร์) เปลี่ยนชื่อ/ย้ายโฟลเดอร์
+  แล้วจะไม่ไปสร้าง stack ใหม่ที่ volume ว่าง
 - backend: `tsx watch` → restart อัตโนมัติเมื่อแก้ `.ts`
 - frontend: Next.js dev (Fast Refresh) ผ่าน gateway ที่ `http://localhost:3001`
 - เปิด Kali box ในตัว: `docker compose -f docker-compose.dev.yml --profile kali up -d`

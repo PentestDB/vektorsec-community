@@ -1,10 +1,16 @@
 # ============================================================================
 #  VektorSec — Local Development Stack (hot reload, no VPS required)
 # ----------------------------------------------------------------------------
-#  Usage:
+#  Usage (รันจาก repo root เท่านั้น — volumes bind .:/app):
 #    1) (ครั้งแรก) copy env files  ->  cp backend/.env.example backend/.env
-#    2) docker compose -f docker-compose.dev.yml up --build
+#    2) docker compose -f docker-compose.dev.yml up -d --build
 #    3) เปิด http://localhost:3001
+#
+#  หมายเหตุ: ไฟล์นี้ตั้งชื่อ project ว่า `vektorsec-dev` โดยเจตนา
+#    - แยก volumes จากโปรดักชัน (docker-compose.yml = project `vektorsec`) จึงไม่ทับกัน
+#    - ชื่อ project ไม่ผูกกับชื่อโฟลเดอร์อีกต่อไป เปลี่ยนชื่อ/ย้ายโฟลเดอร์ repo แล้ว
+#      stack + volumes เดิมยังอยู่ (ถ้าไม่ตั้ง name: compose จะใช้ชื่อโฟลเดอร์เป็น
+#      project name แล้วขึ้น stack ใหม่พร้อม volume ว่าง)
 #
 #  Hot reload:
 #    - backend  : tsx watch -> แก้ไฟล์ .ts แล้ว process restart อัตโนมัติ
@@ -13,6 +19,8 @@
 #  Kali container ในตัว (optional) เริ่มด้วย:
 #    docker compose -f docker-compose.dev.yml --profile kali up -d
 # ============================================================================
+
+name: vektorsec-dev
 
 services:
   mongodb:

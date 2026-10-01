@@ -254,7 +254,7 @@ vault_manage action="store" key="API_KEY" value="sk-xxx"
 |------|----------|
 | `docker-compose.yml` | Normal mode (backend + frontend + mongo + redis) |
 | `docker-compose.kali.yml` | Normal mode + Kali container |
-| `docker-compose.dev.yml` | Developer mode (mongo + redis only) |
+| `docker-compose.dev.yml` | Developer mode — mongo + redis + backend + frontend, hot reload (compose project `vektorsec-dev`, run it from the repo root) |
 
 ---
 

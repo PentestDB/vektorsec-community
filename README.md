@@ -453,9 +453,12 @@ cd frontend && pnpm install && pnpm run dev   # port 3001
 
 ```bash
 cp backend/.env.example backend/.env        # first time only
-docker compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
+- run it from the repo root: the services bind-mount `.` to `/app`, so the compose
+  project lives under its own name (`vektorsec-dev`) instead of the folder name —
+  renaming or moving the checkout no longer spawns an empty stack
 - backend: `tsx watch` → restarts automatically when a `.ts` file changes
 - frontend: Next.js dev (Fast Refresh) through the gateway at `http://localhost:3001`
 - Start the built-in Kali box: `docker compose -f docker-compose.dev.yml --profile kali up -d`
