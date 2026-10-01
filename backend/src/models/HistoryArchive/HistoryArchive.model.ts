@@ -12,7 +12,7 @@ interface ArchiveHistoryData extends HistoryData {
 }
 
 const HistoryArchiveSchema = new Schema({
-  sessionId: { type: String, required: true },
+  sessionId: { type: String, required: true, index: true },
   history: {
     type: [
       {
@@ -25,6 +25,9 @@ const HistoryArchiveSchema = new Schema({
     ],
   },
 });
+
+// Archives are appended per loop and read per session.
+HistoryArchiveSchema.index({ sessionId: 1 });
 
 export default mongoose.model<SessionDoc>(
   "HistoryArchive",

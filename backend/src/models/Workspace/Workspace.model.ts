@@ -13,6 +13,25 @@ export interface WorkHostDoc {
   configuredAt: Date;
 }
 
+export interface WorkspaceAgentConfigDoc {
+  // Max agentic turns per orchestrator run for sessions in this workspace.
+  // One of WORKSPACE_MAX_TURNS_CHOICES ([25, 50, 100]). When undefined the
+  // user-level maxAgentIterations (Settings → Agent Behavior) is used.
+  maxTurns?: number;
+  // Autonomous mode: when true the agent does NOT stop for authorization
+  // confirmation on high-risk (but non-destructive, in-scope) actions such as
+  // WAF bypass, origin-IP discovery or active recon — it proceeds immediately.
+  autonomousMode?: boolean;
+  // Workspace-level target scope (whitelist). When scope.enabled is true this
+  // list is authoritative for all sessions in the workspace; otherwise the
+  // global Admin > Scope config applies.
+  scope?: {
+    enabled?: boolean;
+    strictMode?: boolean;
+    entriesRaw?: string;
+  };
+}
+
 export interface WorkspaceDoc extends mongoose.Document {
   uid: mongoose.Types.ObjectId;
   workspaceId: string;
@@ -23,6 +42,7 @@ export interface WorkspaceDoc extends mongoose.Document {
   status: "active" | "archived";
   workHost?: WorkHostDoc;
   ctfConfig?: CtfConfigDoc;
+  agentConfig?: WorkspaceAgentConfigDoc;
 }
 
 const WorkspaceSchema = new Schema({
@@ -65,6 +85,24 @@ const WorkspaceSchema = new Schema({
           connectionInfo: { type: String },
           userNotes: { type: String },
           setAt: { type: Date, default: Date.now },
+        },
+        default: undefined,
+      },
+    },
+    default: undefined,
+  },
+  // Per-workspace agent settings (Workspace Settings UI). Currently supports
+  // the max agentic turns preset, autonomous mode and a target scope
+  // allowlist; extend here when more fields are needed.
+  agentConfig: {
+    type: {
+      maxTurns: { type: Number },
+      autonomousMode: { type: Boolean, default: false },
+      scope: {
+        type: {
+          enabled: { type: Boolean, default: false },
+          strictMode: { type: Boolean, default: false },
+          entriesRaw: { type: String, default: "" },
         },
         default: undefined,
       },

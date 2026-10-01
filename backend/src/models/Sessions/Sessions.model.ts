@@ -781,6 +781,8 @@ const SessionSchema = new Schema({
 });
 
 SessionSchema.index({ workspaceId: 1, status: 1 });
+// Dashboard / "my sessions" listings query by owner, newest first.
+SessionSchema.index({ uid: 1, createdAt: -1 });
 
 export { AgentMessageSchema };
 export default mongoose.model<SessionDoc>("Session", SessionSchema);

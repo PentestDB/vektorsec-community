@@ -14,6 +14,13 @@ export interface SubscriptionDoc extends Document {
   paymentOrderId?: string;
   /** Cumulative tokens used during a trial (no time expiry — ends at cap). */
   trialTokensUsed: number;
+  /**
+   * Whether the free trial has ever been claimed on this channel.
+   *
+   * Persisted so cancelling (or letting a paid plan expire) cannot be used to
+   * farm unlimited trials: `startTrial()` refuses once this is true.
+   */
+  trialUsed: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +45,7 @@ const SubscriptionSchema = new Schema<SubscriptionDoc>(
     autoRenew: { type: Boolean, default: false },
     paymentOrderId: { type: String },
     trialTokensUsed: { type: Number, default: 0 },
+    trialUsed: { type: Boolean, default: false },
   },
 
   { timestamps: true },

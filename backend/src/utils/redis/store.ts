@@ -1,10 +1,14 @@
-import { redisClient } from "../../server";
+import { lazyRedisClient } from "./client";
 import {
   ContextData,
   HistoryData,
   SingleCommandData,
   CopilotSessionData,
 } from "../../services/copilot.services";
+
+// Resolved per call (see lazyRedisClient): this module is imported before Redis
+// connects, and by tests that never touch Redis at all.
+const redisClient = lazyRedisClient();
 
 // get session data
 export const getSessionData = async (sessionId: string) => {
