@@ -29,22 +29,40 @@ export const AuthContextProvider = ({ children }) => {
 
   useQuery(["check-session"], checkSession, {
     onSuccess: (data) => {
-      dispatch(loginUser(data.user));
-      setLoading(false);
+      // Logged in.
+      if (data?.user) {
+        dispatch(loginUser(data.user));
+        setLoading(false);
 
-      if (pathname === "/onboarding") {
-        if (!data.user.firstLogin) {
-          router.replace("/dashboard");
+        if (pathname === "/onboarding") {
+          if (!data.user.firstLogin) {
+            router.replace("/dashboard");
+          }
         }
+
+        if (
+          pathname === "/" ||
+          pathname === "/login" ||
+          pathname === "/register" ||
+          pathname === "/dashboard"
+        ) {
+          router.push(data.user.firstLogin ? "/onboarding" : "/dashboard");
+        }
+        return;
       }
 
+      // No session (backend answered 200 with user:null) — this is expected on
+      // public pages; protected pages get redirected to /login.
+      dispatch(logout());
+      setLoading(false);
       if (
-        pathname === "/" ||
-        pathname === "/login" ||
-        pathname === "/register" ||
-        pathname === "/dashboard"
+        pathname !== "/" &&
+        !pathname.includes("/login") &&
+        !pathname.includes("/register") &&
+        pathname !== "/no-access" &&
+        pathname !== "/onboarding"
       ) {
-        router.push(data.user.firstLogin ? "/onboarding" : "/dashboard");
+        router.replace("/login");
       }
     },
     onError: () => {
