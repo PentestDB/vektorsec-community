@@ -26,12 +26,15 @@ import {
 import { TbTerminal2 } from "react-icons/tb";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import Loader from "@/components/common/loader/Loader";
+import RichText from "@/components/common/RichText";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Settings.module.scss";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getSSHConfig, updateSSHConfig, updateSafetyProtections, getSSHProfiles, addSSHProfile, deleteSSHProfile, testSSHProfile, testSavedSSHProfile } from "@/services/user.service";
 import { apiClient } from "@/utils/axios.config";
 
 const SSHPage = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery("ssh-config", getSSHConfig);
@@ -61,24 +64,26 @@ const SSHPage = () => {
       queryClient.invalidateQueries("ssh-config");
       message.success(
         variables.disableSafetyProtections
-          ? "Safety protections disabled"
-          : "Safety protections enabled"
+          ? t("sshSettings.safetyDisabled")
+          : t("sshSettings.safetyEnabled"),
       );
     },
     onError: (err) => {
       setSafetyDisabled(!safetyDisabled);
-      message.error(err?.response?.data?.message || "Failed to update safety protections");
+      message.error(
+        err?.response?.data?.message || t("sshSettings.safetyUpdateFailed"),
+      );
     },
   });
 
   const saveMutation = useMutation(updateSSHConfig, {
     onSuccess: () => {
-      message.success("SSH configuration saved");
+      message.success(t("sshSettings.saved"));
       queryClient.invalidateQueries("ssh-config");
       setSaving(false);
     },
     onError: (err) => {
-      message.error(err?.response?.data?.message || "Failed to save SSH config");
+      message.error(err?.response?.data?.message || t("sshSettings.saveFailed"));
       setSaving(false);
     },
   });
@@ -92,21 +97,25 @@ const SSHPage = () => {
 
   const addProfileMutation = useMutation(addSSHProfile, {
     onSuccess: () => {
-      message.success("SSH server added");
+      message.success(t("sshSettings.serverAdded"));
       profileForm.resetFields();
       queryClient.invalidateQueries("managed-ssh-profiles");
     },
     onError: (err) =>
-      message.error(err?.response?.data?.message || "Failed to add SSH server"),
+      message.error(
+        err?.response?.data?.message || t("sshSettings.serverAddFailed"),
+      ),
   });
 
   const deleteProfileMutation = useMutation(deleteSSHProfile, {
     onSuccess: () => {
-      message.success("SSH server removed");
+      message.success(t("sshSettings.serverRemoved"));
       queryClient.invalidateQueries("managed-ssh-profiles");
     },
     onError: (err) =>
-      message.error(err?.response?.data?.message || "Failed to remove SSH server"),
+      message.error(
+        err?.response?.data?.message || t("sshSettings.serverRemoveFailed"),
+      ),
   });
 
   // Test connection for the in-progress form (BEFORE saving).
@@ -115,13 +124,13 @@ const SSHPage = () => {
     onMutate: () => setTestingProfile(true),
     onSuccess: (res) => {
       if (res?.success) {
-        message.success(res.message || "SSH connection successful");
+        message.success(res.message || t("sshSettings.testSuccess"));
       } else {
-        message.error(res?.message || "SSH connection failed");
+        message.error(res?.message || t("sshSettings.testFailed"));
       }
     },
     onError: (err) =>
-      message.error(err?.response?.data?.message || "SSH connection failed"),
+      message.error(err?.response?.data?.message || t("sshSettings.testFailed")),
     onSettled: () => setTestingProfile(false),
   });
 
@@ -131,13 +140,13 @@ const SSHPage = () => {
     onMutate: (alias) => setTestingAlias(alias),
     onSuccess: (res) => {
       if (res?.success) {
-        message.success(res.message || "SSH connection successful");
+        message.success(res.message || t("sshSettings.testSuccess"));
       } else {
-        message.error(res?.message || "SSH connection failed");
+        message.error(res?.message || t("sshSettings.testFailed"));
       }
     },
     onError: (err) =>
-      message.error(err?.response?.data?.message || "SSH connection failed"),
+      message.error(err?.response?.data?.message || t("sshSettings.testFailed")),
     onSettled: () => setTestingAlias(null),
   });
 
@@ -174,14 +183,18 @@ const SSHPage = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="Legacy fallback only"
-        description="For parallel work, open Connection inside each session and choose a mounted ~/.ssh/config alias. This form remains available for older environment-based setups."
+        message={t("sshSettings.legacyTitle")}
+        description={t("sshSettings.legacyBody")}
       />
       <div className={styles.statusRow}>
         {configured ? (
-          <Tag icon={<CheckCircleFilled />} color="success">Configured</Tag>
+          <Tag icon={<CheckCircleFilled />} color="success">
+            {t("common.configured")}
+          </Tag>
         ) : (
-          <Tag icon={<WarningOutlined />} color="warning">Not Configured</Tag>
+          <Tag icon={<WarningOutlined />} color="warning">
+            {t("common.notConfigured")}
+          </Tag>
         )}
         {configured && (
           <Button
@@ -196,16 +209,18 @@ const SSHPage = () => {
                 if (res.success) {
                   message.success(res.message);
                 } else {
-                  message.error(res.message || "SSH connection failed");
+                  message.error(res.message || t("sshSettings.testFailed"));
                 }
               } catch (err) {
-                message.error(err?.response?.data?.message || "SSH connection failed");
+                message.error(
+                  err?.response?.data?.message || t("sshSettings.testFailed"),
+                );
               } finally {
                 setTestingSSH(false);
               }
             }}
           >
-            Test connectivity
+            {t("sshSettings.testConnectivity")}
           </Button>
         )}
       </div>
@@ -224,18 +239,22 @@ const SSHPage = () => {
         <Row gutter={16}>
           <Col span={16}>
             <Form.Item
-              label="Host"
+              label={t("sshSettings.hostLabel")}
               name="host"
-              rules={[{ required: true, message: "SSH host is required" }]}
+              rules={[
+                { required: true, message: t("sshSettings.hostRequired") },
+              ]}
             >
-              <Input placeholder="e.g. 192.168.1.100 or kali.local" />
+              <Input placeholder={t("sshSettings.hostPlaceholder")} />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item
-              label="Port"
+              label={t("common.portLabel")}
               name="port"
-              rules={[{ required: true, message: "Port required" }]}
+              rules={[
+                { required: true, message: t("common.portRequired") },
+              ]}
             >
               <InputNumber
                 min={1}
@@ -248,11 +267,13 @@ const SSHPage = () => {
         </Row>
 
         <Form.Item
-          label="Username"
+          label={t("sshSettings.usernameLabel")}
           name="username"
-          rules={[{ required: true, message: "Username is required" }]}
+          rules={[
+            { required: true, message: t("sshSettings.usernameRequired") },
+          ]}
         >
-          <Input placeholder="e.g. root" />
+          <Input placeholder={t("sshSettings.usernamePlaceholder")} />
         </Form.Item>
 
         <Divider style={{ borderColor: "var(--border-color-100)", margin: "0.5rem 0 1rem" }} />
@@ -260,8 +281,8 @@ const SSHPage = () => {
         <Form.Item
           label={
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Authentication Method
-              <Tooltip title="Password is simpler; private key is more secure and recommended for production.">
+              {t("sshSettings.authMethodLabel")}
+              <Tooltip title={t("sshSettings.authMethodTooltip")}>
                 <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
               </Tooltip>
             </span>
@@ -273,35 +294,45 @@ const SSHPage = () => {
             style={{ display: "flex", gap: 16 }}
           >
             <Radio value="password">
-              <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>Password</span>
+              <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>
+                {t("sshSettings.passwordOption")}
+              </span>
             </Radio>
             <Radio value="key">
-              <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>Private Key</span>
+              <span style={{ color: "var(--primary-text)", fontSize: "0.78rem" }}>
+                {t("sshSettings.keyOption")}
+              </span>
             </Radio>
           </Radio.Group>
         </Form.Item>
 
         {authMethod === "password" ? (
           <Form.Item
-            label="Password"
+            label={t("sshSettings.passwordLabel")}
             name="password"
             extra={
               data?.password ? (
                 <span className={styles.fieldHint}>
-                  A password is already set. Leave blank to keep it unchanged.
+                  {t("sshSettings.passwordHint")}
                 </span>
               ) : null
             }
           >
-            <Input.Password placeholder={data?.password ? "••••••••" : "Enter SSH password"} />
+            <Input.Password
+              placeholder={
+                data?.password
+                  ? "••••••••"
+                  : t("sshSettings.passwordPlaceholder")
+              }
+            />
           </Form.Item>
         ) : (
           <>
             <Form.Item
               label={
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  Private Key Path
-                  <Tooltip title="Absolute path to the private key file on the server filesystem (e.g. /root/.ssh/id_rsa).">
+                  {t("sshSettings.keyPathLabel")}
+                  <Tooltip title={t("sshSettings.keyPathTooltip")}>
                     <InfoCircleOutlined style={{ color: "var(--secondary-text)", fontSize: "0.7rem" }} />
                   </Tooltip>
                 </span>
@@ -310,15 +341,18 @@ const SSHPage = () => {
               extra={
                 data?.hasPrivateKey ? (
                   <span className={styles.fieldHint}>
-                    A private key path is already configured. Leave blank to keep it unchanged.
+                    {t("sshSettings.keyPathHint")}
                   </span>
                 ) : null
               }
             >
-              <Input placeholder="e.g. /root/.ssh/id_rsa" />
+              <Input placeholder={t("sshSettings.keyPathPlaceholder")} />
             </Form.Item>
-            <Form.Item label="Passphrase (optional)" name="passphrase">
-              <Input.Password placeholder="Leave empty if key has no passphrase" />
+            <Form.Item
+              label={t("sshSettings.passphraseLabel")}
+              name="passphrase"
+            >
+              <Input.Password placeholder={t("sshSettings.passphrasePlaceholder")} />
             </Form.Item>
           </>
         )}
@@ -330,7 +364,7 @@ const SSHPage = () => {
             purpleFilled
             style={{ height: "2rem", fontSize: "0.75rem" }}
           >
-            Save Configuration
+            {t("common.saveConfiguration")}
           </PrimaryButton>
         </div>
       </Form>
@@ -342,12 +376,10 @@ const SSHPage = () => {
           <div>
             <div className={styles.safetySectionTitle}>
               <WarningOutlined style={{ color: safetyDisabled ? "#ff4d4f" : "var(--secondary-text)" }} />
-              Disable Safety Protections
+              {t("sshSettings.safetyTitle")}
             </div>
             <div className={styles.safetySectionDesc}>
-              When enabled, destructive commands (<code>rm -rf /</code>, disk wipes, system shutdowns, etc.)
-              will execute without confirmation, even in auto-run mode.
-              The workspace directory (<code>~/pentest-workspace</code>) is still used.
+              <RichText text={t("sshSettings.safetyDesc")} />
             </div>
           </div>
           <Switch
@@ -367,14 +399,12 @@ const SSHPage = () => {
       <div className={styles.notesSection}>
         <ul>
           <li>
-            In <strong>Docker mode</strong>, the default host is the container name
-            (e.g. <code>kali</code>) with port <code>4242</code>.
+            <RichText text={t("sshSettings.notesDocker")} />
           </li>
           <li>
-            In <strong>Developer mode</strong>, point this to your local
-            exploit box or VM (typically <code>localhost</code>).
+            <RichText text={t("sshSettings.notesDev")} />
           </li>
-          <li>Private key authentication is recommended for production.</li>
+          <li>{t("sshSettings.notesKey")}</li>
         </ul>
       </div>
 
@@ -384,11 +414,10 @@ const SSHPage = () => {
         <div className={styles.safetySectionHeader}>
           <div>
             <div className={styles.safetySectionTitle}>
-              <TbTerminal2 style={{ marginRight: 6 }} /> SSH Servers
+              <TbTerminal2 style={{ marginRight: 6 }} /> {t("sshSettings.serversTitle")}
             </div>
             <div className={styles.safetySectionDesc}>
-              Manage multiple SSH servers (any host). Each server appears in the
-              workspace Connection page — pick which host a session connects to.
+              {t("sshSettings.serversDesc")}
             </div>
           </div>
         </div>
@@ -427,7 +456,7 @@ const SSHPage = () => {
                 loading={testingAlias === profile.alias}
                 onClick={() => testSavedMutation.mutate(profile.alias)}
               >
-                Test
+                {t("common.test")}
               </Button>
               <Button
                 size="small"
@@ -439,13 +468,13 @@ const SSHPage = () => {
                 }
                 onClick={() => deleteProfileMutation.mutate(profile.alias)}
               >
-                Remove
+                {t("common.remove")}
               </Button>
             </div>
           ))}
           {(managedProfiles?.profiles ?? []).length === 0 && !profilesLoading && (
             <div style={{ fontSize: 12, color: "#6d6d6d" }}>
-              No SSH servers configured yet. Add one below.
+              {t("sshSettings.noServers")}
             </div>
           )}
         </div>
@@ -458,41 +487,59 @@ const SSHPage = () => {
         >
           <Row gutter={8}>
             <Col span={8}>
-              <Form.Item name="alias" label="Name" rules={[{ required: true, message: "Required" }]}>
-                <Input placeholder="kali-box" />
+              <Form.Item
+                name="alias"
+                label={t("sshSettings.nameLabel")}
+                rules={[{ required: true, message: t("common.required") }]}
+              >
+                <Input placeholder={t("sshSettings.namePlaceholder")} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="label" label="Label">
-                <Input placeholder="My Kali" />
+              <Form.Item name="label" label={t("sshSettings.labelLabel")}>
+                <Input placeholder={t("sshSettings.labelPlaceholder")} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="username" label="Username" rules={[{ required: true, message: "Required" }]}>
+              <Form.Item
+                name="username"
+                label={t("sshSettings.usernameLabel")}
+                rules={[{ required: true, message: t("common.required") }]}
+              >
                 <Input placeholder="root" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={8}>
             <Col span={8}>
-              <Form.Item name="host" label="Host" rules={[{ required: true, message: "Required" }]}>
+              <Form.Item
+                name="host"
+                label={t("sshSettings.hostLabel")}
+                rules={[{ required: true, message: t("common.required") }]}
+              >
                 <Input placeholder="<YOUR_VPS_IP> or example.com" />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="port" label="Port" initialValue={22}>
+              <Form.Item name="port" label={t("common.portLabel")} initialValue={22}>
                 <InputNumber min={1} max={65535} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="password" label="Password">
-                <Input.Password placeholder="SSH password" autoComplete="new-password" />
+              <Form.Item name="password" label={t("sshSettings.passwordLabel")}>
+                <Input.Password
+                  placeholder={t("sshSettings.passwordPlaceholderProfile")}
+                  autoComplete="new-password"
+                />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={8} align="middle">
             <Col span={16}>
-              <Form.Item name="privateKeyPath" label="Private key path (optional)">
+              <Form.Item
+                name="privateKeyPath"
+                label={t("sshSettings.keyPathOptionalLabel")}
+              >
                 <Input placeholder="/root/.ssh/id_rsa" />
               </Form.Item>
             </Col>
@@ -503,7 +550,7 @@ const SSHPage = () => {
                   loading={testingProfile}
                   style={{ height: "2rem", fontSize: "0.75rem" }}
                 >
-                  Test
+                  {t("common.test")}
                 </Button>
                 <Button
                   type="primary"
@@ -512,7 +559,7 @@ const SSHPage = () => {
                   loading={addProfileMutation.isLoading}
                   style={{ height: "2rem", fontSize: "0.75rem" }}
                 >
-                  Add Server
+                  {t("sshSettings.addServer")}
                 </Button>
               </div>
             </Col>

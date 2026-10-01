@@ -244,9 +244,9 @@ const BurpSettingsPage = () => {
           </Col>
           <Col span={8}>
             <Form.Item
-              label={t("burpSettings.portLabel")}
+              label={t("common.portLabel")}
               name="port"
-              rules={[{ required: true, message: t("burpSettings.portRequired") }]}
+              rules={[{ required: true, message: t("common.portRequired") }]}
             >
               <InputNumber
                 min={1}
