@@ -5,83 +5,14 @@ import { Switch, Spin, Tooltip } from "antd";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { getSessionAgentToolsConfig, updateSessionAgentToolsConfig } from "@/services/agent.service";
 import { TbPlugConnected } from "react-icons/tb";
+import { buildToolGroups, buildDisabledToolNames, countTools } from "@/utils/agentTools";
 
-const TOOL_GROUPS = [
-  {
-    label: "Core",
-    description: "Shell and scripting",
-    tools: ["run_bash", "run_python_script", "run_install_tool", "spawn_shell", "write_to_shell", "read_shell", "list_shells", "close_shell"],
-  },
-  {
-    label: "Intelligence",
-    description: "Search, reasoning, delegation",
-    tools: ["google_search", "ask_user", "spawn_subagent"],
-  },
-  {
-    label: "Analysis",
-    description: "Vision and image analysis",
-    tools: ["view_image"],
-  },
-  {
-    label: "Burp Suite",
-    description: "Proxy, repeater, intruder",
-    tools: ["search_burp_proxy_history", "send_to_burp_repeater", "send_to_burp_intruder", "burp_collaborator"],
-  },
-  {
-    label: "Mythic C2",
-    description: "Callbacks, tasking, pivoting, loot",
-    tools: [
-      "mythic_callbacks",
-      "mythic_task",
-      "mythic_task_results",
-      "mythic_pivot",
-      "mythic_payload",
-      "mythic_listener",
-      "mythic_loot",
-      "mythic_graphql",
-    ],
-  },
-  {
-    label: "Browser",
-    description: "Magnitude automation",
-    tools: ["browser_action"],
-  },
-  {
-    label: "Out-of-Band",
-    description: "Blind vulnerability detection",
-    tools: ["oob_listener"],
-  },
-];
-
-const TOOL_LABELS = {
-  run_bash: "Run Bash",
-  run_python_script: "Run Python",
-  run_install_tool: "Install Tool",
-  google_search: "Google Search",
-  ask_user: "Ask User",
-  spawn_shell: "Spawn Shell",
-  write_to_shell: "Write to Shell",
-  read_shell: "Read Shell",
-  list_shells: "List Shells",
-  close_shell: "Close Shell",
-  spawn_subagent: "Spawn Subagent",
-  view_image: "View Image",
-  search_burp_proxy_history: "Proxy History",
-  send_to_burp_repeater: "Burp Repeater",
-  send_to_burp_intruder: "Burp Intruder",
-  burp_collaborator: "Burp Collaborator",
-  browser_action: "Browser Action",
-  oob_listener: "OOB Listener",
-  mythic_callbacks: "Callbacks",
-  mythic_task: "Task Implant",
-  mythic_task_results: "Task Output",
-  mythic_pivot: "Pivot (SOCKS/rpfwd)",
-  mythic_payload: "Payloads",
-  mythic_listener: "Listeners",
-  mythic_loot: "Files & Credentials",
-  mythic_graphql: "Raw GraphQL",
-};
-
+/**
+ * The tool list itself comes from the backend
+ * (`GET /api/agent/session/:id/agent-tools-config` → every registered tool with
+ * `{ name, description, enabled, configured }`). Group order, labels and the
+ * "no tool is ever hidden" fallback live in `@/utils/agentTools`.
+ */
 const AgentToolsPanel = ({ sessionId }) => {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
@@ -107,7 +38,7 @@ const AgentToolsPanel = ({ sessionId }) => {
     const tool = data.tools.find((t) => t.name === toolName);
     if (tool && tool.configured === false) return;
 
-    const currentDisabled = data.tools.filter((t) => !t.enabled).map((t) => t.name);
+    const currentDisabled = buildDisabledToolNames(data.tools);
     const newDisabled = enabled
       ? currentDisabled.filter((n) => n !== toolName)
       : [...currentDisabled, toolName];
@@ -115,12 +46,9 @@ const AgentToolsPanel = ({ sessionId }) => {
     mutation.mutate({ disabledTools: newDisabled });
   };
 
-  const toolMap = {};
-  (data?.tools || []).forEach((t) => { toolMap[t.name] = t; });
-
-  const configuredTools = (data?.tools || []).filter((t) => t.configured !== false);
-  const enabledCount = configuredTools.filter((t) => t.enabled).length || 0;
-  const totalCount = configuredTools.length || 0;
+  const groups = buildToolGroups(data?.tools);
+  const { enabled: enabledCount, total: totalCount } = countTools(data?.tools);
+  const unconfiguredCount = (data?.tools || []).filter((t) => t.configured === false).length;
 
   return (
     <div style={{ marginBottom: "0.5rem" }}>
@@ -153,6 +81,7 @@ const AgentToolsPanel = ({ sessionId }) => {
               marginLeft: "0.25rem",
             }}>
               {enabledCount}/{totalCount}
+              {unconfiguredCount > 0 ? ` · ${unconfiguredCount} not configured` : ""}
             </span>
           )}
         </span>
@@ -179,13 +108,14 @@ const AgentToolsPanel = ({ sessionId }) => {
             <div style={{ display: "flex", justifyContent: "center", padding: "1rem" }}>
               <Spin size="small" />
             </div>
+          ) : groups.length === 0 ? (
+            <div style={{ fontSize: "0.68rem", color: "var(--secondary-text-500)" }}>
+              No agent tools registered.
+            </div>
           ) : (
-            TOOL_GROUPS.map((group) => {
-              const groupTools = group.tools.map((name) => toolMap[name]).filter(Boolean);
-              if (groupTools.length === 0) return null;
-
-              return (
-                <div key={group.label} style={{ marginBottom: "0.6rem" }}>
+            groups.map((group) => (
+              <div key={group.id} style={{ marginBottom: "0.6rem" }}>
+                <Tooltip title={group.description}>
                   <div style={{
                     fontSize: "0.65rem",
                     fontWeight: 600,
@@ -193,54 +123,61 @@ const AgentToolsPanel = ({ sessionId }) => {
                     marginBottom: "0.2rem",
                   }}>
                     {group.label}
+                    <span style={{
+                      fontWeight: 400,
+                      color: "var(--secondary-text-500)",
+                      marginLeft: "0.3rem",
+                    }}>
+                      {group.tools.length}
+                    </span>
                   </div>
-                  {groupTools.map((tool, idx) => {
-                    const isConfigured = tool.configured !== false;
-                    const row = (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "0.3rem 0",
-                          borderBottom: idx < groupTools.length - 1 ? "1px solid var(--border-subtle)" : "none",
-                          opacity: isConfigured ? 1 : 0.5,
-                        }}
-                      >
-                        <span style={{
-                          fontSize: "0.68rem",
-                          fontWeight: 500,
-                          color: isConfigured
-                            ? (tool.enabled ? "var(--primary-text)" : "var(--secondary-text-500)")
-                            : "var(--secondary-text-500)",
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}>
-                          {TOOL_LABELS[tool.name] || tool.name}
-                        </span>
-                        {isConfigured ? (
-                          <Switch
-                            size="small"
-                            checked={tool.enabled}
-                            loading={mutation.isLoading}
-                            onChange={(checked) => handleToggle(tool.name, checked)}
-                          />
-                        ) : (
-                          <span style={{ fontSize: "0.6rem", color: "var(--secondary-text-500)" }}>—</span>
-                        )}
-                      </div>
-                    );
-                    return (
-                      <Tooltip
-                        key={tool.name}
-                        title={isConfigured ? undefined : "Not configured. Configure in Settings."}
-                      >
-                        {row}
-                      </Tooltip>
-                    );
-                  })}
-                </div>
-              );
-            })
+                </Tooltip>
+                {group.tools.map((tool, idx) => {
+                  const isConfigured = tool.configured;
+                  const row = (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "0.3rem 0",
+                        borderBottom: idx < group.tools.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                        opacity: isConfigured ? 1 : 0.5,
+                      }}
+                    >
+                      <span style={{
+                        fontSize: "0.68rem",
+                        fontWeight: 500,
+                        color: isConfigured
+                          ? (tool.enabled ? "var(--primary-text)" : "var(--secondary-text-500)")
+                          : "var(--secondary-text-500)",
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }}>
+                        {tool.label}
+                      </span>
+                      {isConfigured ? (
+                        <Switch
+                          size="small"
+                          checked={tool.enabled}
+                          loading={mutation.isLoading}
+                          onChange={(checked) => handleToggle(tool.name, checked)}
+                        />
+                      ) : (
+                        <span style={{ fontSize: "0.6rem", color: "var(--secondary-text-500)" }}>—</span>
+                      )}
+                    </div>
+                  );
+                  return (
+                    <Tooltip
+                      key={tool.name}
+                      title={isConfigured ? tool.description : "Not configured. Configure in Settings."}
+                    >
+                      {row}
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            ))
           )}
         </div>
       )}
