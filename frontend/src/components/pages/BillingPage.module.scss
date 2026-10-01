@@ -128,6 +128,19 @@
   margin-bottom: 1rem;
 }
 
+// Section heading + actions (e.g. the usage CSV export button) on one row.
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+
+  .sectionTitle {
+    margin-bottom: 0;
+  }
+}
+
 .features {
   list-style: none;
   padding: 0;
