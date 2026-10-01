@@ -1,5 +1,6 @@
 import Loader from "@/components/common/loader/Loader";
 import { getUserTools, toolPreferenceUpdate } from "@/services/user.service";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "@/styles/pages/Tools.module.scss";
 import { Checkbox, Col, Form, App, Row } from "antd";
 import { debounce } from "lodash";
@@ -7,12 +8,13 @@ import { FiExternalLink } from "react-icons/fi";
 import { useMutation, useQuery } from "react-query";
 
 const ToolsPage = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const { data, isLoading } = useQuery("user-tools", getUserTools);
 
   const updateToolsMutation = useMutation(toolPreferenceUpdate, {
     onSuccess: (data) => {
-      message.success("Tool Preference Updated Successfully");
+      message.success(t("toolsSettings.updated"));
     },
     onError: (error) => {
       console.log(error);
@@ -100,7 +102,7 @@ const ToolsPage = () => {
       <Row className={styles.toolsContainer} gutter={[32, 16]}>
         <Col className={styles.leftToolBox} lg={12} xl={12} md={24} sm={24}>
           <div className={styles.selectToolBox}>
-            <h2>Directory Bruteforcing</h2>
+            <h2>{t("toolsSettings.directoryBruteforcing")}</h2>
             <Form.Item name="tools1">
               <Checkbox.Group>
                 {bruteforcing.map((item, index) => {
@@ -120,7 +122,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>Subdomain Discovery Passive</h2>
+            <h2>{t("toolsSettings.subdomainPassive")}</h2>
             <Form.Item name="tools2">
               <Checkbox.Group>
                 {subdomianPassive.map((item, index) => {
@@ -140,7 +142,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>Subdomain Bruteforcing</h2>
+            <h2>{t("toolsSettings.subdomainBruteforcing")}</h2>
             <Form.Item name="tools3">
               <Checkbox.Group>
                 {subdomainBruteforce.map((item, index) => {
@@ -160,7 +162,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>Credential Bruteforcing</h2>
+            <h2>{t("toolsSettings.credentialBruteforcing")}</h2>
             <Form.Item name="tools4">
               <Checkbox.Group>
                 {credBruteforce.map((item, index) => {
@@ -180,7 +182,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>CMS Scanners</h2>
+            <h2>{t("toolsSettings.cmsScanners")}</h2>
             <Form.Item name="tools6">
               <Checkbox.Group>
                 {cmsScanner.map((item, index) => {
@@ -202,7 +204,7 @@ const ToolsPage = () => {
 
         <Col className={styles.rightToolBox} lg={12} xl={12} md={24} sm={24}>
           <div className={styles.selectToolBox}>
-            <h2>Port Scanning</h2>
+            <h2>{t("toolsSettings.portScanning")}</h2>
             <Form.Item name="tools5">
               <Checkbox.Group>
                 {portScanning.map((item, index) => {
@@ -222,7 +224,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>Spider/Crawling</h2>
+            <h2>{t("toolsSettings.spiderCrawling")}</h2>
             <Form.Item name="tools7">
               <Checkbox.Group>
                 {spiderCrawling.map((item, index) => {
@@ -242,7 +244,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>Fingerprinting Technologies</h2>
+            <h2>{t("toolsSettings.fingerprinting")}</h2>
             <Form.Item name="tools8">
               <Checkbox.Group>
                 {fingerPrinting.map((item, index) => {
@@ -262,7 +264,7 @@ const ToolsPage = () => {
           </div>
 
           <div className={styles.selectToolBox}>
-            <h2>Vuln Exploitation</h2>
+            <h2>{t("toolsSettings.vulnExploitation")}</h2>
             <Form.Item name="tools9">
               <Checkbox.Group className={styles.lastToolChild}>
                 {vulnExploitation.map((item, index) => {

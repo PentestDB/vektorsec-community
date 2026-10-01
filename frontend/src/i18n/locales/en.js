@@ -475,6 +475,18 @@ export default {
     "inferenceTestFailed": "Inference test failed",
     "inferenceTestFailedBody": "The local CLI inference test failed"
   },
+  "toolsSettings": {
+    "updated": "Tool Preference Updated Successfully",
+    "directoryBruteforcing": "Directory Bruteforcing",
+    "subdomainPassive": "Subdomain Discovery Passive",
+    "subdomainBruteforcing": "Subdomain Bruteforcing",
+    "credentialBruteforcing": "Credential Bruteforcing",
+    "cmsScanners": "CMS Scanners",
+    "portScanning": "Port Scanning",
+    "spiderCrawling": "Spider/Crawling",
+    "fingerprinting": "Fingerprinting Technologies",
+    "vulnExploitation": "Vuln Exploitation"
+  },
   "login": {
     "title": "Welcome back",
     "subtitle": "Sign in to your VektorSec workspace to resume your security operations.",

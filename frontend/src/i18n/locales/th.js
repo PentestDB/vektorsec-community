@@ -475,6 +475,18 @@ export default {
     "inferenceTestFailed": "ทดสอบการประมวลผลไม่สำเร็จ",
     "inferenceTestFailedBody": "การทดสอบการประมวลผลผ่าน CLI ในเครื่องไม่สำเร็จ"
   },
+  "toolsSettings": {
+    "updated": "อัปเดตการตั้งค่าเครื่องมือแล้ว",
+    "directoryBruteforcing": "ตรวจหาพาธและไดเรกทอรี (Bruteforcing)",
+    "subdomainPassive": "ค้นหา subdomain แบบพาสซีฟ",
+    "subdomainBruteforcing": "ค้นหา subdomain แบบบรุตฟอร์ซ",
+    "credentialBruteforcing": "บรุตฟอร์ซ credential",
+    "cmsScanners": "สแกนเนอร์ CMS",
+    "portScanning": "สแกนพอร์ต",
+    "spiderCrawling": "สำรวจและเก็บข้อมูลเว็บ (Spider/Crawling)",
+    "fingerprinting": "ระบุเทคโนโลยีที่ใช้งาน (Fingerprinting)",
+    "vulnExploitation": "ใช้ประโยชน์จากช่องโหว่"
+  },
   "login": {
     "title": "ยินดีต้อนรับกลับ",
     "subtitle": "เข้าสู่ระบบ workspace ของ VektorSec เพื่อดำเนินการต่อ",
