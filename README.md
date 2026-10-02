@@ -42,6 +42,7 @@
 - [Security Checklist](#-security-checklist)
 - [Development (Developer mode)](#-development-developer-mode)
 - [More Documentation](#-more-documentation)
+- [Support & Donations](#-support--donations)
 - [Credits and License](#-credits-and-license)
 
 ---
@@ -481,6 +482,26 @@ docker compose -f docker-compose.dev.yml up -d --build
 
 > 📖 **Language split**: Thai manuals live in `docs/`, English manuals live in `docs/en/`.
 > This README is English-only; the Thai version is [`README.th.md`](./README.th.md).
+
+---
+
+## 💖 Support & Donations
+
+VektorSec is free and open-source software (MIT). If it saves you time on real
+engagements, CTFs or boot2root boxes, a donation helps keep the project
+maintained and improves the tooling.
+
+**Donate with USDT (ERC-20 — Ethereum network):**
+
+```
+0x156C91fB88eb83C31ABf0eAFed239Fd867e1ddeB
+```
+
+> ⚠️ **Important**: This is an **ERC-20 (Ethereum)** address. Send **USDT** on the
+> **Ethereum (ERC-20)** network only. Tokens sent over other networks
+> (TRC-20, BEP-20, etc.) or other asset types may be permanently lost.
+
+Thank you for your support! ❤️
 
 ---
 

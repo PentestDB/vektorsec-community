@@ -17,6 +17,14 @@ backend/model-registry.json
 id_rsa
 id_ed25519
 
+# Explicit safety net for the real (never-committed) secret files.
+# These are already caught by the globs above — listed on purpose so a
+# reviewer can see at a glance that the sensitive paths are covered.
+/.env
+/backend/.env
+/frontend/.env
+/deploy/secrets.env
+
 # ── Launcher / run.sh generated state ──────────────────────────────────────
 .run.conf
 .run-state
