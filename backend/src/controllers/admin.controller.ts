@@ -14,8 +14,53 @@ import { createMcpToken } from "../services/mcp-auth.service";
 import { readEnvFile, updateEnvVars, deleteEnvVars } from "../utils/envWriter";
 import { reloadEnv } from "../utils/loadConfig";
 import { parseScopeString } from "../utils/scopeValidator";
+import {
+  getScopeGuardState,
+  scopeGuardNotice,
+  scopeGuardUnlockFailureDetail,
+  scopeGuardUnlockWarning,
+  SECURITY_CONTACT_URL,
+  type ScopeGuardState,
+} from "../utils/securityPolicy";
 
 
+
+// ─── Scope Guard policy payload ─────────────────────────────────────
+
+/**
+ * Shared `scope` payload for GET/PUT `/api/admin/scope`.
+ *
+ * `locked` is the authoritative backend state (utils/securityPolicy.ts). The
+ * `unlock` block explains an attempt that did **not** succeed — which of the
+ * three conditions is still missing, the token verdict — so Admin → Security /
+ * Admin → Scope can show the exact reason instead of a generic "locked".
+ */
+function buildScopePayload(env: Record<string, string | undefined>) {
+  const state: ScopeGuardState = getScopeGuardState();
+  return {
+    enabled: state.locked || env.SCOPE_ENABLED === "1",
+    strictMode: env.SCOPE_STRICT_MODE === "1",
+    entriesRaw: env.SCOPE_ENTRIES || "",
+    entries: parseScopeString(env.SCOPE_ENTRIES || ""),
+    locked: state.locked,
+    notice: scopeGuardNotice(state),
+    contactUrl: SECURITY_CONTACT_URL,
+    unlock: {
+      attempted: state.unlockFailed,
+      lockFlagOff: state.lockFlagOff,
+      uiBuildUnlocked: state.uiBuildUnlocked,
+      tokenPresent: state.token.present,
+      tokenValid: state.token.valid,
+      tokenMode: state.token.mode ?? null,
+      tokenReason: state.token.reason ?? null,
+      tokenClient: state.token.client ?? null,
+      tokenExpiresAt: state.token.expiresAt ?? null,
+      reason: state.reason,
+      detail: state.unlockFailed ? scopeGuardUnlockFailureDetail(state) : null,
+      message: scopeGuardUnlockWarning(state),
+    },
+  };
+}
 
 // ─── Dashboard Stats ────────────────────────────────────────────────
 
@@ -1088,18 +1133,9 @@ export const revokeUserMcpToken = async (req: Request, res: Response) => {
 // ─── Scope / Whitelist Management ───────────────────────────────────
 
 export const getScopeConfig = async (_req: Request, res: Response) => {
-
   try {
     const env = readEnvFile();
-    const entriesRaw = env.SCOPE_ENTRIES || "";
-    return res.status(200).json({
-      scope: {
-        enabled: env.SCOPE_ENABLED === "1",
-        strictMode: env.SCOPE_STRICT_MODE === "1",
-        entriesRaw,
-        entries: parseScopeString(entriesRaw),
-      },
-    });
+    return res.status(200).json({ scope: buildScopePayload(env) });
   } catch (error) {
     console.error("[admin] getScopeConfig error:", error);
     return res.status(500).json({ message: "Failed to get scope config" });
@@ -1111,30 +1147,50 @@ export const updateScopeConfig = async (req: Request, res: Response) => {
     const { enabled, strictMode, entriesRaw } = req.body || {};
 
     const updates: Record<string, string> = {};
-    if (typeof enabled === "boolean") updates.SCOPE_ENABLED = enabled ? "1" : "0";
+
+    // Locked instances (utils/securityPolicy.ts): an explicit "disable" is
+    // recorded and refused, never written to the env. Unlocked instances behave
+    // as before. A partial unlock attempt (flag set, token missing/invalid)
+    // keeps `locked = true`, so it is refused here as well.
+    const locked = getScopeGuardState().locked;
+    const disableRefused = locked && enabled === false;
+    if (typeof enabled === "boolean" && !disableRefused) updates.SCOPE_ENABLED = enabled ? "1" : "0";
     if (typeof strictMode === "boolean") updates.SCOPE_STRICT_MODE = strictMode ? "1" : "0";
     if (typeof entriesRaw === "string") updates.SCOPE_ENTRIES = entriesRaw.trim();
+    // Self-heal a stale "off" left behind by an older build.
+    if (locked) updates.SCOPE_ENABLED = "1";
 
     if (Object.keys(updates).length > 0) {
       updateEnvVars(updates);
       reloadEnv();
     }
 
+    const env = readEnvFile();
+    const scope = buildScopePayload(env);
+    const { unlock } = scope;
+
     await logAuditFromRequest(req, res, "admin.scope_config", {
       resourceType: "system",
-      details: { updated: Object.keys(updates), entryCount: parseScopeString(entriesRaw ?? "").length },
-    });
-
-    const env = readEnvFile();
-    return res.status(200).json({
-      message: "Scope config updated",
-      scope: {
-        enabled: env.SCOPE_ENABLED === "1",
-        strictMode: env.SCOPE_STRICT_MODE === "1",
-        entriesRaw: env.SCOPE_ENTRIES || "",
-        entries: parseScopeString(env.SCOPE_ENTRIES || ""),
+      details: {
+        updated: Object.keys(updates),
+        entryCount: parseScopeString(entriesRaw ?? "").length,
+        disableRefused,
+        unlockAttempted: unlock.attempted,
+        unlockFailedReason: unlock.attempted ? unlock.reason : null,
       },
     });
+
+    // Tell the operator exactly what happened: "I set SCOPE_GUARD_LOCK=0 but the
+    // page is still locked" is the most common support ticket, and it is almost
+    // always an invalid/missing unlock token.
+    const message = disableRefused
+      ? `Scope Guard cannot be disabled in this build. Contact ${SECURITY_CONTACT_URL} for a build without it.`
+      : unlock.attempted
+        ? unlock.message ??
+          "Scope Guard unlock attempt failed — the guard stays ENABLED (fail-closed)."
+        : "Scope config updated";
+
+    return res.status(200).json({ message, scope });
   } catch (error) {
     console.error("[admin] updateScopeConfig error:", error);
     return res.status(500).json({ message: "Failed to update scope config" });

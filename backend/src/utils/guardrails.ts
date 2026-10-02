@@ -5,6 +5,7 @@ import {
   createDefaultScopeConfig,
   parseScopeString,
 } from "./scopeValidator";
+import { isScopeGuardLocked } from "./securityPolicy";
 
 /**
  * Guardrails runtime configuration for a session / workspace.
@@ -50,11 +51,17 @@ export function resolveEffectiveScopeConfig(
   wsScope?: WorkspaceScopeSetting,
 ): ScopeConfig {
   if (wsScope && wsScope.enabled === true) {
-    return buildScopeConfig({
+    const candidate = buildScopeConfig({
       entries: wsScope.entriesRaw ?? "",
       enabled: true,
       strictMode: wsScope.strictMode === true,
     });
+    // Locked build (utils/securityPolicy.ts): an enabled-but-empty workspace
+    // override would otherwise mean "allow everything" in non-strict mode and
+    // silently drop the global allowlist — fall back to the locked global guard.
+    if (!isScopeGuardLocked() || candidate.entries.length > 0) {
+      return candidate;
+    }
   }
   return createDefaultScopeConfig();
 }

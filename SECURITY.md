@@ -78,6 +78,51 @@ If you are hunting for issues, these are the parts that matter most:
 
 ---
 
+## Scope Guard enforcement (this distribution)
+
+The Scope Guard — the allowlist check that runs before any security tool is executed
+(`backend/src/utils/scopeValidator.ts`, `backend/src/utils/guardrails.ts`) — is part of this
+distribution's security baseline and is **locked on**: it cannot be disabled through the admin
+UI, the environment variables or `config.toml`. Operators can only tighten it (allowlist
+entries, strict mode). The policy itself lives in `backend/src/utils/securityPolicy.ts`.
+
+> **Redistribution / forking:** removing or neutering the Scope Guard is a deliberate weakening
+> of the product's security model. If you need a build without it, contact the maintainers
+> first: <https://www.facebook.com/Pentestdb/>
+
+**Deliberate unlock (licensed builds).** The lock is a build/deploy-time decision, so an unlocked
+build can be produced without touching the enforcement code — but since the unlock-token change it
+requires **three conditions simultaneously** (`backend/src/utils/securityPolicy.ts`):
+
+1. `SCOPE_GUARD_LOCK=0` in the backend runtime environment (`/srv/data/.env`);
+2. `NEXT_PUBLIC_SCOPE_GUARD_LOCK=0` too, i.e. the deployed bundle was built with
+   `npm run build:unlocked` (the backend is told which UI mode is live, so a swapped bundle is caught);
+3. a signed **unlock token** in the backend environment: `SCOPE_GUARD_UNLOCK_TOKEN=VEK1.…`
+   (HMAC-SHA256, verified against `MASTER_SECRET_KEY`) or `VEK2.…` (Ed25519, verified against the
+   `MASTER_UNLOCK_PUBLIC_KEY` shipped with the instance). Tokens are issued offline for a named
+   client and a fixed expiry by the maintainers' internal generator
+   (`backend/src/utils/unlockToken.ts`), so a copied `.env`, a leaked bundle or an edited flag
+   cannot unlock anything by itself.
+
+Anything else — a typo, a missing flag, a UI built while locked, or a missing/forged/wrong-key/
+expired token, or no verification key at all — keeps the guard ON (fail-closed) and logs
+`WARN: Scope Guard unlock attempt failed — Invalid or missing UNLOCK_TOKEN`. An unlocked instance
+warns on boot (`Scope Guard is DISABLED in this UNLOCKED build`) and reports `locked: false` from
+`GET /api/admin/scope`, together with a `scope.unlock` block listing which conditions were met, so
+it can never be mistaken for a locked one. A refused attempt is flagged in the UI too: **Admin →
+Security** and **Admin → Scope** render a red *Scope Guard unlock attempt failed* card that names
+the missing condition (flag, UI build mode or token verdict) instead of a generic "locked".
+
+> **Shipping an unlocked build?** Tell the customer: in that instance *every* workspace may target
+> hosts the operator never authorised, and only the operator's own allowlist discipline stands
+> between the agent and third-party systems. Removing `SCOPE_GUARD_LOCK` re-locks the backend
+> without a rebuild.
+
+Any way to bypass or silently disable the guard counts as a vulnerability — please report it
+through the private channels described above.
+
+---
+
 ## Hardening checklist for self-hosters
 
 Before exposing an instance to the internet:

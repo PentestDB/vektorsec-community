@@ -8,6 +8,7 @@ import {
   updateScopeConfig,
 } from "@/services/admin.service";
 import styles from "./AdminSettingsPage.module.scss";
+import { SCOPE_GUARD_LOCKED, SECURITY_CONTACT_URL, scopeUnlockWarning } from "@/constants/security";
 
 /**
  * Admin > Security.
@@ -85,12 +86,13 @@ const AdminSecurityPage = () => {
     </div>
   );
 
-  const renderSwitch = (checked, onChange, onLabel, offLabel) => (
+  const renderSwitch = (checked, onChange, onLabel, offLabel, disabled = false) => (
     <label className={styles.switchWrap}>
       <input
         type="checkbox"
         className={styles.switchInput}
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className={`${styles.switch} ${checked ? styles.switchOn : ""}`}>
@@ -99,6 +101,10 @@ const AdminSecurityPage = () => {
       <span className={styles.switchLabel}>{checked ? onLabel : offLabel}</span>
     </label>
   );
+
+  // `scope.unlock` explains a refused unlock attempt: the guard stays ON, so
+  // tell the operator which of the three conditions is still missing.
+  const unlockWarning = scopeUnlockWarning(scope.unlock);
 
   return (
     <div className={styles.container}>
@@ -112,6 +118,64 @@ const AdminSecurityPage = () => {
 
       {error && <div className={styles.error}>{error}</div>}
       {success && <div className={styles.success}>{success}</div>}
+
+      {!SCOPE_GUARD_LOCKED && (
+        <div className={styles.card} style={{ borderColor: "#f87171" }}>
+          <h2 className={styles.cardTitle}>This is an unlocked build — Scope Guard is OFF</h2>
+          <p style={{ margin: 0, fontSize: 13, color: "#cbd5e1", lineHeight: 1.7 }}>
+            Targets are no longer verified against the scope allowlist before a security tool runs, so
+            every workspace can reach any host it is asked to. This build was produced with{" "}
+            <code>SCOPE_GUARD_LOCK=0</code> — see <code>backend/src/utils/securityPolicy.ts</code> and{" "}
+            <code>frontend/src/constants/security.js</code>. Re-lock it by removing that flag and
+            rebuilding the UI without <code>NEXT_PUBLIC_SCOPE_GUARD_LOCK=0</code>.
+          </p>
+        </div>
+      )}
+
+      {unlockWarning && (
+        <div className={styles.card} style={{ borderColor: "#f87171" }}>
+          <h2 className={styles.cardTitle}>Scope Guard unlock attempt failed</h2>
+          <p style={{ margin: 0, fontSize: 13, color: "#cbd5e1", lineHeight: 1.7 }}>
+            {unlockWarning}
+            <br />
+            An unlocked build needs all three conditions at once:{" "}
+            <code>SCOPE_GUARD_LOCK=0</code>, a UI built with{" "}
+            <code>NEXT_PUBLIC_SCOPE_GUARD_LOCK=0</code> and a valid{" "}
+            <code>SCOPE_GUARD_UNLOCK_TOKEN</code> (verified with{" "}
+            <code>MASTER_SECRET_KEY</code> or <code>MASTER_UNLOCK_PUBLIC_KEY</code>) — until then
+            the guard stays ON (fail-closed). Need an unlock token? Contact{" "}
+            <a
+              href={SECURITY_CONTACT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#60a5fa" }}
+            >
+              {SECURITY_CONTACT_URL}
+            </a>
+          </p>
+        </div>
+      )}
+
+      {SCOPE_GUARD_LOCKED && (
+        <div className={styles.card} style={{ borderColor: "#faad14" }}>
+          <h2 className={styles.cardTitle}>Scope Guard is enforced in this build</h2>
+          <p style={{ margin: 0, fontSize: 13, color: "#cbd5e1", lineHeight: 1.7 }}>
+            Every target is verified against the scope allowlist before a security tool runs, and it
+            cannot be switched off from this UI, the environment or the config files (see{" "}
+            <code>backend/src/utils/securityPolicy.ts</code>). Only the allowlist itself is editable.
+            <br />
+            Need a build without Scope Guard? Contact{" "}
+            <a
+              href={SECURITY_CONTACT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#60a5fa" }}
+            >
+              {SECURITY_CONTACT_URL}
+            </a>
+          </p>
+        </div>
+      )}
 
       <div className={styles.section}>
         <div className={styles.card}>
@@ -128,12 +192,15 @@ const AdminSecurityPage = () => {
           )}
           {renderField(
             "Engagement Scope / Whitelist",
-            "Enforce that every command only targets IPs/domains in the configured scope.",
+            SCOPE_GUARD_LOCKED
+              ? `Enforced in this build and cannot be turned off — every command only targets IPs/domains in the configured scope. A build without Scope Guard needs all three unlock conditions at once (SCOPE_GUARD_LOCK=0, a UI built unlocked and a valid SCOPE_GUARD_UNLOCK_TOKEN) — contact ${SECURITY_CONTACT_URL}`
+              : "Enforce that every command only targets IPs/domains in the configured scope.",
             renderSwitch(
-              !!scope.enabled,
+              SCOPE_GUARD_LOCKED ? true : !!scope.enabled,
               (v) => setScope((prev) => ({ ...prev, enabled: v })),
-              "Scope enforcement on",
-              "Scope enforcement off"
+              SCOPE_GUARD_LOCKED ? "Enforced (locked in this build)" : "Scope enforcement on",
+              "Scope enforcement off",
+              SCOPE_GUARD_LOCKED
             )
           )}
           {renderField(

@@ -235,7 +235,9 @@ export default {
     "ssrfTitle": "เป้าหมายเป็น IP/Domain ที่ถูกจำกัด",
     "ssrfDetail": "เป้าหมาย resolve ไปยัง private/internal address (loopback, RFC1918, link-local หรือ cloud metadata) จึงถูก SSRF protection บล็อก — ปิด SSRF ได้ที่ Admin → Security ถ้าต้องสแกนเครือข่ายภายใน",
     "warningTitle": "เป้าหมายนอกขอบเขต",
-    "warningDetail": "agent เตือนว่าเป้าหมายนี้อยู่นอกขอบเขตที่ได้รับอนุญาต — หยุดทดสอบหากไม่มีหนังสืออนุญาตเป็นลายลักษณ์อักษร"
+    "warningDetail": "agent เตือนว่าเป้าหมายนี้อยู่นอกขอบเขตที่ได้รับอนุญาต — หยุดทดสอบหากไม่มีหนังสืออนุญาตเป็นลายลักษณ์อักษร",
+    "guardLocked": "Scope Guard ถูกบังคับใช้ในบิลด์นี้ และไม่สามารถปิดได้",
+    "guardContact": "หากต้องการบิลด์ที่ไม่ติด Scope Guard ติดต่อผู้ดูแลได้ที่ ↓"
   },
   "billing": {
     "title": "การเรียกเก็บเงิน & Subscription",

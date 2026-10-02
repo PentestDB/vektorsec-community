@@ -417,6 +417,55 @@ sudo docker run --rm -v vektorsec_mongodb-data:/data -v ~/backup:/backup \
 
 ---
 
+---
+
+## 🛡️ Scope Guard ถูกบังคับใช้ในบิลด์นี้
+
+Scope Guard — การตรวจสอบว่าทุกคำสั่งยิงไปยังเป้าหมายที่อยู่ใน allowlist เท่านั้น ก่อนที่เครื่องมือ
+security จะถูกเรียกใช้ — เป็นส่วนหนึ่งของ security baseline ของบิลด์นี้ และ **ปิดไม่ได้** ทั้งจาก
+หน้าแอดมิน ตัวแปร environment หรือไฟล์ `config.toml` ปรับได้แค่ให้เข้มขึ้น (เพิ่มรายการ allowlist,
+เปิด strict mode) ที่ **Admin → Scope**
+
+**ถ้าต้องการบิลด์ที่ไม่ติด Scope Guard** ติดต่อผู้ดูแลได้ที่
+→ <https://www.facebook.com/Pentestdb/>
+
+### บิลด์ปลดล็อก (สำหรับลูกค้า / ตัวแทนจำหน่าย)
+
+การล็อกเป็นเรื่องของ "ตอน build" ไม่ใช่ปุ่มในหน้าแอดมิน และตั้งแต่มีการใช้ unlock token
+การปลดล็อกต้องเข้าเงื่อนไข **ครบทั้งสามข้อพร้อมกัน** (โค้ดอยู่ที่ `backend/src/utils/securityPolicy.ts`)
+
+| เงื่อนไข | ล็อก (ค่าเริ่มต้น) | ปลดล็อก |
+| --- | --- | --- |
+| Backend (env ตอนรัน / `/srv/data/.env`) | – *(หรือ `SCOPE_GUARD_LOCK=1`)* | `SCOPE_GUARD_LOCK=0` |
+| Backend ยืนยันโหมดของ UI ที่ deploy จริง | – | `NEXT_PUBLIC_SCOPE_GUARD_LOCK=0` |
+| Unlock token ที่เซ็นโดยผู้ดูแล (env ของ backend) | – | `SCOPE_GUARD_UNLOCK_TOKEN=VEK1.…` |
+| Frontend bundle (ตอน build) | – | `NEXT_PUBLIC_SCOPE_GUARD_LOCK=0` หรือ `npm run build:unlocked` |
+| แก้โค้ดแบบถาวร (ไม่ต้องใช้ flag/token) | `SCOPE_GUARD_LOCKED_IN_CODE = true` | `SCOPE_GUARD_LOCKED_IN_CODE = false` |
+
+ค่าเดียวที่ปลดล็อกได้คือ `0` / `false` / `off` / `no` (ค่าอื่นรวมถึงพิมพ์ผิด = ล็อกไว้) ส่วนเงื่อนไขที่สาม
+คือ **unlock token ที่ผู้ดูแลออกให้** ด้วยเครื่องมือภายใน `scripts/gen-unlock-token.js` (ไม่ได้อยู่ใน
+แพ็กเกจแจกจ่าย) เซ็นด้วย HMAC-SHA256 (`VEK1`) หรือ Ed25519 (`VEK2`) ผูกกับชื่อลูกค้าและวันหมดอายุ
+ดังนั้น bundle ที่หลุด, บรรทัด `.env` ที่ถูกคัดลอก หรือการแก้ `SCOPE_GUARD_LOCK` เพียงอย่างเดียว
+ปลดล็อกไม่ได้
+
+| Token | คีย์ที่ใช้ตรวจบนเครื่อง | หมายเหตุ |
+| --- | --- | --- |
+| `VEK1` (HMAC-SHA256) | `MASTER_SECRET_KEY` | เครื่องต้องมี shared secret เดียวกัน ยาว ≥ 32 ตัวอักษร |
+| `VEK2` (Ed25519) | `MASTER_UNLOCK_PUBLIC_KEY` | แนะนำ — เครื่องเก็บแค่ public key |
+
+token ที่หายไป / ปลอม / ผิดคีย์ / หมดอายุ — หรือไม่ได้ตั้ง `SCOPE_GUARD_LOCK=0`, UI ถูก build ตอนล็อก
+หรือไม่มีคีย์ตรวจสอบเลย — จะทำให้ guard คงสถานะเปิด (fail-closed) และขึ้น log ตอน start ว่า
+`WARN: Scope Guard unlock attempt failed — Invalid or missing UNLOCK_TOKEN` บิลด์ที่ปลดล็อกจะประกาศ
+ตัวเองใน log ตอน start (`Scope Guard is DISABLED in this UNLOCKED build`) และที่ **Admin → Security**
+/ `GET /api/admin/scope` (`locked: false` พร้อมบล็อก `scope.unlock` ที่บอกผลของแต่ละเงื่อนไข) จึงปลอม
+เป็นบิลด์ที่ล็อกไม่ได้ ส่วนความพยายามปลดล็อกที่ถูกปฏิเสธจะขึ้นการ์ดสีแดง *Scope Guard unlock attempt
+failed* ที่ **Admin → Security** และ **Admin → Scope** บอกตรง ๆ ว่าเงื่อนไขข้อใดยังขาด
+(`scopeUnlockWarning()` ใน `frontend/src/constants/security.js`)
+โค้ดอยู่ที่ `backend/src/utils/securityPolicy.ts` + `backend/src/utils/unlockToken.ts` และ mirror ที่
+`frontend/src/constants/security.js`
+
+---
+
 ## 🔒 Security Checklist
 
 - [x] `config.toml`, `*.env`, `deploy/secrets.env`, `kali-data/` ถูก `.gitignore` — ตรวจอีกทีด้วย `git status` ก่อน push

@@ -1,5 +1,7 @@
 import { isIP } from "net";
 
+import { isScopeGuardLocked } from "./securityPolicy";
+
 const DOMAIN_VALID_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 
 function isDomain(value: string): boolean {
@@ -177,7 +179,11 @@ export function validateCommandScope(
 export function createDefaultScopeConfig(): ScopeConfig {
   // Read live config from the .env file (updated via Admin > Scope).
   // Falls back to process.env if loadConfig has already populated it.
-  const enabled = process.env.SCOPE_ENABLED === "1";
+  // Scope Guard is locked ON in this distribution (utils/securityPolicy.ts):
+  // SCOPE_ENABLED may still be written by the admin UI, but it can never switch
+  // enforcement off. Only an unlocked vendor build (SCOPE_GUARD_LOCK=0) or the
+  // SCOPE_GUARD_LOCKED_IN_CODE switch hands control back to the env.
+  const enabled = isScopeGuardLocked() || process.env.SCOPE_ENABLED === "1";
   const strictMode = process.env.SCOPE_STRICT_MODE === "1";
   const raw = process.env.SCOPE_ENTRIES || "";
   return {
@@ -201,7 +207,9 @@ export function buildScopeConfig(input?: {
     config.entries = parseScopeString(input.entries);
   }
   if (input?.enabled !== undefined) {
-    config.enabled = input.enabled;
+    // An explicit *enable* is honoured; disabling is refused while the guard is
+    // locked in this build (utils/securityPolicy.ts).
+    config.enabled = input.enabled || isScopeGuardLocked();
   }
   if (input?.strictMode !== undefined) {
     config.strictMode = input.strictMode;

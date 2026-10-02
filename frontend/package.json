@@ -16,6 +16,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development node server.js",
     "build": "next build --turbopack",
+    "build:unlocked": "cross-env NEXT_PUBLIC_SCOPE_GUARD_LOCK=0 next build --turbopack",
     "start": "cross-env NODE_ENV=production node server.js",
     "test": "node --test \"tests/*.test.mjs\"",
     "test:gateway": "node scripts/test-gateway.mjs",

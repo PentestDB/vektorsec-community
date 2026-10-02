@@ -21,6 +21,7 @@ import { getWorkspaceDetail, createSessionInWorkspace, updateWorkspaceAgentConfi
 import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd, startSolvingAll } from "@/services/ctf.service";
 import { deleteSession } from "@/services/agent.service";
 import { formatDurationSec } from "@/utils/formatDuration";
+import { SCOPE_GUARD_LOCKED, SECURITY_CONTACT_URL } from "@/constants/security";
 import moment from "moment";
 import { useRouter } from "next/navigation";
 import { FiTrash, FiFlag, FiKey, FiLock } from "react-icons/fi";
@@ -448,7 +449,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Target Scope (Whitelist)</div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 8 }}>
           <span style={{ fontSize: 12, color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            Enable allowlist
+            {SCOPE_GUARD_LOCKED ? "Use this workspace allowlist" : "Enable allowlist"}
             <Switch size="small" checked={scopeEnabled} onChange={setScopeEnabled} />
           </span>
           <span style={{ fontSize: 12, color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -468,6 +469,21 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           One per line: domain (covers subdomains), *.domain, IP or CIDR. The agent
           skips tools targeting anything outside this list.
         </div>
+        {SCOPE_GUARD_LOCKED && (
+          <div style={{ fontSize: 11, color: "#fbbf24", margin: "0 0 10px", lineHeight: 1.5 }}>
+            Scope Guard is enforced in this build, so leaving this list off does not disable the
+            checks: the global allowlist still applies, and an empty workspace list falls back to
+            it. Need a build without Scope Guard? Contact{" "}
+            <a
+              href={SECURITY_CONTACT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#60a5fa" }}
+            >
+              {SECURITY_CONTACT_URL}
+            </a>
+          </div>
+        )}
         <Button
           type="primary"
           size="small"

@@ -25,6 +25,17 @@ id_ed25519
 /frontend/.env
 /deploy/secrets.env
 
+# ── Local licensing / unlock tooling (admin-only — NEVER public) ────────────
+# The Scope Guard token generator plus the master key it signs with are internal
+# licensing tools. Publishing them would let anyone mint their own unlock tokens
+# and switch the Scope Guard off, which is the exact thing the guard prevents.
+/scripts/gen-unlock-token.js
+/scripts/.unlock-master-key
+/scripts/*.key
+/scripts/*.pem
+**/.unlock-master-key
+**/.vektorsec/
+
 # ── Launcher / run.sh generated state ──────────────────────────────────────
 .run.conf
 .run-state

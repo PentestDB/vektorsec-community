@@ -15,6 +15,7 @@ import {
   CheckOutlined,
 } from "@ant-design/icons";
 import { useTranslation } from "@/i18n/I18nProvider";
+import { SCOPE_GUARD_LOCKED, SECURITY_CONTACT_URL } from "@/constants/security";
 
 const TOOL_LABELS = {
   run_bash: "Bash",
@@ -368,6 +369,14 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
         >
           <strong>{guardrail.title}</strong>
           <span>{guardrail.detail}</span>
+          {SCOPE_GUARD_LOCKED && guardrail.tone === "blocked" && (
+            <span className={styles.guardrailContact}>
+              {t("guardrails.guardLocked")}{" "}
+              <a href={SECURITY_CONTACT_URL} target="_blank" rel="noopener noreferrer">
+                {t("guardrails.guardContact")} {SECURITY_CONTACT_URL}
+              </a>
+            </span>
+          )}
         </div>
       )}
 

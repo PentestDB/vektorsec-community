@@ -18,6 +18,13 @@ import getSecrets from "./utils/getSecrets";
 import UserModel from "./models/User/User.model";
 import { logger } from "./utils/logger";
 import { envFileExists, getEnvFilePath } from "./utils/loadConfig";
+import {
+  SCOPE_GUARD_LOCK_ENV,
+  SECURITY_CONTACT_URL,
+  getScopeGuardState,
+  scopeGuardUnlockFailureDetail,
+  scopeGuardUnlockWarning,
+} from "./utils/securityPolicy";
 import { isSsrfProtectionEnabled } from "./utils/ssrfGuard";
 
 /**
@@ -174,12 +181,15 @@ function logSecurityPosture(): void {
   const envFile = getEnvFilePath();
   const exists = envFileExists();
   const ssrfOn = isSsrfProtectionEnabled();
+  const guard = getScopeGuardState();
 
   logger.info("configuration loaded", {
     scope: "startup",
     envFile,
     envFileExists: exists,
     ssrfProtection: ssrfOn ? "enabled" : "disabled",
+    scopeGuard: guard.locked ? "enforced (locked)" : "off (unlocked)",
+    scopeGuardReason: guard.reason,
   });
 
   if (!exists) {
@@ -195,6 +205,43 @@ function logSecurityPosture(): void {
       scope: "security",
       envFile,
       hint: "set SSRF_ENABLED=1 (or enable it in Admin > Security) to block loopback/RFC1918 targets",
+    });
+  }
+
+  // Scope Guard belongs to this build's security baseline: state the outcome on
+  // every boot — enforced, unlocked, or a failed unlock attempt — and hand out
+  // the contact channel for anyone who wants the guard removed.
+  if (!guard.locked) {
+    // Unlocked (licensed) instance — never let that be silent.
+    logger.warn("Scope Guard is DISABLED in this UNLOCKED instance", {
+      scope: "security",
+      envFile,
+      unlockedBy: guard.reason,
+      licensedTo: guard.token.client ?? "n/a (unlocked build; code switch off)",
+      tokenExpiresAt: guard.token.expiresAt ?? "no token (unlocked build; code switch off)",
+      hint: `set ${SCOPE_GUARD_LOCK_ENV}=1 and remove the unlock token to enforce scope checks again`,
+    });
+  } else if (guard.unlockFailed) {
+    // Someone configured part of an unlock (flag and/or token) but the guard is
+    // still ON. Say exactly which condition failed — fail-closed, but loud.
+    logger.warn(scopeGuardUnlockWarning(guard) ?? "Scope Guard unlock attempt failed", {
+      scope: "security",
+      envFile,
+      reason: guard.reason,
+      lockFlagOff: guard.lockFlagOff,
+      uiBuildUnlocked: guard.uiBuildUnlocked,
+      tokenPresent: guard.token.present,
+      tokenMode: guard.token.mode ?? null,
+      tokenFailure: guard.token.reason ?? null,
+      missing: scopeGuardUnlockFailureDetail(guard),
+      hint: `fix the conditions or remove the unlock flags/token; need a token? contact ${SECURITY_CONTACT_URL}`,
+    });
+    logger.info("Scope Guard stays ENFORCED (fail-closed)", { scope: "security", envFile });
+  } else {
+    logger.info("Scope Guard is ENFORCED and locked in this build", {
+      scope: "security",
+      envFile,
+      hint: `it cannot be disabled from the admin UI or the environment; need a build without it? contact ${SECURITY_CONTACT_URL}`,
     });
   }
 }

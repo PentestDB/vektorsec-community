@@ -7,8 +7,42 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Changed
+
+- **Scope Guard can no longer be disabled in this distribution**: the target allowlist is
+  verified before any security tool runs and stays enforced regardless of `SCOPE_ENABLED`
+  (Admin → Scope writes are refused, a stale `SCOPE_ENABLED=0` is self-healed). Policy lives in
+  `backend/src/utils/securityPolicy.ts`; operators can still *tighten* the guard (allowlist
+  entries, strict mode), an enabled-but-empty workspace allowlist now falls back to the global
+  guard instead of allowing everything, and the API/UI report `locked` for anyone who needs
+  another build.
+
 ### Added
 
+- **Scope Guard notice with a contact channel**: a blocked tool call explains why it was blocked
+  and, in this locked build, where to ask for one without the guard; Admin → Security and
+  Admin → Scope show the same policy and link (`frontend/src/constants/security.js`, i18n
+  `guardrails.guardLocked` / `guardrails.guardContact`).
+- **Unlocked (vendor) builds via an explicit flag**: `SCOPE_GUARD_LOCK=0` (backend runtime),
+  `NEXT_PUBLIC_SCOPE_GUARD_LOCK=0` / `npm run build:unlocked` (frontend build) or
+  `SCOPE_GUARD_LOCKED_IN_CODE = false` (fork) unlock the guard, so a customer build needs no code
+  edit. Only `0`/`false`/`off`/`no` unlocks — anything else, including a typo, stays locked — and,
+  since the unlock-token change below, a *licensed* build additionally needs a valid
+  `SCOPE_GUARD_UNLOCK_TOKEN`. An unlocked instance warns at boot plus reports `locked: false` /
+  a dedicated notice from `GET /api/admin/scope` (see `backend/src/utils/securityPolicy.ts`).
+- **Scope Guard unlock tokens (third unlock condition)**: the flags alone no longer unlock a build —
+  `SCOPE_GUARD_UNLOCK_TOKEN` must hold a token signed by the maintainers: `VEK1.<payload>.<sig>`
+  (HMAC-SHA256, verified with `MASTER_SECRET_KEY`) or `VEK2.<payload>.<sig>` (Ed25519, verified with
+  `MASTER_UNLOCK_PUBLIC_KEY`), bound to a client name (`sub`/`c`) plus `iat`/`exp`
+  (`backend/src/utils/unlockToken.ts`). A missing, malformed, forged, wrong-key or expired token —
+  or a missing verification key, or a UI built while still locked — keeps the guard ON and logs
+  `WARN: Scope Guard unlock attempt failed — Invalid or missing UNLOCK_TOKEN`;
+  `GET /api/admin/scope` now also returns a `scope.unlock` block (`attempted`, `lockFlagOff`,
+  `uiBuildUnlocked`, `tokenPresent`, `tokenValid`, `tokenMode`, `tokenReason`, `tokenClient`,
+  `tokenExpiresAt`, `reason`, `detail`, `message`) so the admin UI can explain *why* an instance is
+  still locked: **Admin → Security** and **Admin → Scope** show a red *Scope Guard unlock attempt
+  failed* card naming the missing condition (`scopeUnlockWarning()` in
+  `frontend/src/constants/security.js`, covered by `frontend/tests/scopeUnlock.test.mjs`).
 - **Tool plugins are auto-loaded** from `backend/src/tools/extensions/` (or `TOOLS_EXTENSIONS_DIR`):
   no manual import needed, broken plugins are skipped instead of crashing the server
   (`backend/src/tools/plugin-loader.ts`, template `example-plugin.ts.example`).
