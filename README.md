@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/banner.png" alt="VektorSec Banner" width="820" />
+  <img src="./msedge_9tIr0IBPt8.png" alt="VektorSec Banner" width="820" />
 </p>
 
 <h1 align="center">🛡️ VektorSec — AI Penetration Testing Agent</h1>
@@ -55,11 +55,11 @@ VektorSec is an agentic AI penetration-testing agent: it runs real commands on a
 Real execution example: An agent performing an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/).
 
 <p align="center">
-  <img src="./assets/dashboard_with_backdrop.png" alt="VektorSec Dashboard" width="800" />
+  <img src="./msedge_X3YWNXLRhx.png" alt="VektorSec Dashboard" width="800" />
 </p>
 
 <p align="center">
-  <img src="./assets/operationa_dashboard_with_backdrop.png" alt="VektorSec Operational Dashboard" width="800" />
+  <img src="./msedge_l0NcpZRSXr.png" alt="VektorSec Operational Dashboard" width="800" />
 </p>
 
 ## ✨ Key Features
