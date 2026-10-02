@@ -53,7 +53,7 @@ VektorSec คือ AI penetration-testing agent แบบ agentic: มันร
 ตัวอย่างการทำงานจริง: agent บุก auth bypass ใน [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/)
 
 <p align="center">
-  <img src="./assets/dashboard_with_backdrop.png" alt="VektorSec Dashboard" width="800" />
+  <img src="./msedge_X3YWNXLRhx.png" alt="VektorSec Dashboard" width="800" />
 </p>
 
 <p align="center">
