@@ -62,7 +62,7 @@ boot2root boxes and CTFs.
 Real-world example: the agent exploits an auth bypass in [OWASP Juice Shop](https://owasp.org/www-project-juice-shop/)
 
 <p align="center">
-  <img src="./assets/dashboard_with_backdrop.png" alt="VektorSec Dashboard" width="800" />
+  <img src="./msedge_X3YWNXLRhx.png" alt="VektorSec Dashboard" width="800" />
 </p>
 
 <p align="center">
