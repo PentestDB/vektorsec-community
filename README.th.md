@@ -57,7 +57,7 @@ VektorSec คือ AI penetration-testing agent แบบ agentic: มันร
 </p>
 
 <p align="center">
-  <img src="./assets/operationa_dashboard_with_backdrop.png" alt="VektorSec Operational Dashboard" width="800" />
+  <img src="./msedge_9tIr0IBPt8.png" alt="VektorSec Operational Dashboard" width="800" />
 </p>
 
 ## ✨ ความสามารถหลัก
