@@ -40,6 +40,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - **Docs**: manuals are split into Thai (`docs/`) and English (`docs/en/`); the root `README.md`
   is English-only with the Thai version in `README.th.md`.
 
+- **Startup security posture log**: the backend now reports which `.env` file actually took effect
+  (`<DATA_DIR>/.env`, i.e. `/srv/data/.env` in Docker — *not* the repo's `backend/.env`) and whether
+  SSRF protection is active, and warns when no runtime env file exists or SSRF is disabled
+  (`backend/src/utils/loadConfig.ts`, `backend/src/server.ts`).
+
 ### Changed
 
 - **`backend/src/server.ts` is now only the process lifecycle**: HTTP wiring moved to
@@ -51,6 +56,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 
+- **SSRF blocks were mislabelled as scope-guard violations** in the session transcript: a target
+  stopped by SSRF protection now gets its own notice with the correct remediation (turn SSRF
+  protection off under Admin → Security) instead of "Blocked by the scope guard"
+  (`frontend/src/components/pages/session/sessionId/ToolCallBlock.jsx`, new i18n keys
+  `guardrails.ssrfTitle` / `guardrails.ssrfDetail`).
 - **Free trial could be claimed repeatedly**: cancelling the trial (or letting a paid plan expire)
   allowed a new trial. A persisted `trialUsed` flag now makes the trial one-off per channel.
 - **Agent Tools panel hid 34 of 60 tools**: it is now data-driven, so every registered tool appears

@@ -17,6 +17,8 @@ import { startAgentStateWatchdog } from "./services/agent.service";
 import getSecrets from "./utils/getSecrets";
 import UserModel from "./models/User/User.model";
 import { logger } from "./utils/logger";
+import { envFileExists, getEnvFilePath } from "./utils/loadConfig";
+import { isSsrfProtectionEnabled } from "./utils/ssrfGuard";
 
 /**
  * Process lifecycle only: configuration, database/Redis connections, HTTP
@@ -158,6 +160,45 @@ async function resetStaleSessions(): Promise<void> {
   }
 }
 
+/**
+ * Report which configuration file actually took effect and which security
+ * guards are active.
+ *
+ * This exists because the authoritative env file is not always the one in the
+ * repo: whenever `<DATA_DIR>` (= `/srv/data`) exists — i.e. inside Docker — the
+ * backend reads `/srv/data/.env` and silently ignores `backend/.env`. Without
+ * this line a stale guard setting is invisible: you edit `.env`, restart, and
+ * nothing changes.
+ */
+function logSecurityPosture(): void {
+  const envFile = getEnvFilePath();
+  const exists = envFileExists();
+  const ssrfOn = isSsrfProtectionEnabled();
+
+  logger.info("configuration loaded", {
+    scope: "startup",
+    envFile,
+    envFileExists: exists,
+    ssrfProtection: ssrfOn ? "enabled" : "disabled",
+  });
+
+  if (!exists) {
+    logger.warn("no runtime env file found; only the process/compose environment is in effect", {
+      scope: "startup",
+      envFile,
+      hint: "create it (e.g. from backend/.env.example) or export the variables in the environment",
+    });
+  }
+
+  if (!ssrfOn) {
+    logger.warn("SSRF protection is DISABLED; internal/private targets are allowed", {
+      scope: "security",
+      envFile,
+      hint: "set SSRF_ENABLED=1 (or enable it in Admin > Security) to block loopback/RFC1918 targets",
+    });
+  }
+}
+
 /** Start the Telegram bot when a token is configured. */
 async function startTelegram(): Promise<void> {
   try {
@@ -177,6 +218,10 @@ async function startTelegram(): Promise<void> {
 const initializeApp = async () => {
   try {
     initTracing();
+
+    // First thing after config is loaded (see utils/getSecrets.ts → loadConfig):
+    // make the effective env file + active guards observable.
+    logSecurityPosture();
 
     const DEPLOYMENT = await getSecrets("DEPLOYMENT");
     const MONGO_URI = await getSecrets("MONGO_URI");

@@ -62,6 +62,18 @@ export function getEnvFilePath(): string {
   return path.join(resolveDataDir(), ".env");
 }
 
+/**
+ * True when the resolved run-time `.env` file exists on disk.
+ *
+ * Exposed so startup can report *which* file is authoritative. This matters
+ * because in Docker the backend reads `<DATA_DIR>/.env` = `/srv/data/.env`
+ * (the persistent `backend-dev-data` volume) and silently ignores the repo's
+ * `backend/.env` — editing the wrong file looks like "my change did nothing".
+ */
+export function envFileExists(): boolean {
+  return fs.existsSync(getEnvFilePath());
+}
+
 export function loadConfig(): void {
   if (_loaded) return;
 

@@ -187,9 +187,10 @@ const highlighterCustomStyle = {
  * `backend/src/tools/handlers/scan-guard.ts` and `utils/guardrails.ts`), so the
  * check is intentionally text-based and defensive.
  *
- * Returns `{ tone, detail }` — `detail` is the backend-provided reason (empty
- * when the backend only emitted the marker). Titles/fallback copy are added by
- * the component through i18n, so this function stays pure and testable.
+ * Returns `{ tone, detail }` — `tone` is one of `"ssrf" | "blocked" | "warning"`;
+ * `detail` is the backend-provided reason (empty when the backend only emitted
+ * the marker). Titles/fallback copy are added by the component through i18n, so
+ * this function stays pure and testable.
  */
 export function detectGuardrailNotice(content) {
   if (!content) return null;
@@ -200,6 +201,14 @@ export function detectGuardrailNotice(content) {
       .find((line) => /BLOCKED|OUT OF SCOPE|safety/i.test(line))
       ?.replace(/^BLOCKED:\s*/i, "")
       .trim() || "";
+
+  // SSRF protection owns its own copy: the remedy (turn SSRF protection off
+  // under Admin > Security) is different from a workspace scope violation.
+  // Backend marker: "BLOCKED: Target IP/Domain is restricted for security reasons."
+  // (see backend/src/utils/ssrfGuard.ts → blockedTargetResult).
+  if (/Target IP\/Domain is restricted for security reasons/i.test(text)) {
+    return { tone: "ssrf", detail };
+  }
 
   if (/^\s*BLOCKED:/im.test(text) || /\bOUT OF SCOPE\b/i.test(text)) {
     return { tone: "blocked", detail };
@@ -239,7 +248,12 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
   const guardrail = useMemo(() => {
     const notice = detectGuardrailNotice(content);
     if (!notice) return null;
-    const prefix = notice.tone === "blocked" ? "guardrails.blocked" : "guardrails.warning";
+    const prefix =
+      notice.tone === "ssrf"
+        ? "guardrails.ssrf"
+        : notice.tone === "blocked"
+          ? "guardrails.blocked"
+          : "guardrails.warning";
     return {
       tone: notice.tone,
       title: t(`${prefix}Title`),
@@ -349,7 +363,7 @@ const ToolCallBlock = React.memo(function ToolCallBlock({ message }) {
       {guardrail && (
         <div
           className={`${styles.guardrailNotice} ${
-            guardrail.tone === "blocked" ? styles.guardrailBlocked : styles.guardrailWarning
+            guardrail.tone === "warning" ? styles.guardrailWarning : styles.guardrailBlocked
           }`}
         >
           <strong>{guardrail.title}</strong>

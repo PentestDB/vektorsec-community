@@ -232,6 +232,8 @@ export default {
   "guardrails": {
     "blockedTitle": "ถูกบล็อกโดย scope guard",
     "blockedDetail": "เป้าหมายไม่อยู่ใน scope allowlist ของ workspace ระบบจึงไม่ได้รันอะไรเลย — เพิ่มเป้าหมายที่ ตั้งค่า Workspace → Scope แล้วลองใหม่",
+    "ssrfTitle": "เป้าหมายเป็น IP/Domain ที่ถูกจำกัด",
+    "ssrfDetail": "เป้าหมาย resolve ไปยัง private/internal address (loopback, RFC1918, link-local หรือ cloud metadata) จึงถูก SSRF protection บล็อก — ปิด SSRF ได้ที่ Admin → Security ถ้าต้องสแกนเครือข่ายภายใน",
     "warningTitle": "เป้าหมายนอกขอบเขต",
     "warningDetail": "agent เตือนว่าเป้าหมายนี้อยู่นอกขอบเขตที่ได้รับอนุญาต — หยุดทดสอบหากไม่มีหนังสืออนุญาตเป็นลายลักษณ์อักษร"
   },

@@ -231,6 +231,8 @@ export default {
   "guardrails": {
     "blockedTitle": "Blocked by the scope guard",
     "blockedDetail": "The target is not in the workspace scope allowlist, so nothing was executed. Add it under Workspace settings → Scope and try again.",
+    "ssrfTitle": "Target IP/Domain is restricted",
+    "ssrfDetail": "The target resolves to a private/internal address (loopback, RFC1918, link-local or cloud metadata), so SSRF protection blocked it. Turn SSRF protection off under Admin → Security to scan internal networks.",
     "warningTitle": "Out-of-scope target",
     "warningDetail": "The agent warned that this target is outside the authorized scope. Do not continue against it without written authorization."
   },
