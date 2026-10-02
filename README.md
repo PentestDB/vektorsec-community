@@ -66,7 +66,7 @@ Real-world example: the agent exploits an auth bypass in [OWASP Juice Shop](http
 </p>
 
 <p align="center">
-  <img src="./assets/operationa_dashboard_with_backdrop.png" alt="VektorSec Operational Dashboard" width="800" />
+  <img src="./msedge_l0NcpZRSXr.png" alt="VektorSec Operational Dashboard" width="800" />
 </p>
 
 ## ✨ Key Capabilities
