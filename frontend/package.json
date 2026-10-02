@@ -2,6 +2,12 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "author": "PentestDB @ Developer By Raysiya",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PentestDB/vektorsec-community.git"
+  },
+  "license": "MIT",
   "engines": {
     "node": ">=22",
     "pnpm": ">=9"

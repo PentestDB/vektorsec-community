@@ -21,6 +21,11 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%2F%20Docker-9cf.svg" />
 </p>
 
+<p align="center">
+  <b>PentestDB</b> @ Developer By <b>Raysiya</b> ·
+  <a href="https://github.com/PentestDB/vektorsec-community">github.com/PentestDB/vektorsec-community</a>
+</p>
+
 > ⚠️ **Disclaimer**: VektorSec is intended for **authorized security testing only**.
 > Always obtain explicit permission from the system owner before testing. You are
 > responsible for how you use it.
@@ -510,6 +515,17 @@ Thank you for your support! ❤️
 This project builds on the research/open-source work behind VektorSec and is released under the
 [**MIT License**](./LICENSE) — see the LICENSE file, plus [CONTRIBUTING.md](./CONTRIBUTING.md)
 and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
+
+### 👤 Project Credits
+
+| | |
+|---|---|
+| **Organization** | PentestDB |
+| **Developer** | Raysiya |
+| **Repository** | [github.com/PentestDB/vektorsec-community](https://github.com/PentestDB/vektorsec-community) |
+| **License** | MIT |
+
+> **PentestDB** @ Developer By **Raysiya**
 
 ```bibtex
 @article{goyal2024hacking,

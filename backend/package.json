@@ -24,10 +24,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PentestDB/vektorsec.git"
+    "url": "git+https://github.com/PentestDB/vektorsec-community.git"
   },
-  "author": "VektorSec",
-  "license": "ISC",
+  "author": "PentestDB @ Developer By Raysiya",
+  "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "0.78.0",
     "@arizeai/openinference-instrumentation-anthropic": "0.1.7",
