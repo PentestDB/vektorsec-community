@@ -28,6 +28,8 @@ import {
   getInstallCommandForOS,
 } from "../capabilities/registry";
 import WorkspaceModel from "../models/Workspace/Workspace.model";
+import UserModel from "../models/User/User.model";
+import { getCurrentPlan } from "../services/billing.service";
 import { getEvidenceCollector } from "../tools/handlers/collect-evidence";
 import { ReportGenerator } from "../services/evidenceCollector";
 import {
@@ -41,6 +43,10 @@ import {
   toReportFinding,
 } from "../utils/report";
 import { buildPrivilegeAwareInstallCommand } from "../utils/installCommand";
+import { logAuditFromRequest } from "../services/audit.service";
+import fs from "fs";
+import path from "path";
+import { getDataDir } from "../utils/loadConfig";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -133,6 +139,98 @@ export const sendMessage = async (req: Request, res: Response) => {
     if (!res.headersSent) {
       return res.status(500).json({ message: err.message ?? "Agent error" });
     }
+  }
+};
+
+// ── Session chat attachment upload ───────────────────────────────────
+
+const ATTACHMENT_TEXT_EXTENSIONS = new Set([
+  "txt", "log", "md", "markdown", "csv", "json", "xml", "yaml", "yml",
+  "html", "htm", "js", "jsx", "ts", "tsx", "mjs", "cjs", "py", "rb",
+  "go", "rs", "java", "c", "h", "cpp", "hpp", "cs", "php", "sh", "bash",
+  "zsh", "fish", "ps1", "bat", "cmd", "ini", "conf", "config", "cfg",
+  "toml", "env", "sql", "css", "scss", "less", "sass", "properties",
+  "http", "har", "pem", "key", "crt", "cert", "ovpn", "rst", "tex",
+  "svg", "graphql", "gql", "proto", "dockerfile", "makefile", "gitignore",
+]);
+
+function sanitizeAttachmentName(name: string): string {
+  const base = path.basename(name || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const trimmed = base.replace(/^_+|_+$/g, "") || "file";
+  return trimmed.slice(0, 120);
+}
+
+function extractTextPreview(file: Express.Multer.File): string | null {
+  const ext = file.originalname.split(".").pop()?.toLowerCase() ?? "";
+  const mime = file.mimetype || "";
+  const looksText =
+    ATTACHMENT_TEXT_EXTENSIONS.has(ext) ||
+    mime.startsWith("text/") ||
+    mime === "application/json" ||
+    mime === "application/xml" ||
+    mime === "application/javascript";
+  if (!looksText) return null;
+
+  const text = file.buffer.toString("utf8");
+  // Binary content renamed to a text extension — do not inline it.
+  if (text.includes("\u0000")) return null;
+
+  const MAX_PREVIEW_CHARS = 100_000;
+  return text.length > MAX_PREVIEW_CHARS
+    ? `${text.slice(0, MAX_PREVIEW_CHARS)}\n…(truncated)`
+    : text;
+}
+
+export const uploadSessionAttachment = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+      return res.status(400).json({ message: "sessionId is required" });
+    }
+
+    const session = await requireActiveSession(userId, sessionId, res);
+    if (!session) return;
+
+    // Attaching files is a paid-plan feature; admins bypass the gate.
+    const user = await UserModel.findById(userId);
+    if (user?.role !== "admin") {
+      const plan = await getCurrentPlan(userId);
+      if (plan === "free") {
+        return res.status(402).json({
+          message:
+            "File attachments require a paid plan. Please upgrade to attach files.",
+          code: "PLAN_REQUIRES_PAYMENT",
+        });
+      }
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ message: "No file provided" });
+    }
+    if (!file.size) {
+      return res.status(400).json({ message: "Empty file" });
+    }
+
+    const attachmentId = uuidv4();
+    const safeName = sanitizeAttachmentName(file.originalname);
+    const dir = path.join(getDataDir(), "session-attachments", sessionId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${attachmentId}-${safeName}`), file.buffer);
+
+    return res.status(200).json({
+      attachmentId,
+      filename: safeName,
+      originalName: file.originalname,
+      size: file.size,
+      mimeType: file.mimetype || "application/octet-stream",
+      textPreview: extractTextPreview(file),
+    });
+  } catch (err: any) {
+    console.error("[agent] uploadSessionAttachment error:", err);
+    return res.status(500).json({ message: "Failed to upload attachment" });
   }
 };
 
@@ -412,8 +510,39 @@ export const deleteSession = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, sessionId, res);
     if (!session) return;
 
+    // 1. Stop anything still running for this session (agent loop, run presence).
+    abortSession(sessionId);
+    clearUserRunPresence(sessionId);
+
+    // 2. Tear down the live shells/SSH connections held in memory; without this
+    //    the sshd/vpn processes of a "deleted" session keep running forever.
+    try {
+      await sessionLifecycle.destroy(sessionId);
+    } catch (err) {
+      console.error(`[agent] failed to destroy shells for ${sessionId}:`, err);
+    }
+
+    // 3. Archive the record: history, findings and evidence stay readable for
+    //    reports, while the session leaves the active list and the quota.
     session.status = "archived";
+    session.archivedAt = new Date();
+    session.agentState = "idle";
+    session.pendingConsent = undefined;
+    session.pendingManualExecution = undefined;
     await session.save();
+
+    // Shells are persisted documents too — close them so the UI never shows a
+    // "running" shell inside an archived session.
+    await SessionsModel.updateOne(
+      { sessionId },
+      { $set: { "shells.$[].status": "closed" } },
+    );
+
+    await logAuditFromRequest(req, res, "session.archived", {
+      resourceType: "session",
+      resourceId: sessionId,
+      details: { workspaceId: session.workspaceId, name: session.name },
+    });
 
     return res.status(200).json({ message: "Session deleted" });
   } catch (err: any) {

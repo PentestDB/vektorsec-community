@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "react-query";
 import { getCapabilities, updateCapabilities } from "@/services/user.service";
 import { clearContext, getVulnerabilities } from "@/services/agent.service";
 import AgentToolsPanel from "@/components/session/AgentToolsPanel";
-import { updateSessions } from "@/store/user.slice";
+import { useSessionTabNav } from "@/hooks/useSessionTabs";
 import { FiMonitor, FiShield, FiLock, FiLink } from "react-icons/fi";
 import { MdOutlineDeleteSweep } from "react-icons/md";
 import { TbPlugConnected, TbRadar, TbTopologyStar3, TbWorldWww } from "react-icons/tb";
@@ -224,6 +224,7 @@ const Sidebar = ({ sessionId, workspaceId }) => {
   };
 
   const { sessions } = useSelector((state) => state.user);
+  const { openTab } = useSessionTabNav(sessionId);
   const orchestratorTokenUsage = useAgentStreamStore(
     (state) => state.sessions[sessionId]?.tokenUsage ?? null,
   );
@@ -246,75 +247,35 @@ const Sidebar = ({ sessionId, workspaceId }) => {
     }
   };
 
+  // Every secondary tab is opened through the shared helper, which keeps the
+  // find/map/push logic (and the "only one tab active" rule) in one place.
   const navigateToVPN = () => {
-    const vpnId = `${sessionId}/vpn`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === vpnId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: vpnId, is_main: false, is_active: true, type: "vpn" });
-      dispatch(updateSessions(updatedSess));
-    }
+    openTab("vpn");
     router.push(`/session/${sessionId}/vpn`);
   };
 
   const navigateToGUI = () => {
-    const guiId = `${sessionId}/gui`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === guiId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: guiId, is_main: false, is_active: true, type: "gui" });
-      dispatch(updateSessions(updatedSess));
-    }
+    openTab("gui");
     router.push(`/session/${sessionId}/gui`);
   };
 
   const navigateToBurp = () => {
-    const burpId = `${sessionId}/burp`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === burpId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: burpId, is_main: false, is_active: true, type: "burp" });
-      dispatch(updateSessions(updatedSess));
-    }
+    openTab("burp");
     router.push(`/session/${sessionId}/burp`);
   };
 
   const navigateToCaido = () => {
-    const caidoId = `${sessionId}/caido`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === caidoId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: caidoId, is_main: false, is_active: true, type: "caido" });
-      dispatch(updateSessions(updatedSess));
-    }
+    openTab("caido");
     router.push(`/session/${sessionId}/caido`);
   };
 
   const navigateToMythic = () => {
-    const mythicId = `${sessionId}/mythic`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === mythicId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: mythicId, is_main: false, is_active: true, type: "mythic" });
-      dispatch(updateSessions(updatedSess));
-    }
+    openTab("mythic");
     router.push(`/session/${sessionId}/mythic`);
   };
 
   const navigateToBrowserAgent = () => {
-    const baId = `${sessionId}/browser-agent`;
-    let updatedSess = [...sessions];
-    const exists = updatedSess.find((s) => s.id === baId);
-    if (!exists) {
-      updatedSess = updatedSess.map((s) => ({ ...s, is_active: false }));
-      updatedSess.push({ id: baId, is_main: false, is_active: true, type: "browser-agent" });
-      dispatch(updateSessions(updatedSess));
-    }
+    openTab("browser-agent");
     router.push(`/session/${sessionId}/browser-agent`);
   };
 

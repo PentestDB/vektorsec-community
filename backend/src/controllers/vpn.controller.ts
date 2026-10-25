@@ -3,12 +3,15 @@ import { Client as SSHClient } from "ssh2";
 import { requireActiveSession } from "../services/session.helpers";
 import {
   connectSSH,
+  execOnResolvedWorkHost,
   execOnWorkHost,
   resolveSessionWorkHost,
+  ResolvedWorkHost,
 } from "../services/work-host.service";
 import path from "path";
 import fs from "fs";
 import { KALI_DATA_DIR } from "../config/constants";
+import { logger } from "../utils/logger";
 
 const VPN_DIR = path.join(KALI_DATA_DIR, "vpn-profiles");
 
@@ -175,7 +178,13 @@ export const deleteVPNProfile = async (req: Request, res: Response) => {
 
     const safeName = sanitizeProfileName(profile_name);
     const profiles = listLocalProfiles();
-    const profile = profiles.find((p) => p.name === safeName);
+    // The UI echoes back the exact `name` it was given, so match that first and
+    // only fall back to the sanitized form. Re-sanitizing blindly broke deletion
+    // for profiles whose file name was copied onto the host by hand (spaces,
+    // unicode, >64 chars) - those were reported as "Profile not found".
+    const profile =
+      profiles.find((p) => p.name === profile_name || p.filename === profile_name) ??
+      profiles.find((p) => p.name === safeName);
 
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
@@ -221,7 +230,23 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
     console.log("[vpn/connect] 4 profile found", { path: profile.path });
 
     console.log("[vpn/connect] 5 resolving workspace work host...");
-    const target = await resolveSessionWorkHost(session_id);
+    // Resolved up front and reported explicitly. When a session has no
+    // workspace, or the workspace / SSH profile cannot be resolved, this used
+    // to fall through to the generic "Failed to connect VPN" below, leaving the
+    // UI with an opaque 400 and no cause to act on. Surface the reason instead.
+    let target: ResolvedWorkHost;
+    try {
+      target = await resolveSessionWorkHost(session_id);
+    } catch (resolveErr: any) {
+      const reason = resolveErr?.message ?? String(resolveErr);
+      console.log("[vpn/connect] work host unavailable:", reason);
+      logger.warn("vpn connect: work host unavailable", {
+        scope: "vpn",
+        sessionId: session_id,
+        err: resolveErr,
+      });
+      return res.status(400).json({ message: `Work host unavailable - ${reason}` });
+    }
     let ssh: SSHClient | null = null;
 
     try {
@@ -313,9 +338,21 @@ export const connectVPNProfile = async (req: Request, res: Response) => {
       console.log("[vpn/connect] error:", err?.message ?? err);
       return res.status(400).json({ message: err.message ?? "Failed to connect VPN" });
     }
-  } catch (err) {
-    console.log(err);
-    return res.status(400).json({ message: "Failed to connect VPN" });
+  } catch (err: any) {
+    // Include the underlying reason instead of the old generic message: an
+    // opaque "Request failed with status code 400" in the browser console gives
+    // the operator nothing to act on.
+    const reason = err?.message ?? String(err);
+    console.log("[vpn/connect] error:", reason);
+    logger.warn("vpn connect failed", {
+      scope: "vpn",
+      sessionId: req.body?.session_id,
+      profile: req.body?.profile_name,
+      err,
+    });
+    return res.status(400).json({
+      message: reason ? `Failed to connect VPN: ${reason}` : "Failed to connect VPN",
+    });
   }
 };
 
@@ -395,9 +432,11 @@ export const disconnectAllVPN = async (req: Request, res: Response) => {
 // ── Get detailed VPN status ──
 
 export const getVPNStatus = async (req: Request, res: Response) => {
+  let sessionIdForLog: unknown;
   try {
     const userId = res.locals.userId;
     const { session_id } = req.body;
+    sessionIdForLog = session_id;
 
     if (!session_id) {
       return res.status(400).json({ message: "Invalid session id" });
@@ -406,12 +445,18 @@ export const getVPNStatus = async (req: Request, res: Response) => {
     const session = await requireActiveSession(userId, session_id, res);
     if (!session) return;
 
+    // The work host is resolved once and reused by both probes below. The UI
+    // polls this endpoint every few seconds, and each `execOnWorkHost` call
+    // resolves the host again and opens a brand new SSH connection.
+    const target = await resolveSessionWorkHost(session_id);
+
     {
-      const { stdout: pgrepOut, code: pgrepCode } = await execOnWorkHost(session_id, "pgrep -a openvpn 2>/dev/null", 10_000);
+      const { stdout: pgrepOut, code: pgrepCode } = await execOnResolvedWorkHost(target, "pgrep -a openvpn 2>/dev/null", 10_000);
 
       if (pgrepCode !== 0 || !pgrepOut.trim()) {
         return res.status(200).json({
           success: false,
+          reachable: true,
           connections: [],
           message: "No VPN connections active",
         });
@@ -441,7 +486,7 @@ export const getVPNStatus = async (req: Request, res: Response) => {
       }
 
       // Get tun interfaces and IPs
-      const { stdout: ifOut } = await execOnWorkHost(session_id, "ip -4 addr show 2>/dev/null | grep -E '(^[0-9]+:|inet )' || true", 10_000);
+      const { stdout: ifOut } = await execOnResolvedWorkHost(target, "ip -4 addr show 2>/dev/null | grep -E '(^[0-9]+:|inet )' || true", 10_000);
       const tunInterfaces: Array<{ iface: string; ip: string }> = [];
       const ifLines = ifOut.split("\n");
       let currentIface = "";
@@ -464,13 +509,28 @@ export const getVPNStatus = async (req: Request, res: Response) => {
 
       return res.status(200).json({
         success: true,
+        reachable: true,
         connections: enrichedConnections,
         message: `${enrichedConnections.length} VPN connection(s) active`,
       });
     }
   } catch (err) {
-    console.log(err);
-    return res.status(400).json({ message: "Failed to check VPN status" });
+    // This endpoint is a *poll*: the UI re-runs it every few seconds for as long
+    // as a session page is open. An unreachable work host (SSH refused or timed
+    // out - the environment SSH box is down, or the operator has not connected
+    // yet) is a normal state, not a client error, so it is reported as one.
+    // Answering 400 here used to flood the browser console and hide the reason
+    // behind a generic message; the work-host probe
+    // (`GET /shell/:sessionId/connection`) reports `lastError` the same way.
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.warn("vpn status probe failed", { scope: "vpn", sessionId: sessionIdForLog, err });
+    return res.status(200).json({
+      success: false,
+      reachable: false,
+      connections: [],
+      lastError: reason,
+      message: `Work host unreachable - VPN status unavailable (${reason})`,
+    });
   }
 };
 

@@ -2,35 +2,16 @@
 
 import Loader from "@/components/common/loader/Loader";
 import BurpProxyPage from "@/components/pages/session/burp/BurpProxyPage";
+import { useRegisterSessionTab } from "@/hooks/useSessionTabs";
 import { use } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { updateSessions } from "@/store/user.slice";
+import { useSelector } from "react-redux";
 
 const BurpPage = ({ params }) => {
   const { session_id: sessionId } = use(params);
-  const { user, sessions } = useSelector((state) => state.user);
-  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.user);
 
-  const burpSession = sessions.find((session) => session.type === "burp");
-
-  if (!burpSession) {
-    const allSessions = sessions.map((session) => ({
-      ...session,
-      is_active: false,
-    }));
-
-    dispatch(
-      updateSessions([
-        ...allSessions,
-        {
-          id: sessionId + "/burp",
-          is_main: false,
-          is_active: true,
-          type: "burp",
-        },
-      ])
-    );
-  }
+  // Register the Burp tab (this used to be dispatched during render).
+  useRegisterSessionTab(sessionId, "burp");
 
   if (!user) {
     return <Loader />;

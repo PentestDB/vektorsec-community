@@ -2,37 +2,16 @@
 
 import Loader from "@/components/common/loader/Loader";
 import VPNMainPage from "@/components/pages/session/vpn/VPNMainPage";
+import { useRegisterSessionTab } from "@/hooks/useSessionTabs";
 import { use } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { updateSessions } from "@/store/user.slice";
+import { useSelector } from "react-redux";
 
 const VPNPage = ({ params }) => {
   const { session_id: sessionId } = use(params);
-  const { user, sessions } = useSelector((state) => state.user);
-  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.user);
 
-  const vpnSession = sessions.find((session) => session.type === "vpn");
-
-  if (!vpnSession) {
-    const allSessions = sessions.map((session) => {
-      return {
-        ...session,
-        is_active: false,
-      };
-    });
-
-    dispatch(
-      updateSessions([
-        ...allSessions,
-        {
-          id: sessionId + "/vpn",
-          is_main: false,
-          is_active: true,
-          type: "vpn",
-        },
-      ])
-    );
-  }
+  // Register the VPN tab (this used to be dispatched during render).
+  useRegisterSessionTab(sessionId, "vpn");
 
   if (!user) {
     return <Loader />;

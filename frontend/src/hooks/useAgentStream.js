@@ -161,7 +161,7 @@ export default function useAgentStream({
   }, [refs, setMessages]);
 
   const startStream = useCallback(
-    async ({ message, endpoint = "message", burpMeta = null }) => {
+    async ({ message, endpoint = "message", burpMeta = null, fileAttachments = null, displayText = null }) => {
       setAgentState("running");
 
       let stream;
@@ -194,9 +194,17 @@ export default function useAgentStream({
 
       stream
         .onEvent("user_message_ack", (data) => {
+          const displayContent = fileAttachments ? (displayText ?? "") : message;
           setMessages((prev) => [
             ...prev,
-            { id: data.id, role: "user", content: message, timestamp: new Date(), ...(burpMeta ? { burpMeta } : {}) },
+            {
+              id: data.id,
+              role: "user",
+              content: displayContent,
+              timestamp: new Date(),
+              ...(burpMeta ? { burpMeta } : {}),
+              ...(fileAttachments ? { fileAttachments } : {}),
+            },
           ]);
         })
         .onEvent("reasoning", (data) => {

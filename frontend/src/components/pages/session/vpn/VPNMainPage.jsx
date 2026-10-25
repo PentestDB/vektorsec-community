@@ -1,4 +1,4 @@
-import { message, Spin, Upload, Tag, Empty, Popconfirm } from "antd";
+import { message, Spin, Upload, Tag, Empty, Popconfirm, Alert } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import {
@@ -30,7 +30,17 @@ const VPNMainPage = ({ sessionId }) => {
   const { data: vpnStatusData } = useQuery(
     ["check-vpn-status", sessionId],
     () => getVPNStatus({ session_id: sessionId }),
-    { refetchInterval: 5000 }
+    {
+      enabled: !!sessionId,
+      // A poll failure (unreachable work host, or a session that is gone) is
+      // not worth retrying - react-query would otherwise fire 4 requests per
+      // interval. Stop the poll entirely once the session is rejected.
+      retry: false,
+      refetchInterval: (data, query) =>
+        !sessionId || query.state.error?.response?.status === 400
+          ? false
+          : 5000,
+    }
   );
 
   const vpnConnections = vpnStatusData?.connections ?? [];
@@ -144,6 +154,16 @@ const VPNMainPage = ({ sessionId }) => {
           )}
         </div>
       </div>
+
+      {vpnStatusData?.reachable === false && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Cannot read VPN status: the session work host is unreachable"
+          description={vpnStatusData?.lastError || undefined}
+        />
+      )}
 
       <div className={styles.content}>
         {vpnConnections.length > 0 && (

@@ -2,6 +2,11 @@ import { Response, NextFunction, Request } from "express";
 import UserModel from "../models/User/User.model";
 import EarlyAccessModel from "../models/EarlyAccess/EarlyAccess.model";
 import getSecrets from "../utils/getSecrets";
+import {
+  clearSessionCookie,
+  destroySession,
+  isSessionVersionStale,
+} from "../services/session.auth";
 
 /**
  * True when the caller looks like a browser navigation rather than an API
@@ -48,7 +53,38 @@ export const verifySess = async (
   });
 
   if (!user) {
+    await destroySession(req);
+    clearSessionCookie(res);
     return res.status(403).send({ message: "User not found" });
+  }
+
+  // A blocked account must lose access immediately, not on the next login.
+  if ((user as any).isBlocked) {
+    await destroySession(req);
+    clearSessionCookie(res);
+    if (wantsHtml(req)) {
+      res.redirect(`${BASE_URL_FRONTEND}/login`);
+      return;
+    }
+    return res.status(403).json({
+      message: "This account has been blocked. Contact your administrator.",
+      code: "ACCOUNT_BLOCKED",
+    });
+  }
+
+  // Revocation: a password reset, an admin block or "log out everywhere" bumps
+  // the user's version, which invalidates every session issued before it.
+  if (isSessionVersionStale(session.sessionVersion, (user as any).sessionVersion)) {
+    await destroySession(req);
+    clearSessionCookie(res);
+    if (wantsHtml(req)) {
+      res.redirect(`${BASE_URL_FRONTEND}/login`);
+      return;
+    }
+    return res.status(401).json({
+      message: "Your session is no longer valid. Please sign in again.",
+      code: "SESSION_REVOKED",
+    });
   }
 
   res.locals.userId = userId;

@@ -81,8 +81,10 @@ services:
       - .:/app:rw
       # node_modules ใช้ของที่ติดตั้งใน image (กัน mount ทับ)
       - /app/backend/node_modules
-      # runtime data (backend/.env, model-registry.json ฯลฯ) persistent
+      # runtime data (model-registry.json ฯลฯ) persistent + ใช้ backend/.env ตัวเดียว
+      # กับทุก deployment (เหมือน docker-compose.yml) — แก้ backend/.env แล้วมีผลจริง
       - backend-dev-data:/srv/data
+      - ./backend/.env:/srv/data/.env
       # workspace ไฟล์ของ agent (bind — เห็นจาก host ได้)
       - ./kali-data:/kali-data
     ports:

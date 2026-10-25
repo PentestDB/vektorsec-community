@@ -88,10 +88,32 @@ function clientKey(ws: WebSocket): string {
   return (ws as any).__shellSocketId ?? "unknown";
 }
 
+/** Number of live shell-socket clients currently attached to a session. */
+function countClientsForSession(sessionId: string): number {
+  let count = 0;
+  for (const client of clients.values()) {
+    if (client.sessionId === sessionId) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Once the last websocket of a session goes away, start the idle-teardown timer
+ * so its shells, SSH tunnels and remote PTYs don't leak until process restart.
+ * Reconnecting (any `getShellManager` call) cancels the timer again.
+ */
+function scheduleDestroyIfUnused(sessionId: string): void {
+  if (countClientsForSession(sessionId) > 0) return;
+  sessionLifecycle.scheduleDestroy(sessionId);
+}
+
 let nextClientId = 0;
 
 export function setupShellWebSocket(server: Server, sessionMiddleware: any): void {
   const wss = new WebSocketServer({ server, path: "/ws/shell" });
+  // The idle sweep asks back here before destroying anything, so sessions with
+  // an open shell panel are never collected.
+  sessionLifecycle.setActiveClientCounter(countClientsForSession);
 
   wss.on("connection", async (ws: WebSocket, req: IncomingMessage) => {
     (ws as any).__shellSocketId = `c${nextClientId++}`;
@@ -175,6 +197,9 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
     });
 
     ws.on("message", async (raw) => {
+      // Any traffic from a live client counts as activity, so the idle sweep
+      // never tears down a session that is being used.
+      sessionLifecycle.touch(sessionId);
       try {
         const msg = JSON.parse(raw.toString());
         await handleMessage(client, shellManager, msg);
@@ -189,6 +214,7 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
       unsubscribeFromShellEvents(client, shellManager);
       clients.delete(ws);
       clientManagers.delete(ws);
+      scheduleDestroyIfUnused(sessionId);
     });
 
     ws.on("error", (error?: Error) => {
@@ -196,6 +222,7 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
       unsubscribeFromShellEvents(client, shellManager);
       clients.delete(ws);
       clientManagers.delete(ws);
+      scheduleDestroyIfUnused(sessionId);
     });
   });
 
@@ -217,6 +244,7 @@ export function setupShellWebSocket(server: Server, sessionMiddleware: any): voi
         }
         clientManagers.delete(ws);
         clients.delete(ws);
+        scheduleDestroyIfUnused(client.sessionId);
         try {
           ws.terminate();
         } catch {

@@ -2,43 +2,23 @@
 
 import { connectToVNC } from "@/services/copilot.service";
 import { getVNCConfig } from "@/services/user.service";
-import { updateSessions, updateVNC } from "@/store/user.slice";
+import { updateVNC } from "@/store/user.slice";
+import { useRegisterSessionTab } from "@/hooks/useSessionTabs";
 import { Spin, Result, Button } from "antd";
 import { DesktopOutlined, SettingOutlined } from "@ant-design/icons";
 import { use, useState } from "react";
 import { useQuery } from "react-query";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { useRouter } from "next/navigation";
 
 const GUIpage = ({ params }) => {
   const { session_id: sessionId } = use(params);
   const router = useRouter();
   const dispatch = useDispatch();
-  const { sessions } = useSelector((state) => state.user);
   const [settingsHint, setSettingsHint] = useState(false);
 
-  const guiSession = sessions.find((session) => session.type === "gui");
-
-  if (!guiSession) {
-    const allSessions = sessions.map((session) => {
-      return {
-        ...session,
-        is_active: false,
-      };
-    });
-
-    dispatch(
-      updateSessions([
-        ...allSessions,
-        {
-          id: sessionId + "/gui",
-          is_main: false,
-          is_active: true,
-          type: "gui",
-        },
-      ])
-    );
-  }
+  // Register the GUI tab (this used to be dispatched during render).
+  useRegisterSessionTab(sessionId, "gui");
 
   const { data: vncConfig, isLoading: configLoading } = useQuery(
     "vnc-config",
@@ -162,9 +142,11 @@ const GUIpage = ({ params }) => {
     );
   }
 
-  const vncBase = data.vncURL?.startsWith("http://") || data.vncURL?.startsWith("https://")
-    ? data.vncURL
-    : `http://${data.vncURL}`;
+  const vncUrl = data?.vncURL;
+  const vncBase =
+    vncUrl?.startsWith("http://") || vncUrl?.startsWith("https://")
+      ? vncUrl
+      : `http://${vncUrl}`;
 
   return (
     <>

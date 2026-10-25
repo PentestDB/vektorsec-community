@@ -68,6 +68,11 @@ run-out.txt
 /kali_data/
 **/kali-data/
 **/kali_data/
+/backend/data/
+
+# ── Local wiki & scratch/temp files (not part of the public repo) ──────────
+/wiki/
+/backend/_tmp_*
 
 # ── Local screenshots / 2FA QR codes at repo root ──────────────────────────
 /admin-login.png

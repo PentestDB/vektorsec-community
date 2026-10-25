@@ -1,10 +1,11 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import styles from "@/styles/components/Chat.module.scss";
-import { SendOutlined, PauseCircleOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
+import { SendOutlined, PauseCircleOutlined, CloseOutlined, ReloadOutlined, PaperClipOutlined, FileOutlined } from "@ant-design/icons";
+import { message } from "antd";
 import { TbRadar } from "react-icons/tb";
 import { useQuery } from "react-query";
 import { getCtfChallenges } from "@/services/ctf.service";
-import { getSessionInfo } from "@/services/agent.service";
+import { getSessionInfo, uploadSessionAttachment } from "@/services/agent.service";
 import { formatDurationSec } from "@/utils/formatDuration";
 import { useFormatters, useTranslation } from "@/i18n/I18nProvider";
 
@@ -31,6 +32,15 @@ const SLASH_COMMANDS = [
   { name: "solve", descriptionKey: "chat.slash.solve" },
 ];
 
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // 50MB
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ChatInput({
   sessionId,
   onSend,
@@ -47,6 +57,9 @@ export default function ChatInput({
   const { formatNumber } = useFormatters();
   const textareaRef = useRef(null);
   const menuRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [attachments, setAttachments] = useState([]);
+  const [sending, setSending] = useState(false);
 
   const { data: sessionInfo } = useQuery(
     ["session-info", sessionId],
@@ -60,7 +73,11 @@ export default function ChatInput({
   const autoSolvePopulatedRef = useRef(null);
 
   const isRunning = agentState === "running";
-  const canSend = !isRunning && (value.trim().length > 0 || !!burpAttachment) && !disabled;
+  const canSend =
+    !isRunning &&
+    !sending &&
+    (value.trim().length > 0 || attachments.length > 0 || !!burpAttachment) &&
+    !disabled;
 
   const slashMatches = useMemo(() => {
     const trimmed = value.trimStart();
@@ -153,14 +170,69 @@ export default function ChatInput({
     [onSend],
   );
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (!canSend) return;
-    onSend(value.trim());
-    setValue("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+    const userText = value.trim();
+
+    if (attachments.length === 0) {
+      onSend(userText);
+      setValue("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+      return;
     }
-  }, [canSend, value, onSend]);
+
+    setSending(true);
+    try {
+      const uploaded = [];
+      for (const att of attachments) {
+        const formData = new FormData();
+        formData.append("file", att.file);
+        uploaded.push(await uploadSessionAttachment(sessionId, formData));
+      }
+
+      const blocks = uploaded.map((u) => {
+        if (u.textPreview) {
+          return `[Attached file: ${u.filename} (${formatBytes(u.size)}, ${u.mimeType})]\n--- FILE CONTENT ---\n${u.textPreview}\n--- END FILE CONTENT ---`;
+        }
+        return `[Attached file: ${u.filename} (${formatBytes(u.size)}, ${u.mimeType}) — no text preview available. The file was stored server-side with id ${u.attachmentId}.]`;
+      });
+
+      const parts = [userText];
+      if (!userText) parts.push("Please analyze the attached file(s) below.");
+      parts.push(...blocks);
+      const finalMessage = parts.filter(Boolean).join("\n\n");
+
+      onSend(finalMessage, {
+        fileAttachments: uploaded.map((u) => ({
+          name: u.filename,
+          size: u.size,
+          mimeType: u.mimeType,
+          textPreview: u.textPreview,
+        })),
+        displayText: userText,
+      });
+
+      setValue("");
+      setAttachments([]);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    } catch (err) {
+      const resData = err?.response?.data;
+      if (
+        err?.response?.status === 402 ||
+        resData?.code === "PLAN_REQUIRES_PAYMENT"
+      ) {
+        message.error(t("chat.attachRequiresPayment"));
+      } else {
+        message.error(resData?.message ?? t("chat.attachFailed"));
+      }
+    } finally {
+      setSending(false);
+    }
+  }, [canSend, value, attachments, sessionId, onSend, t]);
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -252,6 +324,48 @@ export default function ChatInput({
     }
   }, []);
 
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e) => {
+      const selected = Array.from(e.target.files || []);
+      e.target.value = "";
+      if (!selected.length) return;
+      setAttachments((prev) => {
+        const next = [...prev];
+        for (const file of selected) {
+          if (next.length >= MAX_ATTACHMENTS) {
+            message.warning(t("chat.maxFiles", { max: MAX_ATTACHMENTS }));
+            break;
+          }
+          if (file.size > MAX_ATTACHMENT_BYTES) {
+            message.error(t("chat.fileTooLarge", { name: file.name }));
+            continue;
+          }
+          if (
+            next.some(
+              (a) => a.file.name === file.name && a.file.size === file.size,
+            )
+          ) {
+            continue;
+          }
+          next.push({
+            id: `${file.name}-${file.size}-${Date.now()}-${next.length}`,
+            file,
+          });
+        }
+        return next;
+      });
+    },
+    [t],
+  );
+
+  const removeAttachment = useCallback((id) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   const statusLabel =
     agentState === "running"
       ? t("chat.statusWorking")
@@ -276,6 +390,15 @@ export default function ChatInput({
 
   return (
     <div className={styles.inputArea}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className={styles.hiddenFileInput}
+        onChange={handleFileChange}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
       {burpAttachment && (
         <div className={styles.attachmentChip}>
           <div className={styles.attachmentIcon}>
@@ -301,6 +424,32 @@ export default function ChatInput({
           >
             <CloseOutlined style={{ fontSize: "0.6rem" }} />
           </button>
+        </div>
+      )}
+
+      {attachments.length > 0 && (
+        <div className={styles.fileChipList}>
+          {attachments.map((att) => (
+            <div key={att.id} className={styles.attachmentChip}>
+              <div className={styles.attachmentIcon}>
+                <FileOutlined style={{ fontSize: "0.75rem" }} />
+              </div>
+              <div className={styles.attachmentInfo}>
+                <span className={styles.attachmentTarget}>{att.file.name}</span>
+                <span className={styles.attachmentStatus}>
+                  {formatBytes(att.file.size)}
+                </span>
+              </div>
+              <button
+                className={styles.attachmentDismiss}
+                onClick={() => removeAttachment(att.id)}
+                title={t("chat.removeAttachmentTitle")}
+                disabled={sending}
+              >
+                <CloseOutlined style={{ fontSize: "0.6rem" }} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -409,14 +558,24 @@ export default function ChatInput({
               </button>
             </>
           ) : (
-            <button
-              className={styles.sendButton}
-              onClick={handleSend}
-              disabled={!canSend}
-              title={t("chat.sendTitle")}
-            >
-              <SendOutlined />
-            </button>
+            <>
+              <button
+                className={styles.attachButton}
+                onClick={openFilePicker}
+                disabled={sending || disabled}
+                title={t("chat.attachFileTitle")}
+              >
+                <PaperClipOutlined />
+              </button>
+              <button
+                className={styles.sendButton}
+                onClick={handleSend}
+                disabled={!canSend}
+                title={t("chat.sendTitle")}
+              >
+                <SendOutlined />
+              </button>
+            </>
           )}
         </div>
       </div>

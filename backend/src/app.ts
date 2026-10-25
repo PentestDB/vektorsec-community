@@ -34,6 +34,7 @@ import { publicRoutes } from "./routes/public.routes";
 
 import { apiRateLimiter } from "./middlewares/RateLimit.middleware";
 import { loadPlugins } from "./tools/plugin-loader";
+import { buildSessionCookieOptions, SESSION_COOKIE_NAME } from "./services/session.auth";
 import getSecrets from "./utils/getSecrets";
 import { logger } from "./utils/logger";
 
@@ -114,15 +115,14 @@ export function buildSessionMiddleware(options: {
   return session({
     secret: options.sessionSecret,
     resave: false,
-    name: "sid",
+    name: SESSION_COOKIE_NAME,
     saveUninitialized: false,
+    // Refresh the cookie on activity: an actively used session slides forward,
+    // an abandoned one expires after SESSION_MAX_AGE_HOURS (default 12h).
+    rolling: true,
     proxy: true,
     store: options.sessionStore,
-    cookie: {
-      sameSite: true as const,
-      secure: options.deployment === "LOCAL" ? false : true,
-      maxAge: 1000 * 60 * 60 * 12,
-    },
+    cookie: buildSessionCookieOptions(options.deployment),
   });
 }
 

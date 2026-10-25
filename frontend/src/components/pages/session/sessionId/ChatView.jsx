@@ -186,8 +186,10 @@ export default function ChatView({ sessionId }) {
   }, []);
 
   const handleSend = useCallback(
-    (message) => {
+    (message, attachments) => {
       setIterationLimit(null);
+      const fileAttachments = attachments?.fileAttachments ?? null;
+      const displayText = attachments?.displayText ?? null;
       if (message.startsWith("/")) {
         setMessages((prev) => [
           ...prev,
@@ -214,7 +216,7 @@ export default function ChatView({ sessionId }) {
 
       const endpoint =
         agentState === "paused" ? "resume" : "message";
-      startStream({ message: finalMessage, endpoint, burpMeta });
+      startStream({ message: finalMessage, endpoint, burpMeta, fileAttachments, displayText });
     },
     [agentState, startStream, setMessages, burpAttachment, buildBurpMessage],
   );

@@ -66,11 +66,20 @@ test("guardrails prompt block renders scope + autonomous instructions", () => {
   assert.match(autoBlock, /never covers/i);
 });
 
-test("guardrails prompt block is empty when nothing is enforced", () => {
-  // Built directly: the global default can no longer be disabled, so this
-  // exercises the builder's "nothing enforced" branch.
+test("guardrails prompt block declares the authorization state when no allowlist exists", () => {
+  // Built directly: the global default can no longer be disabled in a locked
+  // build, so this exercises the "no allowlist configured" branch (unlocked
+  // builds only). The model must be told there is nothing to check against —
+  // otherwise it asks the operator to prove authorization in chat.
   const scope = { enabled: false, strictMode: false, entries: [] };
-  assert.equal(buildGuardrailPromptBlock({ autonomousMode: false, scope }), "");
+  const block = buildGuardrailPromptBlock({ autonomousMode: false, scope });
+
+  assert.match(block, /<authorization_state>/);
+  assert.doesNotMatch(block, /<authorized_scope>/);
+  assert.match(block, /No scope allowlist is configured/);
+  assert.match(block, /IS the authorization for the work they asked for/);
+  assert.match(block, /Do not ask them to prove ownership/);
+  assert.match(block, /Admin → Scope/);
 });
 
 test("scopeBlockedResult is a non-zero exit with a BLOCKED prefix", () => {

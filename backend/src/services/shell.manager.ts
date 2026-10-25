@@ -1,5 +1,5 @@
 import { Client as SSHClient } from "ssh2";
-import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { EventEmitter } from "events";
 import { v4 as uuidv4 } from "uuid";
 import { ShellType, ShellCreator } from "../models/Sessions/Sessions.model";
@@ -14,6 +14,60 @@ const RING_BUFFER_MAX = 256 * 1024; // 256KB per shell
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const ANSI_REGEX = /\x1B\[[0-?]*[-\[\]#-~]/g;
+
+/**
+ * sshd counts *every* session channel of a single TCP connection — interactive
+ * shells as well as `exec` commands — against `MaxSessions` (10 by default).
+ * When that budget is gone the server refuses the next channel with the
+ * famously opaque "(SSH) Channel open failure: open failed", which tells the
+ * user nothing about what to do. Keep a couple of slots free for agent
+ * commands and fail pre-flight instead of letting the server decide.
+ *
+ * `SSH_MAX_SHELLS_PER_SESSION=0` disables the check (hosts with a raised
+ * `MaxSessions`, or when an operator prefers the raw sshd error).
+ */
+const MAX_SHELLS_PER_SESSION: number = (() => {
+  const raw = process.env.SSH_MAX_SHELLS_PER_SESSION;
+  if (raw === undefined || raw.trim() === "") return 8;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isNaN(parsed) || parsed < 0 ? 8 : parsed;
+})();
+
+/**
+ * Grace period before a single retry. sshd refuses a channel while a previous
+ * one is still being torn down (the shell exits / `exit-status` is in flight),
+ * so a short wait turns a spurious failure into a success.
+ */
+const CHANNEL_OPEN_RETRY_DELAY_MS = 500;
+
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const isChannelOpenFailure = (message: string): boolean =>
+  /channel open failure/i.test(message);
+
+const isNotConnected = (message: string): boolean =>
+  /not connected/i.test(message);
+
+/**
+ * Rewrite ssh2's `(SSH) Channel open failure: open failed` into something a
+ * pentester can act on: the work host ran out of session slots. Kept exported
+ * so the socket/tool layers can reuse the same wording if they ever need to.
+ */
+export function describeChannelOpenFailure(
+  message: string,
+  openChannels: number,
+  shellLimit: number,
+): string {
+  return (
+    `The work host refused a new shell channel (${message}). sshd allows one session ` +
+    `channel per shell and per command, capped by "MaxSessions" (10 by default), and ` +
+    `${openChannels} channel(s) are currently open` +
+    (shellLimit > 0 ? ` (this build caps shells at ${shellLimit})` : "") +
+    `. Close the shells you no longer use and try again, or raise "MaxSessions" in the ` +
+    `host's /etc/ssh/sshd_config.`
+  );
+}
 
 /**
  * Wrap a command in a login shell so PATH additions from .zprofile/.bashrc
@@ -158,6 +212,12 @@ export class ShellManager extends EventEmitter {
   private reconnectAttempt: number = 0;
   /** In-flight connect attempt shared by concurrent callers (spawn + HTTP reconnect). */
   private connectPromise: Promise<void> | null = null;
+  /**
+   * Channels opened for one-shot commands (`execInShell`). Tracked so an
+   * abort, a reconnect or destroy() can free them — an orphaned channel keeps
+   * a whole sshd MaxSessions slot occupied until the remote process exits.
+   */
+  private execChannels: Set<RuntimeChannel> = new Set();
 
   constructor(sessionId: string, loadTarget: () => Promise<ResolvedWorkHost>) {
     super();
@@ -191,6 +251,23 @@ export class ShellManager extends EventEmitter {
       this.target.sshProfileAlias ||
       this.target.sshConfig?.host
     );
+  }
+
+  /**
+   * Session channels currently open on the SSH connection: shells plus running
+   * one-shot commands. This is the number sshd compares against MaxSessions.
+   */
+  get openChannelCount(): number {
+    return this.countShellChannels() + this.execChannels.size;
+  }
+
+  /** Active shells that really hold a channel (or a local child process). */
+  private countShellChannels(): number {
+    let count = 0;
+    for (const shell of this.shells.values()) {
+      if (shell.status === "active" && shell.channel) count++;
+    }
+    return count;
   }
 
   async connect(): Promise<void> {
@@ -345,6 +422,10 @@ export class ShellManager extends EventEmitter {
     if (this.target?.kind === "local") return;
     this.connected = false;
     this.sshConnection = null;
+    // The transport is gone, so every tracked command channel died with it —
+    // drop the references (the shells keep their ring buffers and are reopened
+    // by reopenShells() once SSH is back).
+    this.execChannels.clear();
 
     for (const shell of this.shells.values()) {
       if (shell.status === "active") {
@@ -399,57 +480,107 @@ export class ShellManager extends EventEmitter {
     }
   }
 
-  private openChannel(shell: ManagedShell): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.target?.kind === "local") {
-        const child = spawnLocalShell(this.target.workFolder, shell.type === "pty");
-        this.wireChannel(shell, localChannel(child));
-        console.log(`[ShellManager:${this.sessionId}] Spawned local shell ${shell.shellId} (label=${shell.label}, cwd=${expandLocalFolder(this.target.workFolder)})`);
-        resolve();
-        return;
-      }
-      if (!this.sshConnection) {
-        return reject(new Error("SSH not connected"));
-      }
+  private async openChannel(shell: ManagedShell): Promise<void> {
+    if (this.target?.kind === "local") {
+      const child = spawnLocalShell(this.target.workFolder, shell.type === "pty");
+      this.wireChannel(shell, localChannel(child));
+      console.log(`[ShellManager:${this.sessionId}] Spawned local shell ${shell.shellId} (label=${shell.label}, cwd=${expandLocalFolder(this.target.workFolder)})`);
+      return;
+    }
+    if (!this.sshConnection) {
+      throw new Error("SSH not connected");
+    }
 
-      const folder = shellFolderExpression(this.target!.workFolder);
-      const cmd = buildPersistentShellCommand(folder);
-      console.log(`[ShellManager:${this.sessionId}] Opening shell ${shell.shellId} (label=${shell.label}) over SSH — exec: ${cmd}`);
+    const folder = shellFolderExpression(this.target!.workFolder);
+    const cmd = buildPersistentShellCommand(folder);
+    console.log(`[ShellManager:${this.sessionId}] Opening shell ${shell.shellId} (label=${shell.label}) over SSH — exec: ${cmd}`);
 
+    try {
+      const channel = await this.execSshChannel(cmd, shell.type === "pty", 0, true);
+      this.wireChannel(shell, channel);
+      console.log(`[ShellManager:${this.sessionId}] Shell ${shell.shellId} channel opened`);
+    } catch (err: any) {
       // If the remote command fails before a shell is up (e.g. the fallback
       // shell was missing, mkdir failed, $SHELL unset), surface the real error
       // into the terminal buffer instead of leaving a blank screen that looks
-      // like a hang.
-      const finish = (err: Error | undefined, channel: RuntimeChannel | null) => {
-        if (err) {
-          const msg = `\r\n[Failed to start shell: ${err.message}]\r\n`;
-          shell.outputBuffer.append(msg);
-          this.emit("shell_output", {
-            shellId: shell.shellId,
-            data: msg,
-            offset: shell.outputBuffer.currentOffset,
-          });
-          console.error(`[ShellManager:${this.sessionId}] Failed to start shell ${shell.shellId}:`, err.message);
-          return reject(err);
-        }
-        if (!channel) {
-          return reject(new Error("No channel returned by SSH server"));
-        }
-        this.wireChannel(shell, channel);
-        console.log(`[ShellManager:${this.sessionId}] Shell ${shell.shellId} channel opened`);
-        resolve();
-      };
+      // like a hang. A refused channel ("open failed") is rewritten by
+      // execSshChannel() into an actionable MaxSessions hint.
+      const message = err?.message ?? String(err);
+      const msg = `\r\n[Failed to start shell: ${message}]\r\n`;
+      shell.outputBuffer.append(msg);
+      this.emit("shell_output", {
+        shellId: shell.shellId,
+        data: msg,
+        offset: shell.outputBuffer.currentOffset,
+      });
+      console.error(`[ShellManager:${this.sessionId}] Failed to start shell ${shell.shellId}:`, message);
+      throw err;
+    }
+  }
 
-      if (shell.type === "pty") {
-        this.sshConnection.exec(
-          cmd,
-          { pty: { term: "xterm-256color", cols: 200, rows: 50 } },
-          (err, channel) => finish(err, channel),
-        );
-      } else {
-        this.sshConnection.exec(cmd, (err, channel) => finish(err, channel));
+  /**
+   * Open a single SSH session channel with `exec`, retrying once when the
+   * failure looks transient:
+   *  - "Channel open failure" — sshd is momentarily out of MaxSessions slots
+   *    while a previous channel is still tearing down;
+   *  - "Not connected" — the socket died without a close event; reconnect.
+   *
+   * `isShell` picks the wording of the final error: a refused *shell* channel
+   * is rewritten into the actionable MaxSessions hint, command channels keep
+   * sshd's message (the caller adds its own context).
+   */
+  private async execSshChannel(
+    command: string,
+    pty: boolean,
+    attempt = 0,
+    isShell = false,
+  ): Promise<RuntimeChannel> {
+    const ssh = this.sshConnection;
+    if (!ssh) throw new Error("SSH not connected");
+
+    const open = (): Promise<RuntimeChannel> =>
+      new Promise((resolve, reject) => {
+        const onResult = (err: Error | undefined, channel?: RuntimeChannel) => {
+          if (!err && channel) return resolve(channel);
+          reject(err ?? new Error("No channel returned by SSH server"));
+        };
+        if (pty) {
+          ssh.exec(command, { pty: { term: "xterm-256color", cols: 200, rows: 50 } }, onResult);
+        } else {
+          ssh.exec(command, onResult);
+        }
+      });
+
+    try {
+      return await open();
+    } catch (err: any) {
+      const message: string = err?.message ?? String(err);
+      if (attempt >= 1) {
+        if (isShell && isChannelOpenFailure(message)) {
+          throw new Error(
+            describeChannelOpenFailure(message, this.openChannelCount, MAX_SHELLS_PER_SESSION),
+          );
+        }
+        throw err;
       }
-    });
+      if (isNotConnected(message)) {
+        console.warn(`[ShellManager:${this.sessionId}] ${message} — reconnecting before retrying the channel`);
+        const dead = this.sshConnection;
+        this.connected = false;
+        this.sshConnection = null;
+        // Close the dead socket explicitly: a half-open connection still counts
+        // against the host's MaxStartups, and ssh2 only reaps it lazily.
+        try { dead?.end(); } catch { /* already gone */ }
+        await this.connect();
+        return this.execSshChannel(command, pty, attempt + 1, isShell);
+      }
+      if (isChannelOpenFailure(message)) {
+        console.warn(`[ShellManager:${this.sessionId}] ${message} — retrying in ${CHANNEL_OPEN_RETRY_DELAY_MS}ms`);
+        await wait(CHANNEL_OPEN_RETRY_DELAY_MS);
+        return this.execSshChannel(command, pty, attempt + 1, isShell);
+      }
+      throw err;
+    }
   }
 
   private wireChannel(shell: ManagedShell, channel: RuntimeChannel): void {
@@ -490,6 +621,19 @@ export class ShellManager extends EventEmitter {
   async spawnShell(opts: ShellSpawnOptions): Promise<string> {
     if (!this.connected) {
       await this.connect();
+    }
+
+    // Pre-flight the sshd budget. Without this the *server* decides, and its
+    // refusal reaches the user as "(SSH) Channel open failure: open failed".
+    // The check only counts shells that really hold a channel, so a leaked
+    // "active" entry without a channel never blocks a legitimate spawn.
+    const shellChannels = this.countShellChannels();
+    if (MAX_SHELLS_PER_SESSION > 0 && shellChannels >= MAX_SHELLS_PER_SESSION) {
+      throw new Error(
+        `This session already runs ${shellChannels} shells on the work host — at the limit of ` +
+        `${MAX_SHELLS_PER_SESSION} per connection (sshd "MaxSessions" leaves the remaining slots ` +
+        `for commands). Close a shell tab and try again, or raise SSH_MAX_SHELLS_PER_SESSION.`,
+      );
     }
 
     const shellId = `sh_${uuidv4().slice(0, 8)}`;
@@ -568,18 +712,58 @@ export class ShellManager extends EventEmitter {
       let exitCode = 0;
       let timer: NodeJS.Timeout | null = null;
       let resolved = false;
+      let child: ChildProcess | null = null;
+      let stream: RuntimeChannel | null = null;
+
+      /**
+       * Drop the bookkeeping entry for the command channel (see execChannels).
+       * The handle itself is kept so a later teardown can still destroy it —
+       * clearing the reference here would leak the channel on abort.
+       */
+      const releaseChannel = () => {
+        if (stream) this.execChannels.delete(stream);
+      };
 
       const finish = (out: string, code: number) => {
         if (resolved) return;
         resolved = true;
         if (timer) clearTimeout(timer);
+        abortSignal?.removeEventListener("abort", onAbort);
+        releaseChannel();
         resolve({ output: out, exitCode: code });
       };
 
-      const onAbort = () => {
-        if (resolved) return;
-        finish(output + "\n[ABORTED: command terminated by user]", 130);
+      /**
+       * Tear down the *remote* side too. Aborting used to only settle this
+       * promise: the process kept running on the work host and its SSH channel
+       * stayed open, occupying one of sshd's MaxSessions slots (default 10)
+       * until the process exited on its own. Long-running scans never do, so
+       * after a few aborts every new shell spawn failed with
+       * "(SSH) Channel open failure: open failed".
+       */
+      const destroyRemote = () => {
+        try { child?.kill("SIGTERM"); } catch { /* already gone */ }
+        try { stream?.destroy(); } catch { /* already gone */ }
+        releaseChannel();
       };
+
+      /**
+       * Settle the call *before* tearing the channel down: `destroy()` makes a
+       * transport emit `close` (synchronously for some channel types), and the
+       * close handler would otherwise overwrite the abort/timeout result with
+       * exit code 0.
+       */
+      const settleThenDestroy = (out: string, code: number) => {
+        finish(out, code);
+        destroyRemote();
+      };
+
+      // Function declaration (hoisted) so `finish` can be called from the
+      // already-aborted fast path below without touching `onAbort` early.
+      function onAbort() {
+        if (resolved) return;
+        settleThenDestroy(output + "\n[ABORTED: command terminated by user]", 130);
+      }
 
       if (abortSignal?.aborted) {
         finish("", 130);
@@ -596,62 +780,63 @@ export class ShellManager extends EventEmitter {
       const wrappedCommand = `mkdir -p -- ${folderExpression} && cd -- ${folderExpression} && ${escapeForLoginShell(command)}`;
 
       if (this.target!.kind === "local") {
-        const child = spawn("/bin/sh", ["-lc", wrappedCommand], {
+        const proc = spawn("/bin/sh", ["-lc", wrappedCommand], {
           cwd: folder,
           env: process.env,
           stdio: ["ignore", "pipe", "pipe"],
         });
+        child = proc;
         const onData = (data: Buffer) => {
           const text = data.toString();
           output += text;
           onChunk?.(text);
         };
-        child.stdout.on("data", onData);
-        child.stderr.on("data", onData);
-        child.on("error", reject);
-        child.on("close", (code) => {
-          abortSignal?.removeEventListener("abort", onAbort);
+        proc.stdout.on("data", onData);
+        proc.stderr.on("data", onData);
+        proc.on("error", reject);
+        proc.on("close", (code) => {
           finish(output, code ?? 0);
         });
-        abortSignal?.addEventListener("abort", () => child.kill("SIGTERM"), { once: true });
         if (timeoutMs > 0) {
           timer = setTimeout(() => {
-            child.kill("SIGTERM");
-            finish(output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`, 124);
+            settleThenDestroy(output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`, 124);
           }, timeoutMs);
         }
         return;
       }
 
-      if (!this.sshConnection) return reject(new Error("SSH not connected"));
-      this.sshConnection.exec(wrappedCommand, (err, stream) => {
+      const ssh = this.sshConnection;
+      if (!ssh) return reject(new Error("SSH not connected"));
+      ssh.exec(wrappedCommand, (err, channel) => {
         if (err) {
           abortSignal?.removeEventListener("abort", onAbort);
           return reject(err);
         }
 
+        // Register the channel first: an abort/timeout arriving right now has
+        // to be able to destroy it instead of leaking a MaxSessions slot.
+        stream = channel as unknown as RuntimeChannel;
+        this.execChannels.add(stream);
+
         if (timeoutMs > 0) {
           timer = setTimeout(() => {
-            stream.destroy();
-            abortSignal?.removeEventListener("abort", onAbort);
-            finish(output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`, 124);
+            settleThenDestroy(output + `\n[TIMEOUT: command exceeded ${Math.round(timeoutMs / 1000)}s limit]`, 124);
           }, timeoutMs);
         }
 
-        stream.on("data", (data: Buffer) => {
+        channel.on("data", (data: Buffer) => {
           const text = data.toString();
           output += text;
           onChunk?.(text);
         });
 
-        stream.stderr.on("data", (data: Buffer) => {
+        channel.stderr.on("data", (data: Buffer) => {
           const text = data.toString();
           output += text;
           onChunk?.(text);
         });
 
-        stream.on("close", (code: number | null) => {
-          abortSignal?.removeEventListener("abort", onAbort);
+        channel.on("close", (code: number | null) => {
           exitCode = code ?? 0;
           finish(output, exitCode);
         });
@@ -730,6 +915,18 @@ export class ShellManager extends EventEmitter {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+
+    // Free in-flight command channels as well: `destroy()` runs on session
+    // cleanup and when the SSH profile changes, and without this the remote
+    // commands kept running with their channels open.
+    for (const channel of this.execChannels) {
+      try {
+        channel.destroy();
+      } catch {
+        // already closed
+      }
+    }
+    this.execChannels.clear();
 
     for (const shell of this.shells.values()) {
       if (shell.channel) {

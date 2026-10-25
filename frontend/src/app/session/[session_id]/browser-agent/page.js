@@ -1,38 +1,17 @@
 "use client";
 
 import { getBrowserAgentVNC, getMagnitudeConfig } from "@/services/user.service";
-import { updateSessions } from "@/store/user.slice";
+import { useRegisterSessionTab } from "@/hooks/useSessionTabs";
 import { Spin, Result, Button } from "antd";
 import { GlobalOutlined, SettingOutlined, DesktopOutlined, ReloadOutlined } from "@ant-design/icons";
 import { use, useMemo } from "react";
 import { useQuery } from "react-query";
-import { useDispatch, useSelector } from "react-redux";
 
 const BrowserAgentPage = ({ params }) => {
   const { session_id: sessionId } = use(params);
-  const dispatch = useDispatch();
-  const { sessions } = useSelector((state) => state.user);
 
-  const baSession = sessions.find((session) => session.type === "browser-agent");
-
-  if (!baSession) {
-    const allSessions = sessions.map((session) => ({
-      ...session,
-      is_active: false,
-    }));
-
-    dispatch(
-      updateSessions([
-        ...allSessions,
-        {
-          id: sessionId + "/browser-agent",
-          is_main: false,
-          is_active: true,
-          type: "browser-agent",
-        },
-      ])
-    );
-  }
+  // Register the Browser Agent tab (this used to be dispatched during render).
+  useRegisterSessionTab(sessionId, "browser-agent");
 
   const { data: magnitudeConfig, isLoading: configLoading } = useQuery(
     "magnitude-config",

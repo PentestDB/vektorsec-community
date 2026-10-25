@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BulbOutlined, DownOutlined, RightOutlined } from "@ant-design/icons";
+import { BulbOutlined, DownOutlined, RightOutlined, PaperClipOutlined } from "@ant-design/icons";
 import { TbRadar } from "react-icons/tb";
 import ReactMarkdown from "react-markdown";
 import styles from "@/styles/components/Chat.module.scss";
@@ -42,6 +42,47 @@ function ReasoningBlock({ reasoning, isStreaming }) {
           <pre>{reasoning}</pre>
         </div>
       )}
+    </div>
+  );
+}
+
+function formatBytes(n) {
+  if (n == null) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileAttachmentsBlock({ instruction, attachments }) {
+  const [openId, setOpenId] = useState(null);
+
+  return (
+    <div className={styles.message}>
+      {instruction && <div className={styles.userMessage}>{instruction}</div>}
+      <div className={styles.fileAttachmentsBlock}>
+        {attachments.map((att, i) => (
+          <div key={`${att.name}-${att.size}-${i}`} className={styles.fileAttachmentItem}>
+            <div
+              className={styles.fileAttachmentHeader}
+              onClick={() => setOpenId(openId === i ? null : i)}
+            >
+              <PaperClipOutlined className={styles.fileAttachmentIcon} />
+              <span className={styles.fileAttachmentName}>{att.name}</span>
+              <span className={styles.fileAttachmentSize}>
+                {formatBytes(att.size)}
+              </span>
+              {att.textPreview && (
+                <span className={styles.fileAttachmentChevron}>
+                  {openId === i ? <DownOutlined /> : <RightOutlined />}
+                </span>
+              )}
+            </div>
+            {openId === i && att.textPreview && (
+              <pre className={styles.fileAttachmentPreview}>{att.textPreview}</pre>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -167,7 +208,7 @@ function detectSuggestedActions(content) {
 }
 
 const ChatMessage = React.memo(function ChatMessage({ message, allMessages, onSendAction, agentState }) {
-  const { role, content, streaming, isError, isSummary, toolCalls, reasoning, reasoningStreaming, burpMeta } = message;
+  const { role, content, streaming, isError, isSummary, toolCalls, reasoning, reasoningStreaming, burpMeta, fileAttachments } = message;
 
   if (role === "tool") {
     const hasPairedAssistant = allMessages?.some(
@@ -212,6 +253,14 @@ const ChatMessage = React.memo(function ChatMessage({ message, allMessages, onSe
     const detectedBurpMeta = burpMeta || detectBurpMeta(content);
     if (detectedBurpMeta) {
       return <BurpRequestBlock content={content} meta={detectedBurpMeta} />;
+    }
+    if (fileAttachments?.length) {
+      return (
+        <FileAttachmentsBlock
+          instruction={content}
+          attachments={fileAttachments}
+        />
+      );
     }
     return (
       <div className={styles.message}>

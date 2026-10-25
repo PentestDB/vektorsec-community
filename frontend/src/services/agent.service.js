@@ -36,6 +36,17 @@ export const updateSessionAgentToolsConfig = async (sessionId, body) => {
 export const sessionReportUrl = (sessionId, format = "markdown") =>
   `/api/agent/session/${encodeURIComponent(sessionId)}/report?format=${encodeURIComponent(format)}`;
 
+export const uploadSessionAttachment = async (sessionId, formData) => {
+  const res = await apiClient.post(
+    `/agent/session/${encodeURIComponent(sessionId)}/attachment`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    },
+  );
+  return res.data;
+};
+
 export const getSessionHistory = async (sessionId) => {
   const res = await apiClient.get(`/agent/session/${sessionId}/history`);
   return res.data;

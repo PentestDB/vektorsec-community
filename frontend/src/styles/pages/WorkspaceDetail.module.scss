@@ -759,3 +759,756 @@
   color: #ff6b6b;
   font-size: 0.78rem;
 }
+
+// ─── Pentest Cockpit (non-CTF workspaces) ───────────────────────────
+
+.cockpit {
+  margin-bottom: 1.25rem;
+  background: var(--secondary-bg);
+  border: 1px solid rgba(0, 242, 254, 0.16);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease;
+}
+
+.cockpitLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  font-size: 0.78rem;
+  color: var(--secondary-text);
+}
+
+.cockpitHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cockpitTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-text);
+  letter-spacing: -0.01em;
+}
+
+.cockpitCount {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--secondary-text);
+  background: var(--surface-hover);
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+}
+
+.severityBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sevPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.sevCount {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.sevLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.sev_critical {
+  color: #ff6b6b;
+  background: rgba(255, 62, 62, 0.12);
+  border-color: rgba(255, 62, 62, 0.35);
+}
+
+.sev_high {
+  color: #ffa94d;
+  background: rgba(255, 159, 67, 0.12);
+  border-color: rgba(255, 159, 67, 0.32);
+}
+
+.sev_medium {
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.1);
+  border-color: rgba(255, 209, 102, 0.28);
+}
+
+.sev_low {
+  color: #4dabf7;
+  background: rgba(77, 171, 247, 0.1);
+  border-color: rgba(77, 171, 247, 0.28);
+}
+
+.sev_info {
+  color: #8b9bb0;
+  background: rgba(139, 155, 176, 0.1);
+  border-color: rgba(139, 155, 176, 0.25);
+}
+
+.sev_exploited {
+  color: #ff4d6d;
+  background: rgba(255, 77, 109, 0.12);
+  border-color: rgba(255, 77, 109, 0.35);
+}
+
+.cockpitGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cockpitPanel {
+  min-width: 0;
+  padding: 0.75rem 1rem;
+  border-right: 1px solid var(--border-subtle);
+
+  @media (max-width: 900px) {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+}
+
+.panelTitle {
+  margin-bottom: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b9bb0;
+}
+
+.cockpitEmpty,
+.asideEmpty {
+  padding: 0.5rem 0;
+  font-size: 0.74rem;
+  color: var(--secondary-text);
+}
+
+.findingsList {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.findingRow {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 120px 96px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(0, 242, 254, 0.06);
+    outline: none;
+  }
+}
+
+.sevBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.findingMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.findingTitle {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--primary-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.findingMeta {
+  font-size: 0.66rem;
+  color: var(--secondary-text);
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.findingSession {
+  font-size: 0.68rem;
+  color: #79c0ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.findingStatus {
+  font-size: 0.66rem;
+  color: var(--secondary-text);
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpitAside {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0.75rem 1rem;
+}
+
+.asideBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.asideTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b9bb0;
+}
+
+.asideCount {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--secondary-text);
+  background: var(--surface-hover);
+  padding: 0.05rem 0.35rem;
+  border-radius: 8px;
+}
+
+.targetChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.targetChip {
+  max-width: 100%;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.66rem;
+  font-family: ui-monospace, monospace;
+  color: var(--primary-text);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.targetMore {
+  font-size: 0.64rem;
+  color: var(--secondary-text);
+}
+
+.chainStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+}
+
+.chainStat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+}
+
+.chainDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chain_success {
+  background: #00e676;
+}
+
+.chain_running {
+  background: #38bdf8;
+}
+
+.chain_pending {
+  background: #8b9bb0;
+}
+
+.chain_failed {
+  background: #ff6b6b;
+}
+
+.chain_skipped {
+  background: #d29922;
+}
+
+.chainCount {
+  font-weight: 700;
+  color: var(--primary-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.chainLabel {
+  color: var(--secondary-text);
+  text-transform: capitalize;
+}
+
+.scopeLine {
+  margin-top: 0.4rem;
+  font-size: 0.66rem;
+  color: var(--secondary-text);
+}
+
+// ─── Phase 2: Tooling Launchpad ─────────────────────────────────────
+
+.launchpad {
+  margin-bottom: 1.25rem;
+  background: var(--secondary-bg);
+  border: 1px solid rgba(0, 242, 254, 0.16);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: fadeIn 0.2s ease;
+}
+
+.launchpadHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.launchpadTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-text);
+}
+
+.launchpadCount {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.1);
+  border: 1px solid rgba(0, 242, 254, 0.25);
+  border-radius: 10px;
+  padding: 0.05rem 0.45rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.launchpadSession {
+  font-size: 0.66rem;
+  color: var(--secondary-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.launchpadRefresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9d6e6;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: rgba(0, 242, 254, 0.6);
+    color: #00f2fe;
+    background: rgba(0, 242, 254, 0.08);
+  }
+}
+
+.launchpadGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(214px, 1fr));
+  gap: 0.6rem;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.toolTile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    border-color: rgba(0, 242, 254, 0.35);
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.12);
+  }
+}
+
+// State modifiers folded onto the tile itself, so an integration that is
+// down/misconfigured reads as such before anything is clicked.
+.toolState_offline {
+  border-color: rgba(255, 107, 107, 0.22);
+}
+
+.toolState_loading,
+.toolState_unavailable {
+  opacity: 0.7;
+}
+
+.toolState_unconfigured {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.toolTileHead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.toolTileIcon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #8b9bb0;
+}
+
+.toolTileName {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--primary-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #8b9bb0;
+}
+
+.toolDot_online {
+  background: #00e676;
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.6);
+}
+
+.toolDot_offline {
+  background: #ff6b6b;
+}
+
+.toolDot_loading {
+  background: #38bdf8;
+  animation: toolPulse 1.1s ease-in-out infinite;
+}
+
+.toolDot_unconfigured,
+.toolDot_unavailable {
+  background: rgba(139, 155, 176, 0.45);
+}
+
+@keyframes toolPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.toolTileDetail {
+  font-size: 0.66rem;
+  font-family: ui-monospace, monospace;
+  color: var(--secondary-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolTileActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+}
+
+.toolTileHint {
+  font-size: 0.62rem;
+  color: var(--secondary-text);
+  font-style: italic;
+}
+
+.toolLaunchBtn,
+.toolLinkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.66rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolLaunchBtn {
+  border: 1px solid rgba(0, 242, 254, 0.45);
+  background: rgba(0, 242, 254, 0.08);
+  color: #00f2fe;
+  font-weight: 600;
+
+  &:hover {
+    background: rgba(0, 242, 254, 0.16);
+    box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+  }
+}
+
+.toolLinkBtn {
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--secondary-text);
+
+  &:hover {
+    color: var(--primary-text);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+}
+
+.toolGearBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--secondary-text);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: #00f2fe;
+    border-color: rgba(0, 242, 254, 0.5);
+    background: rgba(0, 242, 254, 0.08);
+  }
+}
+
+// ─── Phase 3: Scope & Reporting ─────────────────────────────────────
+
+.deliverables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.deliverableCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 0.9rem;
+  background: var(--secondary-bg);
+  border: 1px solid rgba(0, 242, 254, 0.16);
+  border-radius: 10px;
+  animation: fadeIn 0.2s ease;
+}
+
+.deliverableHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.deliverableTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary-text);
+}
+
+.deliverableCount {
+  font-size: 0.66rem;
+  color: var(--secondary-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.deliverableAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--secondary-text);
+  font-size: 0.66rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: #00f2fe;
+    border-color: rgba(0, 242, 254, 0.5);
+    background: rgba(0, 242, 254, 0.08);
+  }
+}
+
+.deliverableEmpty {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+  font-size: 0.72rem;
+  color: var(--secondary-text);
+}
+
+.deliverableHint {
+  font-size: 0.64rem;
+  color: var(--secondary-text);
+  line-height: 1.35;
+}
+
+.scopeChip {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 10px;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid transparent;
+}
+
+.scopeChip_off {
+  color: #8b9bb0;
+  background: rgba(139, 155, 176, 0.1);
+  border-color: rgba(139, 155, 176, 0.25);
+}
+
+.scopeChip_enforced {
+  color: #00f2fe;
+  background: rgba(0, 242, 254, 0.1);
+  border-color: rgba(0, 242, 254, 0.3);
+}
+
+.scopeChip_strict {
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.1);
+  border-color: rgba(255, 209, 102, 0.3);
+}
+
+.scopeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.scopeChipItem {
+  max-width: 100%;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.66rem;
+  font-family: ui-monospace, monospace;
+  color: var(--primary-text);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeChipMore {
+  font-size: 0.64rem;
+  color: var(--secondary-text);
+  align-self: center;
+}
+
+.scopeAddRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.reportSeverity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.reportActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+}
+

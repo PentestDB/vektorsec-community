@@ -1418,7 +1418,13 @@ async function runAgentLoopCore(params: RunAgentLoopParams): Promise<void> {
         newMessages.push(toolMsg);
       }
 
-      const askedUser = toolResults.find((r) => r.toolName === "ask_user");
+      // A *new* question (exitCode 0) ends the run so the operator can answer
+      // it. A repeat that ask_user refused to deliver (exitCode 1 — the agent
+      // asked something it already asked) must NOT stall the run: the agent
+      // keeps working instead of looping on the same question forever.
+      const askedUser = toolResults.find(
+        (r) => r.toolName === "ask_user" && (r.result.exitCode ?? 0) === 0,
+      );
       if (askedUser) {
         completedNormally = true;
         break;

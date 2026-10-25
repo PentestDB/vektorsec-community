@@ -17,6 +17,19 @@ import {
   WORKSPACE_MAX_TURNS_CHOICES,
   normalizeWorkspaceMaxTurns,
 } from "../utils/agentConfig";
+import { getEvidenceCollector } from "../tools/handlers/collect-evidence";
+import { ReportGenerator } from "../services/evidenceCollector";
+import { logAuditFromRequest } from "../services/audit.service";
+import {
+  buildExecutiveSummary,
+  buildRecommendations,
+  compactEvidence,
+  parseReportFormat,
+  reportContentType,
+  reportFileName,
+  sortFindingsBySeverity,
+  toReportFinding,
+} from "../utils/report";
 
 export const createWorkspace = async (req: Request, res: Response) => {
   try {
@@ -213,6 +226,285 @@ export const getWorkspaceAgentConfig = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[workspace] getWorkspaceAgentConfig error:", err);
     return res.status(400).json({ message: "Failed to load workspace agent settings" });
+  }
+};
+
+/**
+ * GET /workspace/:workspaceId/overview
+ *
+ * Read-only aggregation of a workspace's engagement state for the Pentest
+ * cockpit: session activity, findings rolled up from every active session,
+ * discovered targets (target memory) and attack-chain progress. Nothing here
+ * touches the network, SSH or the agent runtime — it is a projection of what is
+ * already persisted so the workspace page can show the engagement at a glance.
+ */
+export const getWorkspaceOverview = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+
+    const workspace = await WorkspaceModel.findOne({
+      workspaceId,
+      uid: userId,
+      status: "active",
+    })
+      .select("workspaceId name type agentConfig workHost")
+      .lean();
+
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+
+    const sessions = await SessionsModel.find({
+      workspaceId,
+      status: { $ne: "archived" },
+    })
+      .select(
+        "sessionId name agentState totalTokens vulnerabilities targetMemory attackChain",
+      )
+      .lean();
+
+    const sessionStats = { total: sessions.length, running: 0, idle: 0, waiting: 0, tokens: 0 };
+
+    const bySeverity = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+    const byStatus = { open: 0, confirmed: 0, remediated: 0, accepted: 0 };
+    const findings: any[] = [];
+    let exploited = 0;
+
+    const targetMap = new Map<string, { target: string; entries: number; dataTypes: Set<string> }>();
+    const chainByStatus = { pending: 0, running: 0, success: 0, failed: 0, skipped: 0 };
+    const chainPhases = new Set<string>();
+    let chainSteps = 0;
+
+    for (const session of sessions) {
+      const state = session.agentState;
+      if (state === "running") sessionStats.running += 1;
+      else if (state === "idle") sessionStats.idle += 1;
+      else if (
+        state === "waiting_consent" ||
+        state === "waiting_manual_execution" ||
+        state === "paused"
+      ) {
+        sessionStats.waiting += 1;
+      }
+      sessionStats.tokens += session.totalTokens || 0;
+
+      for (const vuln of session.vulnerabilities ?? []) {
+        const severity = (vuln.severity ?? "info") as keyof typeof bySeverity;
+        if (bySeverity[severity] !== undefined) bySeverity[severity] += 1;
+        const status = (vuln.status ?? "open") as keyof typeof byStatus;
+        if (byStatus[status] !== undefined) byStatus[status] += 1;
+        if (vuln.exploited) exploited += 1;
+
+        findings.push({
+          vulnerabilityId: vuln.vulnerabilityId,
+          sessionId: session.sessionId,
+          sessionName: session.name,
+          title: vuln.title,
+          host: vuln.host,
+          service: vuln.service ?? null,
+          endpoint: vuln.endpoint ?? null,
+          severity: vuln.severity ?? "info",
+          cvssScore: vuln.cvssScore ?? null,
+          cve: vuln.cve ?? null,
+          cwe: vuln.cwe ?? null,
+          status: vuln.status ?? "open",
+          exploited: vuln.exploited === true,
+          updatedAt: vuln.updatedAt,
+        });
+      }
+
+      for (const entry of session.targetMemory ?? []) {
+        if (!entry?.target) continue;
+        const existing = targetMap.get(entry.target);
+        if (existing) {
+          existing.entries += 1;
+          if (entry.dataType) existing.dataTypes.add(entry.dataType);
+        } else {
+          targetMap.set(entry.target, {
+            target: entry.target,
+            entries: 1,
+            dataTypes: new Set(entry.dataType ? [entry.dataType] : []),
+          });
+        }
+      }
+
+      const chain = session.attackChain;
+      if (chain) {
+        if (chain.currentPhase) chainPhases.add(chain.currentPhase);
+        for (const step of chain.steps ?? []) {
+          chainSteps += 1;
+          const stepStatus = (step.status ?? "pending") as keyof typeof chainByStatus;
+          if (chainByStatus[stepStatus] !== undefined) chainByStatus[stepStatus] += 1;
+        }
+      }
+    }
+
+    const severityRank: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+    findings.sort((a, b) => {
+      const delta = (severityRank[b.severity] ?? 0) - (severityRank[a.severity] ?? 0);
+      if (delta !== 0) return delta;
+      return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
+    });
+
+    const targets = Array.from(targetMap.values())
+      .map((t) => ({ target: t.target, entries: t.entries, dataTypes: Array.from(t.dataTypes) }))
+      .sort((a, b) => b.entries - a.entries);
+
+    const scopeRaw = workspace.agentConfig?.scope?.entriesRaw ?? "";
+    const scopeEntries = scopeRaw
+      .split(/[\n,]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    return res.status(200).json({
+      workspaceId,
+      generatedAt: new Date().toISOString(),
+      sessions: sessionStats,
+      vulnerabilities: {
+        total: findings.length,
+        exploited,
+        bySeverity,
+        byStatus,
+        findings,
+      },
+      targets,
+      attackChain: {
+        steps: chainSteps,
+        byStatus: chainByStatus,
+        phases: Array.from(chainPhases),
+      },
+      scope: {
+        enabled: workspace.agentConfig?.scope?.enabled === true,
+        strictMode: workspace.agentConfig?.scope?.strictMode === true,
+        entryCount: scopeEntries.length,
+        entries: scopeEntries,
+      },
+      workHost: workspace.workHost || null,
+    });
+  } catch (err: any) {
+    console.error("[workspace] getWorkspaceOverview error:", err);
+    return res.status(400).json({ message: "Failed to load workspace overview" });
+  }
+};
+
+/**
+ * GET /workspace/:workspaceId/report?format=markdown|html|json[&inline=1]
+ *
+ * Engagement-level deliverable for the whole workspace: findings are merged
+ * from every active session (severity sorted), the evidence the agents
+ * collected during those sessions is attached and the workspace scope is
+ * stamped on the document. It reuses the exact pipeline of the per-session
+ * export (`GET /api/agent/session/:id/report`) so both documents stay
+ * consistent — same evidence collector, same renderer, same helpers.
+ */
+export const exportWorkspaceReport = async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    const { workspaceId } = req.params;
+
+    if (!workspaceId) {
+      return res.status(400).json({ message: "workspaceId is required" });
+    }
+
+    const format = parseReportFormat(req.query.format);
+    if (!format) {
+      return res.status(400).json({ message: "format must be markdown, html or json" });
+    }
+
+    const workspace = await WorkspaceModel.findOne({
+      workspaceId,
+      uid: userId,
+      status: "active",
+    })
+      .select("workspaceId name createdAt agentConfig")
+      .lean();
+
+    if (!workspace) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+
+    const sessions = await SessionsModel.find({
+      workspaceId,
+      status: { $ne: "archived" },
+    })
+      .select("sessionId name createdAt vulnerabilities")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const findings = sortFindingsBySeverity(
+      sessions.flatMap((session) =>
+        ((session.vulnerabilities ?? []) as any[]).map((vulnerability, index) =>
+          toReportFinding(vulnerability, index),
+        ),
+      ),
+    );
+
+    const evidence = sessions.flatMap((session) =>
+      compactEvidence(getEvidenceCollector(session.sessionId).getAll()),
+    );
+
+    const scopeEntries = (workspace.agentConfig?.scope?.entriesRaw ?? "")
+      .split(/[\n,]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const scope = scopeEntries.slice(0, 20).join(", ");
+
+    // Which sessions fed this report — an engagement report has to stay
+    // traceable back to the runs it aggregates.
+    const sessionNames = sessions
+      .map((session) => session.name || session.sessionId)
+      .filter(Boolean);
+    const provenance = sessionNames.length
+      ? ` Findings were aggregated from ${sessions.length} session(s): ${sessionNames
+          .slice(0, 12)
+          .join(", ")}${sessionNames.length > 12 ? ", …" : ""}.`
+      : " No sessions have been recorded in this workspace yet.";
+
+    const title = `${workspace.name || "Engagement"} — workspace report`;
+
+    const generator = new ReportGenerator(workspaceId);
+    const report = generator.generateReport({
+      title,
+      engagementDate: workspace.createdAt ?? new Date(),
+      scope: scope || undefined,
+      executiveSummary:
+        buildExecutiveSummary({
+          findings,
+          scope: scope || undefined,
+          evidenceCount: evidence.length,
+        }) + provenance,
+      methodology: [
+        "Reconnaissance",
+        "Enumeration",
+        "Vulnerability Analysis",
+        "Exploitation",
+        "Post-Exploitation",
+        "Reporting",
+      ],
+      findings,
+      evidence,
+      recommendations: buildRecommendations(findings),
+    });
+
+    const body =
+      format === "html"
+        ? generator.toHtml(report)
+        : format === "json"
+          ? JSON.stringify(report, null, 2)
+          : generator.toMarkdown(report);
+
+    res.setHeader("Content-Type", reportContentType(format));
+    if (req.query.inline !== "1") {
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${reportFileName({ title, format })}"`,
+      );
+    }
+    return res.status(200).send(body);
+  } catch (err: any) {
+    console.error("[workspace] exportWorkspaceReport error:", err);
+    return res.status(500).json({ message: err?.message || "Failed to export report" });
   }
 };
 
@@ -452,13 +744,43 @@ export const deleteWorkspace = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Workspace not found" });
     }
 
+    const activeSessions = await SessionsModel.find({
+      workspaceId,
+      uid: userId,
+      status: "active",
+    })
+      .select("sessionId")
+      .lean();
+
+    // Archiving the workspace must also kill the live shells of its sessions,
+    // otherwise "deleted" engagements keep ssh tunnels/processes alive.
+    for (const { sessionId } of activeSessions) {
+      if (!sessionId) continue;
+      try {
+        await sessionLifecycle.destroy(sessionId);
+      } catch (err) {
+        console.error(`[workspace] failed to destroy shells for ${sessionId}:`, err);
+      }
+    }
+
+    const archivedAt = new Date();
+
     workspace.status = "archived";
     await workspace.save();
 
     await SessionsModel.updateMany(
       { workspaceId, uid: userId, status: "active" },
-      { $set: { status: "archived" } },
+      { $set: { status: "archived", archivedAt, agentState: "idle" } },
     );
+
+    await logAuditFromRequest(req, res, "workspace.archived", {
+      resourceType: "workspace",
+      resourceId: workspaceId,
+      details: {
+        name: workspace.name,
+        archivedSessions: activeSessions.length,
+      },
+    });
 
     return res.status(200).json({ message: "Workspace deleted" });
   } catch (err: any) {

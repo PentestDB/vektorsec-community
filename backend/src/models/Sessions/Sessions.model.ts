@@ -289,6 +289,8 @@ export interface SessionDoc extends mongoose.Document {
   boxId?: mongoose.Types.ObjectId;
   createdAt: Date;
   status: "active" | "archived";
+  /** When the session was archived (deleted from the active list). */
+  archivedAt?: Date;
   agentState: AgentState;
   messages: AgentMessageDoc[];
   pendingConsent?: PendingConsentDoc;
@@ -587,6 +589,7 @@ const SessionSchema = new Schema({
   boxId: { type: mongoose.Types.ObjectId },
   createdAt: { type: Date, default: Date.now },
   status: { type: String, default: "active", enum: ["active", "archived"] },
+  archivedAt: { type: Date },
   agentState: {
     type: String,
     default: "idle",

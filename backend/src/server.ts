@@ -45,6 +45,12 @@ declare module "express-session" {
   export interface SessionData {
     user: { userId: string };
     environment: string;
+    /**
+     * Value of `User.sessionVersion` at sign-in. When the account's version is
+     * bumped (password reset / block / logout-all) every older session — this
+     * one included — is rejected by `verifySess`. See `services/session.auth.ts`.
+     */
+    sessionVersion?: number;
   }
 }
 
@@ -302,6 +308,10 @@ const initializeApp = async () => {
     // WebSocket for shell streaming (replaces Socket.IO terminal handling)
     setupShellWebSocket(httpServer, sessionMiddleware);
 
+    // Periodic idle sweep: tears down shell managers/SSH tunnels of sessions
+    // nobody touched for 30 min (ws closes already schedule a timed destroy).
+    sessionLifecycle.startIdleSweep();
+
     // Periodic sweep that force-resets sessions stuck in "running" (no live
     // process) and pauses orphaned user runs after 30s of disconnection.
     startAgentStateWatchdog();
@@ -322,6 +332,7 @@ const initializeApp = async () => {
       logger.info("SIGTERM received; shutting down gracefully");
 
       await sessionLifecycle.destroyAll();
+      sessionLifecycle.stopIdleSweep();
 
       const memoryUsage = process.memoryUsage();
       logger.info("memory usage at shutdown", {

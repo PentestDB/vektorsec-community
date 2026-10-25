@@ -11,6 +11,7 @@ import TelegramUserModel from "../models/TelegramUser/TelegramUser.model";
 import UsageRecordModel from "../models/UsageRecord/UsageRecord.model";
 import { logAuditFromRequest } from "../services/audit.service";
 import { createMcpToken } from "../services/mcp-auth.service";
+import { revokeAllUserSessions } from "../services/session.auth";
 import { readEnvFile, updateEnvVars, deleteEnvVars } from "../utils/envWriter";
 import { reloadEnv } from "../utils/loadConfig";
 import { parseScopeString } from "../utils/scopeValidator";
@@ -244,10 +245,14 @@ export const blockUser = async (req: Request, res: Response) => {
     user.blockedReason = reason || "Blocked by admin";
     await user.save();
 
+    // A block must take effect immediately: drop every stored session and bump
+    // the version so any surviving record is rejected by `verifySess`.
+    const revoked = await revokeAllUserSessions(userId);
+
     await logAuditFromRequest(req, res, "admin.user_management", {
       resourceType: "user",
       resourceId: userId,
-      details: { action: "block", reason },
+      details: { action: "block", reason, revokedSessions: revoked.revokedSessions },
     });
 
 
@@ -416,10 +421,17 @@ export const resetUserPassword = async (req: Request, res: Response) => {
     user.password = hashedPassword;
     await user.save();
 
+    // A password reset invalidates every existing login of that account.
+    const revoked = await revokeAllUserSessions(userId);
+
     await logAuditFromRequest(req, res, "user.password_reset", {
       resourceType: "user",
       resourceId: userId,
-      details: { email: user.email, by: res.locals.user?.email || res.locals.userId },
+      details: {
+        email: user.email,
+        by: res.locals.user?.email || res.locals.userId,
+        revokedSessions: revoked.revokedSessions,
+      },
     });
 
     return res.status(200).json({ message: "Password reset successfully" });
@@ -509,10 +521,17 @@ export const resetUserTwoFactor = async (req: Request, res: Response) => {
     user.twoFactorSecret = undefined;
     await user.save();
 
+    // Resetting 2FA is an account-takeover recovery path: end all sessions.
+    const revoked = await revokeAllUserSessions(userId);
+
     await logAuditFromRequest(req, res, "user.two_factor_reset", {
       resourceType: "user",
       resourceId: userId,
-      details: { email: user.email, by: res.locals.user?.email || res.locals.userId },
+      details: {
+        email: user.email,
+        by: res.locals.user?.email || res.locals.userId,
+        revokedSessions: revoked.revokedSessions,
+      },
     });
 
     return res.status(200).json({ message: "Two-factor authentication reset for this user" });

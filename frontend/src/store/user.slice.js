@@ -1,4 +1,9 @@
 import { createSlice } from "@reduxjs/toolkit";
+import {
+  activateSessionTab,
+  closeSessionTab,
+  normalizeSessionTabs,
+} from "../utils/sessionTabs";
 
 const initialState = {
   user: null,
@@ -58,28 +63,16 @@ export const userSlice = createSlice({
       state.sessions = [];
     },
     updateSessions: (state, action) => {
-      state.sessions = action.payload;
+      // An empty payload is valid (all sessions archived) — normalise it instead
+      // of trusting it, and make sure exactly one tab stays active.
+      state.sessions = normalizeSessionTabs(action.payload);
     },
     updateCurrentSession: (state, action) => {
-      const session_id = action.payload;
-      const sessions = state.sessions.map((s) => {
-        return { ...s, is_active: s.id === session_id ? true : false };
-      });
-
-      state.sessions = sessions;
+      state.sessions = activateSessionTab(state.sessions, action.payload);
     },
     closeSession: (state, action) => {
-      const session_id = action.payload;
-
-      const sessions = state.sessions.filter((s) => s.id !== session_id);
-
-      const active_session = sessions.find((s) => s.is_active);
-
-      if (!active_session) {
-        sessions[0].is_active = true;
-      }
-
-      state.sessions = sessions;
+      // Closing the last tab must not throw (used to crash on `sessions[0]`).
+      state.sessions = closeSessionTab(state.sessions, action.payload);
     },
     updateVNC: (state, action) => {
       state.vnc = action.payload;

@@ -3,6 +3,7 @@ import {
   checkUserSession,
   loginUser,
   logout,
+  logoutAll,
   registerUser,
   setupTwoFactor,
   verifyTwoFactorSetup,
@@ -33,6 +34,9 @@ router.get("/github/callback", githubOAuthCallback);
 
 // Authenticated routes
 router.post("/logout", logout);
+// Ends every login of this account on every device (requires a live session so
+// an attacker holding only a stale cookie cannot use it as a DoS primitive).
+router.post("/logout-all", verifySess, logoutAll);
 router.get("/status", checkUserSession);
 
 // 2FA management (requires an authenticated session)

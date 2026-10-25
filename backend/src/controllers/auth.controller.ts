@@ -14,6 +14,13 @@ import {
   buildOtpAuthUri,
 } from "../services/twoFactor.service";
 import { verifyRecaptcha } from "../services/recaptcha.service";
+import {
+  clearSessionCookie,
+  destroySession,
+  establishAuthenticatedSession,
+  revokeAllUserSessions,
+  untrackUserSession,
+} from "../services/session.auth";
 
 /**
  * Public endpoint — returns the reCAPTCHA site key so the frontend can render
@@ -36,24 +43,18 @@ export const logout = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "No user to log out!" });
     }
 
-    const userdata = await UserModel.findOne({ _id: user.userId });
-
     // Record audit log before destroying session
     await logAuditFromRequest(req, res, "auth.logout", {
       resourceType: "user",
       resourceId: user.userId,
     });
 
-    // Destroy the session and clear the cookie
-    req.session.destroy((err) => {
-      if (err) {
-        console.error("Session destruction error:", err);
-        return res.status(500).json({ message: "Error logging out!" });
-      }
-      res.clearCookie("sid");
-      // Moved the success response here to ensure it's called after session is destroyed
-      res.status(200).json({ message: "Logged out successfully!" });
-    });
+    // Destroy the session, forget its id and clear the cookie.
+    await untrackUserSession(user.userId, req.sessionID);
+    await destroySession(req);
+    clearSessionCookie(res);
+
+    return res.status(200).json({ message: "Logged out successfully!" });
   } catch (err) {
     console.error("Logout error:", err);
     // Sending a 500 status code for server-side errors
@@ -61,6 +62,43 @@ export const logout = async (req: Request, res: Response) => {
   }
 };
 
+
+/**
+ * POST /api/auth/logout-all
+ *
+ * Ends every login of the current user everywhere: the stored session records
+ * are deleted and the account's `sessionVersion` is bumped, so sessions that
+ * outlive the Redis delete are rejected by `verifySess` as well. The current
+ * cookie is destroyed too, so the caller has to sign in again.
+ */
+export const logoutAll = async (req: Request, res: Response) => {
+  try {
+    const userId = req.session.user?.userId;
+    if (!userId) {
+      return res.status(400).json({ message: "No user to log out!" });
+    }
+
+    const { sessionVersion, revokedSessions } = await revokeAllUserSessions(userId);
+
+    await logAuditFromRequest(req, res, "auth.logout_all", {
+      resourceType: "user",
+      resourceId: userId,
+      details: { revokedSessions, sessionVersion },
+    });
+
+    await destroySession(req);
+    clearSessionCookie(res);
+
+    return res.status(200).json({
+      message: "Logged out from all devices.",
+      revokedSessions,
+      sessionVersion,
+    });
+  } catch (err) {
+    console.error("Logout-all error:", err);
+    return res.status(500).json({ message: "Failed to logout from all devices!" });
+  }
+};
 
 export const checkUserSession = async (req: Request, res: Response) => {
   try {
@@ -290,6 +328,14 @@ export const disableTwoFactor = async (req: Request, res: Response) => {
     (user as any).twoFactorSecret = undefined;
     await user.save();
 
+    // Removing a second factor lowers the account's security level: kill every
+    // other session, then keep this device signed in with the new version.
+    const revoked = await revokeAllUserSessions(user._id.toString());
+    await establishAuthenticatedSession(req, {
+      _id: user._id.toString(),
+      sessionVersion: revoked.sessionVersion,
+    });
+
     await logAuditFromRequest(req, res, "auth.two_factor_disabled", {
       resourceType: "user",
       resourceId: user._id.toString(),
@@ -423,17 +469,9 @@ export const loginUser = async (req: Request, res: Response) => {
 
     await user.save();
 
-    req.session.user = {
-      userId: user._id.toString(),
-    };
-
-    // saving the session
-    req.session.save(function (err) {
-      if (err) {
-        console.log(err);
-        return res.status(400).json({ message: "Failed to save session!" });
-      }
-    });
+    // Regenerate the session id before storing the user (session-fixation
+    // defence) and stamp the session with the account's current version.
+    await establishAuthenticatedSession(req, user);
 
     // Record successful login
     await logAuditFromRequest(req, res, "auth.login", {
@@ -530,10 +568,7 @@ async function findOrCreateSocialUser(opts: {
 
 /** Establish the express-session for a user (same as email/password login). */
 async function establishSession(req: Request, user: any): Promise<void> {
-  req.session.user = { userId: user._id.toString() };
-  await new Promise<void>((resolve, reject) => {
-    req.session.save((err: any) => (err ? reject(err) : resolve()));
-  });
+  await establishAuthenticatedSession(req, user);
 }
 
 // ─── Google OAuth ─────────────────────────────────────────────────────

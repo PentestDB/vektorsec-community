@@ -90,6 +90,50 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 
+- **Connecting a VPN profile returned an opaque `400` with no cause**: `POST /copilot/vpn/connect`
+  resolved the session work host inside its outer `try`, so a session with no workspace (or an
+  unresolvable workspace / SSH profile) fell through to the generic *"Failed to connect VPN"* and the
+  UI only surfaced *"Request failed with status code 400"*. The host is now resolved explicitly, its
+  failure is reported as `Work host unavailable - <reason>`, every failure is logged through the
+  shared logger, and the outer catch includes the underlying reason instead of the generic message
+  (`backend/src/controllers/vpn.controller.ts`).
+- **Editing `backend/.env` had no effect in the developer stack**: `docker-compose.dev.yml` kept
+  `/srv/data` on a named volume only, so the running backend read a *different* file
+  (`/srv/data/.env` inside `backend-dev-data`) and the repo's `backend/.env` — the file
+  Settings → SSH and the Admin UI rewrite in every other deployment — was silently ignored, which
+  made a wrong/unreachable `SSH_HOST` look like "my change did nothing". The dev backend now
+  bind-mounts `./backend/.env` onto `/srv/data/.env` exactly like `docker-compose.yml`
+  (see also `wiki/TH-Troubleshooting.md` / `wiki/EN-Troubleshooting.md` for the
+  `connect ECONNREFUSED` work-host case and WSL Kali guidance).
+- **The agent looped on authorization questions instead of doing the work**: `ask_user` ended the
+  run every time it was called, so a refusal-flavoured question ("is this target yours? do you have
+  written authorization?") simply came back on the next turn — the operator answered and the agent
+  asked again. Authorization is now treated as a platform setting rather than a chat negotiation:
+  the system prompt gained an `<authorization>` section that forbids asking the user to prove
+  ownership or to re-confirm scope and forbids repeating a question
+  (`backend/src/utils/copilot/prompts.ts`), the injected `<authorized_scope>` block states that the
+  allowlist *is* the operator's authorization (`backend/src/utils/guardrails.ts`), `ask_user`
+  refuses an identical repeat (exit code 1) and caps questions per 30-minute session window
+  (`backend/src/tools/handlers/generic-response.ts`), and such a refused repeat no longer ends the
+  run so the agent keeps working (`backend/src/services/agent.service.ts`). Out-of-scope targets
+  stay hard-blocked — the agent now reports the block instead of interrogating the operator.
+- **The agent asked the operator to prove ownership when no allowlist existed**: the guardrail block
+  was only emitted when a scope was enforced, so a run with no configured scope received *no*
+  scope/authorization statement while the prompt still said "the scope list is your authorization".
+  `buildGuardrailPromptBlock` now always emits something: with a scope it still emits
+  `<authorized_scope>`, and with no allowlist it emits `<authorization_state>` stating that the
+  operator's in-session request is the authorization, that the agent must not invent a permission
+  gate, and that it may decline at most once with a concrete technical reason before continuing
+  (`backend/src/utils/guardrails.ts`); the `<authorization>` prompt section distinguishes "scope list
+  exists" from "no allowlist configured" and explicitly forbids asking for declarations such as
+  "I own this site" or "I have a pentest contract" (`backend/src/utils/copilot/prompts.ts`).
+- **Racer/swarm agents were outside the guardrail prompt and the workspace scope**: racer system
+  prompts were assembled as `buildSystemPrompt + <racer_mode>` and their `ExecutionContext` omitted
+  `guardrails`, so a racer neither saw the authorization/scope statement nor enforced a workspace
+  allowlist (tool handlers fell back to the global default — a strict workspace scope could be
+  silently skipped). Racer prompts now append the same guardrail block and their execution context
+  carries the guardrails resolved for the session, threaded from `spawn_swarm`
+  (`backend/src/services/swarm.manager.ts`, `backend/src/services/agent.tools.ts`).
 - **SSRF blocks were mislabelled as scope-guard violations** in the session transcript: a target
   stopped by SSRF protection now gets its own notice with the correct remediation (turn SSRF
   protection off under Admin → Security) instead of "Blocked by the scope guard"
@@ -128,6 +172,23 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   when the session is local, with a shortcut to the Connection tab to pick an SSH host
   (`frontend/src/components/shells/ShellPanel.jsx`, `backend/src/services/shell.manager.ts`,
   `backend/src/services/shell.socket.ts`).
+- **`Failed to spawn shell: (SSH) Channel open failure: open failed`**: aborting an agent command
+  used to only settle the local call, so the remote process kept running and its SSH channel stayed
+  open. sshd counts every shell *and* every command channel of a connection against `MaxSessions`
+  (10 by default), so a few aborted long-running scans were enough for the work host to refuse the
+  next terminal — and the UI/console showed ssh2's opaque error. Aborts, timeouts and `destroy()`
+  now tear the remote channel down, channels are tracked per connection, a channel refused while
+  another one is closing is retried once, a shell spawn that would exceed the per-session budget
+  fails with an actionable message before sshd decides (`SSH_MAX_SHELLS_PER_SESSION`, default 8,
+  `0` disables), and sshd's refusal is rewritten into a MaxSessions hint
+  (`backend/src/services/shell.manager.ts`, `backend/tests/shellChannels.test.ts`).
+- **A work host could still run out of SSH slots inside the box, not just in the app**: one
+  connection competes for sshd's `MaxSessions` (10 by default) with *every* terminal and command
+  channel, so a busy session used to reach the point where no new terminal could be opened at all
+  (Connection tab, `SSH Connect` and agent commands all fail, and the legacy `POST
+  /api/shell/test-ssh` probe times out at its 10s budget). The bundled Kali image now ships
+  `MaxSessions 30`, so shells *and* commands have room; raise the same directive in
+  `/etc/ssh/sshd_config` (or a `sshd_config.d` drop-in) of an external box (`kali/Dockerfile`).
 
 ### Security
 

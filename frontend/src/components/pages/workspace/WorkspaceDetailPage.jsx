@@ -1,5 +1,5 @@
 import styles from "@/styles/pages/WorkspaceDetail.module.scss";
-import { message, Tag, Tooltip, Input, Form, Radio, Empty, Button, Spin, Select, Switch, Popover } from "antd";
+import { message, Tag, Tooltip, Input, Form, Radio, Empty, Button, Spin, Select, Switch, Popover, Dropdown } from "antd";
 import PrimaryButton from "@/components/common/PrimaryButton";
 import {
   PlusOutlined,
@@ -12,14 +12,40 @@ import {
   ClockCircleOutlined,
   LoadingOutlined,
   SettingOutlined,
+  BugOutlined,
+  CloudServerOutlined,
+  DesktopOutlined,
+  GlobalOutlined,
+  SafetyCertificateOutlined,
+  ThunderboltOutlined,
+  PartitionOutlined,
+  ReloadOutlined,
+  FileMarkdownOutlined,
+  FileTextOutlined,
+  CodeOutlined,
+  DownloadOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import Loader from "@/components/common/loader/Loader";
 import { useSelector } from "react-redux";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { getWorkspaceDetail, createSessionInWorkspace, updateWorkspaceAgentConfig } from "@/services/workspace.service";
+import {
+  getWorkspaceDetail,
+  getWorkspaceOverview,
+  createSessionInWorkspace,
+  updateWorkspaceAgentConfig,
+  workspaceReportUrl,
+  workspaceReportPreviewUrl,
+} from "@/services/workspace.service";
 import { getCtfChallenges, connectCtf, syncCtfStream, disconnectCtf, submitFlagToCtfd, startSolvingAll } from "@/services/ctf.service";
-import { deleteSession } from "@/services/agent.service";
+import { deleteSession, getConnectionStatus } from "@/services/agent.service";
+import { getBurpConnectionStatus } from "@/services/burp.service";
+import { getCaidoConnectionStatus } from "@/services/caido.service";
+import { getMythicConnectionStatus } from "@/services/mythic.service";
+import { getVPNStatus } from "@/services/copilot.service";
+import { getBrowserAgentVNC } from "@/services/user.service";
+import SettingsOverlay from "@/components/common/SettingsOverlay";
 import { formatDurationSec } from "@/utils/formatDuration";
 import { SCOPE_GUARD_LOCKED, SECURITY_CONTACT_URL } from "@/constants/security";
 import moment from "moment";
@@ -51,6 +77,9 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
   const [syncProgress, setSyncProgress] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
   const [syncError, setSyncError] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState(null);
+  const [guardrailsOpen, setGuardrailsOpen] = useState(false);
   const syncAbortRef = useRef(null);
   const [newSessionForm] = Form.useForm();
 
@@ -69,12 +98,45 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     }
   );
 
+  // Pentest cockpit: workspace-wide roll-up of findings, targets and chain
+  // progress. Disabled for CTF workspaces (they use the challenge board).
+  const { data: overview, isLoading: overviewLoading } = useQuery(
+    ["workspace-overview", workspaceId],
+    () => getWorkspaceOverview(workspaceId),
+    {
+      enabled: !!user && !!workspaceId && workspace?.type !== "ctf",
+      refetchInterval: 10000,
+    }
+  );
+
+  const handleOpenFinding = useCallback(
+    (finding) => {
+      if (!finding?.sessionId || !finding?.vulnerabilityId) return;
+      router.push(
+        `/session/${finding.sessionId}/vulnerabilities/${finding.vulnerabilityId}`
+      );
+    },
+    [router]
+  );
+
+  /**
+   * Deep-link into Settings for one integration tab (ssh | burp | caido |
+   * mythic | magnitude). The workspace page is not the session shell, so the
+   * overlay is mounted here and opened by state instead of relying on the
+   * `open-settings` window event that `HeaderLinks` listens for.
+   */
+  const openSettingsTab = useCallback((tab) => {
+    setSettingsTab(tab ?? null);
+    setSettingsOpen(true);
+  }, []);
+
   const createSessionMutation = useMutation(
     (values) => createSessionInWorkspace({ workspaceId, ...values }),
     {
       onSuccess: (data) => {
         message.success("Session created!");
         queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+        queryClient.invalidateQueries(["workspace-overview", workspaceId]);
         setShowNewSession(false);
         newSessionForm.resetFields();
         router.push(`/session/${data.sessionId}`);
@@ -89,6 +151,7 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     onSuccess: () => {
       message.success("Session deleted");
       queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+      queryClient.invalidateQueries(["workspace-overview", workspaceId]);
     },
     onError: (err) => {
       message.error(err?.response?.data?.message ?? "Failed to delete session");
@@ -425,6 +488,38 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
     },
   );
 
+  // Phase 3 — scope management straight from the cockpit aside: append a single
+  // entry to the workspace allowlist without opening the guardrails popover.
+  const addScopeEntry = useMutation(
+    (entry) =>
+      updateWorkspaceAgentConfig({
+        workspaceId,
+        maxTurns: turnLimit,
+        autonomousMode,
+        scope: {
+          enabled: scopeEnabled,
+          strictMode: scopeStrict,
+          entriesRaw: [scopeEntries, entry].filter(Boolean).join("\n"),
+        },
+      }),
+    {
+      onSuccess: (data) => {
+        const s = data?.scope ?? {};
+        setScopeEnabled(s?.enabled === true);
+        setScopeStrict(s?.strictMode === true);
+        setScopeEntries(s?.entriesRaw ?? "");
+        message.success("Scope entry added");
+        queryClient.invalidateQueries(["workspace-detail", workspaceId]);
+        queryClient.invalidateQueries(["workspace-overview", workspaceId]);
+      },
+      onError: (error) => {
+        message.error(
+          error?.response?.data?.message || "Failed to add scope entry",
+        );
+      },
+    },
+  );
+
   const guardrailsPopoverContent = (
     <div style={{ width: 340 }}>
       <div style={{ marginBottom: 12 }}>
@@ -582,6 +677,8 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
               }
               trigger="click"
               placement="bottomRight"
+              open={guardrailsOpen}
+              onOpenChange={setGuardrailsOpen}
             >
               <Button size="small" icon={<SettingOutlined />} title="Agent guardrails & scope settings" />
             </Popover>
@@ -664,6 +761,38 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
       </div>
 
       <div className={styles.content}>
+        {!isCTF && (
+          <PentestCockpit
+            overview={overview}
+            loading={overviewLoading}
+            styles={styles}
+            onOpenFinding={handleOpenFinding}
+          />
+        )}
+
+        {!isCTF && (
+          <WorkspaceDeliverables
+            styles={styles}
+            workspaceId={workspaceId}
+            overview={overview}
+            loading={overviewLoading}
+            scopeEnabled={scopeEnabled}
+            scopeStrict={scopeStrict}
+            scopeEntries={scopeEntries}
+            onAddEntry={(entry) => addScopeEntry.mutate(entry)}
+            addingEntry={addScopeEntry.isLoading}
+            onOpenGuardrails={() => setGuardrailsOpen(true)}
+          />
+        )}
+
+        <ToolingLaunchpad
+          workspace={workspace}
+          sessions={sessions}
+          onNavigate={(href) => router.push(href)}
+          onOpenSettings={openSettingsTab}
+          styles={styles}
+        />
+
         <div className={styles.sectionHeader}>
           <h2>{isCTF && ctfConnected ? "Challenges" : "Sessions"}</h2>
           <span className={styles.sessionCount}>
@@ -866,6 +995,640 @@ const WorkspaceDetailPage = ({ workspaceId }) => {
           </Form>
         </div>
       </ModalComponent>
+
+      {/* Integrations deep-linked from the Tooling launchpad (ssh/burp/caido/
+          mythic/magnitude). Mounted here because the workspace page is not the
+          session shell that `HeaderLinks` drives. */}
+      <SettingsOverlay
+        open={settingsOpen}
+        initialTab={settingsTab}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsTab(null);
+        }}
+      />
+    </div>
+  );
+};
+
+const SEVERITY_KEYS = ["critical", "high", "medium", "low", "info"];
+
+const formatScopeNote = (scope) => {
+  if (!scope?.entryCount) return null;
+  const noun = scope.entryCount === 1 ? "entry" : "entries";
+  const mode = scope.enabled ? (scope.strictMode ? "strict" : "enforced") : "not enforced";
+  return `Scope: ${scope.entryCount} ${noun} · ${mode}`;
+};
+
+// ── Phase 2: Tooling Launchpad ────────────────────────────────────────────────
+// One panel that answers "which tools are live for this engagement right now"
+// — work host, VPN, Burp, Caido, Mythic and the browser agent — and jumps into
+// the tool on the workspace's primary session, or into the matching Settings
+// tab when something still needs to be configured.
+
+/** Running session first, then idle, then newest (the API sorts newest-first). */
+const pickPrimarySession = (sessions = []) =>
+  sessions.find((s) => s.agentState === "running")?.sessionId ??
+  sessions.find((s) => s.agentState === "idle")?.sessionId ??
+  sessions[0]?.sessionId ??
+  null;
+
+/** Collapse the various health shapes into one of the four tile states. */
+const toolTileState = ({ loading, configured, connected }) => {
+  if (loading) return "loading";
+  if (configured === false) return "unconfigured";
+  if (connected === true) return "online";
+  return "offline";
+};
+
+const ToolTile = ({ styles, icon, name, state, detail, links = [], onNavigate, onConfigure }) => (
+  <div className={`${styles.toolTile} ${styles[`toolState_${state}`] ?? ""}`}>
+    <div className={styles.toolTileHead}>
+      <span className={styles.toolTileIcon}>{icon}</span>
+      <span className={styles.toolTileName}>{name}</span>
+      <span className={`${styles.toolDot} ${styles[`toolDot_${state}`] ?? ""}`} />
+    </div>
+    <div className={styles.toolTileDetail} title={detail}>
+      {detail}
+    </div>
+    <div className={styles.toolTileActions}>
+      {links.length === 0 ? (
+        <span className={styles.toolTileHint}>No session to launch in</span>
+      ) : (
+        links.map((link, index) => (
+          <button
+            key={link.href}
+            type="button"
+            className={index === 0 ? styles.toolLaunchBtn : styles.toolLinkBtn}
+            onClick={() => onNavigate(link.href)}
+          >
+            {index === 0 ? <PlayCircleOutlined /> : null} {link.label}
+          </button>
+        ))
+      )}
+      {onConfigure ? (
+        <Tooltip title="Open in Settings">
+          <button
+            type="button"
+            className={styles.toolGearBtn}
+            onClick={onConfigure}
+            aria-label={`Configure ${name}`}
+          >
+            <SettingOutlined />
+          </button>
+        </Tooltip>
+      ) : null}
+    </div>
+  </div>
+);
+
+const ToolingLaunchpad = ({ workspace, sessions, onNavigate, onOpenSettings, styles }) => {
+  const sessionId = useMemo(() => pickPrimarySession(sessions), [sessions]);
+  const primarySession = sessions.find((session) => session.sessionId === sessionId);
+
+  // Workspace-scoped probes. Burp/Caido/Mythic/browser-agent are user-level
+  // integrations; work host and VPN are session-bound, so they only poll once a
+  // session exists.
+  const connQuery = useQuery(
+    ["tooling-work-host", sessionId],
+    () => getConnectionStatus(sessionId),
+    { enabled: !!sessionId, refetchInterval: 15000, retry: false },
+  );
+  const burpQuery = useQuery(["tooling-burp"], getBurpConnectionStatus, {
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const caidoQuery = useQuery(["tooling-caido"], getCaidoConnectionStatus, {
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const mythicQuery = useQuery(["tooling-mythic"], getMythicConnectionStatus, {
+    refetchInterval: 30000,
+    retry: false,
+  });
+  const vpnQuery = useQuery(
+    ["tooling-vpn", sessionId],
+    () => getVPNStatus({ session_id: sessionId }),
+    { enabled: !!sessionId, refetchInterval: 15000, retry: false },
+  );
+  const vncQuery = useQuery(["tooling-browser-agent"], getBrowserAgentVNC, {
+    refetchInterval: 30000,
+    retry: false,
+  });
+
+  const refreshAll = useCallback(() => {
+    [connQuery, burpQuery, caidoQuery, mythicQuery, vpnQuery, vncQuery].forEach((query) =>
+      query.refetch(),
+    );
+  }, [connQuery, burpQuery, caidoQuery, mythicQuery, vpnQuery, vncQuery]);
+
+  const workHost = workspace?.workHost ?? {};
+  const hostKind = workHost?.kind === "ssh" ? "ssh" : "local";
+  const hostLabel =
+    (hostKind === "ssh" ? workHost?.sshProfileAlias : "") || workHost?.workFolder || "—";
+
+  const conn = connQuery.data ?? {};
+  const hostState = sessionId
+    ? toolTileState({
+        loading: connQuery.isLoading,
+        connected: conn.sshConnected === true || conn.hostConnected === true,
+      })
+    : "unavailable";
+
+  const burp = burpQuery.data ?? {};
+  const caido = caidoQuery.data ?? {};
+  const mythic = mythicQuery.data ?? {};
+  const vpnConnections = vpnQuery.data?.connections ?? [];
+  const vnc = vncQuery.data ?? {};
+
+  const burpState = toolTileState({
+    loading: burpQuery.isLoading,
+    configured: burp.configured,
+    connected: burp.connected,
+  });
+  const caidoState = toolTileState({
+    loading: caidoQuery.isLoading,
+    configured: caido.configured,
+    connected: caido.connected,
+  });
+  const mythicState = toolTileState({
+    loading: mythicQuery.isLoading,
+    configured: mythic.configured,
+    connected: mythic.connected,
+  });
+  const vpnState = sessionId
+    ? toolTileState({ loading: vpnQuery.isLoading, connected: vpnConnections.length > 0 })
+    : "unavailable";
+  const vncState =
+    vnc.enabled === false
+      ? "unconfigured"
+      : toolTileState({ loading: vncQuery.isLoading, connected: vnc.vncRunning === true });
+
+  const linksFor = (path, label = "Open") =>
+    sessionId ? [{ label, href: `/session/${sessionId}/${path}` }] : [];
+
+  const tiles = [
+    {
+      key: "work-host",
+      icon: hostKind === "ssh" ? <CloudServerOutlined /> : <DesktopOutlined />,
+      name: hostKind === "ssh" ? "SSH work host" : "Local work host",
+      state: hostState,
+      detail: sessionId
+        ? `${hostLabel}${conn.lastError ? ` · ${conn.lastError}` : ""}`
+        : "Create a session to bind a work host",
+      links: linksFor("connection", "Connection"),
+      settingsTab: "ssh",
+    },
+    {
+      key: "vpn",
+      icon: <GlobalOutlined />,
+      name: "VPN",
+      state: vpnState,
+      detail: !sessionId
+        ? "VPN tunnels are bound to a session"
+        : vpnConnections.length
+          ? `${vpnConnections.length} tunnel${vpnConnections.length === 1 ? "" : "s"} up`
+          : vpnQuery.data?.lastError || "No active tunnel",
+      links: linksFor("vpn", "Profiles"),
+    },
+    {
+      key: "burp",
+      icon: <BugOutlined />,
+      name: "Burp Suite",
+      state: burpState,
+      detail: burp.connected
+        ? `Burp ${burp.burpVersion || "connected"}${
+            burp.extensionVersion ? ` · ext ${burp.extensionVersion}` : ""
+          }`
+        : burp.message || (burp.configured ? "RPC unreachable" : "Not configured"),
+      links: linksFor("burp", "Proxy"),
+      settingsTab: "burp",
+    },
+    {
+      key: "caido",
+      icon: <ThunderboltOutlined />,
+      name: "Caido",
+      state: caidoState,
+      detail: caido.connected
+        ? caido.url || "Connected"
+        : caido.message || (caido.configured ? "Unreachable" : "Not configured"),
+      links: linksFor("caido", "Proxy"),
+      settingsTab: "caido",
+    },
+    {
+      key: "mythic",
+      icon: <PartitionOutlined />,
+      name: "Mythic C2",
+      state: mythicState,
+      detail: mythic.connected
+        ? `${mythic.operation ? `op ${mythic.operation} · ` : ""}${
+            mythic.callbackCount ?? 0
+          } callbacks`
+        : mythic.error || (mythic.configured ? "Unreachable" : "Not configured"),
+      links: linksFor("mythic", "Callbacks"),
+      settingsTab: "mythic",
+    },
+    {
+      key: "browser-agent",
+      icon: <DesktopOutlined />,
+      name: "Browser agent",
+      state: vncState,
+      detail:
+        vnc.enabled === false
+          ? "Browser agent disabled"
+          : vnc.headless
+            ? "Headless — no VNC stream"
+            : vnc.vncRunning
+              ? `VNC ready${vnc.novncPort ? ` :${vnc.novncPort}` : ""}`
+              : "VNC not running",
+      links: linksFor("browser-agent", "Open"),
+      settingsTab: "magnitude",
+    },
+  ];
+
+  const onlineCount = tiles.filter((tile) => tile.state === "online").length;
+
+  return (
+    <div className={styles.launchpad}>
+      <div className={styles.launchpadHead}>
+        <div className={styles.launchpadTitle}>
+          <ThunderboltOutlined /> Tooling
+          <span className={styles.launchpadCount}>
+            {onlineCount}/{tiles.length} online
+          </span>
+          <span className={styles.launchpadSession}>
+            {primarySession
+              ? `launching in ${primarySession.name || primarySession.sessionId}`
+              : "no session yet"}
+          </span>
+        </div>
+        <button type="button" className={styles.launchpadRefresh} onClick={refreshAll}>
+          <ReloadOutlined /> Refresh
+        </button>
+      </div>
+      <div className={styles.launchpadGrid}>
+        {tiles.map((tile) => (
+          <ToolTile
+            key={tile.key}
+            styles={styles}
+            icon={tile.icon}
+            name={tile.name}
+            state={tile.state}
+            detail={tile.detail}
+            links={tile.links}
+            onNavigate={onNavigate}
+            onConfigure={tile.settingsTab ? () => onOpenSettings(tile.settingsTab) : null}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const PentestCockpit = ({ overview, loading, styles, onOpenFinding }) => {
+  if (loading && !overview) {
+    return (
+      <div className={styles.cockpit}>
+        <div className={styles.cockpitLoading}>
+          <LoadingOutlined /> Loading security overview...
+        </div>
+      </div>
+    );
+  }
+  if (!overview) return null;
+
+  const vulns = overview.vulnerabilities || {};
+  const bySeverity = vulns.bySeverity || {};
+  const findings = vulns.findings || [];
+  const targets = overview.targets || [];
+  const chain = overview.attackChain || {};
+  const chainByStatus = chain.byStatus || {};
+  const scopeNote = formatScopeNote(overview.scope);
+
+  return (
+    <div className={styles.cockpit}>
+      <div className={styles.cockpitHead}>
+        <div className={styles.cockpitTitle}>
+          <span>Security Overview</span>
+          <span className={styles.cockpitCount}>
+            {vulns.total ?? 0} finding{(vulns.total ?? 0) === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className={styles.severityBar}>
+          {SEVERITY_KEYS.map((key) => (
+            <span
+              key={key}
+              className={`${styles.sevPill} ${styles[`sev_${key}`]}`}
+              title={`${bySeverity[key] ?? 0} ${key}`}
+            >
+              <span className={styles.sevCount}>{bySeverity[key] ?? 0}</span>
+              <span className={styles.sevLabel}>{key}</span>
+            </span>
+          ))}
+          {(vulns.exploited ?? 0) > 0 && (
+            <span
+              className={`${styles.sevPill} ${styles.sev_exploited}`}
+              title="Findings confirmed as exploited"
+            >
+              <span className={styles.sevCount}>{vulns.exploited}</span>
+              <span className={styles.sevLabel}>exploited</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.cockpitGrid}>
+        <div className={styles.cockpitPanel}>
+          <div className={styles.panelTitle}>Findings ({findings.length})</div>
+          {findings.length === 0 ? (
+            <div className={styles.cockpitEmpty}>
+              No findings yet — run the agent in a session to populate the board.
+            </div>
+          ) : (
+            <div className={styles.findingsList}>
+              {findings.map((finding) => (
+                <div
+                  key={`${finding.sessionId}:${finding.vulnerabilityId}`}
+                  className={styles.findingRow}
+                  onClick={() => onOpenFinding?.(finding)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onOpenFinding?.(finding);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <span
+                    className={`${styles.sevBadge} ${styles[`sev_${finding.severity}`]}`}
+                  >
+                    {finding.severity}
+                  </span>
+                  <span className={styles.findingMain}>
+                    <span className={styles.findingTitle} title={finding.title}>
+                      {finding.title}
+                    </span>
+                    <span className={styles.findingMeta}>
+                      {finding.host || "—"}
+                      {finding.endpoint || finding.service
+                        ? ` · ${finding.endpoint || finding.service}`
+                        : ""}
+                      {finding.cvssScore != null ? ` · CVSS ${finding.cvssScore}` : ""}
+                      {finding.cve
+                        ? ` · ${finding.cve}`
+                        : finding.cwe
+                          ? ` · ${finding.cwe}`
+                          : ""}
+                    </span>
+                  </span>
+                  <span className={styles.findingSession} title={finding.sessionName}>
+                    {finding.sessionName}
+                  </span>
+                  <span className={styles.findingStatus}>
+                    {finding.status}
+                    {finding.exploited ? " · exploited" : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className={styles.cockpitAside}>
+          <div className={styles.asideBlock}>
+            <div className={styles.asideTitle}>
+              Assets <span className={styles.asideCount}>{targets.length}</span>
+            </div>
+            {targets.length === 0 ? (
+              <div className={styles.asideEmpty}>No targets discovered yet</div>
+            ) : (
+              <div className={styles.targetChips}>
+                {targets.slice(0, 24).map((target) => (
+                  <span
+                    key={target.target}
+                    className={styles.targetChip}
+                    title={`${target.entries} observation${
+                      target.entries === 1 ? "" : "s"
+                    }${target.dataTypes?.length ? ` · ${target.dataTypes.join(", ")}` : ""}`}
+                  >
+                    {target.target}
+                  </span>
+                ))}
+                {targets.length > 24 && (
+                  <span className={styles.targetMore}>+{targets.length - 24} more</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className={styles.asideBlock}>
+            <div className={styles.asideTitle}>
+              Attack Chain{" "}
+              <span className={styles.asideCount}>{chain.steps ?? 0} steps</span>
+            </div>
+            {(chain.steps ?? 0) === 0 ? (
+              <div className={styles.asideEmpty}>No attack-chain activity yet</div>
+            ) : (
+              <div className={styles.chainStats}>
+                {["success", "running", "pending", "failed", "skipped"].map((key) => (
+                  <span key={key} className={styles.chainStat}>
+                    <span className={`${styles.chainDot} ${styles[`chain_${key}`]}`} />
+                    <span className={styles.chainCount}>{chainByStatus[key] ?? 0}</span>
+                    <span className={styles.chainLabel}>{key}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {scopeNote && <div className={styles.scopeLine}>{scopeNote}</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Phase 3: Scope & Reporting ────────────────────────────────────────────────
+// Turns the cockpit from a read-only dashboard into a control surface: the target
+// allowlist can be extended inline, and the aggregated engagement report (every
+// session's findings merged) is one click away in three formats.
+
+const REPORT_FORMATS = [
+  { key: "markdown", label: "Markdown", icon: <FileMarkdownOutlined /> },
+  { key: "html", label: "HTML", icon: <FileTextOutlined /> },
+  { key: "json", label: "JSON", icon: <CodeOutlined /> },
+];
+
+const WorkspaceDeliverables = ({
+  styles,
+  workspaceId,
+  overview,
+  loading,
+  scopeEnabled,
+  scopeStrict,
+  scopeEntries,
+  onAddEntry,
+  addingEntry,
+  onOpenGuardrails,
+}) => {
+  const [draft, setDraft] = useState("");
+
+  const entries = useMemo(
+    () =>
+      (scopeEntries || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    [scopeEntries],
+  );
+
+  const findings = overview?.vulnerabilities ?? {};
+  const bySeverity = findings.bySeverity ?? {};
+  const sessionCount = overview?.sessions?.total ?? 0;
+  const scopeState = !scopeEnabled ? "off" : scopeStrict ? "strict" : "enforced";
+
+  const submitDraft = () => {
+    const value = draft.trim();
+    if (!value) return;
+    onAddEntry(value);
+    setDraft("");
+  };
+
+  return (
+    <div className={styles.deliverables}>
+      <div className={styles.deliverableCard}>
+        <div className={styles.deliverableHead}>
+          <span className={styles.deliverableTitle}>
+            <SafetyCertificateOutlined /> Target scope
+          </span>
+          <span className={`${styles.scopeChip} ${styles[`scopeChip_${scopeState}`]}`}>
+            {scopeState === "off" ? "not enforced" : scopeState}
+          </span>
+          <span className={styles.deliverableCount}>
+            {entries.length} {entries.length === 1 ? "entry" : "entries"}
+          </span>
+          {onOpenGuardrails ? (
+            <button
+              type="button"
+              className={styles.deliverableAction}
+              onClick={onOpenGuardrails}
+            >
+              <SettingOutlined /> Guardrails
+            </button>
+          ) : null}
+        </div>
+
+        {entries.length === 0 ? (
+          <div className={styles.deliverableEmpty}>
+            No allowlist entries yet — add the hosts, CIDRs or wildcards the agent is
+            allowed to touch.
+          </div>
+        ) : (
+          <div className={styles.scopeChips}>
+            {entries.slice(0, 18).map((entry) => (
+              <span key={entry} className={styles.scopeChipItem} title={entry}>
+                {entry}
+              </span>
+            ))}
+            {entries.length > 18 && (
+              <span className={styles.scopeChipMore}>+{entries.length - 18} more</span>
+            )}
+          </div>
+        )}
+
+        <div className={styles.scopeAddRow}>
+          <Input
+            size="small"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onPressEnter={submitDraft}
+            placeholder="api.target.htb, 10.10.10.0/24, *.target.htb"
+          />
+          <Button
+            size="small"
+            type="primary"
+            loading={addingEntry}
+            disabled={!draft.trim()}
+            onClick={submitDraft}
+          >
+            <PlusOutlined /> Add
+          </Button>
+        </div>
+        <div className={styles.deliverableHint}>
+          Accepts hosts, CIDR ranges and wildcards. Entries added here are enforced by
+          every session in this workspace.
+        </div>
+      </div>
+
+      <div className={styles.deliverableCard}>
+        <div className={styles.deliverableHead}>
+          <span className={styles.deliverableTitle}>
+            <FileTextOutlined /> Engagement report
+          </span>
+          <span className={styles.deliverableCount}>
+            {findings.total ?? 0} findings · {sessionCount} sessions
+          </span>
+        </div>
+
+        {loading && !overview ? (
+          <div className={styles.deliverableEmpty}>
+            <LoadingOutlined /> Aggregating findings from every session...
+          </div>
+        ) : (
+          <div className={styles.reportSeverity}>
+            {SEVERITY_KEYS.map((key) => (
+              <span
+                key={key}
+                className={`${styles.sevPill} ${styles[`sev_${key}`]}`}
+                title={`${bySeverity[key] ?? 0} ${key}`}
+              >
+                <span className={styles.sevCount}>{bySeverity[key] ?? 0}</span>
+                <span className={styles.sevLabel}>{key}</span>
+              </span>
+            ))}
+            {(findings.exploited ?? 0) > 0 && (
+              <span
+                className={`${styles.sevPill} ${styles.sev_exploited}`}
+                title="Findings confirmed as exploited"
+              >
+                <span className={styles.sevCount}>{findings.exploited}</span>
+                <span className={styles.sevLabel}>exploited</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className={styles.reportActions}>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: REPORT_FORMATS.map((format) => ({
+                key: format.key,
+                label: format.label,
+                icon: format.icon,
+              })),
+              onClick: ({ key }) => {
+                // Same-origin download: the gateway relays Content-Disposition.
+                window.location.assign(workspaceReportUrl(workspaceId, key));
+              },
+            }}
+          >
+            <Button type="primary" icon={<DownloadOutlined />}>
+              Export report
+            </Button>
+          </Dropdown>
+          <Button
+            icon={<EyeOutlined />}
+            onClick={() =>
+              // Inline HTML in a new tab — the report pipeline stamps the workspace
+              // scope and every finding with its session provenance.
+              window.open(workspaceReportPreviewUrl(workspaceId), "_blank", "noopener")
+            }
+          >
+            Preview
+          </Button>
+        </div>
+        <div className={styles.deliverableHint}>
+          Merges findings from every session in this workspace, sorted by severity, with
+          scope, evidence and provenance attached.
+        </div>
+      </div>
     </div>
   );
 };

@@ -172,6 +172,7 @@ export function buildExecutionContext(params: {
             modelPresets,
             ctfContext: swarmDefaults?.ctfContext,
             agentPromptConfig: swarmDefaults?.agentPromptConfig,
+            guardrails,
             maxIterations: maxSwarmIterations,
           });
 

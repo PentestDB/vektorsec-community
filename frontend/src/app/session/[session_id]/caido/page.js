@@ -1,29 +1,14 @@
 "use client";
 
 import CaidoProxyPage from "@/components/pages/session/caido/CaidoProxyPage";
-import { use, useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { updateSessions } from "@/store/user.slice";
+import { useRegisterSessionTab } from "@/hooks/useSessionTabs";
+import { use } from "react";
 
 const CaidoPage = ({ params }) => {
   const { session_id: sessionId } = use(params);
-  const dispatch = useDispatch();
-  const { sessions } = useSelector((state) => state.user);
 
-  useEffect(() => {
-    const caidoSession = sessions.find((session) => session.type === "caido");
-    if (!caidoSession) {
-      dispatch(updateSessions([
-        ...sessions,
-        {
-          id: sessionId + "/caido",
-          is_main: false,
-          is_active: true,
-          type: "caido",
-        },
-      ]));
-    }
-  }, [dispatch, sessionId, sessions]);
+  // Register the Caido tab (now shares the same helper as the other routes).
+  useRegisterSessionTab(sessionId, "caido");
 
   return <CaidoProxyPage sessionId={sessionId} />;
 };

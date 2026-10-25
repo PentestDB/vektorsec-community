@@ -1,5 +1,6 @@
 import express from "express";
 import { verifySess } from "../middlewares/VerifySession.middleware";
+import { enforceUsageLimit } from "../middlewares/UsageLimit.middleware";
 import {
   createSession,
   sendMessage,
@@ -19,16 +20,22 @@ import {
   updateSessionAgentToolsConfig,
   exportSessionReport,
   installCapability,
+  uploadSessionAttachment,
 } from "../controllers/agent.controller";
 import {
   chatAboutVulnerability,
   getVulnerabilities,
   getVulnerability,
 } from "../controllers/vulnerability.controller";
+import { uploadSessionAttachmentMiddleware } from "../middlewares/MulterMiddleware";
 
 const router = express.Router();
 
-router.post("/create-session", [verifySess], createSession);
+router.post(
+  "/create-session",
+  [verifySess, enforceUsageLimit(["concurrent_sessions", "sessions"])],
+  createSession,
+);
 router.post("/sessions", [verifySess], getUserSessions);
 router.get("/session/:sessionId", [verifySess], getSessionInfo);
 router.get("/session/:sessionId/history", [verifySess], getHistory);
@@ -39,6 +46,7 @@ router.get("/session/:sessionId/report", [verifySess], exportSessionReport);
 router.get("/session/:sessionId/vulnerabilities", [verifySess], getVulnerabilities);
 router.get("/session/:sessionId/vulnerabilities/:vulnerabilityId", [verifySess], getVulnerability);
 router.post("/session/:sessionId/vulnerabilities/:vulnerabilityId/chat", [verifySess], chatAboutVulnerability);
+router.post("/session/:sessionId/attachment", [verifySess, uploadSessionAttachmentMiddleware.single("file")], uploadSessionAttachment);
 router.post("/delete-session", [verifySess], deleteSession);
 
 router.post("/message", [verifySess], sendMessage);

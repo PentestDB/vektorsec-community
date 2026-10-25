@@ -12,7 +12,16 @@ RUN apt-get update && \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Configure SSH for passwordless root login
+#
+# MaxSessions: every interactive shell *and* every one-shot command channel of a
+# client counts against this per-connection budget (default 10), so a session
+# that runs a handful of agent commands alongside its terminals exhausts it and
+# sshd then refuses the next channel with the opaque
+# "(SSH) Channel open failure: open failed" — no new terminal can be opened at
+# all. Raise it so agent shells, user terminals and commands have room.
 RUN mkdir -p /var/run/sshd && \
+    sed -i 's/^#*\s*MaxSessions.*/MaxSessions 30/' /etc/ssh/sshd_config && \
+    grep -q '^MaxSessions' /etc/ssh/sshd_config          || echo 'MaxSessions 30' >> /etc/ssh/sshd_config && \
     sed -i 's/^#*\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/^#*\s*PermitEmptyPasswords.*/PermitEmptyPasswords yes/' /etc/ssh/sshd_config && \
     sed -i 's/^#*\s*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config && \

@@ -25,16 +25,126 @@ export type UsageResource =
   | "mcp_tokens"
   | "agent_iterations";
 
-interface UsageCheck {
-  resource: UsageResource;
-  /** Optional custom error message. */
-  message?: string;
+/** Plan limits this middleware understands (see `config/plans.ts`). */
+export interface UsageLimits {
+  maxConcurrentSessions: number;
+  maxSessionsPerPeriod: number;
+  maxWorkspaces: number;
+  maxMcpTokens: number;
+}
+
+/** Resource usage counted from the database for one user. */
+export interface UsageCounts {
+  workspaces: number;
+  concurrentSessions: number;
+  sessionsThisPeriod: number;
+  mcpTokens: number;
+}
+
+export interface UsageLimitViolation {
+  code: string;
+  message: string;
+  limit: number;
+  current: number;
+}
+
+export interface UsageLimitContext {
+  /** Per-user override of the plan's MCP token limit. */
+  maxMcpTokensOverride?: number;
 }
 
 /**
- * Middleware factory that enforces a plan limit for a given resource.
+ * A limit of `0` (or a negative / non-finite value) means "unlimited", matching
+ * the documented convention of `maxSessionsPerPeriod` in `config/plans.ts`.
  */
-export function enforceUsageLimit(resource: UsageResource, message?: string) {
+function isUnlimited(limit: number): boolean {
+  return !Number.isFinite(limit) || limit <= 0;
+}
+
+/**
+ * Pure plan-limit evaluation (no I/O, hence unit-testable).
+ *
+ * Returns `null` when the resource may be used, otherwise the blocking
+ * violation with the limit and the current usage.
+ */
+export function evaluateUsageLimit(
+  resource: UsageResource,
+  limits: UsageLimits,
+  counts: UsageCounts,
+  ctx: UsageLimitContext = {},
+): UsageLimitViolation | null {
+  switch (resource) {
+    case "concurrent_sessions": {
+      const limit = limits.maxConcurrentSessions;
+      if (isUnlimited(limit) || counts.concurrentSessions < limit) return null;
+      return {
+        code: "PLAN_LIMIT_CONCURRENT_SESSIONS",
+        message: `Concurrent session limit reached (${limit}). Upgrade your plan to run more sessions in parallel.`,
+        limit,
+        current: counts.concurrentSessions,
+      };
+    }
+
+    case "sessions": {
+      const limit = limits.maxSessionsPerPeriod;
+      if (isUnlimited(limit) || counts.sessionsThisPeriod < limit) return null;
+      return {
+        code: "PLAN_LIMIT_SESSIONS",
+        message: `Session limit reached for this period (${limit}). Upgrade your plan for unlimited sessions.`,
+        limit,
+        current: counts.sessionsThisPeriod,
+      };
+    }
+
+    case "workspaces": {
+      const limit = limits.maxWorkspaces;
+      if (isUnlimited(limit) || counts.workspaces < limit) return null;
+      return {
+        code: "PLAN_LIMIT_WORKSPACES",
+        message: `Workspace limit reached (${limit}). Upgrade your plan for more workspaces.`,
+        limit,
+        current: counts.workspaces,
+      };
+    }
+
+    case "mcp_tokens": {
+      // Admin override wins over the plan limit (same rule as before).
+      const limit = ctx.maxMcpTokensOverride ?? limits.maxMcpTokens;
+      if (isUnlimited(limit) || counts.mcpTokens < limit) return null;
+      return {
+        code: "PLAN_LIMIT_MCP_TOKENS",
+        message: `MCP token limit reached (${limit}). Upgrade your plan for more MCP tokens.`,
+        limit,
+        current: counts.mcpTokens,
+      };
+    }
+
+    case "agent_iterations":
+      // Enforced inside the agent loop; the middleware only exposes the limit.
+      return null;
+
+    default:
+      return null;
+  }
+}
+
+
+/**
+ * Middleware factory that enforces one or more plan limits before a route
+ * creates a billable resource.
+ *
+ * Usage:
+ *   router.post("/create-session", [verifySess, enforceUsageLimit(["concurrent_sessions", "sessions"])], handler);
+ *
+ * Responds `403` with `{ code, limit, current }` when a limit is hit, and
+ * exposes `res.locals.plan` / `res.locals.planLimits` for downstream handlers.
+ */
+export function enforceUsageLimit(
+  resource: UsageResource | UsageResource[],
+  message?: string,
+) {
+  const resources: UsageResource[] = Array.isArray(resource) ? resource : [resource];
+
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = res.locals.userId;
@@ -58,93 +168,53 @@ export function enforceUsageLimit(resource: UsageResource, message?: string) {
       const plan = await getPlan(effectivePlanId);
       const limit = plan.limits;
 
+      // Only count what the requested resources actually need, so a single
+      // create costs one or two COUNT queries instead of four.
+      const needs = (r: UsageResource) => resources.includes(r);
+      const counts: UsageCounts = {
+        workspaces: 0,
+        concurrentSessions: 0,
+        sessionsThisPeriod: 0,
+        mcpTokens: 0,
+      };
 
-      // Workspaces are owned by the user via `uid`.
-      const userWorkspaces = await Workspace.find({ uid: userId }).select("workspaceId");
-      const workspaceIds = userWorkspaces.map((w) => w.workspaceId);
+      if (needs("workspaces") || needs("concurrent_sessions") || needs("sessions")) {
+        // Workspaces are owned by the user via `uid`.
+        counts.workspaces = await Workspace.countDocuments({ uid: userId });
+      }
 
-      switch (resource) {
-        case "concurrent_sessions": {
-          const activeCount = await Sessions.countDocuments({
-            workspaceId: { $in: workspaceIds },
-            status: "active",
+      if (needs("concurrent_sessions")) {
+        counts.concurrentSessions = await Sessions.countDocuments({
+          uid: userId,
+          status: "active",
+        });
+      }
+
+      if (needs("sessions") && limit.maxSessionsPerPeriod > 0) {
+        const periodStart = user.creditsPeriodStart ?? new Date(0);
+        counts.sessionsThisPeriod = await Sessions.countDocuments({
+          uid: userId,
+          createdAt: { $gte: periodStart },
+        });
+      }
+
+      if (needs("mcp_tokens")) {
+        // Revoked tokens are kept for auditing — they must not count as usage.
+        counts.mcpTokens = (user.configs?.mcpTokens ?? []).filter((t) => !t.revokedAt).length;
+      }
+
+      for (const resourceName of resources) {
+        const violation = evaluateUsageLimit(resourceName, limit, counts, {
+          maxMcpTokensOverride: user.mcpTokenLimit,
+        });
+        if (violation) {
+          return res.status(403).json({
+            message: message ?? violation.message,
+            code: violation.code,
+            limit: violation.limit,
+            current: violation.current,
           });
-          if (activeCount >= limit.maxConcurrentSessions) {
-            return res.status(403).json({
-              message:
-                message ??
-                `Concurrent session limit reached (${limit.maxConcurrentSessions}). Upgrade your plan to run more sessions in parallel.`,
-              code: "PLAN_LIMIT_CONCURRENT_SESSIONS",
-              limit: limit.maxConcurrentSessions,
-              current: activeCount,
-            });
-          }
-          break;
         }
-
-        case "sessions": {
-          if (limit.maxSessionsPerPeriod > 0) {
-            const periodStart = user.creditsPeriodStart ?? new Date(0);
-            const periodCount = await Sessions.countDocuments({
-              workspaceId: { $in: workspaceIds },
-              createdAt: { $gte: periodStart },
-            });
-            if (periodCount >= limit.maxSessionsPerPeriod) {
-              return res.status(403).json({
-                message:
-                  message ??
-                  `Session limit reached for this period (${limit.maxSessionsPerPeriod}). Upgrade your plan for unlimited sessions.`,
-                code: "PLAN_LIMIT_SESSIONS",
-                limit: limit.maxSessionsPerPeriod,
-                current: periodCount,
-              });
-            }
-          }
-          break;
-        }
-
-        case "workspaces": {
-          const workspaceCount = userWorkspaces.length;
-          if (workspaceCount >= limit.maxWorkspaces) {
-            return res.status(403).json({
-              message:
-                message ??
-                `Workspace limit reached (${limit.maxWorkspaces}). Upgrade your plan for more workspaces.`,
-              code: "PLAN_LIMIT_WORKSPACES",
-              limit: limit.maxWorkspaces,
-              current: workspaceCount,
-            });
-          }
-          break;
-        }
-
-
-        case "mcp_tokens": {
-          const tokenCount = (user.configs?.mcpTokens ?? []).length;
-          // Admin override: if mcpTokenLimit is set on the user, use it instead of the plan limit.
-          const maxTokens = user.mcpTokenLimit ?? limit.maxMcpTokens;
-          if (tokenCount >= maxTokens) {
-            return res.status(403).json({
-              message:
-                message ??
-                `MCP token limit reached (${maxTokens}). Upgrade your plan for more MCP tokens.`,
-              code: "PLAN_LIMIT_MCP_TOKENS",
-              limit: maxTokens,
-              current: tokenCount,
-            });
-          }
-          break;
-        }
-
-
-        case "agent_iterations": {
-          // This is enforced at the agent level; here we just expose the limit.
-          res.locals.planLimits = limit;
-          break;
-        }
-
-        default:
-          break;
       }
 
       // Expose plan limits to downstream handlers.

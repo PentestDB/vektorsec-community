@@ -48,6 +48,12 @@ export interface UserDoc extends mongoose.Document {
    blockedReason?: string;
   /** Optional admin override for the MCP token limit (overrides plan limit). */
   mcpTokenLimit?: number;
+  /**
+   * Incremented whenever every existing login must be revoked (password reset,
+   * account block, "log out everywhere"). Sessions store the value they were
+   * issued with — see `services/session.auth.ts` and `VerifySession`.
+   */
+  sessionVersion?: number;
 
 
    ipLocation: {
@@ -119,6 +125,11 @@ const UserSchema = new Schema({
   blockedReason: { type: String },
   /** Optional admin override for the MCP token limit (overrides plan limit). */
   mcpTokenLimit: { type: Number },
+  /**
+   * Starts at 0. Bumping it invalidates every session issued earlier (password
+   * reset, admin block, "log out everywhere") — see `services/session.auth.ts`.
+   */
+  sessionVersion: { type: Number, default: 0 },
 
   ipLocation: {
 

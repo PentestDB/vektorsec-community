@@ -169,6 +169,14 @@ const uploadCsvMiddleware = multer({ fileFilter: csvFileFilter });
 const uploadOpenVPNMiddleware = multer({ fileFilter: openVPNFileFilter });
 const uploadMiddleware = multer({});
 
+// Session chat attachments: accept any file type up to 50MB in memory, then
+// the controller validates and persists it. A hard size limit keeps a single
+// oversized attachment from exhausting the process heap.
+const uploadSessionAttachmentMiddleware = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
+
 export {
   uploadImageMiddleware,
   uploadDocumentMiddleware,
@@ -176,4 +184,5 @@ export {
   uploadCsvMiddleware,
   uploadOpenVPNMiddleware,
   uploadMiddleware,
+  uploadSessionAttachmentMiddleware,
 };

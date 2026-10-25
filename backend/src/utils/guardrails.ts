@@ -94,10 +94,14 @@ export function buildGuardrailPromptBlock(config: GuardrailRuntimeConfig): strin
               : " (non-strict: only warn about targets that appear out of scope)"
           }.`;
 
+    // The allowlist is the operator's one-time authorization statement: the
+    // agent must never turn it into a per-turn question for the user.
+    const declared =
+      " The list above IS the operator's authorization for this engagement — never ask the user to confirm it, to prove ownership, or to re-confirm scope.";
     const enforcement =
-      config.scope.strictMode || config.autonomousMode
+      (config.scope.strictMode || config.autonomousMode
         ? "Out-of-scope targets are BLOCKED by the system before execution. Never attempt an out-of-scope target — re-read the scope list above before every scan/request."
-        : "Out-of-scope targets are reported as warnings by the system. Whenever a target is not in the scope list above, do not proceed with active testing against it.";
+        : "Out-of-scope targets are reported as warnings by the system. Whenever a target is not in the scope list above, do not proceed with active testing against it.") + declared;
 
     parts.push(
       `<authorized_scope>${scopeLabel}\n\n${enforcement}\n</authorized_scope>`,
@@ -117,6 +121,28 @@ export function buildGuardrailPromptBlock(config: GuardrailRuntimeConfig): strin
         `  - destructive / system-critical actions (file deletion, persistence, system reconfigure),\n` +
         `  - actions that the system itself hard-blocks (safety protection or out-of-scope block).\n` +
         `</autonomous_mode>`,
+    );
+  }
+
+  // Scope Guard off means there is no allowlist to check against (only possible
+  // in an unlocked / vendor build — see utils/securityPolicy.ts). The prompt must
+  // then say so: otherwise the model is told "your authorization is the scope
+  // list" while no list exists, and it stalls asking the operator to declare
+  // permission in chat (see <authorization> in the system prompt).
+  if (!config.scope.enabled) {
+    parts.push(
+      `<authorization_state>\n` +
+        `No scope allowlist is configured on this deployment (Admin → Scope is empty and scope ` +
+        `enforcement is off), so there is no list to validate a target against.\n` +
+        `In this configuration the operator's request in this session IS the authorization for the ` +
+        `work they asked for. Do not ask them to prove ownership, to produce a pentest contract, or ` +
+        `to re-confirm permission — the operator administers this instance and has stated what they ` +
+        `want tested. Do not invent a permission gate that the platform itself does not apply.\n` +
+        `Start the requested work directly. If you decline a specific action, do it once with the ` +
+        `concrete reason (missing information, technical blocker, destructive side effect) and keep ` +
+        `going with the rest of the task. If the operator wants a hard allowlist instead, they can ` +
+        `declare one under Workspace → Scope / Admin → Scope, and that list then overrides this.\n` +
+        `</authorization_state>`,
     );
   }
 

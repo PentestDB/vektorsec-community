@@ -7,7 +7,7 @@ import SessionsModel, {
   SwarmStatus,
 } from "../models/Sessions/Sessions.model";
 import { ShellManager } from "./shell.manager";
-import { SSEWriter, buildTraceTags, trackTokens } from "./agent.service";
+import { SSEWriter, buildTraceTags, trackTokens, loadSessionWorkspaceGuardrails } from "./agent.service";
 
 import { SubagentManager } from "./subagent.manager";
 import { FindingsBus, Finding } from "./findings-bus";
@@ -38,6 +38,8 @@ import { getModelContextLimit } from "../utils/modelMetadata";
 import { parseToolArguments } from "../utils/toolArguments";
 import { executeWithTimeout } from "../utils/executeWithTimeout";
 import { normalizeMaxSwarmIterations, DEFAULT_MAX_SWARM_ITERATIONS } from "../utils/agentConfig";
+import { buildGuardrailPromptBlock } from "../utils/guardrails";
+import type { GuardrailRuntimeConfig } from "../utils/guardrails";
 
 
 const DEFAULT_SWARM_TIMEOUT_MS = 15 * 60 * 1000;
@@ -277,6 +279,7 @@ export class SwarmManager extends EventEmitter {
     modelPresets?: ModelPreset[];
     ctfContext?: CtfSwarmContext;
     agentPromptConfig?: AgentPromptConfig;
+    guardrails?: GuardrailRuntimeConfig;
     maxIterations?: number;
   }): Promise<string> {
     const swarmId = `swarm_${uuidv4().slice(0, 8)}`;
@@ -367,6 +370,7 @@ export class SwarmManager extends EventEmitter {
       userId,
       abortSignal: abortCtrl.signal,
       agentPromptConfig: params.agentPromptConfig,
+      guardrails: params.guardrails,
       ctfContext: params.ctfContext,
       maxIterations,
     })
@@ -398,6 +402,7 @@ export class SwarmManager extends EventEmitter {
     abortSignal: AbortSignal;
     ctfContext?: CtfSwarmContext;
     agentPromptConfig?: AgentPromptConfig;
+    guardrails?: GuardrailRuntimeConfig;
     engagementState?: EngagementState;
     maxIterations?: number;
   }): Promise<void> {
@@ -424,6 +429,7 @@ export class SwarmManager extends EventEmitter {
         engagementState: engState,
         ctfContext: params.ctfContext,
         agentPromptConfig: params.agentPromptConfig,
+        guardrails: params.guardrails,
         maxIterations,
       }),
     );
@@ -534,6 +540,7 @@ export class SwarmManager extends EventEmitter {
     abortSignal: AbortSignal;
     ctfContext?: CtfSwarmContext;
     agentPromptConfig?: AgentPromptConfig;
+    guardrails?: GuardrailRuntimeConfig;
     resumeMessages?: AgentMessageDoc[];
     engagementState?: EngagementState;
     maxIterations?: number;
@@ -544,6 +551,14 @@ export class SwarmManager extends EventEmitter {
     } = params;
     const { agentId, task, context, modelLabel, preset } = agent;
     const maxIterations = normalizeMaxSwarmIterations(params.maxIterations);
+
+    // Racers must run under the *same* authorization + scope policy as the
+    // orchestrator. Without this they neither see the scope statement in their
+    // system prompt nor enforce the workspace allowlist in their tool calls
+    // (ctx.guardrails would be undefined and handlers would fall back to the
+    // global default), so a strict workspace scope would be silently skipped.
+    const guardrails: GuardrailRuntimeConfig =
+      params.guardrails ?? (await loadSessionWorkspaceGuardrails(this.sessionId)).guardrails;
 
 
     const providerConfig = await buildProviderConfig(preset);
@@ -580,20 +595,27 @@ ITERATION EFFICIENCY:
 - Prioritize high-impact actions: exploit first, enumerate only what's necessary.
 </racer_mode>`;
 
+    // Same scope/authorization statement the orchestrator gets, so a racer never
+    // asks the operator to prove authorization and never scans out of scope.
+    const guardrailBlock = buildGuardrailPromptBlock(guardrails);
+
     let systemContent: string;
     if (params.agentPromptConfig) {
-      systemContent = buildSystemPrompt(params.agentPromptConfig) + racerSuffix;
+      systemContent = buildSystemPrompt(params.agentPromptConfig) + racerSuffix + guardrailBlock;
     } else if (params.ctfContext) {
-      systemContent = buildCtfSwarmPrompt({ modelLabel, winCondition, envInfo: this.envInfo, ctfContext: params.ctfContext });
+      systemContent =
+        buildCtfSwarmPrompt({ modelLabel, winCondition, envInfo: this.envInfo, ctfContext: params.ctfContext }) +
+        guardrailBlock;
     } else {
-      systemContent = buildSwarmAgentPrompt({
-        goal,
-        task: fullTask,
-        modelLabel,
-        winCondition,
-        parentSessionId: this.sessionId,
-        envInfo: this.envInfo,
-      });
+      systemContent =
+        buildSwarmAgentPrompt({
+          goal,
+          task: fullTask,
+          modelLabel,
+          winCondition,
+          parentSessionId: this.sessionId,
+          envInfo: this.envInfo,
+        }) + guardrailBlock;
     }
 
     let messages: AgentMessageDoc[];
@@ -632,6 +654,7 @@ ITERATION EFFICIENCY:
       sessionId: this.sessionId,
       agentId,
       agentRole: "swarm_agent",
+      guardrails,
       engagementState: params.engagementState,
       runCommand: (cmd, timeoutMs) =>
         this.shellManager.execInShell(cmd, timeoutMs, onChunk, abortSignal),
