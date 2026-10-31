@@ -8,7 +8,7 @@
  * show license state, save a pasted license key).
  */
 
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -35,7 +35,14 @@ const net = require("node:net");
 const http = require("node:http");
 
 const { startBackend, stopBackend, startFrontend, stopFrontend, readLicensePublicKey } = require("./backend-runner");
-const { startLocalDb, stopLocalDb } = require("./local-db");
+const { startLocalDb, stopLocalDb, MONGO_PORT, REDIS_PORT } = require("./local-db");
+const {
+  findBusyPorts,
+  isPortBusy,
+  isLocalDbOwned,
+  buildConflictDialog,
+  buildForeignDbDialog,
+} = require("./port-guard");
 const { getLicenseInfo } = require("./drm-ipc");
 
 const FRONTEND_PORT = Number(process.env.FRONTEND_PORT || 3001);
@@ -144,7 +151,83 @@ function registerIpc() {
   });
 }
 
-app.whenReady().then(async () => {
+/**
+ * Persist boot problems next to the child-process logs: a packaged Windows GUI
+ * app has no console, so a failed start would otherwise leave no trace behind.
+ */
+function logStartupProblem(message) {
+  console.error(message);
+  try {
+    const dir = path.join(app.getPath("userData"), "logs");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.appendFileSync(path.join(dir, "startup.log"), `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    /* logging must never break the boot */
+  }
+}
+
+/** Refuse to start, with an explanation, instead of opening another app's UI. */
+function abortWithDialog(content) {
+  logStartupProblem(`${content.title} - ${content.message}`);
+  try {
+    dialog.showErrorBox(content.title, `${content.message}\n\n${content.detail}`);
+  } catch {
+    /* no display available */
+  }
+  app.quit();
+}
+
+async function boot() {
+  // Dialogs and app.getPath() require a ready Electron app.
+  await app.whenReady();
+
+  // ── Port guard ──────────────────────────────────────────────────────────
+  // The desktop app and both compose files publish the same ports (3001, 8081,
+  // 27017, 6379). With the Docker stack up, our gateway dies with EADDRINUSE
+  // and the window would show the *Docker* UI backed by the *Docker* database —
+  // the login then fails with a 401 that looks like a wrong password. Fail
+  // loudly instead of guessing.
+  const busyServicePorts = await findBusyPorts([FRONTEND_PORT, BACKEND_PORT]);
+  if (busyServicePorts.length > 0) {
+    abortWithDialog(
+      buildConflictDialog({
+        busyPorts: busyServicePorts,
+        frontendPort: FRONTEND_PORT,
+        backendPort: BACKEND_PORT,
+      }),
+    );
+    return;
+  }
+
+  const userDataDir = app.getPath("userData");
+
+  // 27017/6379 may legitimately be reused (scripts/local-db.ps1 started them and
+  // wrote a pid file). Anything else on those ports means the app is about to
+  // write into somebody else's database - ask before doing that.
+  const foreignMongo = (await isPortBusy(MONGO_PORT)) && !isLocalDbOwned({ userDataDir, name: "mongod" });
+  const foreignRedis = (await isPortBusy(REDIS_PORT)) && !isLocalDbOwned({ userDataDir, name: "redis" });
+  if (foreignMongo || foreignRedis) {
+    const content = buildForeignDbDialog({
+      mongo: foreignMongo,
+      redis: foreignRedis,
+      ports: { mongo: MONGO_PORT, redis: REDIS_PORT },
+    });
+    logStartupProblem(`${content.title} - ${content.message}`);
+    const choice = dialog.showMessageBoxSync({
+      type: "warning",
+      title: content.title,
+      message: content.message,
+      detail: content.detail,
+      buttons: ["Continue", "Quit"],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (choice !== 0) {
+      app.quit();
+      return;
+    }
+  }
+
   // MongoDB + Redis: start the portable local runtime when it is installed and
   // nothing is listening yet. Without them the backend exits in a restart loop
   // and the UI shows "Gateway upstream error" on the login page.
@@ -196,7 +279,29 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-});
+}
+
+// A second copy would fight the first one for 3001/8081/27017 — keep one stack
+// per machine and just bring the existing window forward.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+
+  boot().catch((error) => {
+    abortWithDialog({
+      title: "VektorSec failed to start",
+      message: error && error.message ? error.message : String(error),
+      detail:
+        "See backend.log / frontend.log / startup.log in the app data folder " +
+        "(%APPDATA%\\VektorSec\\logs).",
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
