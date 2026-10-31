@@ -307,6 +307,35 @@ powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 doctor   # ต
 `http://127.0.0.1:3001` ถ้าเบราว์เซอร์ resolve `localhost` เป็น `::1` แล้วต่อไม่ติด
 และเครื่องอื่นในวงเดียวกันจะเข้าด้วย `localhost` ไม่ได้ตามการตั้งค่านี้
 
+### Q: ใช้แอป desktop (`release\`) กับ Docker stack พร้อมกันได้ไหม
+
+**ไม่ได้** — ทั้งสองฝั่งใช้พอร์ตชุดเดียวกัน: `3001` (gateway), `8081` (backend),
+`27017` (MongoDB), `6379` (Redis) จึงต้องเลือกทีละโหมด
+
+อาการที่เจอเมื่อเปิดแอปขณะ Docker รันอยู่ (ดูได้ใน `%APPDATA%\VektorSec\logs\`):
+
+```
+frontend.log  Error: listen EADDRINUSE: address already in use 127.0.0.1:3001
+backend.log   mongodb connected  {"host":"mongodb://127.0.0.1:27017/vektorsec"}   ← คือ Mongo ของ Docker
+audit log     auth.login_failed  reason=invalid_password  UA=…Electron…            ← 401 ทั้งที่รหัสถูก
+```
+
+เพราะ gateway ของแอปสตาร์ทไม่ได้ และ backend ของแอปไปต่อ **ฐานข้อมูลของ Docker**
+ทำให้รหัส admin ของแอป (`MyStrongPass!2026` — ดู `release\note.txt`) ไม่ตรงกับ hash ใน DB นั้น
+
+สลับโหมดด้วยสคริปต์ (ปิดฝั่งหนึ่งให้อัตโนมัติ):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\app-stack.ps1 up      # ปิด Docker -> เปิด MongoDB/Redis ของแอป -> เปิด VektorSec.exe
+powershell -ExecutionPolicy Bypass -File scripts\app-stack.ps1 status  # ดู process/พอร์ต/container
+powershell -ExecutionPolicy Bypass -File scripts\app-stack.ps1 down    # ปิดแอป + DB ของแอป -> คืนพอร์ตให้ Docker
+powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 up   # กลับไปโหมด Docker
+```
+
+> บิลด์ที่สร้างจากซอร์สชุดปัจจุบันจะมี **port guard** ในตัว (`electron/port-guard.js`):
+> ถ้า 3001/8081 ถูกใช้อยู่ แอปจะขึ้นกล่องข้อความอธิบายแล้วปิดตัวเอง แทนที่จะเปิด UI
+> ของ stack อื่นแบบเงียบ ๆ — และจะเตือนด้วยถ้า MongoDB/Redis บนเครื่องไม่ใช่ตัวของแอป
+
 ### Q: บริการ (เช่น redis) ไม่ start หรือ exit ทันที (พอร์ตชนกัน)
 
 การรันสอง stack พร้อมกัน (`vektorsec` และ `vektorsec-community`) ใช้พอร์ตเดียวกัน

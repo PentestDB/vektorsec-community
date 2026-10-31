@@ -309,6 +309,37 @@ Note: compose publishes the ports on `127.0.0.1` (IPv4) only — open
 `http://127.0.0.1:3001` if your browser resolves `localhost` to `::1` and fails,
 and other machines on the LAN cannot reach the stack under this binding.
 
+### Q: Can the desktop app (`release\`) and the Docker stack run at the same time?
+
+**No** — both sides need the same ports: `3001` (gateway), `8081` (backend),
+`27017` (MongoDB), `6379` (Redis). Pick one mode at a time.
+
+What happens when the app is started while Docker is up (see `%APPDATA%\VektorSec\logs\`):
+
+```
+frontend.log  Error: listen EADDRINUSE: address already in use 127.0.0.1:3001
+backend.log   mongodb connected  {"host":"mongodb://127.0.0.1:27017/vektorsec"}   <- this is Docker's Mongo
+audit log     auth.login_failed  reason=invalid_password  UA=...Electron...       <- 401 although the password is right
+```
+
+The app's own gateway cannot bind 3001 and its backend attaches to the **Docker**
+database, so the app's admin password (`MyStrongPass!2026` - see `release\note.txt`)
+does not match the hash stored there.
+
+Switch modes with the helper (it stops the other side for you):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\app-stack.ps1 up      # stop Docker -> start the app's MongoDB/Redis -> launch VektorSec.exe
+powershell -ExecutionPolicy Bypass -File scripts\app-stack.ps1 status  # processes / ports / containers
+powershell -ExecutionPolicy Bypass -File scripts\app-stack.ps1 down    # close the app + its DB -> ports back to Docker
+powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 up   # back to the Docker stack
+```
+
+> Builds made from the current source also ship a **port guard**
+> (`electron/port-guard.js`): when 3001/8081 are taken the app explains the
+> conflict and quits instead of silently showing another stack's UI, and it warns
+> when the MongoDB/Redis on the machine is not the app's own.
+
 ### Q: A service (e.g. redis) does not start or exits immediately (port conflict)
 
 Running two VektorSec stacks at the same time (`vektorsec` and `vektorsec-community`)
