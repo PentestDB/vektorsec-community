@@ -40,6 +40,15 @@ id_ed25519
 **/.unlock-master-key
 **/.vektorsec/
 
+# ── Standalone desktop / DRM ────────────────────────────────────────────────
+# electron/license-public-key.pem is the *public* half and must stay tracked:
+# electron-builder.yml ships it through extraResources and the backend needs it
+# to verify HWID-bound licenses offline. Only private material is ignored here.
+/electron/license-private-key.pem
+/electron/*private*.pem
+/backend/native/build/
+/release/
+
 # ── Launcher / run.sh generated state ──────────────────────────────────────
 .run.conf
 .run-state
@@ -49,6 +58,9 @@ backend/mptest.js
 
 # ── Dependencies ───────────────────────────────────────────────────────────
 **/node_modules/
+# Production-only dependency trees staged for the installer (scripts/stage-deps.mjs)
+.stage/
+
 .pnpm-store/
 
 # ── Build artifacts ────────────────────────────────────────────────────────

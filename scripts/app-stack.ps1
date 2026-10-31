@@ -110,19 +110,20 @@ function Resolve-AppExe {
     return (Resolve-Path -LiteralPath $Exe).Path
   }
 
-  foreach ($candidate in @("release\unpack\VektorSec.exe", "release\win-unpacked\VektorSec.exe")) {
-    $full = Join-Path $RepoRoot $candidate
-    if (Test-Path $full) { return $full }
-  }
-
   $releaseDir = Join-Path $RepoRoot "release"
+  $candidates = @()
   if (Test-Path $releaseDir) {
-    $found = Get-ChildItem -Path $releaseDir -Recurse -Filter "VektorSec.exe" -ErrorAction SilentlyContinue |
-      Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if ($found) { return $found.FullName }
+    $candidates = @(Get-ChildItem -Path $releaseDir -Recurse -Filter "VektorSec.exe" -ErrorAction SilentlyContinue)
   }
 
-  throw "VektorSec.exe not found under release\. Build it first: npm run package:win:nosign"
+  if ($candidates.Count -eq 0) {
+    throw "VektorSec.exe not found under release\. Build it first: npm run package:win:nosign"
+  }
+
+  # `release\win-unpacked` (fresh electron-builder output) and `release\unpack`
+  # (a hand-unpacked copy) can both exist; the newest binary is the real one -
+  # otherwise a rebuild would be silently ignored in favour of the stale folder.
+  return ($candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
 }
 
 function Invoke-LocalDb([string]$LocalDbAction) {

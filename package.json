@@ -13,9 +13,9 @@
     "electron:dev": "electron .",
     "electron:start": "electron .",
     "stage:deps": "node scripts/stage-deps.mjs",
-    "dist": "npm run stage:deps && electron-builder --win nsis",
-    "package:win": "npm run stage:deps && electron-builder --win nsis --publish never",
-    "package:win:nosign": "npm run stage:deps && electron-builder --win nsis --publish never --config.win.signAndEditExecutable=false",
+    "dist": "npm run build:frontend && npm run build:backend && npm run stage:deps && electron-builder --win nsis",
+    "package:win": "npm run build:frontend && npm run build:backend && npm run stage:deps && electron-builder --win nsis --publish never",
+    "package:win:nosign": "npm run build:frontend && npm run build:backend && npm run stage:deps && electron-builder --win nsis --publish never --config.win.signAndEditExecutable=false",
     "build:backend": "cd backend && node node_modules/typescript/lib/tsc.js -p tsconfig.json",
     "build:frontend": "cd frontend && npm run build",
     "build:native": "cd backend/native && node-gyp rebuild"

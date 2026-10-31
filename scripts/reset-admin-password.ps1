@@ -179,6 +179,20 @@ const bcrypt = hasher;
 $backend = Resolve-BackendContainer
 Write-Step "Backend container: $backend"
 
+# The backend source tree lives at /app/backend in some images and
+# /usr/src/backend in the production one (see backend/Dockerfile) - probe
+# instead of hardcoding, otherwise `docker exec -w` fails with chdir error.
+$backendRoot = "/app/backend"
+$probe = Invoke-NativeCapture -FilePath "docker" -Arguments @(
+  "exec", $backend, "sh", "-c",
+  "test -d /app/backend && echo /app/backend || (test -d /usr/src/backend && echo /usr/src/backend || echo /)"
+)
+if ($probe.ExitCode -eq 0 -and $probe.Output) {
+  $detected = ($probe.Output | Select-Object -Last 1)
+  if ($detected) { $backendRoot = "$detected".Trim() }
+}
+Write-Ok "backend root inside the container: $backendRoot"
+
 $tmpScript = Join-Path $env:TEMP "vektorsec-reset-admin.js"
 Set-Content -LiteralPath $tmpScript -Value $AdminScript -Encoding ASCII
 
@@ -192,7 +206,7 @@ if ($copy.ExitCode -ne 0) {
 try {
   if ($List) {
     Write-Step "Accounts in MongoDB"
-    $listArgs = @("exec", "-w", "/app/backend", "-e", "NODE_PATH=/app/backend/node_modules", "-e", "RESET_MODE=list", $backend, "node", $containerScript)
+    $listArgs = @("exec", "-w", $backendRoot, "-e", "NODE_PATH=$backendRoot/node_modules", "-e", "RESET_MODE=list", $backend, "node", $containerScript)
     $result = Invoke-NativeCapture -FilePath "docker" -Arguments $listArgs
     if ($result.ExitCode -ne 0) {
       Write-Fail ($result.Output -join "`n")
@@ -216,8 +230,8 @@ try {
 
   Write-Step "Updating the password hash for $Email"
   $resetArgs = @(
-    "exec", "-w", "/app/backend",
-    "-e", "NODE_PATH=/app/backend/node_modules",
+    "exec", "-w", $backendRoot,
+    "-e", "NODE_PATH=$backendRoot/node_modules",
     "-e", "RESET_MODE=reset",
     "-e", "RESET_EMAIL=$Email",
     "-e", "RESET_PASSWORD=$newPassword",
