@@ -51,6 +51,7 @@ export default {
   },
   "nav": {
     "home": "หน้าแรก",
+    "backHome": "กลับหน้าแรก",
     "pricing": "ราคา",
     "topUp": "เติมเครดิต",
     "docs": "เอกสาร",

@@ -51,6 +51,7 @@ export default {
   },
   "nav": {
     "home": "Home",
+    "backHome": "Back to home",
     "pricing": "Pricing",
     "topUp": "Top Up",
     "docs": "Docs",

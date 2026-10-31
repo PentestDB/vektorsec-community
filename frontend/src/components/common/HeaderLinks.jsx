@@ -10,7 +10,7 @@ import { useMutation } from "react-query";
 import Link from "next/link";
 import { RiLogoutCircleRLine, RiSettings3Line } from "react-icons/ri";
 import { FaGithub } from "react-icons/fa";
-import { FiFlag } from "react-icons/fi";
+import { FiFlag, FiHome } from "react-icons/fi";
 import {
   CheckCircleFilled,
   ClockCircleOutlined,
@@ -140,6 +140,13 @@ const HeaderLinks = ({ sessionId, sessionName, sessionInfo, logoVisible = true }
           </div>
           <div className={styles.username}>{user.name}</div>
           <LanguageSwitcher className={styles.headerIconBtn} />
+          <button
+            className={styles.headerIconBtn}
+            onClick={() => router.push("/")}
+            title={t("nav.backHome")}
+          >
+            <FiHome />
+          </button>
           <a
             href="https://github.com/PentestDB"
             target="_blank"

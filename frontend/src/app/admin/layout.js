@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { checkSession, logoutUser } from "@/services/auth.service";
+import { useTranslation } from "@/i18n/I18nProvider";
 import styles from "./admin.module.scss";
 
 // Admin page styles are imported here (side-effect) so every admin sub-page
@@ -21,6 +22,20 @@ import "@/components/pages/SystemHealthPage.module.scss";
 // Surrogate-pair emoji break when copied/pasted between editors, so we stick
 // to safe BMP symbols (U+00A4 ... U+271B).
 const MENU_GROUPS = [
+  {
+    // Direct way back to the public site — the admin shell used to trap the
+    // operator inside /admin unless they typed the landing URL by hand.
+    title: "Site",
+    items: [
+      {
+        href: "/",
+        label: "Back to Home",
+        labelKey: "nav.backHome",
+        icon: "\u2190",
+        exact: true,
+      },
+    ],
+  },
   {
     title: "Overview",
     items: [
@@ -73,6 +88,7 @@ const MENU_GROUPS = [
 export default function AdminLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
@@ -144,8 +160,10 @@ export default function AdminLayout({ children }) {
               <div key={group.title} className={styles.navGroup}>
                 <div className={styles.navGroupTitle}>{group.title}</div>
                 {group.items.map((item) => {
-                  const isActive =
-                    pathname === item.href || pathname.startsWith(item.href + "/");
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname === item.href ||
+                      pathname.startsWith(item.href + "/");
                   return (
                     <Link
                       key={item.href}
@@ -155,7 +173,7 @@ export default function AdminLayout({ children }) {
                       }`}
                     >
                       <span className={styles.navIcon}>{item.icon}</span>
-                      <span>{item.label}</span>
+                      <span>{item.labelKey ? t(item.labelKey) : item.label}</span>
                     </Link>
                   );
                 })}

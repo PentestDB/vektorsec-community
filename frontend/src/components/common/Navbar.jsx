@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import CopilotLogo from "./CopilotLogo";
 import { checkSession, logoutUser } from "@/services/auth.service";
 import { getMenuItems } from "@/services/menu.service";
+import { withHomeLink } from "@/utils/navMenus";
 import { useTranslation } from "@/i18n/I18nProvider";
 import LanguageSwitcher from "@/i18n/LanguageSwitcher";
 
@@ -70,10 +71,7 @@ const Navbar = ({ nobg }) => {
     let cancelled = false;
     getMenuItems()
       .then((data) => {
-        if (!cancelled)
-          setCustomMenus(
-            Array.isArray(data?.menus) ? data.menus : DEFAULT_MENUS
-          );
+        if (!cancelled) setCustomMenus(withHomeLink(data?.menus, DEFAULT_MENUS));
       })
       .catch(() => {
         if (!cancelled) setCustomMenus(DEFAULT_MENUS);

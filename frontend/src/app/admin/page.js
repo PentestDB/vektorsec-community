@@ -254,9 +254,14 @@ const AdminLogin = () => {
         )}
 
         {!twoFactorStep && !twoFactorSetup && (
-          <Link href="/login" className={styles.loginLink}>
-            Back to user login
-          </Link>
+          <>
+            <Link href="/login" className={styles.loginLink}>
+              Back to user login
+            </Link>
+            <Link href="/" className={styles.loginLink}>
+              Back to home
+            </Link>
+          </>
         )}
       </div>
     </div>
