@@ -81,6 +81,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Changed
 
+- **Docker images are versioned**: `docker-compose.yml` / `docker-compose.kali.yml` tag the images
+  with the app version (`vektorsec-backend:1.0.1`, `vektorsec-frontend:0.1.1`) and pass it as the
+  `APP_VERSION` build arg, which becomes the `org.opencontainers.image.version` label plus an
+  `APP_VERSION` env var — so `docker compose images` and `docker exec <container> env | grep
+  APP_VERSION` show which build a container is running. Versions bumped: backend `1.0.1`,
+  frontend `0.1.1`, desktop `1.0.1`. Both compose files already build from source, so a
+  `docker compose up -d --build` picks up every fix below.
 - **`backend/src/server.ts` is now only the process lifecycle**: HTTP wiring moved to
   `backend/src/app.ts` (`createApp()`), and the shared Redis client to
   `backend/src/utils/redis/client.ts` — importing the API no longer boots the server, which is
@@ -90,6 +97,22 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 
+- **Output files were validated as scan targets**: `extractTargets()` matched every `name.ext`
+  token against the domain regex, so `nmap -oN scan-fast.txt 10.0.0.5` was refused with
+  `Target scan-fast.txt is OUT OF SCOPE` — and so were `> out.txt`, `| tee out.log` and a URL path
+  such as `http://10.0.0.5/index.php` (matched `index.php`). Output-file flags (`-oN -oX -oG -oA
+  -oS -oJ -oH -oM`, `-o`, `--output`, `--outfile`, `--output-dir`, `-w`, `--log`, `--report`, …),
+  shell redirections (`>`, `>>`, `2>`, `2>&1`, `&>` — spaced and attached) and `tee` destinations
+  are now stripped before extraction, local paths are ignored and URLs are reduced to their host.
+  A value after an output flag that is *not* file-shaped is still validated, so a misplaced flag
+  cannot hide a real target (`backend/src/utils/scopeValidator.ts`,
+  `backend/tests/guardrails.test.ts`).
+- **SSRF blocks were reported as scope violations**: `blockedTargetResult()` now returns a second
+  line naming the real remedy (`SSRF_ENABLED=0` / Admin → Security) and states that adding the
+  target to the scope allowlist does not lift it; the Admin → Scope / Admin → Security hints and
+  the `guardrails.ssrfDetail` copy (en/th) say the same, so an allowlisted internal target no
+  longer reads as *"my scope entry was not saved"* (`backend/src/utils/ssrfGuard.ts`,
+  `frontend/src/components/pages/AdminSettingsPage.jsx`, `frontend/src/i18n/locales/*.js`).
 - **Connecting a VPN profile returned an opaque `400` with no cause**: `POST /copilot/vpn/connect`
   resolved the session work host inside its outer `try`, so a session with no workspace (or an
   unresolvable workspace / SSH profile) fell through to the generic *"Failed to connect VPN"* and the

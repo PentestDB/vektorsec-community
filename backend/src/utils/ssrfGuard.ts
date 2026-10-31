@@ -430,10 +430,25 @@ export async function assertCommandTargetsAreExternal(
   if (!result.allowed) throw new SsrfBlockedError(SSRF_BLOCK_ERROR);
 }
 
+/**
+ * Second line of {@link blockedTargetResult} output.
+ *
+ * The Scope Guard and SSRF protection are two independent checks that both
+ * print a `BLOCKED:` line, so an SSRF block on a private target is routinely
+ * misread as "my Admin > Scope entry was not saved". Spell the difference out
+ * where the block is reported, and keep the first line unchanged — the UI
+ * classifier (`ToolCallBlock.detectGuardrailNotice`) and the backend tests match
+ * on `SSRF_BLOCK_ERROR` alone.
+ */
+export const SSRF_BLOCK_HINT =
+  "This is SSRF protection, not the Scope Guard — adding the target to the scope allowlist " +
+  "does not lift it. Turn SSRF protection off under Admin > Security (SSRF_ENABLED=0) to scan " +
+  "lab / internal (RFC1918, loopback, link-local, cloud-metadata) targets.";
+
 /** Convenience `{ output, exitCode }` shape used by the agent tool handlers. */
 export function blockedTargetResult(): { output: string; exitCode: number } {
   return {
-    output: `BLOCKED: ${SSRF_BLOCK_ERROR}`,
+    output: `BLOCKED: ${SSRF_BLOCK_ERROR}\n${SSRF_BLOCK_HINT}`,
     exitCode: 1,
   };
 }

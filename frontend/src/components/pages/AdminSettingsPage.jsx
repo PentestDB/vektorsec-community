@@ -839,7 +839,7 @@ const AdminSettingsPage = () => {
             )}
             {renderField(
               "Allowed Targets",
-              "One per line or comma/space separated: IP, CIDR or domain.",
+              "One per line or comma/space separated: IP, CIDR or domain. Private / RFC1918 entries (e.g. 192.168.x.x, 10.x.x.x) still need SSRF Protection turned off under Admin → Security — that is a separate guard from this allowlist.",
               <textarea
                 className={styles.textarea}
                 rows={8}

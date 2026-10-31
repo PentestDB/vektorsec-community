@@ -81,16 +81,139 @@ function isSubdomainOf(sub: string, parent: string): boolean {
 const IP_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 const DOMAIN_REGEX = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b/g;
 
+/**
+ * Flags whose value is a **local output file**, never a scan target.
+ *
+ * Without this list `nmap -oN scan-fast.txt 10.0.0.5` was read as "scan the
+ * domain `scan-fast.txt`" — a file name looks exactly like a domain to
+ * {@link DOMAIN_REGEX} — and the command was blocked as OUT OF SCOPE.
+ *
+ *   nmap    : -oN -oX -oG -oA -oS -oJ -oH -oM
+ *   masscan : -oB -oJ -oG -oL -oX
+ *   ffuf/sqlmap/naabu/curl : -o / --output / -w
+ *   generic : --out*, --log*, --save*, --report*
+ */
+const OUTPUT_FILE_FLAGS = new Set<string>([
+  "-on", "-ox", "-og", "-oa", "-os", "-oj", "-oh", "-om", "-ob", "-ol",
+  "-o", "-of", "-output", "--output", "--output-file", "--output-dir",
+  "--out", "--outfile", "--out-file", "--write", "--write-out",
+  "--log", "--log-file", "--save", "--save-to", "--report", "--report-file",
+  "--json-output", "--csv-output", "--html-output", "--xml-output",
+]);
+
+/** Programs whose next argument is a file the command writes to (`| tee out`). */
+const FILE_SINK_PROGRAMS = new Set<string>(["tee", "sponge"]);
+
+/** `>`, `>>`, `2>`, `2>>`, `&>` — the following token is a file. */
+const REDIRECT_OPERATOR = /^(?:\d?>>?|&>>?)$/;
+
+/** `>out.txt`, `2>err.log`, `&>all.log` — the file is attached to the operator. */
+const ATTACHED_REDIRECT = /^(?:\d?>>?|&>>?)(\S+)$/;
+
+function stripQuotes(value: string): string {
+  const v = value.trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"') && v.length > 1) ||
+    (v.startsWith("'") && v.endsWith("'") && v.length > 1)
+  ) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
+/**
+ * True when the value is a file system path / file name rather than a host.
+ * The extension must be alphabetic so a misused flag followed by a real IP
+ * (`-oN 192.168.1.1`) is still validated instead of silently dropped.
+ */
+function looksLikeFile(value: string): boolean {
+  const v = stripQuotes(value);
+  if (!v) return false;
+  if (v.includes("/") || v.includes("\\")) return true;
+  return /^[^.\s]*\.[a-z][a-z0-9]{0,9}$/i.test(v);
+}
+
+/**
+ * Reduce one shell token to the host it addresses, or `""` when it carries no
+ * network target (local path, output file, flag, operator, …).
+ */
+function hostFromToken(token: string): string {
+  const value = stripQuotes(token).replace(/^[("'`]+/, "").replace(/[)"'`,;]+$/, "");
+  if (!value) return "";
+
+  if (value.includes("://")) {
+    try {
+      return new URL(value).hostname;
+    } catch {
+      return "";
+    }
+  }
+
+  // `host/path`, `host:8080/path`, `192.168.1.1/login.php` → host only.
+  const hostWithPath = value.match(/^([A-Za-z0-9_.-]+)(?::\d+)?[/\\]/);
+  if (hostWithPath) return hostWithPath[1];
+
+  // `./out`, `../out`, `/root/pentest-workspaces/…` are files, not targets.
+  if (/^[.~]?[/\\]/.test(value)) return "";
+
+  return value;
+}
+
+/**
+ * Tokens of `command` that may address a network target, with every local file
+ * (output flags, redirect destinations, paths) removed.
+ */
+function hostTokens(command: string): string[] {
+  const kept: string[] = [];
+  let expectFile = false;
+
+  for (const token of command.split(/\s+/).filter(Boolean)) {
+    if (expectFile) {
+      expectFile = false;
+      if (looksLikeFile(token)) continue;
+    }
+
+    if (REDIRECT_OPERATOR.test(token)) {
+      expectFile = true;
+      continue;
+    }
+    if (ATTACHED_REDIRECT.test(token)) continue;
+
+    const eq = token.indexOf("=");
+    const flag = (eq > 0 ? token.slice(0, eq) : token).toLowerCase();
+
+    if (OUTPUT_FILE_FLAGS.has(flag)) {
+      if (eq < 0) expectFile = true; // --output out.txt
+      continue; //                       --output=out.txt
+    }
+    if (FILE_SINK_PROGRAMS.has(flag)) {
+      expectFile = true;
+      continue;
+    }
+    // nmap's attached form: -oNout.txt / -oXout.xml.
+    if (/^-o[a-z].+/i.test(token)) continue;
+
+    const host = hostFromToken(token);
+    if (host) kept.push(host);
+  }
+
+  return kept;
+}
+
 export function extractTargets(command: string): string[] {
   const targets = new Set<string>();
-  const ips = command.match(IP_REGEX) ?? [];
+  // Only the host part of each token is scanned: output file names, redirect
+  // destinations and local paths must never be validated as targets.
+  const scanned = hostTokens(command).join(" ");
+
+  const ips = scanned.match(IP_REGEX) ?? [];
   for (const ip of ips) {
     // Filter out obviously invalid IPs (octets > 255)
     if (ip.split(".").every((o) => parseInt(o, 10) <= 255)) {
       targets.add(ip);
     }
   }
-  const domains = command.match(DOMAIN_REGEX) ?? [];
+  const domains = scanned.match(DOMAIN_REGEX) ?? [];
   for (const d of domains) {
     targets.add(d);
   }

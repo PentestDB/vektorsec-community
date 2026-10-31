@@ -4,6 +4,14 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
+# Image metadata: lets `docker compose images` / `docker inspect` / `docker exec
+# <container> env | grep APP_VERSION` show which build is running (the compose
+# file tags the image with the same value).
+ARG APP_VERSION=1.0.1
+LABEL org.opencontainers.image.title="vektorsec-backend" \
+      org.opencontainers.image.version="${APP_VERSION}"
+ENV APP_VERSION="${APP_VERSION}"
+
 # Install build deps + Chromium runtime deps + VNC stack for Magnitude browser agent
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client make gcc g++ python3 openvpn iproute2 util-linux ca-certificates libnss3-tools \

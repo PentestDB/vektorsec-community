@@ -10,6 +10,7 @@ import {
   parseScopeString,
   createDefaultScopeConfig,
   buildScopeConfig,
+  extractTargets,
 } from "../src/utils/scopeValidator";
 import {
   getScopeGuardState,
@@ -99,6 +100,50 @@ test("validateCommandScope blocks out-of-scope targets and allows in-scope ones"
   assert.equal(validateCommandScope("nmap -sV 10.10.5.5", scope).allowed, true);
   assert.equal(validateCommandScope("nmap -sV 8.8.8.8", scope).allowed, false);
   assert.equal(validateCommandScope("nmap -sV sub.example.com", scope).allowed, true);
+});
+
+test("extractTargets ignores output files, redirects and local paths", () => {
+  const id = "8fa510b6-ae38-4609-a241-c62c3d9cc723";
+  // Field report: `-oN <uuid>-nmap-fast.txt` made the validator read the FILE
+  // NAME as a domain target and block the whole command as OUT OF SCOPE.
+  assert.deepEqual(
+    extractTargets(
+      `cd /root/pentest-workspaces/41067596-07da-470d-9697-87662b0c984a && nmap -Pn -T4 --top-ports 1000 --open -oN ${id}-nmap-fast.txt 192.168.1.1 2>&1`,
+    ),
+    ["192.168.1.1"],
+  );
+  assert.deepEqual(extractTargets("nmap 192.168.1.1 -oN scan-fast.txt"), ["192.168.1.1"]);
+  assert.deepEqual(extractTargets("nmap -oX out.xml -oA report 192.168.1.1"), ["192.168.1.1"]);
+  assert.deepEqual(extractTargets("nmap -oNscan.txt 192.168.1.1"), ["192.168.1.1"]);
+  assert.deepEqual(extractTargets("nmap 192.168.1.1 > scan.txt 2>&1"), ["192.168.1.1"]);
+  assert.deepEqual(extractTargets("nmap 192.168.1.1 >scan.txt"), ["192.168.1.1"]);
+  assert.deepEqual(extractTargets("nmap 192.168.1.1 | tee scan.log"), ["192.168.1.1"]);
+});
+
+test("extractTargets keeps real targets and reduces URLs to their host", () => {
+  assert.deepEqual(extractTargets("nmap -sV example.com"), ["example.com"]);
+  assert.deepEqual(extractTargets("curl -s http://192.168.1.1/index.php"), ["192.168.1.1"]);
+  assert.deepEqual(extractTargets("curl https://example.com:8443/admin/login.aspx"), ["example.com"]);
+  assert.deepEqual(
+    extractTargets("gobuster dir -u 10.10.0.5 -w /usr/share/wordlists/dirb/common.txt"),
+    ["10.10.0.5"],
+  );
+});
+
+test("an output-file name is not an out-of-scope target", () => {
+  const scope = {
+    enabled: true,
+    strictMode: true,
+    entries: parseScopeString("192.168.1.1"),
+  };
+  const cmd =
+    "cd /root/pentest-workspaces/41067596-07da-470d-9697-87662b0c984a && " +
+    "nmap -Pn -T4 --top-ports 1000 --open -oN 8fa510b6-ae38-4609-a241-c62c3d9cc723-nmap-fast.txt 192.168.1.1 2>&1";
+  const result = validateCommandScope(cmd, scope);
+  assert.equal(result.allowed, true, result.reason);
+  // …while a genuinely out-of-scope target in the same shape is still blocked.
+  const outside = cmd.replace("192.168.1.1", "8.8.8.8");
+  assert.equal(validateCommandScope(outside, scope).allowed, false);
 });
 
 test("Scope Guard cannot be disabled: SCOPE_ENABLED=0 is ignored", () => {

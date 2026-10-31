@@ -16,6 +16,10 @@ backend/model-registry.json
 *.key
 id_rsa
 id_ed25519
+# The DRM *public* verification key is not a secret: it ships with the app so a
+# license can be verified offline. The matching private key never leaves the
+# vendor, so only this public half is allowed through the *.pem rule above.
+!/electron/license-public-key.pem
 
 # Explicit safety net for the real (never-committed) secret files.
 # These are already caught by the globs above — listed on purpose so a
@@ -62,6 +66,19 @@ tsc-*.txt
 build-*.txt
 run-out.txt
 .clineignore
+
+# ── Electron packaging output & staging ─────────────────────────────────────
+# release/ holds the installer + the unpacked app (which contains a copy of
+# frontend/.env and the bundled runtime); .stage/ is the staged backend/frontend
+# tree used to build it. Both are build artifacts, never sources.
+/release/
+/.stage/
+/backend/native/build/
+*.node
+*.bak
+
+# ── Ad-hoc local scripts (never part of the product) ────────────────────────
+/delete_menus.js
 
 # ── Runtime / user data (Docker bind mounts — never versioned) ─────────────
 /kali-data/

@@ -1,0 +1,65 @@
+# electron-builder configuration for the VektorSec standalone desktop app.
+# Produces a Windows NSIS installer (.exe) that embeds the Electron/Node runtime
+# and runs the backend service natively — no Docker Desktop required.
+appId: com.vektorsec.desktop
+productName: VektorSec
+copyright: Copyright © PentestDB @ Developer By Raysiya
+
+afterPack: electron/after-pack.js
+
+directories:
+  output: release
+  buildResources: assets
+
+# Everything ships as real files on disk (`asar: false`): the two servers are
+# spawned as child processes, and a child started with ELECTRON_RUN_AS_NODE
+# cannot resolve `node_modules` from inside an asar archive.
+files:
+  - electron/**/*
+  - backend/dist/**/*
+  - backend/package.json
+  - frontend/.next/**/*
+  - frontend/server.js
+  - frontend/gateway/**/*
+  - frontend/next.config.*
+  - frontend/.env
+  - frontend/public/**/*
+  - frontend/package.json
+  - config.example.toml
+  # Portable MongoDB/Redis installer for the customer machine — the app starts
+  # the binaries it puts in %APPDATA%\VektorSec\runtime (electron/local-db.js).
+  - scripts/local-db.ps1
+  - "!**/*.map"
+  - "!**/tests/**"
+
+extraResources:
+  # The vendor's Ed25519 license public key — the backend verifies HWID-bound
+  # license keys offline against it.
+  - from: electron/license-public-key.pem
+    to: license-public-key.pem
+  # `files` never copies a node_modules tree that is not a dependency of this
+  # package.json, so the two servers get their dependencies from here.
+  # These come from `.stage/` (scripts/stage-deps.mjs): a production-only,
+  # hoisted (real directories, no pnpm junctions) install. Copying the pnpm tree
+  # directly shipped ABSOLUTE junctions into the build machine, so the installed
+  # app could not resolve a single module; it also dragged every devDependency
+  # (typescript, eslint, tsx...) into the installer.
+  - from: .stage/backend/node_modules
+    to: app/backend/node_modules
+  - from: .stage/frontend/node_modules
+    to: app/frontend/node_modules
+
+asar: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

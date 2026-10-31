@@ -16,7 +16,11 @@ services:
     restart: always
 
   backend:
-    build: ./backend
+    image: vektorsec-backend:1.0.1
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: "1.0.1"
     environment:
       MONGO_URI: mongodb://mongodb:27017/vektorsec
       REDIS_URL: redis://redis:6379
@@ -65,8 +69,11 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: vektorsec-frontend:0.1.1
     build:
       context: ./frontend
+      args:
+        APP_VERSION: "0.1.1"
     environment:
       PORT: 3001
       # Black-box gateway targets (server-side only — never reach the browser)

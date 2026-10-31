@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   SSRF_BLOCK_ERROR,
+  SSRF_BLOCK_HINT,
   SsrfBlockedError,
   blockedTargetResult,
   extractHostnameFromTarget,
@@ -160,4 +161,22 @@ test("SsrfBlockedError and blockedTargetResult carry the required message", () =
   const result = blockedTargetResult();
   assert.equal(result.exitCode, 1);
   assert.match(result.output, /Target IP\/Domain is restricted for security reasons/);
+});
+
+test("blockedTargetResult separates SSRF protection from the Scope Guard", () => {
+  // A private target that IS in the scope allowlist is still blocked by SSRF
+  // protection, and operators reported that block as "my scope entry was not
+  // saved". The first line must stay the canonical marker (the UI classifier and
+  // the session transcript match on it); the second line must name the real
+  // remedy and say it is not the Scope Guard.
+  const { output, exitCode } = blockedTargetResult();
+  const [first, ...rest] = output.split("\n");
+  const hint = rest.join("\n");
+
+  assert.equal(exitCode, 1);
+  assert.equal(first, `BLOCKED: ${SSRF_BLOCK_ERROR}`);
+  assert.equal(hint, SSRF_BLOCK_HINT);
+  assert.match(hint, /not the Scope Guard/i);
+  assert.match(hint, /scope allowlist/i);
+  assert.match(hint, /SSRF_ENABLED=0/);
 });

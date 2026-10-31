@@ -1,6 +1,6 @@
 {
   "name": "vektorsec",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "VektorSec",
   "main": "src/server.ts",
   "engines": {

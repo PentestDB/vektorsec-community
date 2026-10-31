@@ -23,6 +23,14 @@ WORKDIR /usr/src/app
 
 ENV NODE_ENV=production
 
+# Image metadata: lets `docker compose images` / `docker inspect` / `docker exec
+# <container> env | grep APP_VERSION` show which build is running (the compose
+# file tags the image with the same value).
+ARG APP_VERSION=0.1.1
+LABEL org.opencontainers.image.title="vektorsec-frontend" \
+      org.opencontainers.image.version="${APP_VERSION}"
+ENV APP_VERSION="${APP_VERSION}"
+
 COPY --from=builder /usr/src/app/package.json ./
 COPY --from=builder /usr/src/app/pnpm-lock.yaml ./
 COPY --from=builder /usr/src/app/.next ./.next
