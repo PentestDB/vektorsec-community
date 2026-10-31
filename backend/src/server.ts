@@ -26,6 +26,7 @@ import {
   scopeGuardUnlockWarning,
 } from "./utils/securityPolicy";
 import { isSsrfProtectionEnabled } from "./utils/ssrfGuard";
+import { getLicenseState, initializeLicenseManager } from "./utils/drm/licenseManager";
 
 /**
  * Process lifecycle only: configuration, database/Redis connections, HTTP
@@ -188,6 +189,7 @@ function logSecurityPosture(): void {
   const exists = envFileExists();
   const ssrfOn = isSsrfProtectionEnabled();
   const guard = getScopeGuardState();
+  const license = getLicenseState();
 
   logger.info("configuration loaded", {
     scope: "startup",
@@ -196,7 +198,19 @@ function logSecurityPosture(): void {
     ssrfProtection: ssrfOn ? "enabled" : "disabled",
     scopeGuard: guard.locked ? "enforced (locked)" : "off (unlocked)",
     scopeGuardReason: guard.reason,
+    drmLicense: license.enforced ? (license.valid ? "valid" : "invalid (fail-closed)") : "not-enforced",
+    drmReason: license.reason,
   });
+
+  if (license.enforced && !license.valid) {
+    logger.warn("DRM license is not valid — the Scope Guard stays LOCKED", {
+      scope: "security",
+      envFile,
+      reason: license.reason,
+      hwid: license.hwid ?? null,
+      hint: `a valid VEKTORSEC_LICENSE_KEY bound to this machine's HWID is required; contact ${SECURITY_CONTACT_URL}`,
+    });
+  }
 
   if (!exists) {
     logger.warn("no runtime env file found; only the process/compose environment is in effect", {
@@ -271,6 +285,10 @@ async function startTelegram(): Promise<void> {
 const initializeApp = async () => {
   try {
     initTracing();
+
+    // Activate the DRM license/trial (HWID-bound) before the guard state is
+    // read, so `logSecurityPosture()` reports the real enforcement outcome.
+    await initializeLicenseManager();
 
     // First thing after config is loaded (see utils/getSecrets.ts → loadConfig):
     // make the effective env file + active guards observable.

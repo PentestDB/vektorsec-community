@@ -24,6 +24,15 @@ mongo_uri = "mongodb://mongodb:27017/vektorsec"
 mongo_database = "vektorsec"
 redis_url = "redis://redis:6379"
 
+[admin]
+# บัญชี admin ตัวแรก — สร้างอัตโนมัติตอน backend start ถ้าใน DB ยังไม่มี role "admin"
+# (ถ้ามี admin อยู่แล้ว ส่วนนี้จะถูกข้าม ไม่ทับของเดิม)
+# ถ้าเว้น password ว่าง → backend สุ่มรหัส 32 ตัวอักษรแล้วเขียนลง log ครั้งเดียว
+#   desktop app : %APPDATA%\VektorSec\logs\backend.log
+#   docker      : docker compose logs backend | grep -i "temporary password"
+email = "admin@vektorsec.local"
+password = ""                        # ใส่รหัสที่ต้องการได้เลย เช่น "MyStrongPass!2026"
+
 [session]
 # ⚠️ ห้ามใช้ค่านี้ใน production — สุ่มค่าใหม่ด้วย:  openssl rand -hex 32
 # run.sh / deploy/vps-setup.sh จะสุ่มให้อัตโนมัติถ้ายังเป็น placeholder

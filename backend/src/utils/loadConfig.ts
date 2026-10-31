@@ -15,6 +15,13 @@ const TOML_KEY_MAP: Record<string, Record<string, string>> = {
     mongo_database: "MONGO_DATABASE",
     redis_url: "REDIS_URL",
   },
+  // Bootstrap credentials for the first admin account (see server.ts →
+  // ensureAdminAccount). Leaving the password empty makes the backend generate
+  // a random temporary one and print it once at startup.
+  admin: {
+    email: "ADMIN_EMAIL",
+    password: "ADMIN_PASSWORD",
+  },
   session: {
     secret: "SESS_SECRET",
     lifetime: "SESS_LIFETIME",

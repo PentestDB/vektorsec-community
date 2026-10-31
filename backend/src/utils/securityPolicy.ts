@@ -45,6 +45,7 @@ import {
   verifyUnlockToken,
   type UnlockTokenVerification,
 } from "./unlockToken";
+import { getLicenseState, type LicenseState } from "./drm/licenseManager";
 
 /** Single source of truth for the "I need an unrestricted build" channel. */
 export const SECURITY_CONTACT_URL = "https://www.facebook.com/Pentestdb/";
@@ -79,6 +80,17 @@ export const SCOPE_GUARD_UNLOCK_VALUES: readonly string[] = ["0", "false", "off"
 export const SCOPE_GUARD_LOCKED_IN_CODE = true;
 
 /**
+ * Default license state used when DRM is not part of this build's policy (no
+ * license public key configured). The guard then behaves exactly as before.
+ */
+const LICENSE_NOT_ENFORCED: LicenseState = {
+  enforced: false,
+  valid: false,
+  reason: "not-enforced",
+  source: "none",
+};
+
+/**
  * Fail-closed flag test: only an explicit off-value (`0`/`false`/`off`/`no`)
  * counts as "switched off" — a typo, an empty value or a missing variable are
  * all treated as "still on".
@@ -94,7 +106,8 @@ export type ScopeGuardLockReason =
   | "lock-flag-on" // SCOPE_GUARD_LOCK missing / not an off-value
   | "ui-build-locked" // NEXT_PUBLIC_SCOPE_GUARD_LOCK missing / not an off-value
   | "token-missing" // SCOPE_GUARD_UNLOCK_TOKEN not configured
-  | "token-invalid"; // token configured but not verifiable
+  | "token-invalid" // token configured but not verifiable
+  | "license-invalid"; // DRM active but the license/HWID check failed (fail-closed)
 
 export interface ScopeGuardState {
   /** true = Scope Guard is enforced (the safe default). */
@@ -109,6 +122,8 @@ export interface ScopeGuardState {
   uiBuildUnlocked: boolean;
   /** Result of verifying `SCOPE_GUARD_UNLOCK_TOKEN`. */
   token: UnlockTokenVerification;
+  /** DRM license/trial state (see `drm/licenseManager.ts`). */
+  license: LicenseState;
 }
 
 /**
@@ -119,21 +134,30 @@ export interface ScopeGuardState {
  *   1. `SCOPE_GUARD_LOCK=0` (backend deployment flag)
  *   2. `NEXT_PUBLIC_SCOPE_GUARD_LOCK=0` (the deployed UI was built unlocked)
  *   3. `SCOPE_GUARD_UNLOCK_TOKEN` verifies against the vendor master key
+ *   4. the DRM license/trial is valid **and HWID-bound** (when DRM is active)
  *
  * …or when the code switch is flipped off (a deliberate rebuild by the vendor,
- * which cannot be reached through env/admin settings at all).
+ * which cannot be reached through env/admin settings at all). When DRM is
+ * active and the license is missing, invalid, expired or bound to another
+ * machine, the guard stays ON immediately (fail-closed) — see `licenseManager`.
  */
 export function resolveScopeGuardState(
   env: NodeJS.ProcessEnv = process.env,
   codeLock: boolean = SCOPE_GUARD_LOCKED_IN_CODE,
+  license: LicenseState = LICENSE_NOT_ENFORCED,
 ): ScopeGuardState {
   const lockFlagOff = isScopeGuardUnlockFlagOff(env[SCOPE_GUARD_LOCK_ENV]);
   const uiBuildUnlocked = isScopeGuardUnlockFlagOff(env[SCOPE_GUARD_UI_LOCK_ENV]);
   const token = verifyUnlockToken(env[SCOPE_GUARD_UNLOCK_TOKEN_ENV], { env });
-  const conditions = { lockFlagOff, uiBuildUnlocked, token };
+  const conditions = { lockFlagOff, uiBuildUnlocked, token, license };
 
   if (!codeLock) {
     return { ...conditions, locked: false, reason: "unlocked-in-code", unlockFailed: false };
+  }
+
+  // DRM active but no valid HWID-bound license/trial → lock immediately.
+  if (license.enforced && !license.valid) {
+    return { ...conditions, locked: true, reason: "license-invalid", unlockFailed: true };
   }
 
   if (lockFlagOff && uiBuildUnlocked && token.valid) {
@@ -169,15 +193,19 @@ let cachedState: ScopeGuardState | null = null;
  */
 export function getScopeGuardState(): ScopeGuardState {
   const env = process.env;
+  const license = getLicenseState();
   const key = [
     env[SCOPE_GUARD_LOCK_ENV],
     env[SCOPE_GUARD_UI_LOCK_ENV],
     env[SCOPE_GUARD_UNLOCK_TOKEN_ENV],
     env[UNLOCK_MASTER_KEY_ENV],
     env[UNLOCK_PUBLIC_KEY_ENV],
+    license.enforced,
+    license.valid,
+    license.reason,
   ].join("\u0000");
   if (cachedState && key === cachedKey) return cachedState;
-  cachedState = resolveScopeGuardState(env);
+  cachedState = resolveScopeGuardState(env, SCOPE_GUARD_LOCKED_IN_CODE, license);
   cachedKey = key;
   return cachedState;
 }
@@ -221,12 +249,24 @@ export const SCOPE_GUARD_UNLOCK_CONDITIONS_FAILED_NOTICE =
   `ENABLED (fail-closed). Required: ${SCOPE_GUARD_LOCK_ENV}=0, ${SCOPE_GUARD_UI_LOCK_ENV}=0 and a ` +
   `valid ${SCOPE_GUARD_UNLOCK_TOKEN_ENV}. Contact ${SECURITY_CONTACT_URL} for help.`;
 
+/** Console warning for a failed DRM license/HWID check. */
+export const SCOPE_GUARD_LICENSE_FAILED_LOG =
+  "WARN: Scope Guard unlock attempt failed — invalid or expired DRM license (fail-closed)";
+
+/** Admin-facing notice for a failed DRM license/HWID check. */
+export const SCOPE_GUARD_LICENSE_FAILED_NOTICE =
+  "Scope Guard unlock attempt failed — the DRM license is missing, invalid, expired or bound " +
+  `to a different machine, so the guard stays ENABLED (fail-closed). Contact ${SECURITY_CONTACT_URL}.`;
+
 /**
  * Which conditions are still missing — short, actionable text for the startup
  * log and the admin API (`scope.unlock.detail`).
  */
 export function scopeGuardUnlockFailureDetail(state: ScopeGuardState): string {
   const missing: string[] = [];
+  if (state.license.enforced && !state.license.valid) {
+    missing.push(`DRM license: ${state.license.reason}`);
+  }
   if (!state.lockFlagOff) missing.push(`${SCOPE_GUARD_LOCK_ENV}=0 is not set`);
   if (!state.uiBuildUnlocked) missing.push(`${SCOPE_GUARD_UI_LOCK_ENV}=0 is not set`);
   if (!state.token.valid) {
@@ -240,6 +280,7 @@ export function scopeGuardUnlockWarning(
   state: ScopeGuardState = getScopeGuardState(),
 ): string | null {
   if (!state.locked || !state.unlockFailed) return null;
+  if (state.license.enforced && !state.license.valid) return SCOPE_GUARD_LICENSE_FAILED_LOG;
   return state.token.valid
     ? SCOPE_GUARD_UNLOCK_CONDITIONS_FAILED_LOG
     : SCOPE_GUARD_UNLOCK_TOKEN_FAILED_LOG;
@@ -254,6 +295,12 @@ export function scopeGuardNotice(state: ScopeGuardState = getScopeGuardState()):
   }
 
   if (state.unlockFailed) {
+    if (state.license.enforced && !state.license.valid) {
+      const detail = scopeGuardUnlockFailureDetail(state);
+      return detail
+        ? `${SCOPE_GUARD_LICENSE_FAILED_NOTICE} Missing: ${detail}.`
+        : SCOPE_GUARD_LICENSE_FAILED_NOTICE;
+    }
     const base = state.token.valid
       ? SCOPE_GUARD_UNLOCK_CONDITIONS_FAILED_NOTICE
       : SCOPE_GUARD_UNLOCK_TOKEN_FAILED_NOTICE;
