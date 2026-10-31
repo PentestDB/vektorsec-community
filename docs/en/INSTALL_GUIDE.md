@@ -281,6 +281,34 @@ corepack prepare pnpm@latest --activate
 ./run.sh start   # then choose to rebuild backend/frontend
 ```
 
+### Q: `http://localhost:3001` is unreachable (connection refused)
+
+In order of likelihood:
+
+1. **Docker Desktop is not running** — every container is stopped, so nothing
+   listens on port 3001. `docker ps` reports
+   `cannot find the file specified` when the engine is down.
+2. **The stack was never started** — run
+   `docker compose -f docker-compose.dev.yml up -d --build`
+3. **A container cannot start because the root `.env` is missing** —
+   `docker-compose.yml` runs MongoDB with `--auth`; an empty `MONGO_PASSWORD`
+   makes the mongo container exit and the backend waits forever on
+   `depends_on: service_healthy`.
+4. **The production frontend image was never built** —
+   `image vektorsec-frontend:0.1.1: not found` →
+   `docker compose -f docker-compose.yml build` (~15-30 min).
+
+Windows shortcut (starts Docker, prepares `.env`, runs compose, waits until ready):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 up
+powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 doctor   # one-shot health check
+```
+
+Note: compose publishes the ports on `127.0.0.1` (IPv4) only — open
+`http://127.0.0.1:3001` if your browser resolves `localhost` to `::1` and fails,
+and other machines on the LAN cannot reach the stack under this binding.
+
 ### Q: A service (e.g. redis) does not start or exits immediately (port conflict)
 
 Running two VektorSec stacks at the same time (`vektorsec` and `vektorsec-community`)

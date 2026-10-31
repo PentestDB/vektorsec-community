@@ -283,6 +283,30 @@ corepack prepare pnpm@latest --activate
 ./run.sh start   # แล้วเลือก rebuild backend/frontend
 ```
 
+### Q: เปิด `http://localhost:3001` ไม่ได้ (connection refused)
+
+ตามลำดับที่เจอบ่อย:
+
+1. **Docker Desktop ไม่ได้เปิด** — container ถูก stop ทั้งหมด จึงไม่มีอะไร listen ที่พอร์ต 3001
+   ตรวจด้วย `docker ps` (ถ้าขึ้น `cannot find the file specified` แปลว่า engine ยังไม่ทำงาน)
+2. **ยังไม่เคย `up` stack** — รัน `docker compose -f docker-compose.dev.yml up -d --build`
+3. **เปิด container ไม่ขึ้นเพราะไม่มี `.env` ที่ root** — `docker-compose.yml` รัน MongoDB
+   ด้วย `--auth` ถ้า `MONGO_PASSWORD` ว่าง container mongo จะ exit ทันที และ backend จะค้าง
+   ที่ `depends_on: service_healthy`
+4. **production compose ยังไม่ build frontend** — `image vektorsec-frontend:0.1.1: not found`
+   → `docker compose -f docker-compose.yml build` (ใช้เวลา ~15-30 นาที)
+
+ทางลัดบน Windows (เปิด Docker + เตรียม `.env` + `up` + รอจนพร้อม):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 up
+powershell -ExecutionPolicy Bypass -File scripts\docker-stack.ps1 doctor   # ตรวจทุกจุดทีเดียว
+```
+
+หมายเหตุ: compose publish พอร์ตไว้ที่ `127.0.0.1` (IPv4) เท่านั้น — เปิด
+`http://127.0.0.1:3001` ถ้าเบราว์เซอร์ resolve `localhost` เป็น `::1` แล้วต่อไม่ติด
+และเครื่องอื่นในวงเดียวกันจะเข้าด้วย `localhost` ไม่ได้ตามการตั้งค่านี้
+
 ### Q: บริการ (เช่น redis) ไม่ start หรือ exit ทันที (พอร์ตชนกัน)
 
 การรันสอง stack พร้อมกัน (`vektorsec` และ `vektorsec-community`) ใช้พอร์ตเดียวกัน
